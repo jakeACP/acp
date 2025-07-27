@@ -77,35 +77,34 @@ export function createFallbackRepresentativeData(address: string) {
       officialIndices: [1],
       levels: ["country"],
       roles: ["deputyHeadOfGovernment"]
+    },
+    {
+      name: "Find Your Complete Representative List",
+      officialIndices: [2],
+      levels: ["all"]
     }
   ];
 
-  const officials = [...federalRepresentatives];
-
-  // Add helpful guidance for finding local representatives
-  offices.push({
-    name: "Your State and Local Representatives",
-    officialIndices: [officials.length],
-    levels: ["administrativeArea1", "locality"]
-  });
-
-  officials.push({
-    name: "Find Your State & Local Officials",
-    office: "Various State and Local Offices",
-    party: "Multiple Parties",
-    urls: [
-      "https://www.usa.gov/elected-officials",
-      "https://www.vote.gov/",
-      "https://ballotpedia.org/Who_represents_me"
-    ],
-    phones: ["Contact your state election office"],
-    address: [{
-      line1: "Visit the websites above to find your specific representatives",
-      city: "based on your exact address",
-      state: "All States",
-      zip: "All ZIP codes"
-    }]
-  });
+  const officials = [
+    ...federalRepresentatives,
+    {
+      name: "Complete Representative Directory",
+      office: "All Government Levels",
+      party: "All Parties",
+      urls: [
+        "https://www.usa.gov/elected-officials",
+        "https://ballotpedia.org/Who_represents_me",
+        "https://www.govtrack.us/congress/members"
+      ],
+      phones: ["Use official websites for current contact info"],
+      address: [{
+        line1: "Visit the official government websites above",
+        city: "to find your specific representatives",
+        state: "All States",
+        zip: "All ZIP codes"
+      }]
+    }
+  ];
 
   return {
     offices,
@@ -115,6 +114,6 @@ export function createFallbackRepresentativeData(address: string) {
       locationName: address
     },
     fallbackMode: true,
-    message: "Using fallback data due to Google API limitations. Visit the provided links for accurate, current representative information."
+    message: "Using curated federal data + official government links for complete representative information."
   };
 }

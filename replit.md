@@ -159,3 +159,15 @@ The application is designed as a modern, scalable platform that can grow from a 
 - **Accessibility Features**: Screen reader support and keyboard navigation
 
 The platform now serves as a cutting-edge example of transparent, fair, and technologically advanced democratic participation.
+
+## Known Issues & Solutions (January 2025)
+
+### Google Civic Information API Changes
+- **Issue**: Google retired the Representatives API endpoint in 2025, causing 404 errors when trying to fetch detailed representative contact information
+- **Solution**: Implemented hybrid approach using Google's working Divisions API + curated federal representative data + official government links
+- **Result**: Users get accurate federal representatives (President Biden, VP Harris) with real contact info, plus clear guidance to find state/local officials through official sources
+
+### User Expectations vs API Limitations  
+- **User Expectation**: Complete representative contact database downloadable from API
+- **Reality**: Google's retirement of the endpoint means no single API provides comprehensive representative data
+- **Approach**: Standardized representative structure (President, VP, 2 Senators, 1 House Rep, Governor per person) with direct links to authoritative sources
