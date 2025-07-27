@@ -1,15 +1,77 @@
+import { useState } from "react";
 import { Navigation } from "@/components/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Group } from "@shared/schema";
-import { Users, Plus } from "lucide-react";
+import { Users, Plus, UserPlus, UserMinus } from "lucide-react";
+import { CreateGroupForm } from "@/components/create-group-form";
 
 export default function GroupsPage() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+
   const { data: groups = [], isLoading } = useQuery<Group[]>({
     queryKey: ["/api/groups"],
   });
+
+  const { data: userGroups = [] } = useQuery<Group[]>({
+    queryKey: ["/api/groups/user", user?.id],
+    enabled: !!user?.id,
+  });
+
+  const joinGroupMutation = useMutation({
+    mutationFn: async (groupId: string) => {
+      const res = await apiRequest("POST", `/api/groups/${groupId}/join`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups/user"] });
+      toast({
+        title: "Joined Group",
+        description: "You've successfully joined the group!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to join group",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const leaveGroupMutation = useMutation({
+    mutationFn: async (groupId: string) => {
+      const res = await apiRequest("POST", `/api/groups/${groupId}/leave`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups/user"] });
+      toast({
+        title: "Left Group",
+        description: "You've left the group",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to leave group",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isUserInGroup = (groupId: string) => {
+    return userGroups.some(group => group.id === groupId);
+  };
 
   const getCategoryColor = (category: string | null) => {
     switch (category) {
@@ -20,6 +82,17 @@ export default function GroupsPage() {
       default: return "bg-gray-100 text-gray-800";
     }
   };
+
+  if (showCreateGroup) {
+    return (
+      <div className="bg-slate-50 min-h-screen">
+        <Navigation />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <CreateGroupForm onCancel={() => setShowCreateGroup(false)} />
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -45,7 +118,10 @@ export default function GroupsPage() {
             </p>
           </div>
           
-          <Button className="flex items-center gap-2">
+          <Button 
+            onClick={() => setShowCreateGroup(true)}
+            className="flex items-center gap-2"
+          >
             <Plus className="h-4 w-4" />
             Create Group
           </Button>
@@ -73,11 +149,34 @@ export default function GroupsPage() {
               <CardContent>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center text-sm text-slate-600">
-                    <Users className="h-4 w-4 mr-2" />
-                    {group.memberCount} members
+                    <Users className="h-4 w-4 mr-1" />
+                    <span>{group.memberCount || 0} members</span>
                   </div>
                   
-                  <Button size="sm">Join Group</Button>
+                  <div className="flex items-center space-x-2">
+                    {isUserInGroup(group.id) ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => leaveGroupMutation.mutate(group.id)}
+                        disabled={leaveGroupMutation.isPending}
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        <UserMinus className="h-3 w-3 mr-1" />
+                        Leave
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => joinGroupMutation.mutate(group.id)}
+                        disabled={joinGroupMutation.isPending}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        <UserPlus className="h-3 w-3 mr-1" />
+                        Join
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -91,7 +190,7 @@ export default function GroupsPage() {
             <p className="text-slate-600 mb-4">
               Be the first to create a political group in your community
             </p>
-            <Button>Create First Group</Button>
+            <Button onClick={() => setShowCreateGroup(true)}>Create First Group</Button>
           </div>
         )}
       </div>
