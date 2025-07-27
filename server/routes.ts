@@ -470,35 +470,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Civic API key not configured" });
       }
 
-      // Try the newer elections endpoint first (still supported), then fall back to divisions
-      const electionsUrl = `https://www.googleapis.com/civicinfo/v2/elections?key=${civicApiKey}`;
-      const divisionsUrl = `https://www.googleapis.com/civicinfo/v2/divisions?query=${encodeURIComponent(address)}&key=${civicApiKey}`;
+      // Try the representatives endpoint first (may still work with proper key)
+      let civicUrl = `https://www.googleapis.com/civicinfo/v2/representatives?key=${civicApiKey}&address=${encodeURIComponent(address)}`;
+      let fallbackToDiv = false;
       
-      // Since Representatives API is deprecated, we'll create our own representative data structure
-      const civicUrl = divisionsUrl;
+      console.log('Trying Representatives API first...');
       
       console.log('Civic API URL:', civicUrl.replace(civicApiKey, 'API_KEY_HIDDEN'));
       
-      const response = await fetch(civicUrl);
+      let response = await fetch(civicUrl);
+      let civicData;
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Civic API error response:', response.status, errorText);
-        throw new Error(`Google Civic API returned ${response.status}: ${errorText}`);
+        console.log(`Representatives API failed with ${response.status}, trying divisions API...`);
+        // Fallback to divisions API
+        civicUrl = `https://www.googleapis.com/civicinfo/v2/divisions?query=${encodeURIComponent(address)}&key=${civicApiKey}`;
+        response = await fetch(civicUrl);
+        fallbackToDiv = true;
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Both APIs failed:', response.status, errorText);
+          
+          // Use fallback data
+          const { createFallbackRepresentativeData } = await import('./lib/representatives-fallback');
+          civicData = createFallbackRepresentativeData(address);
+        } else {
+          const divisionsData = await response.json();
+          civicData = await transformDivisionsToRepresentatives(divisionsData, address);
+        }
+      } else {
+        civicData = await response.json();
+        console.log('Representatives API success! Found:', Object.keys(civicData));
       }
-      
-      const divisionsData = await response.json();
-      console.log('Divisions API response:', Object.keys(divisionsData));
-      
-      // Transform divisions data into our representative structure
-      const transformedData = await transformDivisionsToRepresentatives(divisionsData, address);
       
       // Save user's search for future reference
       if (req.user.id) {
         await storage.saveUserAddress(req.user.id, address);
       }
       
-      res.json(transformedData);
+      res.json(civicData);
     } catch (error: any) {
       console.error("Representatives search error:", error);
       res.status(500).json({ message: error.message || "Failed to search representatives" });

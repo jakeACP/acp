@@ -325,6 +325,11 @@ export default function RepresentativesPage() {
               <p className="text-slate-600">
                 Found {civicData.officials?.length || 0} representatives
               </p>
+              {civicData.fallbackMode && (
+                <p className="text-amber-600 text-sm mt-2">
+                  Using fallback data - visit provided links for current information
+                </p>
+              )}
             </div>
 
             <Tabs defaultValue="all" className="w-full">
