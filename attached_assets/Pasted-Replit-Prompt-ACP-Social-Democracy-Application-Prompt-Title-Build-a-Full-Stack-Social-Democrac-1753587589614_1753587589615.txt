@@ -1,0 +1,79 @@
+Replit Prompt: ACP Social Democracy Application
+Prompt Title:
+🗳️ Build a Full-Stack Social Democracy Platform with Voting, Polling, Groups, and Candidate Tools
+
+Prompt Description:
+Create a full-stack web application called the ACP Social Democracy Application, designed to serve as the central hub for a grassroots, subscription-funded political movement (the Anti-Corruption Party). The app should function like a politically-focused social network with tools for direct democracy, transparent collaboration, and community-led governance.
+
+Core Features Required:
+
+🔐 Authentication & Roles
+Email/password signup & login (OAuth optional)
+
+Roles: Admin, Moderator, Citizen (voter), Candidate
+
+📢 Newsfeed & Social Tools
+Public timeline for updates, videos, articles
+
+Commenting, reacting (likes/flags)
+
+Filter by tags (e.g., Healthcare, Climate, Corruption)
+
+🗳️ Voting & Polling System
+Create and vote on community polls
+
+Rank-choice voting & referenda system
+
+Voting history tied to verified accounts (but anonymized)
+
+🧑‍🤝‍🧑 Political Groups & Communities
+Join/create political groups (e.g., local chapters, issue-based groups)
+
+Discussion forums with moderation tools
+
+Group voting on internal matters
+
+👤 Candidate Portal
+Profile for candidates to declare intentions
+
+Proposal section (issue positions, plans, etc.)
+
+Community endorsement & crowdfunding integration
+
+💬 Direct Messaging & Notifications
+Inbox with secure messaging
+
+Push/email notifications for polls, comments, mentions
+
+🧾 Transparency Ledger (Optional but encouraged)
+Immutable log of funding, decisions, and proposals (simple blockchain or audit trail simulation)
+
+💳 Subscription-Based Model
+Stripe or simulated payment gateway for monthly subscriptions
+
+Funds go to app development & ACP movement (not candidates)
+
+Tech Stack Suggestions:
+
+Frontend: React + Tailwind CSS or ShadCN for UI
+
+Backend: Node.js + Express
+
+Database: PostgreSQL or MongoDB
+
+Auth: Passport.js or Firebase Auth
+
+Payments: Stripe API or mocked service
+
+Hosting: Replit or Render for deployment
+
+Stretch Goals (Optional):
+
+Mobile-friendly/responsive layout
+
+Federation or decentralized features (ActivityPub support)
+
+AI moderation tools (OpenAI or open-source moderation)
+
+🛠️ Instructions to Developers:
+Focus on clean, modular code with scalability in mind. Prioritize user privacy, transparency, and community control. All components should reinforce a vision of user-led democracy without corporate manipulation or ad-driven incentives.
