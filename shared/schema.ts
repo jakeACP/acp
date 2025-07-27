@@ -131,6 +131,20 @@ export const userAddresses = pgTable("user_addresses", {
   lastUsed: timestamp("last_used").defaultNow(),
 });
 
+export const userAddressesRelations = relations(userAddresses, ({ one }) => ({
+  user: one(users, {
+    fields: [userAddresses.userId],
+    references: [users.id],
+  }),
+}));
+
+export const followedRepresentativesRelations = relations(followedRepresentatives, ({ one }) => ({
+  user: one(users, {
+    fields: [followedRepresentatives.userId],
+    references: [users.id],
+  }),
+}));
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   posts: many(posts),

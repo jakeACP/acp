@@ -493,6 +493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('Both APIs failed:', response.status, errorText);
           
           // Use fallback data
+          console.log('Using fallback representative data');
           const { createFallbackRepresentativeData } = await import('./lib/representatives-fallback');
           civicData = createFallbackRepresentativeData(address);
         } else {

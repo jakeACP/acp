@@ -79,6 +79,14 @@ export default function RepresentativesPage() {
         title: "Representatives Found",
         description: `Found ${data.officials?.length || 0} representatives for your area`,
       });
+      
+      if (data.fallbackMode) {
+        toast({
+          title: "Using Fallback Data",
+          description: "Visit the provided links for current representative information",
+          variant: "destructive",
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Search Failed",
