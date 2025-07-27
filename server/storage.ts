@@ -56,6 +56,7 @@ export interface IStorage {
   getCandidateById(id: string): Promise<Candidate | undefined>;
   createCandidate(candidate: InsertCandidate): Promise<Candidate>;
   getCandidateByUserId(userId: string): Promise<Candidate | undefined>;
+  supportCandidate(candidateId: string, userId: string): Promise<void>;
 
   // Messages
   getMessages(userId: string): Promise<Message[]>;
@@ -502,6 +503,16 @@ export class DatabaseStorage implements IStorage {
       .values(candidate)
       .returning();
     return newCandidate;
+  }
+
+  async supportCandidate(candidateId: string, userId: string): Promise<void> {
+    // Increment endorsement count
+    await db
+      .update(candidates)
+      .set({ 
+        endorsements: sql`${candidates.endorsements} + 1`
+      })
+      .where(eq(candidates.id, candidateId));
   }
 
   async getCandidateByUserId(userId: string): Promise<Candidate | undefined> {

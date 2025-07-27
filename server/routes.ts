@@ -305,12 +305,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
+      // Check if user already has a candidacy
+      const existingCandidate = await storage.getCandidateByUserId(req.user.id);
+      if (existingCandidate) {
+        return res.status(400).json({ message: "You have already declared candidacy" });
+      }
+
       const candidateData = insertCandidateSchema.parse({
         ...req.body,
         userId: req.user.id,
       });
       const candidate = await storage.createCandidate(candidateData);
       res.status(201).json(candidate);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/candidates/user/:userId", async (req, res) => {
+    try {
+      const candidate = await storage.getCandidateByUserId(req.params.userId);
+      if (!candidate) {
+        return res.status(404).json({ message: "No candidacy found for this user" });
+      }
+      res.json(candidate);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/candidates/:id/support", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // For now, just increment the endorsements count
+      // In a real app, you'd track individual endorsements to prevent duplicates
+      const candidate = await storage.getCandidateById(req.params.id);
+      if (!candidate) {
+        return res.status(404).json({ message: "Candidate not found" });
+      }
+
+      // Simple endorsement increment (can be enhanced later)
+      await storage.supportCandidate(req.params.id, req.user.id);
+      res.json({ message: "Support added successfully" });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }

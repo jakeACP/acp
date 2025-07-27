@@ -1,20 +1,66 @@
+import { useState } from "react";
 import { Navigation } from "@/components/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Candidate, User } from "@shared/schema";
-import { Users, UserPlus } from "lucide-react";
+import { Users, UserPlus, Heart, Eye } from "lucide-react";
+import { DeclareCandidacyForm } from "@/components/declare-candidacy-form";
 
 type CandidateWithUser = Candidate & {
   user: User;
 };
 
 export default function CandidatesPage() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [showDeclareCandidacy, setShowDeclareCandidacy] = useState(false);
+
   const { data: candidates = [], isLoading } = useQuery<CandidateWithUser[]>({
     queryKey: ["/api/candidates"],
   });
+
+  const { data: userCandidate } = useQuery({
+    queryKey: ["/api/candidates/user", user?.id],
+    enabled: !!user?.id,
+  });
+
+  const supportMutation = useMutation({
+    mutationFn: async (candidateId: string) => {
+      const res = await apiRequest("POST", `/api/candidates/${candidateId}/support`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+      toast({
+        title: "Support Added",
+        description: "You're now supporting this candidate!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to support candidate",
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (showDeclareCandidacy) {
+    return (
+      <div className="bg-slate-50 min-h-screen">
+        <Navigation />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <DeclareCandidacyForm onCancel={() => setShowDeclareCandidacy(false)} />
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -40,10 +86,20 @@ export default function CandidatesPage() {
             </p>
           </div>
           
-          <Button className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4" />
-            Declare Candidacy
-          </Button>
+          {userCandidate ? (
+            <Badge variant="secondary" className="px-4 py-2 text-sm">
+              <UserPlus className="h-4 w-4 mr-2" />
+              Running for {userCandidate.position}
+            </Badge>
+          ) : (
+            <Button 
+              onClick={() => setShowDeclareCandidacy(true)}
+              className="flex items-center gap-2"
+            >
+              <UserPlus className="h-4 w-4" />
+              Declare Candidacy
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -101,8 +157,18 @@ export default function CandidatesPage() {
                 )}
                 
                 <div className="flex gap-2">
-                  <Button className="flex-1">Support</Button>
-                  <Button variant="outline">View Profile</Button>
+                  <Button 
+                    className="flex-1"
+                    onClick={() => supportMutation.mutate(candidate.id)}
+                    disabled={supportMutation.isPending}
+                  >
+                    <Heart className="h-4 w-4 mr-2" />
+                    {supportMutation.isPending ? "Supporting..." : "Support"}
+                  </Button>
+                  <Button variant="outline">
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Profile
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -117,7 +183,7 @@ export default function CandidatesPage() {
               <CardDescription className="mb-4">
                 Be the first to declare your candidacy for public office
               </CardDescription>
-              <Button>Declare Candidacy</Button>
+              <Button onClick={() => setShowDeclareCandidacy(true)}>Declare Candidacy</Button>
             </CardContent>
           </Card>
         )}
