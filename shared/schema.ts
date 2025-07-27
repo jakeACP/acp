@@ -115,6 +115,22 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const followedRepresentatives = pgTable("followed_representatives", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  office: text("office").notNull(),
+  party: text("party"),
+  followedAt: timestamp("followed_at").defaultNow(),
+});
+
+export const userAddresses = pgTable("user_addresses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  address: text("address").notNull(),
+  lastUsed: timestamp("last_used").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   posts: many(posts),
@@ -258,3 +274,7 @@ export type Candidate = typeof candidates.$inferSelect;
 export type InsertCandidate = z.infer<typeof insertCandidateSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type FollowedRepresentative = typeof followedRepresentatives.$inferSelect;
+export type InsertFollowedRepresentative = typeof followedRepresentatives.$inferInsert;
+export type UserAddress = typeof userAddresses.$inferSelect;
+export type InsertUserAddress = typeof userAddresses.$inferInsert;

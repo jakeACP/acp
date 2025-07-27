@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, messages, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type Message, type InsertMessage } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, messages, followedRepresentatives, userAddresses, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count } from "drizzle-orm";
 import session from "express-session";
@@ -63,6 +63,11 @@ export interface IStorage {
   getConversation(userId1: string, userId2: string): Promise<Message[]>;
   sendMessage(message: InsertMessage): Promise<Message>;
   markMessageRead(messageId: string): Promise<void>;
+
+  // Representatives
+  saveUserAddress(userId: string, address: string): Promise<void>;
+  followRepresentative(userId: string, repData: { name: string; office: string; party?: string }): Promise<void>;
+  getFollowedRepresentatives(userId: string): Promise<FollowedRepresentative[]>;
 
   sessionStore: any;
 }
@@ -554,6 +559,58 @@ export class DatabaseStorage implements IStorage {
       .update(messages)
       .set({ isRead: true })
       .where(eq(messages.id, messageId));
+  }
+
+  async saveUserAddress(userId: string, address: string): Promise<void> {
+    // Check if address already exists for user
+    const existingAddress = await db
+      .select()
+      .from(userAddresses)
+      .where(and(eq(userAddresses.userId, userId), eq(userAddresses.address, address)));
+
+    if (existingAddress.length > 0) {
+      // Update last used timestamp
+      await db
+        .update(userAddresses)
+        .set({ lastUsed: new Date() })
+        .where(eq(userAddresses.id, existingAddress[0].id));
+    } else {
+      // Insert new address
+      await db
+        .insert(userAddresses)
+        .values({ userId, address });
+    }
+  }
+
+  async followRepresentative(userId: string, repData: { name: string; office: string; party?: string }): Promise<void> {
+    // Check if already following
+    const existing = await db
+      .select()
+      .from(followedRepresentatives)
+      .where(and(
+        eq(followedRepresentatives.userId, userId),
+        eq(followedRepresentatives.name, repData.name),
+        eq(followedRepresentatives.office, repData.office)
+      ));
+
+    if (existing.length === 0) {
+      await db
+        .insert(followedRepresentatives)
+        .values({
+          userId,
+          name: repData.name,
+          office: repData.office,
+          party: repData.party || null,
+        });
+    }
+  }
+
+  async getFollowedRepresentatives(userId: string): Promise<FollowedRepresentative[]> {
+    return await db
+      .select()
+      .from(followedRepresentatives)
+      .where(eq(followedRepresentatives.userId, userId))
+      .orderBy(desc(followedRepresentatives.followedAt));
   }
 }
 

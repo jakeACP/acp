@@ -412,6 +412,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Representatives API
+  app.post("/api/representatives/search", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { address } = req.body;
+      
+      if (!address) {
+        return res.status(400).json({ message: "Address is required" });
+      }
+
+      // Use Google Civic Information API to get representatives
+      const civicApiKey = process.env.GOOGLE_CIVIC_API_KEY;
+      if (!civicApiKey) {
+        return res.status(500).json({ message: "Civic API key not configured" });
+      }
+
+      const civicUrl = `https://www.googleapis.com/civicinfo/v2/representatives?key=${civicApiKey}&address=${encodeURIComponent(address)}`;
+      
+      const response = await fetch(civicUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Civic API error: ${response.status}`);
+      }
+      
+      const civicData = await response.json();
+      
+      // Save user's search for future reference
+      if (req.user.id) {
+        await storage.saveUserAddress(req.user.id, address);
+      }
+      
+      res.json(civicData);
+    } catch (error: any) {
+      console.error("Representatives search error:", error);
+      res.status(500).json({ message: error.message || "Failed to search representatives" });
+    }
+  });
+
+  app.post("/api/representatives/follow", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { name, office, party } = req.body;
+      
+      await storage.followRepresentative(req.user.id, {
+        name,
+        office,
+        party,
+      });
+      
+      res.json({ message: "Representative followed successfully" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/representatives/followed", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const followed = await storage.getFollowedRepresentatives(req.user.id);
+      res.json(followed);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
