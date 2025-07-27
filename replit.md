@@ -4,6 +4,11 @@
 
 This is a full-stack social democracy platform designed to serve as the central hub for a grassroots, subscription-funded political movement (the Anti-Corruption Party). The application provides comprehensive tools for democratic participation including voting, polling, group management, candidate profiles, and community engagement.
 
+**NEW FEATURES ADDED**: 
+- **Blockchain Transparency System**: All votes are cryptographically secured and publicly verifiable
+- **Ranked Choice Voting**: Advanced voting system for fairer elections with instant runoff calculations
+- **Enhanced Poll Creation**: Support for both simple and ranked choice voting methods
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -52,10 +57,12 @@ Preferred communication style: Simple, everyday language.
 - **Real-time Updates**: Query invalidation for immediate UI updates
 
 ### Voting & Polling System
-- **Poll Creation**: JSON-based option storage with vote counting
-- **Vote Tracking**: User vote history with privacy considerations
-- **Poll Management**: Active/inactive states with end dates
-- **Results Display**: Real-time vote counting with progress indicators
+- **Simple Voting**: Traditional one-vote-per-person polls with real-time results
+- **Ranked Choice Voting**: Advanced instant runoff voting with preference ranking
+- **Blockchain Verification**: Cryptographic security and public auditability
+- **Vote Tracking**: Transparent vote history with anonymized user identification
+- **Poll Management**: Active/inactive states with configurable end dates
+- **Results Display**: Real-time vote counting with detailed round-by-round analysis
 
 ### Group Management
 - **Community Organization**: Topic-based and location-based groups
@@ -130,3 +137,25 @@ Preferred communication style: Simple, everyday language.
 - **API Design**: Stateless endpoints suitable for load balancing
 
 The application is designed as a modern, scalable platform that can grow from a small community tool to a large-scale democratic participation system while maintaining security, performance, and user experience standards.
+
+## Recent Updates (January 2025)
+
+### Blockchain Transparency Integration
+- **Vote Verification System**: Each vote receives a cryptographic hash for independent verification
+- **Merkle Tree Structure**: Votes are organized in tamper-proof blockchain blocks
+- **Public Audit Trail**: Complete transparency without compromising voter privacy
+- **Chain Integrity Checks**: Automatic validation of blockchain consistency
+
+### Ranked Choice Voting Implementation
+- **Instant Runoff Algorithm**: Fair elimination-based winner determination
+- **Drag-and-Drop Interface**: Intuitive preference ranking for voters
+- **Real-time Results**: Round-by-round elimination visualization
+- **Tie-Breaking Logic**: Sophisticated handling of tied scenarios
+
+### Enhanced User Experience
+- **Advanced Poll Creation**: Support for multiple voting methods and blockchain verification
+- **Visual Vote Tracking**: Progress bars, percentages, and detailed analytics
+- **Mobile-Responsive Design**: Optimized interface for all device types
+- **Accessibility Features**: Screen reader support and keyboard navigation
+
+The platform now serves as a cutting-edge example of transparent, fair, and technologically advanced democratic participation.

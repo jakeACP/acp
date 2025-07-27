@@ -1,16 +1,23 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { PostCard } from "@/components/post-card";
 import { PollCard } from "@/components/poll-card";
 import { EnhancedPollCard } from "@/components/enhanced-poll-card";
+import { RankedChoicePoll } from "@/components/ranked-choice-poll";
 import { SeedButton } from "@/components/seed-button";
 import { CreatePostForm } from "@/components/create-post-form";
+import { CreatePollForm } from "@/components/create-poll-form";
+import { BlockchainTransparency } from "@/components/blockchain-transparency";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Post, Poll } from "@shared/schema";
-import { Loader2, MessageSquare } from "lucide-react";
+import { Loader2, MessageSquare, BarChart3, Shield } from "lucide-react";
 
 export function MainFeed() {
   const { user } = useAuth();
+  const [showCreatePoll, setShowCreatePoll] = useState(false);
+  const [showBlockchain, setShowBlockchain] = useState(false);
 
   const { data: posts = [], isLoading } = useQuery<Post[]>({
     queryKey: ["/api/posts"],
@@ -34,10 +41,49 @@ export function MainFeed() {
     ...polls.map(poll => ({ type: 'poll' as const, data: poll, createdAt: poll.createdAt }))
   ].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
+  if (showCreatePoll) {
+    return (
+      <div className="space-y-6">
+        <CreatePollForm onCancel={() => setShowCreatePoll(false)} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Development Seed Button */}
       <SeedButton />
+      
+      {/* Quick Actions */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCreatePoll(true)}
+              className="flex items-center gap-2"
+            >
+              <BarChart3 className="h-4 w-4" />
+              Create Poll
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowBlockchain(!showBlockchain)}
+              className="flex items-center gap-2"
+            >
+              <Shield className="h-4 w-4" />
+              Blockchain Transparency
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Blockchain Transparency Panel */}
+      {showBlockchain && (
+        <BlockchainTransparency />
+      )}
       
       {/* Create Post Form */}
       <CreatePostForm />
@@ -49,7 +95,11 @@ export function MainFeed() {
             {item.type === 'post' ? (
               <PostCard post={item.data as Post} />
             ) : (
-              <EnhancedPollCard poll={item.data as Poll} />
+              (item.data as Poll).votingType === 'ranked_choice' ? (
+                <RankedChoicePoll poll={item.data as Poll} />
+              ) : (
+                <EnhancedPollCard poll={item.data as Poll} />
+              )
             )}
           </div>
         ))

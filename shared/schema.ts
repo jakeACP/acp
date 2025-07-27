@@ -38,6 +38,9 @@ export const polls = pgTable("polls", {
   title: text("title").notNull(),
   description: text("description"),
   options: json("options").notNull().$type<{ id: string; text: string; votes: number }[]>(),
+  votingType: text("voting_type").default("simple"), // "simple" or "ranked_choice"
+  isBlockchainVerified: boolean("is_blockchain_verified").default(false),
+  blockchainHash: text("blockchain_hash"),
   totalVotes: integer("total_votes").default(0),
   endDate: timestamp("end_date"),
   isActive: boolean("is_active").default(true),
@@ -49,6 +52,8 @@ export const pollVotes = pgTable("poll_votes", {
   pollId: varchar("poll_id").notNull().references(() => polls.id),
   userId: varchar("user_id").notNull().references(() => users.id),
   optionId: text("option_id").notNull(),
+  rankedChoices: json("ranked_choices").$type<string[]>(), // For ranked choice voting
+  blockchainHash: text("blockchain_hash"), // Individual vote verification
   createdAt: timestamp("created_at").defaultNow(),
 });
 

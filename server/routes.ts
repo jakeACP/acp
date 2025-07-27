@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
+import { blockchainVerifier, type VoteRecord } from "./lib/blockchain";
+import { RankedChoiceCalculator, type RankedBallot } from "./lib/ranked-choice";
 import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema } from "@shared/schema";
 import { z } from "zod";
 

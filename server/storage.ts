@@ -25,8 +25,13 @@ export interface IStorage {
   // Polls
   createPoll(poll: InsertPoll): Promise<Poll>;
   getPollById(id: string): Promise<Poll | undefined>;
+  getPoll(id: string): Promise<Poll | undefined>;
   getPollByPostId(postId: string): Promise<Poll | undefined>;
   getActivePolls(): Promise<Poll[]>;
+  recordVote(pollId: string, userId: string, optionId: string, blockchainHash?: string): Promise<void>;
+  recordRankedVote(pollId: string, userId: string, rankedChoices: string[], blockchainHash?: string): Promise<void>;
+  getRankedVotes(pollId: string): Promise<any[]>;
+  getUserVote(pollId: string, userId: string): Promise<any>;
   votePoll(pollId: string, userId: string, optionId: string): Promise<void>;
   getPollVote(pollId: string, userId: string): Promise<string | undefined>;
 
@@ -219,6 +224,99 @@ export class DatabaseStorage implements IStorage {
       .from(pollVotes)
       .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
     return vote?.optionId;
+  }
+
+  async getPoll(id: string): Promise<Poll | undefined> {
+    return this.getPollById(id);
+  }
+
+  async recordVote(pollId: string, userId: string, optionId: string, blockchainHash?: string): Promise<void> {
+    // Check if user already voted
+    const existingVote = await db
+      .select()
+      .from(pollVotes)
+      .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
+
+    if (existingVote.length > 0) {
+      throw new Error("You have already voted on this poll");
+    }
+
+    // Insert new vote
+    await db
+      .insert(pollVotes)
+      .values({ 
+        pollId, 
+        userId, 
+        optionId,
+        blockchainHash
+      });
+
+    // Update poll vote counts
+    await this.updatePollCounts(pollId);
+  }
+
+  async recordRankedVote(pollId: string, userId: string, rankedChoices: string[], blockchainHash?: string): Promise<void> {
+    // Check if user already voted
+    const existingVote = await db
+      .select()
+      .from(pollVotes)
+      .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
+
+    if (existingVote.length > 0) {
+      throw new Error("You have already voted on this poll");
+    }
+
+    // Insert new ranked vote
+    await db
+      .insert(pollVotes)
+      .values({ 
+        pollId, 
+        userId, 
+        optionId: rankedChoices[0], // First choice for simple compatibility
+        rankedChoices,
+        blockchainHash
+      });
+
+    // Update poll vote counts
+    await this.updatePollCounts(pollId);
+  }
+
+  async getRankedVotes(pollId: string): Promise<any[]> {
+    return await db
+      .select()
+      .from(pollVotes)
+      .where(eq(pollVotes.pollId, pollId));
+  }
+
+  async getUserVote(pollId: string, userId: string): Promise<any> {
+    const [vote] = await db
+      .select()
+      .from(pollVotes)
+      .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
+    return vote || null;
+  }
+
+  private async updatePollCounts(pollId: string): Promise<void> {
+    const poll = await this.getPollById(pollId);
+    if (poll) {
+      const votes = await db
+        .select()
+        .from(pollVotes)
+        .where(eq(pollVotes.pollId, pollId));
+
+      const updatedOptions = poll.options.map(option => ({
+        ...option,
+        votes: votes.filter(v => v.optionId === option.id).length
+      }));
+
+      await db
+        .update(polls)
+        .set({ 
+          options: updatedOptions,
+          totalVotes: votes.length 
+        })
+        .where(eq(polls.id, pollId));
+    }
   }
 
   async getGroups(): Promise<Group[]> {
