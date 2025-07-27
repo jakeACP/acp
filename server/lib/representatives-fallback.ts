@@ -1,5 +1,5 @@
-// Fallback representative data for when Google Civic API is unavailable
-// This uses publicly available information about current US federal officials
+// Representative data using publicly available information
+// Since Google retired the Representatives API endpoint in 2025, we maintain accurate federal data
 
 interface RepresentativeData {
   name: string;
