@@ -1,0 +1,451 @@
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, messages, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type Message, type InsertMessage } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, and, or, sql, count } from "drizzle-orm";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
+
+const PostgresSessionStore = connectPg(session);
+
+export interface IStorage {
+  // Users
+  getUser(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUserStripeInfo(userId: string, customerId: string, subscriptionId: string): Promise<User>;
+
+  // Posts
+  getPosts(limit?: number, offset?: number): Promise<Post[]>;
+  getPostById(id: string): Promise<Post | undefined>;
+  createPost(post: InsertPost): Promise<Post>;
+  getPostsByUser(userId: string): Promise<Post[]>;
+  getPostsByTag(tag: string): Promise<Post[]>;
+
+  // Polls
+  createPoll(poll: InsertPoll): Promise<Poll>;
+  getPollById(id: string): Promise<Poll | undefined>;
+  getPollByPostId(postId: string): Promise<Poll | undefined>;
+  getActivePolls(): Promise<Poll[]>;
+  votePoll(pollId: string, userId: string, optionId: string): Promise<void>;
+  getPollVote(pollId: string, userId: string): Promise<string | undefined>;
+
+  // Groups
+  getGroups(): Promise<Group[]>;
+  getGroupById(id: string): Promise<Group | undefined>;
+  createGroup(group: InsertGroup): Promise<Group>;
+  getUserGroups(userId: string): Promise<Group[]>;
+  joinGroup(groupId: string, userId: string): Promise<void>;
+  leaveGroup(groupId: string, userId: string): Promise<void>;
+
+  // Comments
+  getCommentsByPost(postId: string): Promise<Comment[]>;
+  createComment(comment: InsertComment): Promise<Comment>;
+
+  // Likes
+  toggleLike(userId: string, targetId: string, targetType: string): Promise<boolean>;
+  getLikeStatus(userId: string, targetId: string, targetType: string): Promise<boolean>;
+
+  // Candidates
+  getCandidates(): Promise<Candidate[]>;
+  getCandidateById(id: string): Promise<Candidate | undefined>;
+  createCandidate(candidate: InsertCandidate): Promise<Candidate>;
+  getCandidateByUserId(userId: string): Promise<Candidate | undefined>;
+
+  // Messages
+  getMessages(userId: string): Promise<Message[]>;
+  getConversation(userId1: string, userId2: string): Promise<Message[]>;
+  sendMessage(message: InsertMessage): Promise<Message>;
+  markMessageRead(messageId: string): Promise<void>;
+
+  sessionStore: any;
+}
+
+export class DatabaseStorage implements IStorage {
+  sessionStore: any;
+
+  constructor() {
+    this.sessionStore = new PostgresSessionStore({ 
+      pool, 
+      createTableIfMissing: true 
+    });
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async updateUserStripeInfo(userId: string, customerId: string, subscriptionId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId 
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async getPosts(limit = 20, offset = 0): Promise<Post[]> {
+    return await db
+      .select()
+      .from(posts)
+      .orderBy(desc(posts.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getPostById(id: string): Promise<Post | undefined> {
+    const [post] = await db.select().from(posts).where(eq(posts.id, id));
+    return post || undefined;
+  }
+
+  async createPost(post: InsertPost): Promise<Post> {
+    const [newPost] = await db
+      .insert(posts)
+      .values(post)
+      .returning();
+    return newPost;
+  }
+
+  async getPostsByUser(userId: string): Promise<Post[]> {
+    return await db
+      .select()
+      .from(posts)
+      .where(eq(posts.authorId, userId))
+      .orderBy(desc(posts.createdAt));
+  }
+
+  async getPostsByTag(tag: string): Promise<Post[]> {
+    return await db
+      .select()
+      .from(posts)
+      .where(sql`${tag} = ANY(${posts.tags})`)
+      .orderBy(desc(posts.createdAt));
+  }
+
+  async createPoll(poll: InsertPoll): Promise<Poll> {
+    const [newPoll] = await db
+      .insert(polls)
+      .values(poll)
+      .returning();
+    return newPoll;
+  }
+
+  async getPollById(id: string): Promise<Poll | undefined> {
+    const [poll] = await db.select().from(polls).where(eq(polls.id, id));
+    return poll || undefined;
+  }
+
+  async getPollByPostId(postId: string): Promise<Poll | undefined> {
+    const [poll] = await db.select().from(polls).where(eq(polls.postId, postId));
+    return poll || undefined;
+  }
+
+  async getActivePolls(): Promise<Poll[]> {
+    return await db
+      .select()
+      .from(polls)
+      .where(eq(polls.isActive, true))
+      .orderBy(desc(polls.createdAt));
+  }
+
+  async votePoll(pollId: string, userId: string, optionId: string): Promise<void> {
+    // Check if user already voted
+    const existingVote = await db
+      .select()
+      .from(pollVotes)
+      .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
+
+    if (existingVote.length > 0) {
+      // Update existing vote
+      await db
+        .update(pollVotes)
+        .set({ optionId })
+        .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
+    } else {
+      // Insert new vote
+      await db
+        .insert(pollVotes)
+        .values({ pollId, userId, optionId });
+    }
+
+    // Update poll vote counts
+    const poll = await this.getPollById(pollId);
+    if (poll) {
+      const votes = await db
+        .select()
+        .from(pollVotes)
+        .where(eq(pollVotes.pollId, pollId));
+
+      const updatedOptions = poll.options.map(option => ({
+        ...option,
+        votes: votes.filter(v => v.optionId === option.id).length
+      }));
+
+      await db
+        .update(polls)
+        .set({ 
+          options: updatedOptions,
+          totalVotes: votes.length 
+        })
+        .where(eq(polls.id, pollId));
+    }
+  }
+
+  async getPollVote(pollId: string, userId: string): Promise<string | undefined> {
+    const [vote] = await db
+      .select()
+      .from(pollVotes)
+      .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
+    return vote?.optionId;
+  }
+
+  async getGroups(): Promise<Group[]> {
+    return await db
+      .select()
+      .from(groups)
+      .orderBy(desc(groups.memberCount));
+  }
+
+  async getGroupById(id: string): Promise<Group | undefined> {
+    const [group] = await db.select().from(groups).where(eq(groups.id, id));
+    return group || undefined;
+  }
+
+  async createGroup(group: InsertGroup): Promise<Group> {
+    const [newGroup] = await db
+      .insert(groups)
+      .values(group)
+      .returning();
+
+    // Add creator as admin member
+    await db
+      .insert(groupMembers)
+      .values({
+        groupId: newGroup.id,
+        userId: group.createdBy,
+        role: "admin"
+      });
+
+    return newGroup;
+  }
+
+  async getUserGroups(userId: string): Promise<Group[]> {
+    return await db
+      .select({
+        id: groups.id,
+        name: groups.name,
+        description: groups.description,
+        category: groups.category,
+        image: groups.image,
+        memberCount: groups.memberCount,
+        isPublic: groups.isPublic,
+        createdBy: groups.createdBy,
+        createdAt: groups.createdAt,
+      })
+      .from(groups)
+      .innerJoin(groupMembers, eq(groups.id, groupMembers.groupId))
+      .where(eq(groupMembers.userId, userId));
+  }
+
+  async joinGroup(groupId: string, userId: string): Promise<void> {
+    await db
+      .insert(groupMembers)
+      .values({ groupId, userId });
+
+    // Update member count
+    await db
+      .update(groups)
+      .set({ memberCount: sql`${groups.memberCount} + 1` })
+      .where(eq(groups.id, groupId));
+  }
+
+  async leaveGroup(groupId: string, userId: string): Promise<void> {
+    await db
+      .delete(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
+
+    // Update member count
+    await db
+      .update(groups)
+      .set({ memberCount: sql`${groups.memberCount} - 1` })
+      .where(eq(groups.id, groupId));
+  }
+
+  async getCommentsByPost(postId: string): Promise<Comment[]> {
+    return await db
+      .select()
+      .from(comments)
+      .where(eq(comments.postId, postId))
+      .orderBy(desc(comments.createdAt));
+  }
+
+  async createComment(comment: InsertComment): Promise<Comment> {
+    const [newComment] = await db
+      .insert(comments)
+      .values(comment)
+      .returning();
+
+    // Update post comment count
+    await db
+      .update(posts)
+      .set({ commentsCount: sql`${posts.commentsCount} + 1` })
+      .where(eq(posts.id, comment.postId));
+
+    return newComment;
+  }
+
+  async toggleLike(userId: string, targetId: string, targetType: string): Promise<boolean> {
+    const existingLike = await db
+      .select()
+      .from(likes)
+      .where(and(
+        eq(likes.userId, userId),
+        eq(likes.targetId, targetId),
+        eq(likes.targetType, targetType)
+      ));
+
+    if (existingLike.length > 0) {
+      // Remove like
+      await db
+        .delete(likes)
+        .where(and(
+          eq(likes.userId, userId),
+          eq(likes.targetId, targetId),
+          eq(likes.targetType, targetType)
+        ));
+
+      // Update count
+      if (targetType === "post") {
+        await db
+          .update(posts)
+          .set({ likesCount: sql`${posts.likesCount} - 1` })
+          .where(eq(posts.id, targetId));
+      } else if (targetType === "comment") {
+        await db
+          .update(comments)
+          .set({ likesCount: sql`${comments.likesCount} - 1` })
+          .where(eq(comments.id, targetId));
+      }
+
+      return false;
+    } else {
+      // Add like
+      await db
+        .insert(likes)
+        .values({ userId, targetId, targetType });
+
+      // Update count
+      if (targetType === "post") {
+        await db
+          .update(posts)
+          .set({ likesCount: sql`${posts.likesCount} + 1` })
+          .where(eq(posts.id, targetId));
+      } else if (targetType === "comment") {
+        await db
+          .update(comments)
+          .set({ likesCount: sql`${comments.likesCount} + 1` })
+          .where(eq(comments.id, targetId));
+      }
+
+      return true;
+    }
+  }
+
+  async getLikeStatus(userId: string, targetId: string, targetType: string): Promise<boolean> {
+    const [like] = await db
+      .select()
+      .from(likes)
+      .where(and(
+        eq(likes.userId, userId),
+        eq(likes.targetId, targetId),
+        eq(likes.targetType, targetType)
+      ));
+    return !!like;
+  }
+
+  async getCandidates(): Promise<Candidate[]> {
+    return await db
+      .select()
+      .from(candidates)
+      .where(eq(candidates.isActive, true))
+      .orderBy(desc(candidates.endorsements));
+  }
+
+  async getCandidateById(id: string): Promise<Candidate | undefined> {
+    const [candidate] = await db.select().from(candidates).where(eq(candidates.id, id));
+    return candidate || undefined;
+  }
+
+  async createCandidate(candidate: InsertCandidate): Promise<Candidate> {
+    const [newCandidate] = await db
+      .insert(candidates)
+      .values(candidate)
+      .returning();
+    return newCandidate;
+  }
+
+  async getCandidateByUserId(userId: string): Promise<Candidate | undefined> {
+    const [candidate] = await db.select().from(candidates).where(eq(candidates.userId, userId));
+    return candidate || undefined;
+  }
+
+  async getMessages(userId: string): Promise<Message[]> {
+    return await db
+      .select()
+      .from(messages)
+      .where(or(eq(messages.senderId, userId), eq(messages.recipientId, userId)))
+      .orderBy(desc(messages.createdAt));
+  }
+
+  async getConversation(userId1: string, userId2: string): Promise<Message[]> {
+    return await db
+      .select()
+      .from(messages)
+      .where(
+        or(
+          and(eq(messages.senderId, userId1), eq(messages.recipientId, userId2)),
+          and(eq(messages.senderId, userId2), eq(messages.recipientId, userId1))
+        )
+      )
+      .orderBy(desc(messages.createdAt));
+  }
+
+  async sendMessage(message: InsertMessage): Promise<Message> {
+    const [newMessage] = await db
+      .insert(messages)
+      .values(message)
+      .returning();
+    return newMessage;
+  }
+
+  async markMessageRead(messageId: string): Promise<void> {
+    await db
+      .update(messages)
+      .set({ isRead: true })
+      .where(eq(messages.id, messageId));
+  }
+}
+
+export const storage = new DatabaseStorage();

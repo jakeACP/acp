@@ -1,0 +1,132 @@
+# ACP Social Democracy Application
+
+## Overview
+
+This is a full-stack social democracy platform designed to serve as the central hub for a grassroots, subscription-funded political movement (the Anti-Corruption Party). The application provides comprehensive tools for democratic participation including voting, polling, group management, candidate profiles, and community engagement.
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
+
+### Frontend Architecture
+- **Framework**: React with TypeScript
+- **Routing**: Wouter for client-side routing
+- **UI Library**: Radix UI components with shadcn/ui styling system
+- **Styling**: Tailwind CSS with CSS variables for theming
+- **State Management**: TanStack Query (React Query) for server state
+- **Forms**: React Hook Form with Zod validation
+- **Build Tool**: Vite with hot module replacement
+
+### Backend Architecture
+- **Framework**: Express.js with TypeScript
+- **Authentication**: Passport.js with local strategy and session-based auth
+- **API Design**: RESTful endpoints with consistent error handling
+- **Database ORM**: Drizzle ORM for type-safe database interactions
+- **Session Management**: Express sessions with PostgreSQL session store
+
+### Database Design
+- **Database**: PostgreSQL (configured for Neon serverless)
+- **Schema**: Comprehensive relational design covering:
+  - Users with role-based access (admin, moderator, citizen, candidate)
+  - Posts with tags and engagement metrics
+  - Polls with JSON-stored options and voting system
+  - Groups for community organization
+  - Comments and likes for social interaction
+  - Candidates with profiles and proposals
+  - Direct messaging system
+
+## Key Components
+
+### Authentication System
+- **Strategy**: Session-based authentication using Passport.js
+- **Password Security**: Scrypt hashing with salt for secure password storage
+- **Role Management**: Four distinct user roles with different permissions
+- **Protected Routes**: Client-side route protection with automatic redirects
+
+### Social Feed System
+- **Post Types**: Regular posts, polls, and announcements
+- **Engagement**: Like/unlike functionality and comment threading
+- **Tagging**: Array-based tag system for content categorization
+- **Real-time Updates**: Query invalidation for immediate UI updates
+
+### Voting & Polling System
+- **Poll Creation**: JSON-based option storage with vote counting
+- **Vote Tracking**: User vote history with privacy considerations
+- **Poll Management**: Active/inactive states with end dates
+- **Results Display**: Real-time vote counting with progress indicators
+
+### Group Management
+- **Community Organization**: Topic-based and location-based groups
+- **Membership System**: Join/leave functionality with member tracking
+- **Group Categories**: Predefined categories (climate, education, corruption, healthcare)
+- **Discussion Forums**: Group-specific content and conversations
+
+### Candidate Portal
+- **Profile Management**: Comprehensive candidate information display
+- **Proposal System**: Platform for sharing policy positions
+- **Community Integration**: Endorsement and engagement tracking
+- **Candidacy Declaration**: Self-service candidate registration
+
+## Data Flow
+
+### Client-Server Communication
+- **API Layer**: RESTful endpoints with consistent JSON responses
+- **Error Handling**: Centralized error management with user-friendly messages
+- **Loading States**: React Query provides built-in loading and error states
+- **Caching Strategy**: Infinite stale time with manual invalidation
+
+### Authentication Flow
+1. User submits credentials via login form
+2. Server validates against database using scrypt comparison
+3. Passport.js establishes session with PostgreSQL session store
+4. Client receives user object and updates global auth state
+5. Protected routes automatically redirect unauthenticated users
+
+### Data Validation
+- **Client-side**: Zod schemas for form validation with React Hook Form
+- **Server-side**: Drizzle schema validation for database operations
+- **Type Safety**: End-to-end TypeScript for compile-time error prevention
+
+## External Dependencies
+
+### Database Infrastructure
+- **Neon Database**: Serverless PostgreSQL with connection pooling
+- **WebSocket Support**: Real-time capabilities for future enhancements
+
+### UI Framework Dependencies
+- **Radix UI**: Accessible, unstyled component primitives
+- **Lucide Icons**: Consistent icon system throughout the application
+- **Tailwind CSS**: Utility-first CSS framework with design system
+
+### Development Tools
+- **ESBuild**: Fast bundling for production builds
+- **Vite**: Development server with hot module replacement
+- **TSX**: TypeScript execution for development server
+
+### Payment Integration (Prepared)
+- **Stripe**: Ready for subscription management and crowdfunding
+- **React Stripe.js**: Client-side payment component integration
+
+## Deployment Strategy
+
+### Production Build Process
+1. **Frontend**: Vite builds optimized React bundle to `dist/public`
+2. **Backend**: ESBuild bundles server code to `dist/index.js`
+3. **Database**: Drizzle migrations applied via `db:push` command
+4. **Assets**: Static files served from built public directory
+
+### Environment Configuration
+- **Database URL**: Required environment variable for PostgreSQL connection
+- **Session Secret**: Required for secure session management
+- **Development Mode**: Automatic Vite integration with dev server
+- **Production Mode**: Optimized builds with static file serving
+
+### Scalability Considerations
+- **Database**: Serverless PostgreSQL scales automatically
+- **Session Storage**: PostgreSQL-backed sessions for horizontal scaling
+- **Static Assets**: Optimized builds ready for CDN deployment
+- **API Design**: Stateless endpoints suitable for load balancing
+
+The application is designed as a modern, scalable platform that can grow from a small community tool to a large-scale democratic participation system while maintaining security, performance, and user experience standards.
