@@ -1,223 +1,167 @@
-// Ranked Choice Voting (Instant Runoff Voting) Implementation
-
-export interface RankedBallot {
+export interface RankedVote {
   userId: string;
-  choices: string[]; // Array of option IDs in preference order
+  rankedChoices: string[]; // Array of option IDs in preference order
+}
+
+export interface RoundResult {
+  round: number;
+  voteCounts: { [optionId: string]: number };
+  totalVotes: number;
+  majorityThreshold: number;
+  winner?: string;
+  eliminated?: string;
 }
 
 export interface RankedChoiceResult {
   winner: string | null;
   rounds: RoundResult[];
-  totalBallots: number;
   eliminationOrder: string[];
 }
 
-export interface RoundResult {
-  round: number;
-  voteCounts: Record<string, number>;
-  totalVotes: number;
-  eliminated?: string;
-  winner?: string;
-  majorityThreshold: number;
-}
-
-export class RankedChoiceCalculator {
-  private candidates: Set<string>;
-  private ballots: RankedBallot[];
-
-  constructor(candidates: string[], ballots: RankedBallot[]) {
-    this.candidates = new Set(candidates);
-    this.ballots = this.validateBallots(ballots);
+export function calculateRankedChoiceWinner(
+  votes: RankedVote[],
+  options: { id: string; text: string }[]
+): RankedChoiceResult {
+  if (votes.length === 0) {
+    return {
+      winner: null,
+      rounds: [],
+      eliminationOrder: []
+    };
   }
 
-  // Validate ballots to ensure they only contain valid candidates
-  private validateBallots(ballots: RankedBallot[]): RankedBallot[] {
-    return ballots.map(ballot => ({
-      ...ballot,
-      choices: ballot.choices.filter(choice => this.candidates.has(choice))
-    })).filter(ballot => ballot.choices.length > 0);
-  }
+  const activeOptions = new Set(options.map(opt => opt.id));
+  const eliminationOrder: string[] = [];
+  const rounds: RoundResult[] = [];
+  let roundNumber = 1;
 
-  // Count first-choice votes for remaining candidates
-  private countVotes(remainingCandidates: Set<string>): Record<string, number> {
-    const voteCounts: Record<string, number> = {};
+  while (activeOptions.size > 1) {
+    // Count first-choice votes for active options
+    const voteCounts: { [optionId: string]: number } = {};
     
-    // Initialize all remaining candidates with 0 votes
-    remainingCandidates.forEach(candidate => {
-      voteCounts[candidate] = 0;
+    // Initialize counts
+    activeOptions.forEach(optionId => {
+      voteCounts[optionId] = 0;
     });
 
-    // Count first-choice votes from each ballot
-    this.ballots.forEach(ballot => {
-      const firstChoice = ballot.choices.find(choice => 
-        remainingCandidates.has(choice)
+    // Count votes
+    for (const vote of votes) {
+      // Find the first active choice in this vote
+      const firstActiveChoice = vote.rankedChoices.find(choice => 
+        activeOptions.has(choice)
       );
       
-      if (firstChoice) {
-        voteCounts[firstChoice]++;
-      }
-    });
-
-    return voteCounts;
-  }
-
-  // Find candidate(s) with minimum votes for elimination
-  private findCandidateToEliminate(voteCounts: Record<string, number>): string {
-    const minVotes = Math.min(...Object.values(voteCounts));
-    const candidatesWithMinVotes = Object.keys(voteCounts)
-      .filter(candidate => voteCounts[candidate] === minVotes);
-    
-    // Simple tie-breaking: eliminate first candidate alphabetically
-    // In production, you might want more sophisticated tie-breaking
-    return candidatesWithMinVotes.sort()[0];
-  }
-
-  // Check if any candidate has a majority (>50%)
-  private checkForMajority(voteCounts: Record<string, number>, totalVotes: number): string | null {
-    const majorityThreshold = totalVotes / 2;
-    
-    for (const [candidate, votes] of Object.entries(voteCounts)) {
-      if (votes > majorityThreshold) {
-        return candidate;
+      if (firstActiveChoice) {
+        voteCounts[firstActiveChoice]++;
       }
     }
-    
-    return null;
-  }
 
-  // Run the ranked choice voting calculation
-  calculateWinner(): RankedChoiceResult {
-    let remainingCandidates = new Set(this.candidates);
-    const rounds: RoundResult[] = [];
-    const eliminationOrder: string[] = [];
-    let roundNumber = 1;
+    const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
+    const majorityThreshold = Math.floor(totalVotes / 2) + 1;
 
-    // Continue until we have a winner or only one candidate remains
-    while (remainingCandidates.size > 1) {
-      const voteCounts = this.countVotes(remainingCandidates);
-      const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
-      const majorityThreshold = totalVotes / 2;
+    // Check for majority winner
+    const winner = Object.entries(voteCounts).find(([_, count]) => 
+      count >= majorityThreshold
+    );
 
-      const roundResult: RoundResult = {
-        round: roundNumber,
-        voteCounts,
-        totalVotes,
-        majorityThreshold
-      };
+    const roundResult: RoundResult = {
+      round: roundNumber,
+      voteCounts,
+      totalVotes,
+      majorityThreshold,
+    };
 
-      // Check for majority winner
-      const majorityWinner = this.checkForMajority(voteCounts, totalVotes);
-      if (majorityWinner) {
-        roundResult.winner = majorityWinner;
-        rounds.push(roundResult);
-        
-        return {
-          winner: majorityWinner,
-          rounds,
-          totalBallots: this.ballots.length,
-          eliminationOrder
-        };
-      }
-
-      // No majority winner, eliminate candidate with fewest votes
-      const toEliminate = this.findCandidateToEliminate(voteCounts);
-      roundResult.eliminated = toEliminate;
+    if (winner) {
+      roundResult.winner = winner[0];
       rounds.push(roundResult);
-
-      eliminationOrder.push(toEliminate);
-      remainingCandidates.delete(toEliminate);
-      roundNumber++;
+      
+      return {
+        winner: winner[0],
+        rounds,
+        eliminationOrder
+      };
     }
 
-    // If only one candidate remains, they win
-    const winner = remainingCandidates.size === 1 ? 
-      Array.from(remainingCandidates)[0] : null;
-
-    return {
-      winner,
-      rounds,
-      totalBallots: this.ballots.length,
-      eliminationOrder
-    };
-  }
-
-  // Get detailed results with percentages
-  getDetailedResults(): RankedChoiceResult & { 
-    finalPercentages: Record<string, number>;
-    participationRate: number;
-  } {
-    const basicResult = this.calculateWinner();
-    const finalRound = basicResult.rounds[basicResult.rounds.length - 1];
+    // No majority winner, eliminate the candidate with the fewest votes
+    let minVotes = Infinity;
+    let candidateToEliminate = '';
     
-    const finalPercentages: Record<string, number> = {};
-    if (finalRound) {
-      Object.entries(finalRound.voteCounts).forEach(([candidate, votes]) => {
-        finalPercentages[candidate] = finalRound.totalVotes > 0 ? 
-          Math.round((votes / finalRound.totalVotes) * 100) : 0;
-      });
+    for (const [optionId, count] of Object.entries(voteCounts)) {
+      if (count < minVotes) {
+        minVotes = count;
+        candidateToEliminate = optionId;
+      } else if (count === minVotes && candidateToEliminate) {
+        // Tie-breaking: eliminate the one that was added later (by ID comparison)
+        if (optionId > candidateToEliminate) {
+          candidateToEliminate = optionId;
+        }
+      }
     }
 
-    return {
-      ...basicResult,
-      finalPercentages,
-      participationRate: this.ballots.length
-    };
+    roundResult.eliminated = candidateToEliminate;
+    rounds.push(roundResult);
+
+    activeOptions.delete(candidateToEliminate);
+    eliminationOrder.push(candidateToEliminate);
+    roundNumber++;
   }
 
-  // Simulate what would happen if a candidate was eliminated early
-  simulateEliminateCandidate(candidateToEliminate: string): RankedChoiceResult {
-    const modifiedCandidates = Array.from(this.candidates).filter(c => c !== candidateToEliminate);
-    const calculator = new RankedChoiceCalculator(modifiedCandidates, this.ballots);
-    return calculator.calculateWinner();
-  }
-}
+  // If we're down to one candidate, they win
+  const finalWinner = activeOptions.size === 1 ? Array.from(activeOptions)[0] : null;
 
-// Utility function to convert simple poll votes to ranked ballots
-export function convertSimpleVotesToRanked(
-  votes: { userId: string; optionId: string }[],
-  allOptions: string[]
-): RankedBallot[] {
-  return votes.map(vote => ({
-    userId: vote.userId,
-    choices: [vote.optionId] // Simple vote becomes first choice
-  }));
-}
-
-// Utility function to validate ranked choice preferences
-export function validateRankedChoices(
-  choices: string[],
-  validOptions: string[]
-): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-  
-  // Check for duplicate choices
-  const uniqueChoices = new Set(choices);
-  if (uniqueChoices.size !== choices.length) {
-    errors.push("Duplicate choices are not allowed");
-  }
-  
-  // Check for invalid options
-  const invalidChoices = choices.filter(choice => !validOptions.includes(choice));
-  if (invalidChoices.length > 0) {
-    errors.push(`Invalid options: ${invalidChoices.join(", ")}`);
-  }
-  
-  // Check if choices array is empty
-  if (choices.length === 0) {
-    errors.push("At least one choice must be provided");
-  }
-  
   return {
-    valid: errors.length === 0,
+    winner: finalWinner,
+    rounds,
+    eliminationOrder
+  };
+}
+
+export function validateRankedVote(
+  rankedChoices: string[],
+  validOptionIds: string[]
+): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // Check if all choices are valid option IDs
+  for (const choice of rankedChoices) {
+    if (!validOptionIds.includes(choice)) {
+      errors.push(`Invalid option ID: ${choice}`);
+    }
+  }
+
+  // Check for duplicates
+  const uniqueChoices = new Set(rankedChoices);
+  if (uniqueChoices.size !== rankedChoices.length) {
+    errors.push('Duplicate choices are not allowed');
+  }
+
+  // Check if at least one choice is provided
+  if (rankedChoices.length === 0) {
+    errors.push('At least one choice must be provided');
+  }
+
+  return {
+    isValid: errors.length === 0,
     errors
   };
 }
 
-// Helper to create ranked choice poll options for UI
-export function createRankedChoiceOptions(candidates: string[]) {
-  return candidates.map((candidate, index) => ({
-    id: `option_${index + 1}`,
-    text: candidate,
-    votes: 0
-  }));
+export function simulateRankedChoiceElection(
+  votes: RankedVote[],
+  options: { id: string; text: string }[]
+) {
+  const result = calculateRankedChoiceWinner(votes, options);
+  
+  return {
+    ...result,
+    summary: {
+      totalVotes: votes.length,
+      totalRounds: result.rounds.length,
+      finalWinnerName: result.winner ? 
+        options.find(opt => opt.id === result.winner)?.text : null,
+      eliminatedCandidates: result.eliminationOrder.map(id => 
+        options.find(opt => opt.id === id)?.text
+      ).filter(Boolean)
+    }
+  };
 }

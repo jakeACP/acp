@@ -1,201 +1,160 @@
-import { createHash } from "crypto";
-
-// Simple blockchain-like transparency system for vote verification
-// In production, this would integrate with actual blockchain networks
+import { createHash } from 'crypto';
 
 export interface VoteRecord {
-  id: string;
   pollId: string;
   userId: string;
-  optionId?: string;
-  rankedChoices?: string[];
+  vote: string | string[]; // string for simple, array for ranked choice
   timestamp: number;
+  blockHash?: string;
+  previousHash?: string;
 }
 
-export interface BlockchainRecord {
-  blockId: string;
-  previousHash: string;
+export interface BlockchainBlock {
+  index: number;
   timestamp: number;
   votes: VoteRecord[];
-  merkleRoot: string;
+  previousHash: string;
   hash: string;
+  merkleRoot: string;
 }
 
-class BlockchainVerifier {
-  private blocks: BlockchainRecord[] = [];
-  private readonly genesisHash = "0000000000000000000000000000000000000000000000000000000000000000";
+class BlockchainService {
+  private chain: BlockchainBlock[] = [];
 
-  // Create a hash for a vote record
-  createVoteHash(vote: VoteRecord): string {
-    const voteString = JSON.stringify({
-      id: vote.id,
-      pollId: vote.pollId,
-      userId: this.anonymizeUserId(vote.userId), // Anonymize for privacy
-      optionId: vote.optionId,
-      rankedChoices: vote.rankedChoices,
-      timestamp: vote.timestamp
-    });
-    
-    return createHash('sha256').update(voteString).digest('hex');
+  constructor() {
+    // Create genesis block
+    this.chain.push(this.createGenesisBlock());
   }
 
-  // Create merkle root from vote hashes
-  private createMerkleRoot(votes: VoteRecord[]): string {
-    if (votes.length === 0) return "";
-    
-    const hashes = votes.map(vote => this.createVoteHash(vote));
-    
-    // Build merkle tree bottom-up
-    let currentLevel = hashes;
-    while (currentLevel.length > 1) {
-      const nextLevel: string[] = [];
-      
-      for (let i = 0; i < currentLevel.length; i += 2) {
-        const left = currentLevel[i];
-        const right = i + 1 < currentLevel.length ? currentLevel[i + 1] : left;
-        const combined = createHash('sha256').update(left + right).digest('hex');
-        nextLevel.push(combined);
-      }
-      
-      currentLevel = nextLevel;
-    }
-    
-    return currentLevel[0];
-  }
-
-  // Create block hash
-  private createBlockHash(block: Omit<BlockchainRecord, 'hash'>): string {
-    const blockString = JSON.stringify({
-      blockId: block.blockId,
-      previousHash: block.previousHash,
-      timestamp: block.timestamp,
-      merkleRoot: block.merkleRoot,
-      voteCount: block.votes.length
-    });
-    
-    return createHash('sha256').update(blockString).digest('hex');
-  }
-
-  // Add votes to blockchain
-  addVoteBlock(votes: VoteRecord[]): string {
-    const previousHash = this.blocks.length > 0 
-      ? this.blocks[this.blocks.length - 1].hash 
-      : this.genesisHash;
-    
-    const merkleRoot = this.createMerkleRoot(votes);
-    const blockId = `block_${this.blocks.length + 1}_${Date.now()}`;
-    
-    const block: Omit<BlockchainRecord, 'hash'> = {
-      blockId,
-      previousHash,
+  private createGenesisBlock(): BlockchainBlock {
+    const block: BlockchainBlock = {
+      index: 0,
       timestamp: Date.now(),
-      votes,
-      merkleRoot
+      votes: [],
+      previousHash: "0",
+      hash: "",
+      merkleRoot: ""
     };
     
-    const hash = this.createBlockHash(block);
-    
-    const finalBlock: BlockchainRecord = {
-      ...block,
-      hash
-    };
-    
-    this.blocks.push(finalBlock);
-    return hash;
+    block.merkleRoot = this.calculateMerkleRoot(block.votes);
+    block.hash = this.calculateHash(block);
+    return block;
   }
 
-  // Verify a specific vote exists in the blockchain
-  verifyVote(voteId: string): { verified: boolean; block?: BlockchainRecord; voteHash?: string } {
-    for (const block of this.blocks) {
-      const vote = block.votes.find(v => v.id === voteId);
+  private calculateHash(block: BlockchainBlock): string {
+    const data = block.index + block.timestamp + block.previousHash + block.merkleRoot + JSON.stringify(block.votes);
+    return createHash('sha256').update(data).digest('hex');
+  }
+
+  private calculateMerkleRoot(votes: VoteRecord[]): string {
+    if (votes.length === 0) return createHash('sha256').update('').digest('hex');
+    
+    let hashes = votes.map(vote => 
+      createHash('sha256').update(JSON.stringify(vote)).digest('hex')
+    );
+
+    while (hashes.length > 1) {
+      const newHashes: string[] = [];
+      for (let i = 0; i < hashes.length; i += 2) {
+        const left = hashes[i];
+        const right = i + 1 < hashes.length ? hashes[i + 1] : left;
+        const combined = createHash('sha256').update(left + right).digest('hex');
+        newHashes.push(combined);
+      }
+      hashes = newHashes;
+    }
+
+    return hashes[0];
+  }
+
+  public addVote(voteRecord: VoteRecord): string {
+    const latestBlock = this.getLatestBlock();
+    
+    // Add vote to a new block
+    const newBlock: BlockchainBlock = {
+      index: latestBlock.index + 1,
+      timestamp: Date.now(),
+      votes: [voteRecord],
+      previousHash: latestBlock.hash,
+      hash: "",
+      merkleRoot: ""
+    };
+
+    newBlock.merkleRoot = this.calculateMerkleRoot(newBlock.votes);
+    newBlock.hash = this.calculateHash(newBlock);
+
+    // Update vote record with block hash
+    voteRecord.blockHash = newBlock.hash;
+    voteRecord.previousHash = latestBlock.hash;
+
+    this.chain.push(newBlock);
+    return newBlock.hash;
+  }
+
+  public getLatestBlock(): BlockchainBlock {
+    return this.chain[this.chain.length - 1];
+  }
+
+  public verifyChain(): boolean {
+    for (let i = 1; i < this.chain.length; i++) {
+      const currentBlock = this.chain[i];
+      const previousBlock = this.chain[i - 1];
+
+      // Verify current block hash
+      if (currentBlock.hash !== this.calculateHash(currentBlock)) {
+        return false;
+      }
+
+      // Verify link to previous block
+      if (currentBlock.previousHash !== previousBlock.hash) {
+        return false;
+      }
+
+      // Verify merkle root
+      if (currentBlock.merkleRoot !== this.calculateMerkleRoot(currentBlock.votes)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public getVoteVerification(voteHash: string): any {
+    for (const block of this.chain) {
+      const vote = block.votes.find(v => v.blockHash === voteHash);
       if (vote) {
-        const voteHash = this.createVoteHash(vote);
         return {
-          verified: true,
-          block,
-          voteHash
+          vote,
+          block: {
+            index: block.index,
+            hash: block.hash,
+            timestamp: block.timestamp,
+            previousHash: block.previousHash,
+            merkleRoot: block.merkleRoot
+          },
+          verified: this.verifyChain()
         };
       }
     }
-    
-    return { verified: false };
+    return null;
   }
 
-  // Verify blockchain integrity
-  verifyChain(): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
-    
-    for (let i = 0; i < this.blocks.length; i++) {
-      const block = this.blocks[i];
-      const expectedPreviousHash = i === 0 ? this.genesisHash : this.blocks[i - 1].hash;
-      
-      if (block.previousHash !== expectedPreviousHash) {
-        errors.push(`Block ${i} has invalid previous hash`);
-      }
-      
-      const recalculatedHash = this.createBlockHash({
-        blockId: block.blockId,
-        previousHash: block.previousHash,
-        timestamp: block.timestamp,
-        votes: block.votes,
-        merkleRoot: block.merkleRoot
-      });
-      
-      if (block.hash !== recalculatedHash) {
-        errors.push(`Block ${i} has invalid hash`);
-      }
-      
-      const recalculatedMerkleRoot = this.createMerkleRoot(block.votes);
-      if (block.merkleRoot !== recalculatedMerkleRoot) {
-        errors.push(`Block ${i} has invalid merkle root`);
-      }
+  public getChainSummary() {
+    return {
+      totalBlocks: this.chain.length,
+      totalVotes: this.chain.reduce((sum, block) => sum + block.votes.length, 0),
+      isValid: this.verifyChain(),
+      latestBlockHash: this.getLatestBlock().hash,
+      chainHeight: this.chain.length - 1
+    };
+  }
+
+  public getPollVotes(pollId: string): VoteRecord[] {
+    const votes: VoteRecord[] = [];
+    for (const block of this.chain) {
+      votes.push(...block.votes.filter(vote => vote.pollId === pollId));
     }
-    
-    return {
-      valid: errors.length === 0,
-      errors
-    };
-  }
-
-  // Anonymize user ID for privacy while maintaining verifiability
-  private anonymizeUserId(userId: string): string {
-    return createHash('sha256').update(userId + "salt_for_anonymization").digest('hex').substring(0, 16);
-  }
-
-  // Get blockchain summary for transparency
-  getBlockchainSummary() {
-    return {
-      totalBlocks: this.blocks.length,
-      totalVotes: this.blocks.reduce((sum, block) => sum + block.votes.length, 0),
-      lastBlockHash: this.blocks.length > 0 ? this.blocks[this.blocks.length - 1].hash : null,
-      chainVerification: this.verifyChain()
-    };
-  }
-
-  // Export blockchain data for transparency
-  exportBlockchain() {
-    return {
-      blocks: this.blocks.map(block => ({
-        blockId: block.blockId,
-        timestamp: new Date(block.timestamp).toISOString(),
-        voteCount: block.votes.length,
-        hash: block.hash,
-        previousHash: block.previousHash,
-        merkleRoot: block.merkleRoot
-      })),
-      summary: this.getBlockchainSummary()
-    };
+    return votes;
   }
 }
 
-// Singleton instance for the application
-export const blockchainVerifier = new BlockchainVerifier();
-
-// Utility functions for vote verification
-export function generateVoteProof(vote: VoteRecord): string {
-  return blockchainVerifier.createVoteHash(vote);
-}
-
-export function verifyVoteIntegrity(voteId: string) {
-  return blockchainVerifier.verifyVote(voteId);
-}
+export const blockchain = new BlockchainService();
