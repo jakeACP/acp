@@ -179,3 +179,18 @@ The platform now serves as a cutting-edge example of transparent, fair, and tech
 - **Key Locations**: Navigation header, authentication pages, 404 error page, user profiles, favicon
 - **Brand Consistency**: Maintains professional appearance while reinforcing ACP identity
 - **User Recognition**: Clear visual association with Anti-Corruption Party movement and values
+
+## Security & Account Management Updates (January 2025)
+
+### Change Password Feature Implementation
+- **Secure Password Updates**: Complete change password functionality with current password verification
+- **Backend Security**: Proper password hashing using scrypt with salt for new passwords
+- **Frontend Interface**: User-friendly settings page accessible through navigation dropdown
+- **Error Handling**: Comprehensive validation and user feedback for password requirements
+- **Database Integration**: New updateUserPassword method in storage layer for secure updates
+
+### Authentication Improvements
+- **Duplicate Registration Fix**: Enhanced registration to check both username and email uniqueness
+- **Error Handling**: Improved authentication error messages and try-catch blocks
+- **Type Safety**: Corrected user ID types from number to string for proper session handling
+- **Settings Navigation**: Integrated settings page into main application routing and navigation

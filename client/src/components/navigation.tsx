@@ -87,7 +87,9 @@ export function Navigation() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem>Profile</DropdownMenuItem>
-                  <DropdownMenuItem>Settings</DropdownMenuItem>
+                  <Link href="/settings">
+                    <DropdownMenuItem>Settings</DropdownMenuItem>
+                  </Link>
                   <DropdownMenuItem>Subscription</DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout}>
                     Sign Out
@@ -128,9 +130,15 @@ export function Navigation() {
               <Button variant="ghost" className="w-full justify-start">
                 Profile
               </Button>
-              <Button variant="ghost" className="w-full justify-start">
-                Settings
-              </Button>
+              <Link href="/settings">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Settings
+                </Button>
+              </Link>
               <Button 
                 variant="ghost" 
                 className="w-full justify-start"

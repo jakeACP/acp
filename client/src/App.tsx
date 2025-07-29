@@ -12,6 +12,7 @@ import PollsPage from "@/pages/polls-page";
 import CandidatesPage from "@/pages/candidates-page";
 import MessagesPage from "@/pages/messages-page";
 import RepresentativesPage from "@/pages/representatives-page";
+import SettingsPage from "@/pages/settings-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <ProtectedRoute path="/candidates" component={CandidatesPage} />
       <ProtectedRoute path="/representatives" component={RepresentativesPage} />
       <ProtectedRoute path="/messages" component={MessagesPage} />
+      <ProtectedRoute path="/settings" component={SettingsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
