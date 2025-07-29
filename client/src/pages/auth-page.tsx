@@ -10,6 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { Vote, Users, Shield, Megaphone } from "lucide-react";
+import logoPath from "@assets/logo1_1753819424851.png";
 import { Redirect } from "wouter";
 
 const loginSchema = insertUserSchema.pick({ username: true, password: true });
@@ -54,10 +55,10 @@ export default function AuthPage() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center mb-4">
-              <Vote className="h-8 w-8 text-primary mr-2" />
+              <img src={logoPath} alt="Anti-Corruption Party" className="h-12 w-12 mr-3" />
               <h1 className="text-2xl font-bold text-slate-900">ACP Democracy</h1>
             </div>
-            <p className="text-slate-600">Join the movement for transparent governance</p>
+            <p className="text-slate-600">Join the Anti-Corruption Party movement for transparent governance</p>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -226,6 +227,9 @@ export default function AuthPage() {
       {/* Right side - Hero Section */}
       <div className="flex-1 bg-primary text-primary-foreground p-8 flex items-center justify-center">
         <div className="max-w-lg text-center">
+          <div className="mb-8">
+            <img src={logoPath} alt="Anti-Corruption Party" className="h-20 w-20 mx-auto mb-4 opacity-90" />
+          </div>
           <h2 className="text-3xl font-bold mb-6">
             Democracy That Works for Everyone
           </h2>

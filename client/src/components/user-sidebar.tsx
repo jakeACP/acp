@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Group } from "@shared/schema";
 import { Leaf, GraduationCap, Scale, Users } from "lucide-react";
+import logoPath from "@assets/logo1_1753819424851.png";
 
 export function UserSidebar() {
   const { user } = useAuth();
@@ -50,9 +51,12 @@ export function UserSidebar() {
               {user?.firstName ? `${user.firstName} ${user.lastName}` : user?.username}
             </h3>
             
-            <Badge variant="outline" className="text-primary border-primary">
-              {user?.role === "citizen" ? "Active Citizen" : user?.role}
-            </Badge>
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <Badge variant="outline" className="text-primary border-primary">
+                {user?.role === "citizen" ? "Active Citizen" : user?.role}
+              </Badge>
+              <img src={logoPath} alt="ACP" className="h-5 w-5 opacity-75" title="Anti-Corruption Party Member" />
+            </div>
             
             {user?.location && (
               <p className="text-xs text-slate-500 mt-1">{user.location}</p>

@@ -171,3 +171,11 @@ The platform now serves as a cutting-edge example of transparent, fair, and tech
 - **User Expectation**: Complete representative contact database downloadable from API
 - **Reality**: Google's retirement of the endpoint means no single API provides comprehensive representative data
 - **Approach**: Standardized representative structure (President, VP, 2 Senators, 1 House Rep, Governor per person) with direct links to authoritative sources
+
+## Visual Identity Integration (January 2025)
+
+### Anti-Corruption Party Logo Implementation
+- **Logo Added**: Integrated official ACP logo throughout the application interface
+- **Key Locations**: Navigation header, authentication pages, 404 error page, user profiles, favicon
+- **Brand Consistency**: Maintains professional appearance while reinforcing ACP identity
+- **User Recognition**: Clear visual association with Anti-Corruption Party movement and values

@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { Vote, Bell, ChevronDown, Menu } from "lucide-react";
+import logoPath from "@assets/logo1_1753819424851.png";
 import { cn } from "@/lib/utils";
 
 export function Navigation() {
@@ -31,10 +32,12 @@ export function Navigation() {
         <div className="flex justify-between items-center h-16">
           {/* Logo and Brand */}
           <div className="flex items-center">
-            <div className="flex-shrink-0 flex items-center">
-              <Vote className="h-8 w-8 text-primary mr-3" />
-              <span className="text-xl font-bold text-slate-900">ACP Democracy</span>
-            </div>
+            <Link href="/">
+              <div className="flex-shrink-0 flex items-center cursor-pointer">
+                <img src={logoPath} alt="Anti-Corruption Party" className="h-10 w-10 mr-3" />
+                <span className="text-xl font-bold text-slate-900">ACP Democracy</span>
+              </div>
+            </Link>
           </div>
 
           {/* Desktop Navigation Links */}
