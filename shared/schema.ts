@@ -82,7 +82,7 @@ export const comments = pgTable("comments", {
   postId: varchar("post_id").notNull().references(() => posts.id),
   authorId: varchar("author_id").notNull().references(() => users.id),
   content: text("content").notNull(),
-  parentId: varchar("parent_id").references(() => comments.id),
+  parentId: varchar("parent_id"),
   likesCount: integer("likes_count").default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
