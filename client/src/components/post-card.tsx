@@ -24,7 +24,7 @@ export function PostCard({ post }: PostCardProps) {
 
   const likeMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", "/api/likes", {
+      return await apiRequest("/api/likes", "POST", {
         targetId: post.id,
         targetType: "post",
       });

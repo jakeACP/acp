@@ -47,7 +47,7 @@ export function RankedChoicePoll({ poll }: RankedChoicePollProps) {
 
   const voteMutation = useMutation({
     mutationFn: async (choices: string[]) => {
-      const res = await apiRequest("POST", `/api/polls/${poll.id}/vote-ranked`, {
+      const res = await apiRequest(`/api/polls/${poll.id}/vote-ranked`, "POST", {
         rankedChoices: choices
       });
       return res.json();

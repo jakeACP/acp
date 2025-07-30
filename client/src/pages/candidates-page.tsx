@@ -32,7 +32,7 @@ export default function CandidatesPage() {
 
   const supportMutation = useMutation({
     mutationFn: async (candidateId: string) => {
-      const res = await apiRequest("POST", `/api/candidates/${candidateId}/support`);
+      const res = await apiRequest(`/api/candidates/${candidateId}/support`, "POST");
       return res.json();
     },
     onSuccess: () => {

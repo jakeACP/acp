@@ -13,7 +13,7 @@ export function SeedButton() {
     
     setIsSeeding(true);
     try {
-      await apiRequest("POST", "/api/seed");
+      await apiRequest("/api/seed", "POST");
       
       // Invalidate all queries to refresh the data
       queryClient.invalidateQueries();

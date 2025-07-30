@@ -67,7 +67,7 @@ export default function RepresentativesPage() {
 
     setIsLoading(true);
     try {
-      const response = await apiRequest("POST", "/api/representatives/search", {
+      const response = await apiRequest("/api/representatives/search", "POST", {
         address: address.trim(),
       });
       const data = await response.json();
@@ -100,7 +100,7 @@ export default function RepresentativesPage() {
 
   const followRepresentative = useMutation({
     mutationFn: async (repData: { name: string; office: string; party?: string }) => {
-      const res = await apiRequest("POST", "/api/representatives/follow", repData);
+      const res = await apiRequest("/api/representatives/follow", "POST", repData);
       return res.json();
     },
     onSuccess: () => {

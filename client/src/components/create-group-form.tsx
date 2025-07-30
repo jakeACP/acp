@@ -24,7 +24,7 @@ export function CreateGroupForm({ onCancel }: CreateGroupFormProps) {
 
   const createGroupMutation = useMutation({
     mutationFn: async (groupData: any) => {
-      const res = await apiRequest("POST", "/api/groups", groupData);
+      const res = await apiRequest("/api/groups", "POST", groupData);
       return res.json();
     },
     onSuccess: () => {

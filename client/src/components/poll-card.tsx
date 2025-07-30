@@ -27,7 +27,7 @@ export function PollCard({ poll }: PollCardProps) {
 
   const voteMutation = useMutation({
     mutationFn: async (optionId: string) => {
-      return await apiRequest("POST", `/api/polls/${poll.id}/vote`, { optionId });
+      return await apiRequest(`/api/polls/${poll.id}/vote`, "POST", { optionId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls"] });

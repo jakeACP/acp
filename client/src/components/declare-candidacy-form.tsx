@@ -31,7 +31,7 @@ export function DeclareCandidacyForm({ onCancel }: DeclareCandidacyFormProps) {
 
   const createCandidateMutation = useMutation({
     mutationFn: async (candidateData: any) => {
-      const res = await apiRequest("POST", "/api/candidates", candidateData);
+      const res = await apiRequest("/api/candidates", "POST", candidateData);
       return res.json();
     },
     onSuccess: () => {

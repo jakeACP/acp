@@ -26,7 +26,7 @@ export function CreatePollForm({ onCancel }: CreatePollFormProps) {
 
   const createPollMutation = useMutation({
     mutationFn: async (pollData: any) => {
-      const res = await apiRequest("POST", "/api/polls", pollData);
+      const res = await apiRequest("/api/polls", "POST", pollData);
       return res.json();
     },
     onSuccess: () => {

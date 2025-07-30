@@ -21,7 +21,7 @@ export function CreatePostForm() {
 
   const createPostMutation = useMutation({
     mutationFn: async (postData: { content: string; tags: string[] }) => {
-      const res = await apiRequest("POST", "/api/posts", postData);
+      const res = await apiRequest("/api/posts", "POST", postData);
       return res.json();
     },
     onSuccess: () => {

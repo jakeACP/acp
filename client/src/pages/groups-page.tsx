@@ -27,7 +27,7 @@ export default function GroupsPage() {
 
   const joinGroupMutation = useMutation({
     mutationFn: async (groupId: string) => {
-      const res = await apiRequest("POST", `/api/groups/${groupId}/join`);
+      const res = await apiRequest(`/api/groups/${groupId}/join`, "POST");
       return res.json();
     },
     onSuccess: () => {
@@ -49,7 +49,7 @@ export default function GroupsPage() {
 
   const leaveGroupMutation = useMutation({
     mutationFn: async (groupId: string) => {
-      const res = await apiRequest("POST", `/api/groups/${groupId}/leave`);
+      const res = await apiRequest(`/api/groups/${groupId}/leave`, "POST");
       return res.json();
     },
     onSuccess: () => {

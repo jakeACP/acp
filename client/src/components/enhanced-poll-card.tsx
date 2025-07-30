@@ -23,7 +23,7 @@ export function EnhancedPollCard({ poll }: EnhancedPollCardProps) {
 
   const voteMutation = useMutation({
     mutationFn: async (optionId: string) => {
-      const res = await apiRequest("POST", `/api/polls/${poll.id}/vote`, { optionId });
+      const res = await apiRequest(`/api/polls/${poll.id}/vote`, "POST", { optionId });
       return res.json();
     },
     onSuccess: () => {
