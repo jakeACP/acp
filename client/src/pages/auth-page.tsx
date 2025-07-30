@@ -11,7 +11,7 @@ import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { Vote, Users, Shield, Megaphone } from "lucide-react";
 import logoPath from "@assets/logo1_1753819424851.png";
-import { Redirect } from "wouter";
+import { Redirect, Link } from "wouter";
 
 const loginSchema = insertUserSchema.pick({ username: true, password: true });
 const registerSchema = insertUserSchema.extend({
@@ -116,6 +116,14 @@ export default function AuthPage() {
                       {loginMutation.isPending ? "Signing In..." : "Sign In"}
                     </Button>
                   </form>
+                  
+                  <div className="mt-4 text-center">
+                    <Link href="/forgot-password">
+                      <Button variant="link" className="text-sm text-slate-600 hover:text-slate-900">
+                        Forgot your password?
+                      </Button>
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

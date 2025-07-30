@@ -131,6 +131,15 @@ export const userAddresses = pgTable("user_addresses", {
   lastUsed: timestamp("last_used").defaultNow(),
 });
 
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const userAddressesRelations = relations(userAddresses, ({ one }) => ({
   user: one(users, {
     fields: [userAddresses.userId],
@@ -292,3 +301,5 @@ export type FollowedRepresentative = typeof followedRepresentatives.$inferSelect
 export type InsertFollowedRepresentative = typeof followedRepresentatives.$inferInsert;
 export type UserAddress = typeof userAddresses.$inferSelect;
 export type InsertUserAddress = typeof userAddresses.$inferInsert;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;

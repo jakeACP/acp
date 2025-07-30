@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, messages, followedRepresentatives, userAddresses, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, messages, followedRepresentatives, userAddresses, passwordResetTokens, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count } from "drizzle-orm";
 import session from "express-session";
@@ -69,6 +69,12 @@ export interface IStorage {
   saveUserAddress(userId: string, address: string): Promise<void>;
   followRepresentative(userId: string, repData: { name: string; office: string; party?: string }): Promise<void>;
   getFollowedRepresentatives(userId: string): Promise<FollowedRepresentative[]>;
+
+  // Password Reset
+  createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken>;
+  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markTokenAsUsed(tokenId: string): Promise<void>;
+  cleanupExpiredTokens(): Promise<void>;
 
   sessionStore: any;
 }
@@ -621,6 +627,43 @@ export class DatabaseStorage implements IStorage {
       .from(followedRepresentatives)
       .where(eq(followedRepresentatives.userId, userId))
       .orderBy(desc(followedRepresentatives.followedAt));
+  }
+
+  async createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken> {
+    const [resetToken] = await db
+      .insert(passwordResetTokens)
+      .values({
+        email,
+        token,
+        expiresAt,
+      })
+      .returning();
+    return resetToken;
+  }
+
+  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    const [resetToken] = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(and(
+        eq(passwordResetTokens.token, token),
+        eq(passwordResetTokens.used, false),
+        sql`${passwordResetTokens.expiresAt} > NOW()`
+      ));
+    return resetToken || undefined;
+  }
+
+  async markTokenAsUsed(tokenId: string): Promise<void> {
+    await db
+      .update(passwordResetTokens)
+      .set({ used: true })
+      .where(eq(passwordResetTokens.id, tokenId));
+  }
+
+  async cleanupExpiredTokens(): Promise<void> {
+    await db
+      .delete(passwordResetTokens)
+      .where(sql`${passwordResetTokens.expiresAt} < NOW()`);
   }
 }
 

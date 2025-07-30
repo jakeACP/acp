@@ -13,6 +13,8 @@ import CandidatesPage from "@/pages/candidates-page";
 import MessagesPage from "@/pages/messages-page";
 import RepresentativesPage from "@/pages/representatives-page";
 import SettingsPage from "@/pages/settings-page";
+import ForgotPasswordPage from "@/pages/forgot-password-page";
+import ResetPasswordPage from "@/pages/reset-password-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -26,6 +28,8 @@ function Router() {
       <ProtectedRoute path="/messages" component={MessagesPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />  
+      <Route path="/reset-password" component={ResetPasswordPage} />
       <Route component={NotFound} />
     </Switch>
   );
