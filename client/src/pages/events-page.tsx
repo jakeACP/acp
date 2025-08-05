@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertEventSchema, type Event, type InsertEvent } from "@shared/schema";
-import { Calendar, MapPin, Users, Clock, Plus, Filter } from "lucide-react";
+import { Calendar, MapPin, Users, Clock, Plus, Filter, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -58,21 +58,21 @@ export default function EventsPage() {
     resolver: zodResolver(insertEventSchema),
     defaultValues: {
       title: "",
-      description: "",
+      description: null,
       location: "",
-      address: "",
+      address: null,
       city: "",
       state: "",
-      zipCode: "",
+      zipCode: null,
       startDate: new Date(),
       endDate: null,
       isVirtual: false,
-      virtualLink: "",
+      virtualLink: null,
       maxAttendees: null,
       tags: [],
       isPublic: true,
       requiresApproval: false,
-      image: "",
+      image: null,
     },
   });
 
@@ -144,6 +144,15 @@ export default function EventsPage() {
 
   return (
     <div className="container mx-auto py-8 space-y-6">
+      <div className="flex items-center gap-4 mb-6">
+        <Button variant="ghost" size="sm" asChild>
+          <a href="/" className="flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Feed
+          </a>
+        </Button>
+      </div>
+      
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold">Events</h1>
@@ -187,7 +196,12 @@ export default function EventsPage() {
                       <FormItem>
                         <FormLabel>Event Title</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter event title" {...field} data-testid="input-event-title" />
+                          <Input 
+                            placeholder="Enter event title" 
+                            {...field} 
+                            value={field.value || ""}
+                            data-testid="input-event-title" 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -205,6 +219,7 @@ export default function EventsPage() {
                             placeholder="Describe your event..." 
                             className="min-h-[100px]" 
                             {...field} 
+                            value={field.value || ""}
                             data-testid="textarea-event-description"
                           />
                         </FormControl>
