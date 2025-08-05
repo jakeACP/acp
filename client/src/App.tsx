@@ -13,6 +13,7 @@ import CandidatesPage from "@/pages/candidates-page";
 import MessagesPage from "@/pages/messages-page";
 import RepresentativesPage from "@/pages/representatives-page";
 import SettingsPage from "@/pages/settings-page";
+import EventsPage from "@/pages/events-page";
 import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
 import NotFound from "@/pages/not-found";
@@ -25,6 +26,7 @@ function Router() {
       <ProtectedRoute path="/polls" component={PollsPage} />
       <ProtectedRoute path="/candidates" component={CandidatesPage} />
       <ProtectedRoute path="/representatives" component={RepresentativesPage} />
+      <ProtectedRoute path="/events" component={EventsPage} />
       <ProtectedRoute path="/messages" component={MessagesPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <Route path="/auth" component={AuthPage} />

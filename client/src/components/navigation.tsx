@@ -18,6 +18,7 @@ export function Navigation() {
     { href: "/polls", label: "Polls" },
     { href: "/groups", label: "Groups" },
     { href: "/candidates", label: "Candidates" },
+    { href: "/events", label: "Events" },
     { href: "/representatives", label: "Know Your Reps" },
     { href: "/messages", label: "Messages" },
   ];

@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count } from "drizzle-orm";
 import session from "express-session";
@@ -79,6 +79,22 @@ export interface IStorage {
 
   // Flags
   createFlag(flag: InsertFlag): Promise<Flag>;
+
+  // Events
+  getEvents(limit?: number, offset?: number, filters?: { city?: string; state?: string; tags?: string[] }): Promise<Event[]>;
+  getEventById(id: string): Promise<Event | undefined>;
+  createEvent(event: InsertEvent): Promise<Event>;
+  updateEvent(eventId: string, updateData: Partial<Event>): Promise<Event>;
+  deleteEvent(eventId: string): Promise<void>;
+  getUserEvents(userId: string): Promise<Event[]>;
+  getEventsByLocation(city?: string, state?: string): Promise<Event[]>;
+  
+  // Event Attendees
+  registerForEvent(eventId: string, userId: string, status?: string): Promise<EventAttendee>;
+  unregisterFromEvent(eventId: string, userId: string): Promise<void>;
+  getEventAttendees(eventId: string): Promise<EventAttendee[]>;
+  getUserEventRegistrations(userId: string): Promise<EventAttendee[]>;
+  updateEventAttendeeStatus(eventId: string, userId: string, status: string): Promise<EventAttendee>;
 
   sessionStore: any;
 }
@@ -685,6 +701,154 @@ export class DatabaseStorage implements IStorage {
       .values(flag)
       .returning();
     return newFlag;
+  }
+
+  // Events
+  async getEvents(limit = 50, offset = 0, filters?: { city?: string; state?: string; tags?: string[] }): Promise<Event[]> {
+    let query = db.select().from(events).orderBy(desc(events.startDate));
+    
+    // Apply filters
+    if (filters) {
+      const conditions = [];
+      if (filters.city) {
+        conditions.push(eq(events.city, filters.city));
+      }
+      if (filters.state) {
+        conditions.push(eq(events.state, filters.state));
+      }
+      if (filters.tags && filters.tags.length > 0) {
+        // Check if any of the filter tags match any event tags
+        conditions.push(
+          or(...filters.tags.map(tag => 
+            sql`${events.tags} @> ${JSON.stringify([tag])}`
+          ))
+        );
+      }
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+    }
+    
+    return await query.limit(limit).offset(offset);
+  }
+
+  async getEventById(id: string): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    return event || undefined;
+  }
+
+  async createEvent(event: InsertEvent): Promise<Event> {
+    const [newEvent] = await db
+      .insert(events)
+      .values(event)
+      .returning();
+    return newEvent;
+  }
+
+  async updateEvent(eventId: string, updateData: Partial<Event>): Promise<Event> {
+    const [updatedEvent] = await db
+      .update(events)
+      .set(updateData)
+      .where(eq(events.id, eventId))
+      .returning();
+    return updatedEvent;
+  }
+
+  async deleteEvent(eventId: string): Promise<void> {
+    // First delete all attendee records
+    await db.delete(eventAttendees).where(eq(eventAttendees.eventId, eventId));
+    // Then delete the event
+    await db.delete(events).where(eq(events.id, eventId));
+  }
+
+  async getUserEvents(userId: string): Promise<Event[]> {
+    return await db
+      .select()
+      .from(events)
+      .where(eq(events.organizerId, userId))
+      .orderBy(desc(events.startDate));
+  }
+
+  async getEventsByLocation(city?: string, state?: string): Promise<Event[]> {
+    const conditions = [];
+    if (city) conditions.push(eq(events.city, city));
+    if (state) conditions.push(eq(events.state, state));
+    
+    if (conditions.length === 0) return [];
+    
+    return await db
+      .select()
+      .from(events)
+      .where(and(...conditions))
+      .orderBy(desc(events.startDate));
+  }
+
+  // Event Attendees
+  async registerForEvent(eventId: string, userId: string, status = "attending"): Promise<EventAttendee> {
+    // Check if already registered
+    const existing = await db
+      .select()
+      .from(eventAttendees)
+      .where(and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.userId, userId)));
+    
+    if (existing.length > 0) {
+      // Update existing registration
+      return await this.updateEventAttendeeStatus(eventId, userId, status);
+    }
+    
+    const [attendee] = await db
+      .insert(eventAttendees)
+      .values({ eventId, userId, status })
+      .returning();
+    
+    // Update event attendee count
+    await db
+      .update(events)
+      .set({ 
+        currentAttendees: sql`${events.currentAttendees} + 1` 
+      })
+      .where(eq(events.id, eventId));
+    
+    return attendee;
+  }
+
+  async unregisterFromEvent(eventId: string, userId: string): Promise<void> {
+    const result = await db
+      .delete(eventAttendees)
+      .where(and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.userId, userId)));
+    
+    // Update event attendee count
+    await db
+      .update(events)
+      .set({ 
+        currentAttendees: sql`GREATEST(${events.currentAttendees} - 1, 0)` 
+      })
+      .where(eq(events.id, eventId));
+  }
+
+  async getEventAttendees(eventId: string): Promise<EventAttendee[]> {
+    return await db
+      .select()
+      .from(eventAttendees)
+      .where(eq(eventAttendees.eventId, eventId))
+      .orderBy(desc(eventAttendees.registeredAt));
+  }
+
+  async getUserEventRegistrations(userId: string): Promise<EventAttendee[]> {
+    return await db
+      .select()
+      .from(eventAttendees)
+      .where(eq(eventAttendees.userId, userId))
+      .orderBy(desc(eventAttendees.registeredAt));
+  }
+
+  async updateEventAttendeeStatus(eventId: string, userId: string, status: string): Promise<EventAttendee> {
+    const [updatedAttendee] = await db
+      .update(eventAttendees)
+      .set({ status })
+      .where(and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.userId, userId)))
+      .returning();
+    return updatedAttendee;
   }
 }
 

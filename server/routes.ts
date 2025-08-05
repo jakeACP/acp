@@ -600,6 +600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      console.log("Generated upload URL:", uploadURL);
       res.json({ uploadURL });
     } catch (error) {
       console.error("Error generating upload URL:", error);
@@ -638,6 +639,149 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error setting profile picture:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Events API endpoints
+  app.get("/api/events", async (req, res) => {
+    try {
+      const { limit, offset, city, state, tags } = req.query;
+      const filters = {
+        city: city as string,
+        state: state as string,
+        tags: tags ? (tags as string).split(',') : undefined
+      };
+      
+      const events = await storage.getEvents(
+        limit ? parseInt(limit as string) : undefined,
+        offset ? parseInt(offset as string) : undefined,
+        filters
+      );
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      res.status(500).json({ message: "Failed to fetch events" });
+    }
+  });
+
+  app.get("/api/events/:id", async (req, res) => {
+    try {
+      const event = await storage.getEventById(req.params.id);
+      if (!event) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+      res.json(event);
+    } catch (error) {
+      console.error("Error fetching event:", error);
+      res.status(500).json({ message: "Failed to fetch event" });
+    }
+  });
+
+  app.post("/api/events", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { insertEventSchema } = await import("@shared/schema");
+      const eventData = insertEventSchema.parse({
+        ...req.body,
+        organizerId: req.user.id
+      });
+      
+      const event = await storage.createEvent(eventData);
+      res.status(201).json(event);
+    } catch (error) {
+      console.error("Error creating event:", error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/events/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const event = await storage.getEventById(req.params.id);
+      if (!event) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+
+      // Check if the user is the organizer
+      if (event.organizerId !== req.user.id) {
+        return res.status(403).json({ message: "Not authorized to edit this event" });
+      }
+
+      const updatedEvent = await storage.updateEvent(req.params.id, req.body);
+      res.json(updatedEvent);
+    } catch (error) {
+      console.error("Error updating event:", error);
+      res.status(500).json({ message: "Failed to update event" });
+    }
+  });
+
+  app.delete("/api/events/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const event = await storage.getEventById(req.params.id);
+      if (!event) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+
+      // Check if the user is the organizer
+      if (event.organizerId !== req.user.id) {
+        return res.status(403).json({ message: "Not authorized to delete this event" });
+      }
+
+      await storage.deleteEvent(req.params.id);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      res.status(500).json({ message: "Failed to delete event" });
+    }
+  });
+
+  // Event registration endpoints
+  app.post("/api/events/:id/register", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { status = "attending" } = req.body;
+      const attendee = await storage.registerForEvent(req.params.id, req.user.id, status);
+      res.status(201).json(attendee);
+    } catch (error) {
+      console.error("Error registering for event:", error);
+      res.status(500).json({ message: "Failed to register for event" });
+    }
+  });
+
+  app.delete("/api/events/:id/register", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.unregisterFromEvent(req.params.id, req.user.id);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error("Error unregistering from event:", error);
+      res.status(500).json({ message: "Failed to unregister from event" });
+    }
+  });
+
+  app.get("/api/events/:id/attendees", async (req, res) => {
+    try {
+      const attendees = await storage.getEventAttendees(req.params.id);
+      res.json(attendees);
+    } catch (error) {
+      console.error("Error fetching event attendees:", error);
+      res.status(500).json({ message: "Failed to fetch attendees" });
     }
   });
 

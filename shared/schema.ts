@@ -150,6 +150,37 @@ export const flags = pgTable("flags", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const events = pgTable("events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizerId: varchar("organizer_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  location: text("location").notNull(),
+  address: text("address"),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  zipCode: text("zip_code"),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date"),
+  isVirtual: boolean("is_virtual").default(false),
+  virtualLink: text("virtual_link"),
+  maxAttendees: integer("max_attendees"),
+  currentAttendees: integer("current_attendees").default(0),
+  tags: text("tags").array().default([]),
+  isPublic: boolean("is_public").default(true),
+  requiresApproval: boolean("requires_approval").default(false),
+  image: text("image"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const eventAttendees = pgTable("event_attendees", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").notNull().references(() => events.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  status: text("status").default("attending"), // attending, maybe, not_attending, pending
+  registeredAt: timestamp("registered_at").defaultNow(),
+});
+
 export const userAddressesRelations = relations(userAddresses, ({ one }) => ({
   user: one(users, {
     fields: [userAddresses.userId],
@@ -250,6 +281,25 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   }),
 }));
 
+export const eventsRelations = relations(events, ({ one, many }) => ({
+  organizer: one(users, {
+    fields: [events.organizerId],
+    references: [users.id],
+  }),
+  attendees: many(eventAttendees),
+}));
+
+export const eventAttendeesRelations = relations(eventAttendees, ({ one }) => ({
+  event: one(events, {
+    fields: [eventAttendees.eventId],
+    references: [events.id],
+  }),
+  user: one(users, {
+    fields: [eventAttendees.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -298,6 +348,17 @@ export const insertFlagSchema = createInsertSchema(flags).omit({
   status: true,
 });
 
+export const insertEventSchema = createInsertSchema(events).omit({
+  id: true,
+  createdAt: true,
+  currentAttendees: true,
+});
+
+export const insertEventAttendeeSchema = createInsertSchema(eventAttendees).omit({
+  id: true,
+  registeredAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -321,3 +382,7 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 export type Flag = typeof flags.$inferSelect;
 export type InsertFlag = z.infer<typeof insertFlagSchema>;
+export type Event = typeof events.$inferSelect;
+export type InsertEvent = z.infer<typeof insertEventSchema>;
+export type EventAttendee = typeof eventAttendees.$inferSelect;
+export type InsertEventAttendee = z.infer<typeof insertEventAttendeeSchema>;

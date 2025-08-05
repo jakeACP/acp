@@ -70,6 +70,15 @@ Preferred communication style: Simple, everyday language.
 - **Group Categories**: Predefined categories (climate, education, corruption, healthcare)
 - **Discussion Forums**: Group-specific content and conversations
 
+### Event Management System
+- **Event Creation**: Comprehensive event creation with venue, virtual, and hybrid options
+- **Location-Based Discovery**: Filter events by city, state, and geographical regions
+- **Tag-Based Organization**: Events categorized by tags (Town Hall, Rally, Workshop, etc.)
+- **Registration System**: User registration with status tracking (attending, maybe, pending)
+- **Capacity Management**: Optional attendee limits with real-time capacity tracking
+- **Virtual Event Support**: Integration with video conferencing platforms
+- **Event Analytics**: Track attendance, engagement, and event success metrics
+
 ### Candidate Portal
 - **Profile Management**: Comprehensive candidate information display
 - **Proposal System**: Platform for sharing policy positions
@@ -139,6 +148,15 @@ Preferred communication style: Simple, everyday language.
 The application is designed as a modern, scalable platform that can grow from a small community tool to a large-scale democratic participation system while maintaining security, performance, and user experience standards.
 
 ## Recent Updates (January 2025)
+
+### Events System Implementation (January 2025)
+- **Comprehensive Events Feature**: Full event management system with location-based filtering
+- **Database Schema**: Added events and event_attendees tables with proper relations and indexing
+- **Location Filtering**: Events can be filtered by city, state, and tags for targeted discovery
+- **Event Registration**: Users can register for/unregister from events with status tracking
+- **Event Creation**: Full event creation with venue details, virtual options, and attendee limits
+- **Advanced Filtering**: Support for tag-based filtering and location-specific event discovery
+- **Navigation Integration**: Events page added to main navigation with mobile-responsive design
 
 ### Development Tool Cleanup (January 2025)
 - **Removed Seed Button**: Eliminated "Add Sample Data" button and `/api/seed` endpoint due to duplicate key errors
