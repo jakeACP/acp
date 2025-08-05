@@ -561,7 +561,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Object Storage API endpoints for profile picture uploads
-  const { ObjectStorageService, ObjectNotFoundError } = await import("./objectStorage");
+  const { ObjectStorageService, ObjectNotFoundError, ObjectPermission } = await import("./objectStorage");
 
   // Endpoint for serving private objects (profile pictures)
   app.get("/objects/:objectPath(*)", async (req, res) => {
@@ -576,7 +576,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const canAccess = await objectStorageService.canAccessObjectEntity({
         objectFile,
         userId: userId,
-        requestedPermission: await import("./objectAcl").then(m => m.ObjectPermission.READ),
+        requestedPermission: ObjectPermission.READ,
       });
       if (!canAccess) {
         return res.sendStatus(401);

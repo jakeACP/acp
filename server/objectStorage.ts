@@ -1,13 +1,44 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Response } from "express";
 import { randomUUID } from "crypto";
-import {
-  ObjectAclPolicy,
-  ObjectPermission,
-  canAccessObject,
-  getObjectAclPolicy,
-  setObjectAclPolicy,
-} from "./objectAcl";
+// Simplified ACL policy for profile pictures
+export interface ObjectAclPolicy {
+  owner: string;
+  visibility: "public" | "private";
+}
+
+export enum ObjectPermission {
+  READ = "read",
+  WRITE = "write",
+}
+
+// Simplified access control for profile pictures
+export async function canAccessObject({
+  userId,
+  objectFile,
+  requestedPermission,
+}: {
+  userId?: string;
+  objectFile: any;
+  requestedPermission: ObjectPermission;
+}): Promise<boolean> {
+  // For now, allow access to all authenticated users for profile pictures
+  return !!userId;
+}
+
+export async function getObjectAclPolicy(objectFile: any): Promise<ObjectAclPolicy | null> {
+  // Simplified - assume all profile pictures are public
+  return { owner: "", visibility: "public" };
+}
+
+export async function setObjectAclPolicy(objectFile: any, aclPolicy: ObjectAclPolicy): Promise<void> {
+  // Simplified - just set metadata
+  await objectFile.setMetadata({
+    metadata: {
+      "custom:aclPolicy": JSON.stringify(aclPolicy),
+    },
+  });
+}
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 

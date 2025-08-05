@@ -96,7 +96,8 @@ export default function SettingsPage() {
   };
 
   const handleGetUploadParameters = async () => {
-    const response = await apiRequest("/api/objects/upload", "POST") as { uploadURL: string };
+    const response = await apiRequest("/api/objects/upload", "POST") as any;
+    console.log("Upload parameters response:", response);
     return {
       method: "PUT" as const,
       url: response.uploadURL,
