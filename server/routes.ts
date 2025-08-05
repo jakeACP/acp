@@ -4,7 +4,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { blockchainVerifier, type VoteRecord } from "./lib/blockchain";
 import { RankedChoiceCalculator, type RankedBallot } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertFlagSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -274,6 +274,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ liked });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Flags API
+  app.post("/api/flags", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const flagData = insertFlagSchema.parse({
+        ...req.body,
+        userId: req.user.id,
+      });
+      const flag = await storage.createFlag(flagData);
+      res.status(201).json(flag);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
     }
   });
 

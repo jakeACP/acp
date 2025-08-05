@@ -140,6 +140,16 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const flags = pgTable("flags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  targetId: varchar("target_id").notNull(), // post or comment id
+  targetType: text("target_type").notNull(), // post, comment
+  reason: text("reason").notNull(), // inappropriate_content, spam, harassment, etc.
+  status: text("status").default("pending"), // pending, reviewed, dismissed
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const userAddressesRelations = relations(userAddresses, ({ one }) => ({
   user: one(users, {
     fields: [userAddresses.userId],
@@ -282,6 +292,12 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   createdAt: true,
 });
 
+export const insertFlagSchema = createInsertSchema(flags).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -303,3 +319,5 @@ export type UserAddress = typeof userAddresses.$inferSelect;
 export type InsertUserAddress = typeof userAddresses.$inferInsert;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+export type Flag = typeof flags.$inferSelect;
+export type InsertFlag = z.infer<typeof insertFlagSchema>;

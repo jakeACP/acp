@@ -2,12 +2,16 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Post } from "@shared/schema";
-import { Heart, MessageCircle, Share, Flag } from "lucide-react";
+import { Post, Comment } from "@shared/schema";
+import { Heart, MessageCircle, Share, Flag, Send } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useState } from "react";
 
 interface PostCardProps {
   post: Post;
@@ -15,11 +19,19 @@ interface PostCardProps {
 
 export function PostCard({ post }: PostCardProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showComments, setShowComments] = useState(false);
+  const [newComment, setNewComment] = useState("");
 
   const { data: likeStatus } = useQuery<{ liked: boolean }>({
     queryKey: ["/api/likes", post.id, "post"],
     enabled: !!user && !!post.id,
+  });
+
+  const { data: comments = [] } = useQuery<Comment[]>({
+    queryKey: ["/api/posts", post.id, "comments"],
+    enabled: showComments && !!post.id,
   });
 
   const likeMutation = useMutation({
@@ -35,10 +47,125 @@ export function PostCard({ post }: PostCardProps) {
     },
   });
 
+  const createCommentMutation = useMutation({
+    mutationFn: async (content: string) => {
+      return await apiRequest("/api/comments", "POST", {
+        postId: post.id,
+        content: content.trim(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts", post.id, "comments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      setNewComment("");
+      toast({
+        title: "Comment Added",
+        description: "Your comment has been posted successfully!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add comment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const flagMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("/api/flags", "POST", {
+        targetId: post.id,
+        targetType: "post",
+        reason: "inappropriate_content",
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Content Flagged",
+        description: "Thank you for reporting this content. We'll review it shortly.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error", 
+        description: error.message || "Failed to flag content",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLike = () => {
     if (user) {
       likeMutation.mutate();
     }
+  };
+
+  const handleComment = () => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to comment on posts",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowComments(true);
+  };
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/posts/${post.id}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Check out this post",
+          text: post.content.slice(0, 100) + (post.content.length > 100 ? "..." : ""),
+          url: shareUrl,
+        });
+      } catch (error) {
+        // User cancelled or error occurred
+      }
+    } else {
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast({
+          title: "Link Copied",
+          description: "Post link has been copied to your clipboard!",
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Unable to copy link to clipboard",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const handleFlag = () => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to flag content",
+        variant: "destructive",
+      });
+      return;
+    }
+    flagMutation.mutate();
+  };
+
+  const handleSubmitComment = () => {
+    if (!newComment.trim()) {
+      toast({
+        title: "Empty Comment",
+        description: "Please enter a comment before submitting",
+        variant: "destructive",
+      });
+      return;
+    }
+    createCommentMutation.mutate(newComment);
   };
 
   const getTagColor = (tag: string) => {
@@ -114,19 +241,82 @@ export function PostCard({ post }: PostCardProps) {
               <span>{post.likesCount || 0}</span>
             </Button>
             
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center gap-2 hover:text-primary"
-            >
-              <MessageCircle className="h-4 w-4" />
-              <span>{post.commentsCount || 0}</span>
-            </Button>
+            <Dialog open={showComments} onOpenChange={setShowComments}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleComment}
+                  className="flex items-center gap-2 hover:text-primary"
+                  data-testid="button-comment"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  <span>{post.commentsCount || 0}</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Comments</DialogTitle>
+                </DialogHeader>
+                
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-lg">
+                    <p className="text-sm text-slate-600 mb-2">Original Post:</p>
+                    <p className="text-slate-900">{post.content}</p>
+                  </div>
+                  
+                  {user && (
+                    <div className="flex gap-2">
+                      <Textarea
+                        placeholder="Write a comment..."
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        className="flex-1"
+                        data-testid="input-comment"
+                      />
+                      <Button
+                        onClick={handleSubmitComment}
+                        disabled={createCommentMutation.isPending || !newComment.trim()}
+                        size="sm"
+                        data-testid="button-submit-comment"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-3">
+                    {comments.length === 0 ? (
+                      <p className="text-center text-slate-500 py-4">No comments yet</p>
+                    ) : (
+                      comments.map((comment) => (
+                        <div key={comment.id} className="border rounded-lg p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className="text-xs">
+                                {comment.authorId.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm font-medium">Community Member</span>
+                            <span className="text-xs text-slate-500">
+                              {comment.createdAt && formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                            </span>
+                          </div>
+                          <p className="text-slate-900">{comment.content}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
             
             <Button
               variant="ghost"
               size="sm"
+              onClick={handleShare}
               className="flex items-center gap-2 hover:text-primary"
+              data-testid="button-share"
             >
               <Share className="h-4 w-4" />
               Share
@@ -136,10 +326,13 @@ export function PostCard({ post }: PostCardProps) {
           <Button
             variant="ghost"
             size="sm"
+            onClick={handleFlag}
+            disabled={flagMutation.isPending}
             className="flex items-center gap-2 hover:text-red-500"
+            data-testid="button-flag"
           >
             <Flag className="h-4 w-4" />
-            Flag
+            {flagMutation.isPending ? "Flagging..." : "Flag"}
           </Button>
         </div>
       </CardContent>
