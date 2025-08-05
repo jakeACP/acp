@@ -51,7 +51,6 @@ export default function EventsPage() {
 
   const { data: events = [], isLoading } = useQuery<Event[]>({
     queryKey: ['/api/events', filters],
-    queryFn: () => apiRequest(`/api/events?${queryParams.toString()}`),
   });
 
   const createEventForm = useForm<InsertEvent>({
@@ -303,6 +302,7 @@ export default function EventsPage() {
                             <Input 
                               placeholder="https://zoom.us/..." 
                               {...field} 
+                              value={field.value || ""}
                               data-testid="input-event-virtual-link"
                             />
                           </FormControl>
@@ -320,7 +320,12 @@ export default function EventsPage() {
                         <FormItem>
                           <FormLabel>City</FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter city" {...field} data-testid="input-event-city" />
+                            <Input 
+                              placeholder="Enter city" 
+                              {...field} 
+                              value={field.value || ""}
+                              data-testid="input-event-city" 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -333,7 +338,7 @@ export default function EventsPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>State</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
                             <FormControl>
                               <SelectTrigger data-testid="select-event-state">
                                 <SelectValue placeholder="Select state" />
@@ -359,7 +364,12 @@ export default function EventsPage() {
                         <FormItem>
                           <FormLabel>ZIP Code</FormLabel>
                           <FormControl>
-                            <Input placeholder="12345" {...field} data-testid="input-event-zip" />
+                            <Input 
+                              placeholder="12345" 
+                              {...field} 
+                              value={field.value || ""}
+                              data-testid="input-event-zip" 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -374,7 +384,12 @@ export default function EventsPage() {
                       <FormItem>
                         <FormLabel>Venue Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Community Center, City Hall, etc." {...field} data-testid="input-event-location" />
+                          <Input 
+                            placeholder="Community Center, City Hall, etc." 
+                            {...field} 
+                            value={field.value || ""}
+                            data-testid="input-event-location" 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -388,7 +403,12 @@ export default function EventsPage() {
                       <FormItem>
                         <FormLabel>Street Address</FormLabel>
                         <FormControl>
-                          <Input placeholder="123 Main St" {...field} data-testid="input-event-address" />
+                          <Input 
+                            placeholder="123 Main St" 
+                            {...field} 
+                            value={field.value || ""}
+                            data-testid="input-event-address" 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -406,6 +426,7 @@ export default function EventsPage() {
                             type="number" 
                             placeholder="Leave empty for unlimited"
                             {...field}
+                            value={field.value || ""}
                             onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
                             data-testid="input-event-max-attendees"
                           />
