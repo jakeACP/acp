@@ -140,6 +140,12 @@ The application is designed as a modern, scalable platform that can grow from a 
 
 ## Recent Updates (January 2025)
 
+### Development Tool Cleanup (January 2025)
+- **Removed Seed Button**: Eliminated "Add Sample Data" button and `/api/seed` endpoint due to duplicate key errors
+- **Cleaner Interface**: Streamlined main feed without development-only components
+- **User Experience**: Removed potential confusion from seeding functionality that could break with existing data
+
+
 ### Blockchain Transparency Integration
 - **Vote Verification System**: Each vote receives a cryptographic hash for independent verification
 - **Merkle Tree Structure**: Votes are organized in tamper-proof blockchain blocks

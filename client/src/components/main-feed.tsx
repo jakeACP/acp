@@ -5,7 +5,7 @@ import { PostCard } from "@/components/post-card";
 import { PollCard } from "@/components/poll-card";
 import { EnhancedPollCard } from "@/components/enhanced-poll-card";
 import { RankedChoicePoll } from "@/components/ranked-choice-poll";
-import { SeedButton } from "@/components/seed-button";
+
 import { CreatePostForm } from "@/components/create-post-form";
 import { CreatePollForm } from "@/components/create-poll-form";
 import { BlockchainTransparency } from "@/components/blockchain-transparency";
@@ -51,9 +51,6 @@ export function MainFeed() {
 
   return (
     <div className="space-y-6">
-      {/* Development Seed Button */}
-      <SeedButton />
-      
       {/* Quick Actions */}
       <Card>
         <CardContent className="p-4">

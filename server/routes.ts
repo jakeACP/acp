@@ -10,21 +10,6 @@ import { z } from "zod";
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
-  // Seed data endpoint (development only)
-  app.post("/api/seed", async (req, res) => {
-    if (process.env.NODE_ENV !== "development") {
-      return res.status(403).json({ message: "Seeding only available in development" });
-    }
-    
-    try {
-      const { seedDatabase } = await import("./seed");
-      await seedDatabase();
-      res.json({ message: "Database seeded successfully!" });
-    } catch (error: any) {
-      res.status(500).json({ message: "Seeding failed: " + error.message });
-    }
-  });
-
   // Posts API
   app.get("/api/posts", async (req, res) => {
     try {
