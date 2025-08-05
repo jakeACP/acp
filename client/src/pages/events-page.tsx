@@ -58,21 +58,21 @@ export default function EventsPage() {
     resolver: zodResolver(insertEventSchema),
     defaultValues: {
       title: "",
-      description: null,
+      description: "",
       location: "",
-      address: null,
+      address: "",
       city: "",
       state: "",
-      zipCode: null,
+      zipCode: "",
       startDate: new Date(),
-      endDate: null,
+      endDate: undefined,
       isVirtual: false,
-      virtualLink: null,
-      maxAttendees: null,
+      virtualLink: "",
+      maxAttendees: undefined,
       tags: [],
       isPublic: true,
       requiresApproval: false,
-      image: null,
+      image: "",
     },
   });
 
@@ -221,8 +221,8 @@ export default function EventsPage() {
                             <Input 
                               type="datetime-local" 
                               {...field}
-                              value={field.value ? new Date(field.value).toISOString().slice(0,16) : ""}
-                              onChange={(e) => field.onChange(new Date(e.target.value))}
+                              value={field.value ? format(new Date(field.value), "yyyy-MM-dd'T'HH:mm") : ""}
+                              onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : new Date())}
                               data-testid="input-event-start-date"
                             />
                           </FormControl>
@@ -241,7 +241,7 @@ export default function EventsPage() {
                             <Input 
                               type="datetime-local" 
                               {...field}
-                              value={field.value ? new Date(field.value).toISOString().slice(0,16) : ""}
+                              value={field.value ? format(new Date(field.value), "yyyy-MM-dd'T'HH:mm") : ""}
                               onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
                               data-testid="input-event-end-date"
                             />
@@ -388,7 +388,7 @@ export default function EventsPage() {
                             type="number" 
                             placeholder="Leave empty for unlimited"
                             {...field}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
                             data-testid="input-event-max-attendees"
                           />
                         </FormControl>
