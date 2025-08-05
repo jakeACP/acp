@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { blockchainVerifier, type VoteRecord } from "./lib/blockchain";
-import { RankedChoiceCalculator, type RankedBallot } from "./lib/ranked-choice";
+import { type VoteRecord } from "./lib/blockchain";
+import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
 import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertFlagSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -76,10 +76,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const pollData = insertPollSchema.parse(req.body);
+      // Custom validation for poll creation since frontend sends different structure
+      const { title, description, options, votingType, isBlockchainVerified, endDate } = req.body;
+      
+      if (!title || !options || !Array.isArray(options) || options.length < 2) {
+        return res.status(400).json({ message: "Poll must have a title and at least 2 options" });
+      }
+
+      const pollData = {
+        title,
+        description: description || null,
+        options,
+        votingType: votingType || "simple",
+        isBlockchainVerified: isBlockchainVerified || false,
+        endDate: endDate ? new Date(endDate) : null,
+        postId: null,
+        blockchainHash: null,
+        isActive: true,
+      };
+
       const poll = await storage.createPoll(pollData);
       res.status(201).json(poll);
     } catch (error: any) {
+      console.error("Poll creation error:", error);
       res.status(400).json({ message: error.message });
     }
   });
