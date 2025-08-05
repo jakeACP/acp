@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowLeft, Lock, User, Mail } from "lucide-react";
+import { ObjectUploader } from "@/components/ObjectUploader";
+import { ArrowLeft, Lock, User, Mail, Camera } from "lucide-react";
+import type { UploadResult } from "@uppy/core";
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -29,6 +31,7 @@ export default function SettingsPage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const form = useForm<ChangePasswordData>({
     resolver: zodResolver(changePasswordSchema),
@@ -65,8 +68,48 @@ export default function SettingsPage() {
     },
   });
 
+  const updateProfilePictureMutation = useMutation({
+    mutationFn: async (profilePictureURL: string) => {
+      return apiRequest("/api/profile-picture", "PUT", {
+        profilePictureURL,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Profile Picture Updated",
+        description: "Your profile picture has been updated successfully.",
+      });
+      // Invalidate user query to refresh the profile picture
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: "Failed to update profile picture. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: ChangePasswordData) => {
     changePasswordMutation.mutate(data);
+  };
+
+  const handleGetUploadParameters = async () => {
+    const response = await apiRequest("/api/objects/upload", "POST") as { uploadURL: string };
+    return {
+      method: "PUT" as const,
+      url: response.uploadURL,
+    };
+  };
+
+  const handleUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadURL = result.successful[0].uploadURL;
+      if (uploadURL) {
+        updateProfilePictureMutation.mutate(uploadURL);
+      }
+    }
   };
 
   const handleBack = () => {
@@ -124,6 +167,38 @@ export default function SettingsPage() {
               <div>
                 <label className="text-sm font-medium text-slate-700">Role</label>
                 <p className="text-slate-900 capitalize">{user?.role}</p>
+              </div>
+              
+              {/* Profile Picture Upload */}
+              <div className="pt-4 border-t">
+                <label className="text-sm font-medium text-slate-700 mb-3 block">Profile Picture</label>
+                <div className="flex items-center gap-4">
+                  {user?.avatar ? (
+                    <img 
+                      src={user.avatar} 
+                      alt="Profile" 
+                      className="w-16 h-16 rounded-full object-cover border-2 border-slate-200"
+                      data-testid="img-current-avatar"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center">
+                      <User className="h-8 w-8 text-slate-400" />
+                    </div>
+                  )}
+                  <ObjectUploader
+                    maxNumberOfFiles={1}
+                    maxFileSize={5 * 1024 * 1024} // 5MB
+                    onGetUploadParameters={handleGetUploadParameters}
+                    onComplete={handleUploadComplete}
+                    buttonClassName="flex items-center gap-2"
+                  >
+                    <Camera className="h-4 w-4" />
+                    {user?.avatar ? "Change Picture" : "Upload Picture"}
+                  </ObjectUploader>
+                </div>
+                {updateProfilePictureMutation.isPending && (
+                  <p className="text-sm text-slate-600 mt-2">Uploading...</p>
+                )}
               </div>
             </CardContent>
           </Card>
