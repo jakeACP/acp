@@ -65,10 +65,10 @@ export default function EventsPage() {
       state: "",
       zipCode: "",
       startDate: new Date(),
-      endDate: undefined,
+      endDate: null,
       isVirtual: false,
       virtualLink: "",
-      maxAttendees: undefined,
+      maxAttendees: null,
       tags: [],
       isPublic: true,
       requiresApproval: false,
@@ -88,9 +88,10 @@ export default function EventsPage() {
       });
     },
     onError: (error) => {
+      console.error("Event creation error:", error);
       toast({
         title: "Error",
-        description: "Failed to create event. Please try again.",
+        description: `Failed to create event: ${error.message}`,
         variant: "destructive",
       });
     },
@@ -116,6 +117,8 @@ export default function EventsPage() {
   });
 
   const onSubmit = (data: InsertEvent) => {
+    console.log("Form submitted with data:", data);
+    console.log("Form errors:", createEventForm.formState.errors);
     createEventMutation.mutate(data);
   };
 
@@ -242,7 +245,7 @@ export default function EventsPage() {
                               type="datetime-local" 
                               {...field}
                               value={field.value ? format(new Date(field.value), "yyyy-MM-dd'T'HH:mm") : ""}
-                              onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                              onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
                               data-testid="input-event-end-date"
                             />
                           </FormControl>
@@ -388,7 +391,7 @@ export default function EventsPage() {
                             type="number" 
                             placeholder="Leave empty for unlimited"
                             {...field}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
                             data-testid="input-event-max-attendees"
                           />
                         </FormControl>
