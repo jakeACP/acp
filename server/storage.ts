@@ -45,6 +45,9 @@ export interface IStorage {
   getUserGroups(userId: string): Promise<Group[]>;
   joinGroup(groupId: string, userId: string): Promise<void>;
   leaveGroup(groupId: string, userId: string): Promise<void>;
+  isGroupMember(groupId: string, userId: string): Promise<boolean>;
+  getGroupMemberCount(groupId: string): Promise<number>;
+  recalculateGroupMemberCounts(): Promise<void>;
 
   // Comments
   getCommentsByPost(postId: string): Promise<Comment[]>;
@@ -395,7 +398,7 @@ export class DatabaseStorage implements IStorage {
   async createGroup(group: InsertGroup): Promise<Group> {
     const [newGroup] = await db
       .insert(groups)
-      .values(group)
+      .values({ ...group, memberCount: 1 }) // Initialize with 1 member (creator)
       .returning();
 
     // Add creator as admin member
@@ -429,27 +432,119 @@ export class DatabaseStorage implements IStorage {
   }
 
   async joinGroup(groupId: string, userId: string): Promise<void> {
+    // Check if user is already a member
+    const existingMembership = await db
+      .select()
+      .from(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
+
+    if (existingMembership.length > 0) {
+      throw new Error("You are already a member of this group");
+    }
+
+    // Check if group exists
+    const group = await this.getGroupById(groupId);
+    if (!group) {
+      throw new Error("Group not found");
+    }
+
+    // Add user as member
     await db
       .insert(groupMembers)
-      .values({ groupId, userId });
+      .values({ groupId, userId, role: "member" });
 
-    // Update member count
+    // Get actual member count and update
+    const memberCount = await db
+      .select({ count: count() })
+      .from(groupMembers)
+      .where(eq(groupMembers.groupId, groupId));
+
     await db
       .update(groups)
-      .set({ memberCount: sql`${groups.memberCount} + 1` })
+      .set({ memberCount: memberCount[0].count })
       .where(eq(groups.id, groupId));
   }
 
   async leaveGroup(groupId: string, userId: string): Promise<void> {
-    await db
+    // Check if user is a member
+    const existingMembership = await db
+      .select()
+      .from(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
+
+    if (existingMembership.length === 0) {
+      throw new Error("You are not a member of this group");
+    }
+
+    // Check if group exists
+    const group = await this.getGroupById(groupId);
+    if (!group) {
+      throw new Error("Group not found");
+    }
+
+    // Prevent group creator from leaving (they can only transfer ownership)
+    if (group.createdBy === userId) {
+      throw new Error("Group creators cannot leave their own group. Transfer ownership first.");
+    }
+
+    // Remove user from group
+    const deleteResult = await db
       .delete(groupMembers)
       .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
 
-    // Update member count
+    // Get actual member count and update
+    const memberCount = await db
+      .select({ count: count() })
+      .from(groupMembers)
+      .where(eq(groupMembers.groupId, groupId));
+
     await db
       .update(groups)
-      .set({ memberCount: sql`${groups.memberCount} - 1` })
+      .set({ memberCount: memberCount[0].count })
       .where(eq(groups.id, groupId));
+  }
+
+  async isGroupMember(groupId: string, userId: string): Promise<boolean> {
+    const membership = await db
+      .select()
+      .from(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
+    
+    return membership.length > 0;
+  }
+
+  async getGroupMemberCount(groupId: string): Promise<number> {
+    const result = await db
+      .select({ count: count() })
+      .from(groupMembers)
+      .where(eq(groupMembers.groupId, groupId));
+    
+    return result[0].count;
+  }
+
+  async recalculateGroupMemberCounts(): Promise<void> {
+    // Get all groups with their actual member counts
+    const groupMemberCounts = await db
+      .select({
+        groupId: groupMembers.groupId,
+        memberCount: count()
+      })
+      .from(groupMembers)
+      .groupBy(groupMembers.groupId);
+
+    // Update each group's member count
+    for (const { groupId, memberCount } of groupMemberCounts) {
+      await db
+        .update(groups)
+        .set({ memberCount })
+        .where(eq(groups.id, groupId));
+    }
+
+    // Set member count to 0 for groups with no members
+    await db
+      .update(groups)
+      .set({ memberCount: 0 })
+      .where(sql`${groups.id} NOT IN (SELECT DISTINCT ${groupMembers.groupId} FROM ${groupMembers})`);
   }
 
   async getCommentsByPost(postId: string): Promise<Comment[]> {

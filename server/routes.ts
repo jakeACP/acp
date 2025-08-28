@@ -249,6 +249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.joinGroup(req.params.id, req.user.id);
       res.json({ message: "Joined group successfully" });
     } catch (error: any) {
+      console.error("Group join error:", error.message);
       res.status(400).json({ message: error.message });
     }
   });
@@ -262,7 +263,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.leaveGroup(req.params.id, req.user.id);
       res.json({ message: "Left group successfully" });
     } catch (error: any) {
+      console.error("Group leave error:", error.message);
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Check group membership status
+  app.get("/api/groups/:id/membership", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const isMember = await storage.isGroupMember(req.params.id, req.user.id);
+      const memberCount = await storage.getGroupMemberCount(req.params.id);
+      res.json({ 
+        isMember, 
+        memberCount,
+        userId: req.user.id,
+        groupId: req.params.id 
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin endpoint to recalculate member counts
+  app.post("/api/groups/recalculate-counts", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    if (req.user.role !== 'admin') {
+      return res.sendStatus(403);
+    }
+
+    try {
+      await storage.recalculateGroupMemberCounts();
+      res.json({ message: "Group member counts recalculated successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 
