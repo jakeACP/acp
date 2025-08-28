@@ -47,8 +47,12 @@ export function PollCard({ poll }: PollCardProps) {
   });
 
   const handleVote = () => {
+    console.log("Cast vote clicked, selectedOption:", selectedOption);
     if (selectedOption) {
+      console.log("Submitting vote for option:", selectedOption);
       voteMutation.mutate(selectedOption);
+    } else {
+      console.log("No option selected");
     }
   };
 
@@ -145,7 +149,10 @@ export function PollCard({ poll }: PollCardProps) {
               // Show voting interface if user hasn't voted
               <RadioGroup
                 value={selectedOption}
-                onValueChange={setSelectedOption}
+                onValueChange={(value) => {
+                  console.log("Poll option selected:", value);
+                  setSelectedOption(value);
+                }}
               >
                 {poll.options.map((option) => (
                   <div
