@@ -10,6 +10,7 @@ import AuthPage from "@/pages/auth-page";
 import GroupsPage from "@/pages/groups-page";
 import PollsPage from "@/pages/polls-page";
 import CandidatesPage from "@/pages/candidates-page";
+import CandidateProfilePage from "@/pages/candidate-profile-page";
 import MessagesPage from "@/pages/messages-page";
 import RepresentativesPage from "@/pages/representatives-page";
 import SettingsPage from "@/pages/settings-page";
@@ -27,6 +28,7 @@ function Router() {
       <ProtectedRoute path="/polls" component={PollsPage} />
       <ProtectedRoute path="/polls/:id" component={PollDetailPage} />
       <ProtectedRoute path="/candidates" component={CandidatesPage} />
+      <ProtectedRoute path="/candidates/:id" component={CandidateProfilePage} />
       <ProtectedRoute path="/representatives" component={RepresentativesPage} />
       <ProtectedRoute path="/events" component={EventsPage} />
       <ProtectedRoute path="/messages" component={MessagesPage} />

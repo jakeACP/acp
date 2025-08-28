@@ -383,22 +383,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Candidates API
   app.get("/api/candidates", async (req, res) => {
     try {
-      const candidates = await storage.getCandidates();
+      const candidates = await storage.getCandidatesWithUserData();
       res.json(candidates);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      console.error("Error fetching candidates:", error);
+      res.status(500).json({ message: "Failed to fetch candidates" });
     }
   });
 
   app.get("/api/candidates/:id", async (req, res) => {
     try {
-      const candidate = await storage.getCandidateById(req.params.id);
+      const candidate = await storage.getCandidateWithUserData(req.params.id);
       if (!candidate) {
         return res.status(404).json({ message: "Candidate not found" });
       }
       res.json(candidate);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      console.error("Error fetching candidate:", error);
+      res.status(500).json({ message: "Failed to fetch candidate" });
     }
   });
 
@@ -443,18 +445,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      // For now, just increment the endorsements count
-      // In a real app, you'd track individual endorsements to prevent duplicates
       const candidate = await storage.getCandidateById(req.params.id);
       if (!candidate) {
         return res.status(404).json({ message: "Candidate not found" });
       }
 
-      // Simple endorsement increment (can be enhanced later)
-      await storage.supportCandidate(req.params.id, req.user.id);
-      res.json({ message: "Support added successfully" });
+      // Check if user is trying to support their own candidacy
+      if (candidate.userId === req.user.id) {
+        return res.status(400).json({ message: "You cannot support your own candidacy" });
+      }
+
+      const success = await storage.supportCandidate(req.params.id, req.user.id);
+      
+      if (success) {
+        res.json({ message: "Support added successfully", isSupporting: true });
+      } else {
+        res.status(400).json({ message: "You are already supporting this candidate" });
+      }
     } catch (error: any) {
-      res.status(400).json({ message: error.message });
+      console.error("Error supporting candidate:", error);
+      res.status(500).json({ message: "Failed to support candidate" });
+    }
+  });
+
+  app.delete("/api/candidates/:id/support", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const candidate = await storage.getCandidateById(req.params.id);
+      if (!candidate) {
+        return res.status(404).json({ message: "Candidate not found" });
+      }
+
+      const success = await storage.unsupportCandidate(req.params.id, req.user.id);
+      
+      if (success) {
+        res.json({ message: "Support removed successfully", isSupporting: false });
+      } else {
+        res.status(400).json({ message: "You are not supporting this candidate" });
+      }
+    } catch (error: any) {
+      console.error("Error unsupporting candidate:", error);
+      res.status(500).json({ message: "Failed to remove support" });
+    }
+  });
+
+  app.get("/api/candidates/:id/support-status", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const isSupporting = await storage.checkCandidateSupport(req.params.id, req.user.id);
+      res.json({ isSupporting });
+    } catch (error: any) {
+      console.error("Error checking support status:", error);
+      res.status(500).json({ message: "Failed to check support status" });
+    }
+  });
+
+  app.get("/api/candidates/:id/supporters", async (req, res) => {
+    try {
+      const supporters = await storage.getCandidateSupporters(req.params.id);
+      res.json(supporters);
+    } catch (error: any) {
+      console.error("Error fetching supporters:", error);
+      res.status(500).json({ message: "Failed to fetch supporters" });
     }
   });
 

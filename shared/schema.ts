@@ -107,6 +107,15 @@ export const candidates = pgTable("candidates", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const candidateSupports = pgTable("candidate_supports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  candidateId: varchar("candidate_id").notNull().references(() => candidates.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  uniqueSupport: sql`UNIQUE(${table.candidateId}, ${table.userId})`
+}));
+
 export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   senderId: varchar("sender_id").notNull().references(() => users.id),
@@ -338,6 +347,11 @@ export const insertCandidateSchema = createInsertSchema(candidates).omit({
   endorsements: true,
 });
 
+export const insertCandidateSupportSchema = createInsertSchema(candidateSupports).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   createdAt: true,
@@ -373,6 +387,8 @@ export type Comment = typeof comments.$inferSelect;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Candidate = typeof candidates.$inferSelect;
 export type InsertCandidate = z.infer<typeof insertCandidateSchema>;
+export type CandidateSupport = typeof candidateSupports.$inferSelect;
+export type InsertCandidateSupport = z.infer<typeof insertCandidateSupportSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type FollowedRepresentative = typeof followedRepresentatives.$inferSelect;

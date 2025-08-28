@@ -1,6 +1,6 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, sql, count } from "drizzle-orm";
+import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -61,10 +61,15 @@ export interface IStorage {
 
   // Candidates
   getCandidates(): Promise<Candidate[]>;
+  getCandidatesWithUserData(): Promise<any[]>;
   getCandidateById(id: string): Promise<Candidate | undefined>;
+  getCandidateWithUserData(id: string): Promise<any>;
   createCandidate(candidate: InsertCandidate): Promise<Candidate>;
   getCandidateByUserId(userId: string): Promise<Candidate | undefined>;
-  supportCandidate(candidateId: string, userId: string): Promise<void>;
+  supportCandidate(candidateId: string, userId: string): Promise<boolean>;
+  unsupportCandidate(candidateId: string, userId: string): Promise<boolean>;
+  checkCandidateSupport(candidateId: string, userId: string): Promise<boolean>;
+  getCandidateSupporters(candidateId: string): Promise<User[]>;
 
   // Messages
   getMessages(userId: string): Promise<Message[]>;
@@ -685,8 +690,51 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(candidates.endorsements));
   }
 
+  async getCandidatesWithUserData(): Promise<any[]> {
+    return await db
+      .select({
+        id: candidates.id,
+        userId: candidates.userId,
+        position: candidates.position,
+        platform: candidates.platform,
+        proposals: candidates.proposals,
+        endorsements: candidates.endorsements,
+        isActive: candidates.isActive,
+        createdAt: candidates.createdAt,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(candidates)
+      .innerJoin(users, eq(candidates.userId, users.id))
+      .where(eq(candidates.isActive, true))
+      .orderBy(desc(candidates.endorsements));
+  }
+
   async getCandidateById(id: string): Promise<Candidate | undefined> {
     const [candidate] = await db.select().from(candidates).where(eq(candidates.id, id));
+    return candidate || undefined;
+  }
+
+  async getCandidateWithUserData(id: string): Promise<any> {
+    const [candidate] = await db
+      .select({
+        id: candidates.id,
+        userId: candidates.userId,
+        position: candidates.position,
+        platform: candidates.platform,
+        proposals: candidates.proposals,
+        endorsements: candidates.endorsements,
+        isActive: candidates.isActive,
+        createdAt: candidates.createdAt,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(candidates)
+      .innerJoin(users, eq(candidates.userId, users.id))
+      .where(eq(candidates.id, id));
+    
     return candidate || undefined;
   }
 
@@ -701,14 +749,88 @@ export class DatabaseStorage implements IStorage {
     return newCandidate;
   }
 
-  async supportCandidate(candidateId: string, userId: string): Promise<void> {
-    // Increment endorsement count
+  async supportCandidate(candidateId: string, userId: string): Promise<boolean> {
+    try {
+      // Check if support already exists
+      const existingSupport = await this.checkCandidateSupport(candidateId, userId);
+      if (existingSupport) {
+        return false; // Already supporting
+      }
+
+      // Add support record
+      await db.insert(candidateSupports).values({
+        candidateId,
+        userId,
+      });
+
+      // Increment endorsement count
+      await db
+        .update(candidates)
+        .set({ 
+          endorsements: sql`${candidates.endorsements} + 1`
+        })
+        .where(eq(candidates.id, candidateId));
+
+      return true;
+    } catch (error: any) {
+      // Handle duplicate support attempt
+      if (error.code === '23505' || error.message.includes('duplicate key')) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  async unsupportCandidate(candidateId: string, userId: string): Promise<boolean> {
+    // Check if support exists
+    const existingSupport = await this.checkCandidateSupport(candidateId, userId);
+    if (!existingSupport) {
+      return false; // Not supporting
+    }
+
+    // Remove support record
+    await db
+      .delete(candidateSupports)
+      .where(and(
+        eq(candidateSupports.candidateId, candidateId),
+        eq(candidateSupports.userId, userId)
+      ));
+
+    // Decrement endorsement count
     await db
       .update(candidates)
       .set({ 
-        endorsements: sql`${candidates.endorsements} + 1`
+        endorsements: sql`${candidates.endorsements} - 1`
       })
       .where(eq(candidates.id, candidateId));
+
+    return true;
+  }
+
+  async checkCandidateSupport(candidateId: string, userId: string): Promise<boolean> {
+    const [support] = await db
+      .select()
+      .from(candidateSupports)
+      .where(and(
+        eq(candidateSupports.candidateId, candidateId),
+        eq(candidateSupports.userId, userId)
+      ));
+    
+    return !!support;
+  }
+
+  async getCandidateSupporters(candidateId: string): Promise<User[]> {
+    return await db
+      .select({
+        id: users.id,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(candidateSupports)
+      .innerJoin(users, eq(candidateSupports.userId, users.id))
+      .where(eq(candidateSupports.candidateId, candidateId))
+      .orderBy(desc(candidateSupports.createdAt));
   }
 
   async getCandidateByUserId(userId: string): Promise<Candidate | undefined> {
