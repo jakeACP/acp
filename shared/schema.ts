@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, json } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, json, decimal } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -17,6 +17,16 @@ export const users = pgTable("users", {
   avatar: text("avatar"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  // ACP+ Subscription and Crypto
+  subscriptionStatus: text("subscription_status").default("free"), // free, premium, expired
+  subscriptionStartDate: timestamp("subscription_start_date"),
+  subscriptionEndDate: timestamp("subscription_end_date"),
+  acpCoinBalance: text("acp_coin_balance").default("0.00000000"), // Using text for precision
+  // Profile Customization
+  profileTheme: text("profile_theme").default("default"),
+  profileBackground: text("profile_background"),
+  favoriteSong: text("favorite_song"),
+  profileLayout: json("profile_layout"), // Modular layout configuration
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -369,9 +379,89 @@ export const insertEventSchema = createInsertSchema(events).omit({
   currentAttendees: true,
 });
 
+// ACP Cryptocurrency and Blockchain Tables
+export const acpTransactions = pgTable("acp_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fromUserId: varchar("from_user_id").references(() => users.id),
+  toUserId: varchar("to_user_id").references(() => users.id),
+  amount: text("amount").notNull(), // Using text for precision
+  transactionType: text("transaction_type").notNull(), // subscription_reward, purchase, sale, transfer
+  description: text("description"),
+  blockchainHash: text("blockchain_hash"),
+  blockNumber: integer("block_number"),
+  status: text("status").default("pending"), // pending, confirmed, failed
+  relatedItemId: varchar("related_item_id"), // Links to store items, customizations, etc.
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const acpBlocks = pgTable("acp_blocks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  blockNumber: integer("block_number").notNull().unique(),
+  previousHash: text("previous_hash"),
+  merkleRoot: text("merkle_root").notNull(),
+  timestamp: timestamp("timestamp").defaultNow(),
+  nonce: text("nonce").notNull(),
+  hash: text("hash").notNull().unique(),
+  transactionIds: json("transaction_ids").$type<string[]>(),
+});
+
+// Profile Store and Marketplace
+export const storeItems = pgTable("store_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // theme, background, widget, song, layout
+  type: text("type").notNull(), // official, user_created
+  price: text("price").notNull(), // ACP coin price
+  creatorId: varchar("creator_id").references(() => users.id),
+  itemData: json("item_data"), // CSS, JSON, or other configuration data
+  previewImage: text("preview_image"),
+  downloadCount: integer("download_count").default(0),
+  rating: text("rating").default("0"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const userPurchases = pgTable("user_purchases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  storeItemId: varchar("store_item_id").notNull().references(() => storeItems.id),
+  transactionId: varchar("transaction_id").references(() => acpTransactions.id),
+  purchasePrice: text("purchase_price").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const subscriptionRewards = pgTable("subscription_rewards", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  subscriptionMonth: timestamp("subscription_month").notNull(),
+  coinsAwarded: text("coins_awarded").default("10.00000000"),
+  transactionId: varchar("transaction_id").references(() => acpTransactions.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertEventAttendeeSchema = createInsertSchema(eventAttendees).omit({
   id: true,
   registeredAt: true,
+});
+
+export const insertStoreItemSchema = createInsertSchema(storeItems).omit({
+  id: true,
+  createdAt: true,
+  downloadCount: true,
+  rating: true,
+});
+
+export const insertACPTransactionSchema = createInsertSchema(acpTransactions).omit({
+  id: true,
+  createdAt: true,
+  blockNumber: true,
+  status: true,
+});
+
+export const insertSubscriptionRewardSchema = createInsertSchema(subscriptionRewards).omit({
+  id: true,
+  createdAt: true,
 });
 
 // Types
@@ -403,3 +493,11 @@ export type Event = typeof events.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type EventAttendee = typeof eventAttendees.$inferSelect;
 export type InsertEventAttendee = z.infer<typeof insertEventAttendeeSchema>;
+export type ACPTransaction = typeof acpTransactions.$inferSelect;
+export type InsertACPTransaction = z.infer<typeof insertACPTransactionSchema>;
+export type ACPBlock = typeof acpBlocks.$inferSelect;
+export type StoreItem = typeof storeItems.$inferSelect;
+export type InsertStoreItem = z.infer<typeof insertStoreItemSchema>;
+export type UserPurchase = typeof userPurchases.$inferSelect;
+export type SubscriptionReward = typeof subscriptionRewards.$inferSelect;
+export type InsertSubscriptionReward = z.infer<typeof insertSubscriptionRewardSchema>;

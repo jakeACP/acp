@@ -992,6 +992,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ACP Cryptocurrency Routes
+  app.get("/api/user/balance", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const balance = await storage.getUserBalance(req.user.id);
+      res.json({ balance });
+    } catch (error) {
+      console.error("Error getting user balance:", error);
+      res.status(500).json({ message: "Failed to get balance" });
+    }
+  });
+
+  app.get("/api/transactions/history", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const transactions = await storage.getTransactionHistory(req.user.id, limit);
+      res.json(transactions);
+    } catch (error) {
+      console.error("Error getting transaction history:", error);
+      res.status(500).json({ message: "Failed to get transactions" });
+    }
+  });
+
+  // Subscription Management Routes
+  app.post("/api/subscription/activate", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // Update subscription status
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + 1);
+
+      await storage.updateSubscriptionStatus(req.user.id, "premium", startDate, endDate);
+      
+      // Award monthly coins
+      const reward = await storage.awardSubscriptionCoins(req.user.id, startDate);
+      
+      res.json({ 
+        message: "Subscription activated successfully",
+        coinsAwarded: reward.coinsAwarded,
+        subscriptionEndDate: endDate
+      });
+    } catch (error) {
+      console.error("Error activating subscription:", error);
+      res.status(500).json({ message: "Failed to activate subscription" });
+    }
+  });
+
+  // Store and Marketplace Routes
+  app.get("/api/store/items", async (req, res) => {
+    try {
+      const { category, type } = req.query;
+      const items = await storage.getStoreItems(
+        category as string, 
+        type as string
+      );
+      res.json(items);
+    } catch (error) {
+      console.error("Error getting store items:", error);
+      res.status(500).json({ message: "Failed to get store items" });
+    }
+  });
+
+  app.post("/api/store/purchase/:itemId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { itemId } = req.params;
+      const purchase = await storage.purchaseStoreItem(req.user.id, itemId);
+      
+      res.json({ 
+        message: "Item purchased successfully",
+        purchase
+      });
+    } catch (error: any) {
+      console.error("Error purchasing item:", error);
+      if (error.message === "Insufficient ACP coins" || error.message === "Item already purchased") {
+        return res.status(400).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to purchase item" });
+    }
+  });
+
+  // Profile Customization Routes
+  app.put("/api/profile/customize", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { profileTheme, profileBackground, favoriteSong, profileLayout } = req.body;
+      
+      const updatedUser = await storage.updateUser(req.user.id, {
+        profileTheme,
+        profileBackground,
+        favoriteSong,
+        profileLayout
+      });
+
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating profile customization:", error);
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

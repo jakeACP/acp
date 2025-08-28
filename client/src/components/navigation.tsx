@@ -21,6 +21,7 @@ export function Navigation() {
     { href: "/events", label: "Events" },
     { href: "/representatives", label: "Know Your Reps" },
     { href: "/messages", label: "Messages" },
+    { href: "/crypto", label: "ACP Store" },
   ];
 
   const handleLogout = () => {
@@ -87,13 +88,15 @@ export function Navigation() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <Link href="/settings">
+                  <Link href="/profile">
                     <DropdownMenuItem>Profile</DropdownMenuItem>
+                  </Link>
+                  <Link href="/crypto">
+                    <DropdownMenuItem>ACP Store</DropdownMenuItem>
                   </Link>
                   <Link href="/settings">
                     <DropdownMenuItem>Settings</DropdownMenuItem>
                   </Link>
-                  <DropdownMenuItem>Subscription</DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout}>
                     Sign Out
                   </DropdownMenuItem>
@@ -130,7 +133,7 @@ export function Navigation() {
                 </Link>
               ))}
               <hr className="my-2" />
-              <Link href="/settings">
+              <Link href="/profile">
                 <Button 
                   variant="ghost" 
                   className="w-full justify-start"

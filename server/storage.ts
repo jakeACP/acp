@@ -111,6 +111,24 @@ export interface IStorage {
   updateEventAttendeeStatus(eventId: string, userId: string, status: string): Promise<EventAttendee>;
 
   sessionStore: any;
+
+  // ACP Cryptocurrency System
+  getUserBalance(userId: string): Promise<string>;
+  updateUserBalance(userId: string, newBalance: string): Promise<void>;
+  createTransaction(transaction: InsertACPTransaction): Promise<ACPTransaction>;
+  getTransactionHistory(userId: string, limit?: number): Promise<ACPTransaction[]>;
+  createBlockchainBlock(transactions: ACPTransaction[]): Promise<ACPBlock>;
+  getLatestBlock(): Promise<ACPBlock | undefined>;
+  awardSubscriptionCoins(userId: string, month: Date): Promise<SubscriptionReward>;
+  
+  // Store and Marketplace
+  getStoreItems(category?: string, type?: string): Promise<StoreItem[]>;
+  getStoreItemById(id: string): Promise<StoreItem | undefined>;
+  createStoreItem(item: InsertStoreItem): Promise<StoreItem>;
+  purchaseStoreItem(userId: string, storeItemId: string): Promise<UserPurchase>;
+  getUserPurchases(userId: string): Promise<UserPurchase[]>;
+  checkUserPurchase(userId: string, storeItemId: string): Promise<boolean>;
+  updateSubscriptionStatus(userId: string, status: string, startDate?: Date, endDate?: Date): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1189,6 +1207,239 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.userId, userId)))
       .returning();
     return updatedAttendee;
+  }
+
+  // ACP Cryptocurrency System Implementation
+  async getUserBalance(userId: string): Promise<string> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    return user?.acpCoinBalance || "0.00000000";
+  }
+
+  async updateUserBalance(userId: string, newBalance: string): Promise<void> {
+    await db.update(users)
+      .set({ acpCoinBalance: newBalance })
+      .where(eq(users.id, userId));
+  }
+
+  async createTransaction(transaction: InsertACPTransaction): Promise<ACPTransaction> {
+    const [created] = await db.insert(acpTransactions).values(transaction).returning();
+    return created;
+  }
+
+  async getTransactionHistory(userId: string, limit = 50): Promise<ACPTransaction[]> {
+    return await db.select()
+      .from(acpTransactions)
+      .where(or(eq(acpTransactions.fromUserId, userId), eq(acpTransactions.toUserId, userId)))
+      .orderBy(desc(acpTransactions.createdAt))
+      .limit(limit);
+  }
+
+  async createBlockchainBlock(transactions: ACPTransaction[]): Promise<ACPBlock> {
+    const latestBlock = await this.getLatestBlock();
+    const blockNumber = (latestBlock?.blockNumber || 0) + 1;
+    
+    // Simple blockchain implementation
+    const transactionIds = transactions.map(t => t.id);
+    const merkleRoot = this.calculateMerkleRoot(transactionIds);
+    const previousHash = latestBlock?.hash || "0";
+    const timestamp = new Date();
+    const nonce = Math.random().toString(36);
+    const blockData = `${blockNumber}${previousHash}${merkleRoot}${timestamp.toISOString()}${nonce}`;
+    const hash = await this.calculateHash(blockData);
+
+    const blockData_final = {
+      blockNumber,
+      previousHash,
+      merkleRoot,
+      timestamp,
+      nonce,
+      hash,
+      transactionIds
+    };
+
+    const [block] = await db.insert(acpBlocks).values(blockData_final).returning();
+    
+    // Update transactions with block info
+    await db.update(acpTransactions)
+      .set({ 
+        blockNumber,
+        blockchainHash: hash,
+        status: "confirmed"
+      })
+      .where(inArray(acpTransactions.id, transactionIds));
+
+    return block;
+  }
+
+  async getLatestBlock(): Promise<ACPBlock | undefined> {
+    const [block] = await db.select()
+      .from(acpBlocks)
+      .orderBy(desc(acpBlocks.blockNumber))
+      .limit(1);
+    return block;
+  }
+
+  async awardSubscriptionCoins(userId: string, month: Date): Promise<SubscriptionReward> {
+    // Check if already awarded for this month
+    const existingReward = await db.select()
+      .from(subscriptionRewards)
+      .where(and(
+        eq(subscriptionRewards.userId, userId),
+        eq(subscriptionRewards.subscriptionMonth, month)
+      ))
+      .limit(1);
+
+    if (existingReward.length > 0) {
+      return existingReward[0];
+    }
+
+    // Create transaction for coin reward
+    const transaction = await this.createTransaction({
+      toUserId: userId,
+      amount: "10.00000000",
+      transactionType: "subscription_reward",
+      description: `Monthly ACP+ subscription reward for ${month.toISOString().split('T')[0]}`,
+    });
+
+    // Update user balance
+    const currentBalance = await this.getUserBalance(userId);
+    const newBalance = (parseFloat(currentBalance) + 10).toFixed(8);
+    await this.updateUserBalance(userId, newBalance);
+
+    // Record subscription reward
+    const [reward] = await db.insert(subscriptionRewards).values({
+      userId,
+      subscriptionMonth: month,
+      coinsAwarded: "10.00000000",
+      transactionId: transaction.id
+    }).returning();
+
+    return reward;
+  }
+
+  // Store and Marketplace Implementation
+  async getStoreItems(category?: string, type?: string): Promise<StoreItem[]> {
+    let query = db.select().from(storeItems).where(eq(storeItems.isActive, true));
+    
+    if (category) {
+      query = query.where(eq(storeItems.category, category)) as any;
+    }
+    if (type) {
+      query = query.where(eq(storeItems.type, type)) as any;
+    }
+
+    return await query.orderBy(desc(storeItems.createdAt));
+  }
+
+  async getStoreItemById(id: string): Promise<StoreItem | undefined> {
+    const [item] = await db.select().from(storeItems).where(eq(storeItems.id, id));
+    return item;
+  }
+
+  async createStoreItem(item: InsertStoreItem): Promise<StoreItem> {
+    const [created] = await db.insert(storeItems).values(item).returning();
+    return created;
+  }
+
+  async purchaseStoreItem(userId: string, storeItemId: string): Promise<UserPurchase> {
+    const storeItem = await this.getStoreItemById(storeItemId);
+    if (!storeItem) throw new Error("Store item not found");
+
+    const userBalance = await this.getUserBalance(userId);
+    const itemPrice = parseFloat(storeItem.price);
+    
+    if (parseFloat(userBalance) < itemPrice) {
+      throw new Error("Insufficient ACP coins");
+    }
+
+    // Check if already purchased
+    const existingPurchase = await db.select()
+      .from(userPurchases)
+      .where(and(
+        eq(userPurchases.userId, userId),
+        eq(userPurchases.storeItemId, storeItemId)
+      ))
+      .limit(1);
+
+    if (existingPurchase.length > 0) {
+      throw new Error("Item already purchased");
+    }
+
+    // Create purchase transaction
+    const transaction = await this.createTransaction({
+      fromUserId: userId,
+      toUserId: storeItem.creatorId,
+      amount: storeItem.price,
+      transactionType: "purchase",
+      description: `Purchase: ${storeItem.name}`,
+      relatedItemId: storeItemId
+    });
+
+    // Update balances
+    const newUserBalance = (parseFloat(userBalance) - itemPrice).toFixed(8);
+    await this.updateUserBalance(userId, newUserBalance);
+
+    if (storeItem.creatorId) {
+      const creatorBalance = await this.getUserBalance(storeItem.creatorId);
+      const newCreatorBalance = (parseFloat(creatorBalance) + itemPrice).toFixed(8);
+      await this.updateUserBalance(storeItem.creatorId, newCreatorBalance);
+    }
+
+    // Record purchase
+    const [purchase] = await db.insert(userPurchases).values({
+      userId,
+      storeItemId,
+      transactionId: transaction.id,
+      purchasePrice: storeItem.price
+    }).returning();
+
+    // Update download count
+    await db.update(storeItems)
+      .set({ downloadCount: sql`${storeItems.downloadCount} + 1` })
+      .where(eq(storeItems.id, storeItemId));
+
+    return purchase;
+  }
+
+  async getUserPurchases(userId: string): Promise<UserPurchase[]> {
+    return await db.select()
+      .from(userPurchases)
+      .where(eq(userPurchases.userId, userId))
+      .orderBy(desc(userPurchases.createdAt));
+  }
+
+  async checkUserPurchase(userId: string, storeItemId: string): Promise<boolean> {
+    const [purchase] = await db.select()
+      .from(userPurchases)
+      .where(and(
+        eq(userPurchases.userId, userId),
+        eq(userPurchases.storeItemId, storeItemId)
+      ))
+      .limit(1);
+    return !!purchase;
+  }
+
+  async updateSubscriptionStatus(userId: string, status: string, startDate?: Date, endDate?: Date): Promise<void> {
+    const updateData: any = { subscriptionStatus: status };
+    if (startDate) updateData.subscriptionStartDate = startDate;
+    if (endDate) updateData.subscriptionEndDate = endDate;
+
+    await db.update(users).set(updateData).where(eq(users.id, userId));
+  }
+
+  // Blockchain utility methods
+  private calculateMerkleRoot(transactionIds: string[]): string {
+    if (transactionIds.length === 0) return "0";
+    if (transactionIds.length === 1) return transactionIds[0];
+    
+    // Simple merkle root calculation
+    return transactionIds.join('').slice(0, 64);
+  }
+
+  private async calculateHash(data: string): Promise<string> {
+    // Simple hash implementation using crypto
+    const crypto = await import('crypto');
+    return crypto.createHash('sha256').update(data).digest('hex');
   }
 }
 
