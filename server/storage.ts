@@ -209,7 +209,10 @@ export class DatabaseStorage implements IStorage {
   async createPoll(poll: InsertPoll): Promise<Poll> {
     const [newPoll] = await db
       .insert(polls)
-      .values(poll)
+      .values({
+        ...poll,
+        options: Array.isArray(poll.options) ? poll.options : []
+      })
       .returning();
     return newPoll;
   }
@@ -687,7 +690,10 @@ export class DatabaseStorage implements IStorage {
   async createCandidate(candidate: InsertCandidate): Promise<Candidate> {
     const [newCandidate] = await db
       .insert(candidates)
-      .values(candidate)
+      .values({
+        ...candidate,
+        proposals: Array.isArray(candidate.proposals) ? candidate.proposals : []
+      })
       .returning();
     return newCandidate;
   }
@@ -862,7 +868,7 @@ export class DatabaseStorage implements IStorage {
         );
       }
       if (conditions.length > 0) {
-        query = query.where(and(...conditions));
+        query = query.where(and(...conditions)) as typeof query;
       }
     }
     

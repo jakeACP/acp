@@ -43,14 +43,19 @@ export default function EventsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Create query parameters for filtering
-  const queryParams = new URLSearchParams();
-  if (filters.city) queryParams.append('city', filters.city);
-  if (filters.state) queryParams.append('state', filters.state);
-  if (filters.tags.length > 0) queryParams.append('tags', filters.tags.join(','));
-
   const { data: events = [], isLoading } = useQuery<Event[]>({
     queryKey: ['/api/events', filters],
+    queryFn: async () => {
+      const queryParams = new URLSearchParams();
+      if (filters.city) queryParams.append('city', filters.city);
+      if (filters.state) queryParams.append('state', filters.state);
+      if (filters.tags.length > 0) queryParams.append('tags', filters.tags.join(','));
+      
+      const url = `/api/events${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch events: ${response.statusText}`);
+      return response.json();
+    },
   });
 
   const createEventForm = useForm<InsertEvent>({
@@ -76,7 +81,10 @@ export default function EventsPage() {
   });
 
   const createEventMutation = useMutation({
-    mutationFn: (data: InsertEvent) => apiRequest("/api/events", "POST", data),
+    mutationFn: (data: InsertEvent) => {
+      console.log("Creating event with data:", data);
+      return apiRequest("/api/events", "POST", data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       setShowCreateDialog(false);
@@ -86,11 +94,12 @@ export default function EventsPage() {
         description: "Event created successfully!",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Event creation error:", error);
+      const errorMessage = error?.message || "Unknown error occurred";
       toast({
         title: "Error",
-        description: `Failed to create event: ${error.message}`,
+        description: `Failed to create event: ${errorMessage}`,
         variant: "destructive",
       });
     },
@@ -118,6 +127,44 @@ export default function EventsPage() {
   const onSubmit = (data: InsertEvent) => {
     console.log("Form submitted with data:", data);
     console.log("Form errors:", createEventForm.formState.errors);
+    
+    // Validate required fields
+    if (!data.title?.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Event title is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!data.location?.trim()) {
+      toast({
+        title: "Validation Error", 
+        description: "Event location is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!data.city?.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "City is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!data.state?.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "State is required", 
+        variant: "destructive",
+      });
+      return;
+    }
+    
     createEventMutation.mutate(data);
   };
 

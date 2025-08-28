@@ -773,7 +773,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const event = await storage.createEvent(eventData);
       res.status(201).json(event);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating event:", error);
       res.status(400).json({ message: error.message });
     }
