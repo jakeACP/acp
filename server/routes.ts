@@ -468,7 +468,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const messages = await storage.getMessages(req.user.id);
       res.json(messages);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  app.get("/api/conversations", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const conversations = await storage.getConversationsList(req.user.id);
+      res.json(conversations);
+    } catch (error: any) {
+      console.error("Error fetching conversations:", error);
+      res.status(500).json({ message: "Failed to fetch conversations" });
     }
   });
 
@@ -481,7 +496,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const messages = await storage.getConversation(req.user.id, req.params.userId);
       res.json(messages);
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      console.error("Error fetching conversation:", error);
+      res.status(500).json({ message: "Failed to fetch conversation" });
+    }
+  });
+
+  app.get("/api/messages/unread-count", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const count = await storage.getUnreadMessageCount(req.user.id);
+      res.json({ count });
+    } catch (error: any) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ message: "Failed to fetch unread count" });
+    }
+  });
+
+  app.get("/api/users/messaging", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const users = await storage.getUsersForMessaging();
+      // Filter out the current user
+      const filteredUsers = users.filter(user => user.id !== req.user.id);
+      res.json(filteredUsers);
+    } catch (error: any) {
+      console.error("Error fetching users for messaging:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
     }
   });
 
@@ -491,14 +537,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
+      const { recipientId, content } = req.body;
+
+      if (!recipientId || !content) {
+        return res.status(400).json({ message: "Recipient ID and content are required" });
+      }
+
+      if (content.trim().length === 0) {
+        return res.status(400).json({ message: "Message content cannot be empty" });
+      }
+
+      if (content.length > 2000) {
+        return res.status(400).json({ message: "Message too long. Maximum 2000 characters." });
+      }
+
       const messageData = insertMessageSchema.parse({
-        ...req.body,
+        recipientId,
+        content: content.trim(),
         senderId: req.user.id,
       });
+      
       const message = await storage.sendMessage(messageData);
       res.status(201).json(message);
     } catch (error: any) {
-      res.status(400).json({ message: error.message });
+      console.error("Error sending message:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid message data" });
+      }
+      res.status(500).json({ message: "Failed to send message" });
     }
   });
 
@@ -511,7 +577,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.markMessageRead(req.params.id);
       res.json({ message: "Message marked as read" });
     } catch (error: any) {
-      res.status(400).json({ message: error.message });
+      console.error("Error marking message as read:", error);
+      res.status(500).json({ message: "Failed to mark message as read" });
     }
   });
 

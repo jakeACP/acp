@@ -71,6 +71,9 @@ export interface IStorage {
   getConversation(userId1: string, userId2: string): Promise<Message[]>;
   sendMessage(message: InsertMessage): Promise<Message>;
   markMessageRead(messageId: string): Promise<void>;
+  getConversationsList(userId: string): Promise<any[]>;
+  getUnreadMessageCount(userId: string): Promise<number>;
+  getUsersForMessaging(): Promise<User[]>;
 
   // Representatives
   saveUserAddress(userId: string, address: string): Promise<void>;
@@ -747,6 +750,78 @@ export class DatabaseStorage implements IStorage {
       .update(messages)
       .set({ isRead: true })
       .where(eq(messages.id, messageId));
+  }
+
+  async getConversationsList(userId: string): Promise<any[]> {
+    // Get latest message for each conversation
+    const conversations = await db
+      .select({
+        partnerId: sql<string>`CASE 
+          WHEN ${messages.senderId} = ${userId} THEN ${messages.recipientId}
+          ELSE ${messages.senderId}
+        END`,
+        lastMessageId: messages.id,
+        lastMessageContent: messages.content,
+        lastMessageTime: messages.createdAt,
+        isRead: messages.isRead,
+        lastSenderId: messages.senderId
+      })
+      .from(messages)
+      .where(or(eq(messages.senderId, userId), eq(messages.recipientId, userId)))
+      .orderBy(desc(messages.createdAt));
+
+    // Group by partner and get latest message for each conversation
+    const conversationMap = new Map();
+    
+    conversations.forEach(conv => {
+      if (!conversationMap.has(conv.partnerId)) {
+        conversationMap.set(conv.partnerId, conv);
+      }
+    });
+
+    // Get user details for each conversation partner
+    const partnerIds = Array.from(conversationMap.keys());
+    if (partnerIds.length === 0) return [];
+
+    const partners = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName
+      })
+      .from(users)
+      .where(inArray(users.id, partnerIds));
+
+    // Combine conversation data with partner details
+    return Array.from(conversationMap.values()).map(conv => {
+      const partner = partners.find(p => p.id === conv.partnerId);
+      return {
+        ...conv,
+        partner
+      };
+    }).sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
+  }
+
+  async getUnreadMessageCount(userId: string): Promise<number> {
+    const result = await db
+      .select({ count: count() })
+      .from(messages)
+      .where(and(eq(messages.recipientId, userId), eq(messages.isRead, false)));
+    
+    return result[0].count;
+  }
+
+  async getUsersForMessaging(): Promise<User[]> {
+    return await db
+      .select({
+        id: users.id,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName
+      })
+      .from(users)
+      .orderBy(users.username);
   }
 
   async saveUserAddress(userId: string, address: string): Promise<void> {
