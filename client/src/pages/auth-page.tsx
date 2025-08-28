@@ -12,6 +12,8 @@ import { z } from "zod";
 import { Vote, Users, Shield, Megaphone } from "lucide-react";
 import logoPath from "@assets/logo1_1753819424851.png";
 import { Redirect, Link } from "wouter";
+import { LoadingSpinner } from "@/components/loading-spinner";
+import { ErrorMessage } from "@/components/error-message";
 
 const loginSchema = insertUserSchema.pick({ username: true, password: true });
 const registerSchema = insertUserSchema.extend({
@@ -108,12 +110,29 @@ export default function AuthPage() {
                       )}
                     </div>
 
+                    {loginMutation.error && (
+                      <ErrorMessage
+                        message={loginMutation.error.message || "Login failed. Please check your credentials and try again."}
+                        variant="error"
+                        className="mb-4"
+                        data-testid="login-error-alert"
+                      />
+                    )}
+
                     <Button
                       type="submit"
                       className="w-full"
                       disabled={loginMutation.isPending}
+                      data-testid="button-login-submit"
                     >
-                      {loginMutation.isPending ? "Signing In..." : "Sign In"}
+                      {loginMutation.isPending ? (
+                        <>
+                          <LoadingSpinner size="sm" className="mr-2" />
+                          Signing In...
+                        </>
+                      ) : (
+                        "Sign In"
+                      )}
                     </Button>
                   </form>
                   

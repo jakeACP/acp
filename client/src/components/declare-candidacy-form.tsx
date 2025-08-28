@@ -277,8 +277,16 @@ export function DeclareCandidacyForm({ onCancel }: DeclareCandidacyFormProps) {
               type="submit" 
               disabled={createCandidateMutation.isPending}
               className="bg-blue-600 hover:bg-blue-700"
+              data-testid="button-declare-candidacy"
             >
-              {createCandidateMutation.isPending ? "Declaring..." : "Declare Candidacy"}
+              {createCandidateMutation.isPending ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                  Declaring...
+                </>
+              ) : (
+                "Declare Candidacy"
+              )}
             </Button>
           </div>
         </form>

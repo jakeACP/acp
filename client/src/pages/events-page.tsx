@@ -16,6 +16,8 @@ import { insertEventSchema, type Event, type InsertEvent } from "@shared/schema"
 import { Calendar, MapPin, Users, Clock, Plus, Filter, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { PageLoading } from "@/components/page-loading";
+import { ErrorMessage } from "@/components/error-message";
 
 const US_STATES = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", 
@@ -177,15 +179,7 @@ export default function EventsPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-64 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
-          ))}
-        </div>
-      </div>
-    );
+    return <PageLoading title="Loading Events..." description="Fetching community events and registration information" />;
   }
 
   return (
@@ -497,7 +491,14 @@ export default function EventsPage() {
                       disabled={createEventMutation.isPending}
                       data-testid="button-submit-event"
                     >
-                      {createEventMutation.isPending ? "Creating..." : "Create Event"}
+                      {createEventMutation.isPending ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                          Creating...
+                        </>
+                      ) : (
+                        "Create Event"
+                      )}
                     </Button>
                   </div>
                 </form>

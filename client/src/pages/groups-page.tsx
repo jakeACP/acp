@@ -10,6 +10,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Group } from "@shared/schema";
 import { Users, Plus, UserPlus, UserMinus } from "lucide-react";
 import { CreateGroupForm } from "@/components/create-group-form";
+import { PageLoading } from "@/components/page-loading";
+import { ErrorMessage } from "@/components/error-message";
 
 export default function GroupsPage() {
   const { user } = useAuth();
@@ -95,14 +97,7 @@ export default function GroupsPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="bg-slate-50 min-h-screen">
-        <Navigation />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">Loading groups...</div>
-        </div>
-      </div>
-    );
+    return <PageLoading title="Loading Groups..." description="Fetching community groups and membership information" />;
   }
 
   return (

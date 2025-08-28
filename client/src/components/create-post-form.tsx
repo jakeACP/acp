@@ -67,7 +67,24 @@ export function CreatePostForm() {
   };
 
   const handleSubmit = () => {
-    if (!content.trim()) return;
+    if (!content.trim()) {
+      toast({
+        title: "Content Required",
+        description: "Please enter some content for your post",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (content.trim().length > 5000) {
+      toast({
+        title: "Post Too Long",
+        description: "Posts cannot exceed 5000 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     createPostMutation.mutate({ content: content.trim(), tags });
   };
 
@@ -178,9 +195,13 @@ export function CreatePostForm() {
                   onClick={handleSubmit}
                   disabled={!content.trim() || createPostMutation.isPending}
                   size="sm"
+                  data-testid="button-submit-post"
                 >
                   {createPostMutation.isPending ? (
-                    "Posting..."
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                      Posting...
+                    </>
                   ) : (
                     <>
                       <Send className="h-4 w-4 mr-2" />

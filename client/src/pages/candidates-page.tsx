@@ -12,6 +12,7 @@ import { useLocation } from "wouter";
 import { Users, UserPlus, Eye } from "lucide-react";
 import { DeclareCandidacyForm } from "@/components/declare-candidacy-form";
 import { CandidateActions } from "@/components/candidate-actions";
+import { PageLoading } from "@/components/page-loading";
 
 interface CandidateWithUser {
   id: string;
@@ -92,14 +93,7 @@ export default function CandidatesPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="bg-slate-50 dark:bg-slate-900 min-h-screen">
-        <Navigation />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">Loading candidates...</div>
-        </div>
-      </div>
-    );
+    return <PageLoading title="Loading Candidates..." description="Fetching candidate profiles and support information" />;
   }
 
   return (
