@@ -79,7 +79,8 @@ export const groupMembers = pgTable("group_members", {
 
 export const comments = pgTable("comments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  postId: varchar("post_id").notNull().references(() => posts.id),
+  postId: varchar("post_id").references(() => posts.id),
+  pollId: varchar("poll_id").references(() => polls.id),
   authorId: varchar("author_id").notNull().references(() => users.id),
   content: text("content").notNull(),
   parentId: varchar("parent_id"),

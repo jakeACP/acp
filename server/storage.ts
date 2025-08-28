@@ -36,6 +36,7 @@ export interface IStorage {
   getUserVote(pollId: string, userId: string): Promise<any>;
   votePoll(pollId: string, userId: string, optionId: string): Promise<void>;
   getPollVote(pollId: string, userId: string): Promise<string | undefined>;
+  closePoll(pollId: string): Promise<void>;
 
   // Groups
   getGroups(): Promise<Group[]>;
@@ -47,7 +48,9 @@ export interface IStorage {
 
   // Comments
   getCommentsByPost(postId: string): Promise<Comment[]>;
+  getCommentsByPoll(pollId: string): Promise<Comment[]>;
   createComment(comment: InsertComment): Promise<Comment>;
+  createPollComment(pollId: string, authorId: string, content: string): Promise<Comment>;
 
   // Likes
   toggleLike(userId: string, targetId: string, targetType: string): Promise<boolean>;
@@ -277,6 +280,13 @@ export class DatabaseStorage implements IStorage {
     return vote?.optionId;
   }
 
+  async closePoll(pollId: string): Promise<void> {
+    await db
+      .update(polls)
+      .set({ isActive: false })
+      .where(eq(polls.id, pollId));
+  }
+
   async getPoll(id: string): Promise<Poll | undefined> {
     return this.getPollById(id);
   }
@@ -450,17 +460,49 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(comments.createdAt));
   }
 
+  async getCommentsByPoll(pollId: string): Promise<any[]> {
+    return await db
+      .select({
+        id: comments.id,
+        pollId: comments.pollId,
+        authorId: comments.authorId,
+        content: comments.content,
+        createdAt: comments.createdAt,
+        author: {
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        }
+      })
+      .from(comments)
+      .innerJoin(users, eq(comments.authorId, users.id))
+      .where(eq(comments.pollId, pollId))
+      .orderBy(desc(comments.createdAt));
+  }
+
   async createComment(comment: InsertComment): Promise<Comment> {
     const [newComment] = await db
       .insert(comments)
       .values(comment)
       .returning();
 
-    // Update post comment count
-    await db
-      .update(posts)
-      .set({ commentsCount: sql`${posts.commentsCount} + 1` })
-      .where(eq(posts.id, comment.postId));
+    // Update post comment count if it's a post comment
+    if (comment.postId) {
+      await db
+        .update(posts)
+        .set({ commentsCount: sql`${posts.commentsCount} + 1` })
+        .where(eq(posts.id, comment.postId));
+    }
+
+    return newComment;
+  }
+
+  async createPollComment(pollId: string, authorId: string, content: string): Promise<Comment> {
+    const [newComment] = await db
+      .insert(comments)
+      .values({ pollId, authorId, content })
+      .returning();
 
     return newComment;
   }

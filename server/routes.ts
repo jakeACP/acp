@@ -151,6 +151,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/polls/:id/comments", async (req, res) => {
+    try {
+      const comments = await storage.getCommentsByPoll(req.params.id);
+      res.json(comments);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/polls/:id/comments", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { content } = req.body;
+      const comment = await storage.createPollComment(req.params.id, req.user.id, content);
+      res.status(201).json(comment);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/polls/:id/close", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    // Only admins can close polls
+    if (req.user.role !== 'admin') {
+      return res.sendStatus(403);
+    }
+
+    try {
+      await storage.closePoll(req.params.id);
+      res.json({ message: "Poll closed successfully" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   // Groups API
   app.get("/api/groups", async (req, res) => {
     try {
@@ -467,9 +508,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           foundOfficials: data.officials?.length || 0
         }
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Test endpoint error:', error);
-      res.status(500).json({ message: error.message });
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ message });
     }
   });
 

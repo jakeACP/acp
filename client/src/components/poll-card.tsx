@@ -98,7 +98,11 @@ export function PollCard({ poll }: PollCardProps) {
           </div>
         </div>
         
-        <h4 className="text-lg font-medium text-slate-900 mb-4">
+        <h4 
+          className="text-lg font-medium text-slate-900 mb-4 cursor-pointer hover:text-primary transition-colors"
+          onClick={() => window.location.href = `/polls/${poll.id}`}
+          data-testid="link-poll-title"
+        >
           {poll.title}
         </h4>
         

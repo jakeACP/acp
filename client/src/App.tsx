@@ -14,6 +14,7 @@ import MessagesPage from "@/pages/messages-page";
 import RepresentativesPage from "@/pages/representatives-page";
 import SettingsPage from "@/pages/settings-page";
 import EventsPage from "@/pages/events-page";
+import PollDetailPage from "@/pages/poll-detail-page";
 import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
 import NotFound from "@/pages/not-found";
@@ -24,6 +25,7 @@ function Router() {
       <ProtectedRoute path="/" component={HomePage} />
       <ProtectedRoute path="/groups" component={GroupsPage} />
       <ProtectedRoute path="/polls" component={PollsPage} />
+      <ProtectedRoute path="/polls/:id" component={PollDetailPage} />
       <ProtectedRoute path="/candidates" component={CandidatesPage} />
       <ProtectedRoute path="/representatives" component={RepresentativesPage} />
       <ProtectedRoute path="/events" component={EventsPage} />
