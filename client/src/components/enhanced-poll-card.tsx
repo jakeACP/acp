@@ -28,6 +28,7 @@ export function EnhancedPollCard({ poll }: EnhancedPollCardProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/vote-count"] });
       toast({
         title: "Vote Recorded",
         description: "Thank you for participating in this poll!",
