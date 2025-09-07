@@ -1065,6 +1065,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/store/items", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const itemData = {
+        ...req.body,
+        creatorId: req.user.id
+      };
+      
+      const newItem = await storage.createStoreItem(itemData);
+      res.status(201).json(newItem);
+    } catch (error) {
+      console.error("Error creating store item:", error);
+      res.status(500).json({ message: "Failed to create store item" });
+    }
+  });
+
   app.post("/api/store/purchase/:itemId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
