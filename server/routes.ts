@@ -1007,6 +1007,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/user/vote-count", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const voteCount = await storage.getUserVoteCount(req.user.id);
+      res.json({ voteCount });
+    } catch (error) {
+      console.error("Error getting user vote count:", error);
+      res.status(500).json({ message: "Failed to get vote count" });
+    }
+  });
+
   app.get("/api/transactions/history", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);

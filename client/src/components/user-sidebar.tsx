@@ -16,6 +16,11 @@ export function UserSidebar() {
     enabled: !!user?.id,
   });
 
+  const { data: voteData } = useQuery<{ voteCount: number }>({
+    queryKey: ["/api/user/vote-count"],
+    enabled: !!user?.id,
+  });
+
   const getGroupIcon = (category: string | null) => {
     switch (category) {
       case "climate": return <Leaf className="h-4 w-4 text-white" />;
@@ -65,7 +70,7 @@ export function UserSidebar() {
           
           <div className="mt-6 grid grid-cols-2 gap-4 text-center">
             <div>
-              <p className="text-2xl font-bold text-slate-900">127</p>
+              <p className="text-2xl font-bold text-slate-900">{voteData?.voteCount || 0}</p>
               <p className="text-xs text-slate-500">Votes Cast</p>
             </div>
             <div>

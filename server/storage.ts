@@ -36,6 +36,7 @@ export interface IStorage {
   getUserVote(pollId: string, userId: string): Promise<any>;
   votePoll(pollId: string, userId: string, optionId: string): Promise<void>;
   getPollVote(pollId: string, userId: string): Promise<string | undefined>;
+  getUserVoteCount(userId: string): Promise<number>;
   closePoll(pollId: string): Promise<void>;
 
   // Groups
@@ -404,6 +405,14 @@ export class DatabaseStorage implements IStorage {
       .from(pollVotes)
       .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
     return vote || null;
+  }
+
+  async getUserVoteCount(userId: string): Promise<number> {
+    const [result] = await db
+      .select({ count: count() })
+      .from(pollVotes)
+      .where(eq(pollVotes.userId, userId));
+    return result?.count || 0;
   }
 
   private async updatePollCounts(pollId: string): Promise<void> {
