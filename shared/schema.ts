@@ -320,29 +320,6 @@ export const eventAttendeesRelations = relations(eventAttendees, ({ one }) => ({
   }),
 }));
 
-export const charitiesRelations = relations(charities, ({ one, many }) => ({
-  creator: one(users, {
-    fields: [charities.creatorId],
-    references: [users.id],
-  }),
-  donations: many(charityDonations),
-}));
-
-export const charityDonationsRelations = relations(charityDonations, ({ one }) => ({
-  charity: one(charities, {
-    fields: [charityDonations.charityId],
-    references: [charities.id],
-  }),
-  user: one(users, {
-    fields: [charityDonations.userId],
-    references: [users.id],
-  }),
-  transaction: one(acpTransactions, {
-    fields: [charityDonations.transactionId],
-    references: [acpTransactions.id],
-  }),
-}));
-
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -495,6 +472,29 @@ export const charityDonations = pgTable("charity_donations", {
   status: text("status").default("completed"), // pending, completed, failed, refunded
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const charitiesRelations = relations(charities, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [charities.creatorId],
+    references: [users.id],
+  }),
+  donations: many(charityDonations),
+}));
+
+export const charityDonationsRelations = relations(charityDonations, ({ one }) => ({
+  charity: one(charities, {
+    fields: [charityDonations.charityId],
+    references: [charities.id],
+  }),
+  user: one(users, {
+    fields: [charityDonations.userId],
+    references: [users.id],
+  }),
+  transaction: one(acpTransactions, {
+    fields: [charityDonations.transactionId],
+    references: [acpTransactions.id],
+  }),
+}));
 
 export const insertEventAttendeeSchema = createInsertSchema(eventAttendees).omit({
   id: true,
