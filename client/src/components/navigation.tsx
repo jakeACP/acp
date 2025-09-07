@@ -19,6 +19,7 @@ export function Navigation() {
     { href: "/groups", label: "Groups" },
     { href: "/candidates", label: "Candidates" },
     { href: "/events", label: "Events" },
+    { href: "/charities", label: "Charities" },
     { href: "/representatives", label: "Know Your Reps" },
     { href: "/messages", label: "Messages" },
     { href: "/crypto", label: "ACP Store" },

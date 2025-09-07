@@ -20,6 +20,8 @@ import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
 import CryptoDashboardPage from "@/pages/crypto-dashboard-page";
 import ProfilePage from "@/pages/profile-page";
+import CharitiesPage from "@/pages/charities-page";
+import CharityDetailPage from "@/pages/charity-detail-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -35,6 +37,8 @@ function Router() {
       <ProtectedRoute path="/events" component={EventsPage} />
       <ProtectedRoute path="/messages" component={MessagesPage} />
       <ProtectedRoute path="/crypto" component={CryptoDashboardPage} />
+      <ProtectedRoute path="/charities" component={CharitiesPage} />
+      <ProtectedRoute path="/charities/:id" component={CharityDetailPage} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
