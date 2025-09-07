@@ -303,17 +303,13 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
 
     if (existingVote.length > 0) {
-      // Update existing vote
-      await db
-        .update(pollVotes)
-        .set({ optionId })
-        .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
-    } else {
-      // Insert new vote
-      await db
-        .insert(pollVotes)
-        .values({ pollId, userId, optionId });
+      throw new Error("You have already voted on this poll");
     }
+
+    // Insert new vote
+    await db
+      .insert(pollVotes)
+      .values({ pollId, userId, optionId });
 
     // Update poll vote counts
     const poll = await this.getPollById(pollId);
