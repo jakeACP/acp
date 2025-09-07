@@ -38,7 +38,7 @@ export function PostCard({ post }: PostCardProps) {
   });
 
   const { data: comments = [] } = useQuery<Comment[]>({
-    queryKey: ["/api/posts", post.id, "comments"],
+    queryKey: [`/api/posts/${post.id}/comments`],
     enabled: showComments && !!post.id,
   });
 
@@ -63,7 +63,7 @@ export function PostCard({ post }: PostCardProps) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/posts", post.id, "comments"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/posts/${post.id}/comments`] });
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
       setNewComment("");
       toast({
