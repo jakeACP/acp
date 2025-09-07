@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, storeItems, userPurchases, subscriptionRewards, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -129,6 +129,23 @@ export interface IStorage {
   getUserPurchases(userId: string): Promise<UserPurchase[]>;
   checkUserPurchase(userId: string, storeItemId: string): Promise<boolean>;
   updateSubscriptionStatus(userId: string, status: string, startDate?: Date, endDate?: Date): Promise<void>;
+  
+  // Charity Management
+  getCharities(limit?: number, offset?: number, filters?: { category?: string; isActive?: boolean }): Promise<Charity[]>;
+  getCharityById(id: string): Promise<Charity | undefined>;
+  createCharity(charity: InsertCharity): Promise<Charity>;
+  updateCharity(charityId: string, updateData: Partial<Charity>): Promise<Charity>;
+  deleteCharity(charityId: string): Promise<void>;
+  getUserCharities(userId: string): Promise<Charity[]>;
+  getCharitiesByCategory(category: string): Promise<Charity[]>;
+  
+  // Charity Donations
+  donateToCharity(donation: InsertCharityDonation): Promise<CharityDonation>;
+  getCharityDonations(charityId: string): Promise<CharityDonation[]>;
+  getUserDonations(userId: string): Promise<CharityDonation[]>;
+  updateCharityProgress(charityId: string): Promise<void>;
+  getTopDonors(charityId: string, limit?: number): Promise<{ user: User; totalDonated: string; donationCount: number }[]>;
+  createDonationPost(userId: string, charityId: string, donationAmount: string, currencyType: string, isAnonymous?: boolean): Promise<Post>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1425,6 +1442,189 @@ export class DatabaseStorage implements IStorage {
     if (endDate) updateData.subscriptionEndDate = endDate;
 
     await db.update(users).set(updateData).where(eq(users.id, userId));
+  }
+
+  // Charity Management Methods
+  async getCharities(limit: number = 50, offset: number = 0, filters?: { category?: string; isActive?: boolean }): Promise<Charity[]> {
+    let query = db.select().from(charities);
+
+    if (filters?.category) {
+      query = query.where(eq(charities.category, filters.category));
+    }
+    if (filters?.isActive !== undefined) {
+      query = query.where(eq(charities.isActive, filters.isActive));
+    }
+
+    return await query
+      .orderBy(desc(charities.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getCharityById(id: string): Promise<Charity | undefined> {
+    const [charity] = await db.select().from(charities).where(eq(charities.id, id));
+    return charity || undefined;
+  }
+
+  async createCharity(insertCharity: InsertCharity): Promise<Charity> {
+    const [charity] = await db
+      .insert(charities)
+      .values(insertCharity)
+      .returning();
+    return charity;
+  }
+
+  async updateCharity(charityId: string, updateData: Partial<Charity>): Promise<Charity> {
+    const [charity] = await db
+      .update(charities)
+      .set(updateData)
+      .where(eq(charities.id, charityId))
+      .returning();
+    return charity;
+  }
+
+  async deleteCharity(charityId: string): Promise<void> {
+    await db.delete(charities).where(eq(charities.id, charityId));
+  }
+
+  async getUserCharities(userId: string): Promise<Charity[]> {
+    return await db
+      .select()
+      .from(charities)
+      .where(eq(charities.creatorId, userId))
+      .orderBy(desc(charities.createdAt));
+  }
+
+  async getCharitiesByCategory(category: string): Promise<Charity[]> {
+    return await db
+      .select()
+      .from(charities)
+      .where(and(eq(charities.category, category), eq(charities.isActive, true)))
+      .orderBy(desc(charities.createdAt));
+  }
+
+  // Charity Donations Methods
+  async donateToCharity(insertDonation: InsertCharityDonation): Promise<CharityDonation> {
+    // Create the donation record
+    const [donation] = await db
+      .insert(charityDonations)
+      .values(insertDonation)
+      .returning();
+
+    // Update charity progress
+    await this.updateCharityProgress(insertDonation.charityId);
+
+    return donation;
+  }
+
+  async getCharityDonations(charityId: string): Promise<CharityDonation[]> {
+    return await db
+      .select()
+      .from(charityDonations)
+      .where(eq(charityDonations.charityId, charityId))
+      .orderBy(desc(charityDonations.createdAt));
+  }
+
+  async getUserDonations(userId: string): Promise<CharityDonation[]> {
+    return await db
+      .select()
+      .from(charityDonations)
+      .where(eq(charityDonations.userId, userId))
+      .orderBy(desc(charityDonations.createdAt));
+  }
+
+  async updateCharityProgress(charityId: string): Promise<void> {
+    // Calculate total raised amounts in both USD and ACP coins
+    const donations = await db
+      .select()
+      .from(charityDonations)
+      .where(and(
+        eq(charityDonations.charityId, charityId),
+        eq(charityDonations.status, "completed")
+      ));
+
+    let totalUSD = 0;
+    let totalACPCoins = 0;
+    const uniqueDonors = new Set<string>();
+
+    donations.forEach(donation => {
+      uniqueDonors.add(donation.userId);
+      
+      if (donation.currencyType === "usd") {
+        totalUSD += parseFloat(donation.amount);
+      } else if (donation.currencyType === "acp_coin") {
+        totalACPCoins += parseFloat(donation.amount);
+      }
+    });
+
+    // Update charity with calculated totals
+    await db
+      .update(charities)
+      .set({
+        raisedAmount: totalUSD.toFixed(2),
+        acpCoinRaised: totalACPCoins.toFixed(8),
+        donorCount: uniqueDonors.size
+      })
+      .where(eq(charities.id, charityId));
+  }
+
+  async getTopDonors(charityId: string, limit: number = 10): Promise<{ user: User; totalDonated: string; donationCount: number }[]> {
+    const donorStats = await db
+      .select({
+        userId: charityDonations.userId,
+        totalDonated: sql<string>`SUM(CASE WHEN ${charityDonations.currencyType} = 'usd' THEN ${charityDonations.amount}::numeric ELSE 0 END)`.as('totalDonated'),
+        donationCount: sql<number>`COUNT(*)`.as('donationCount')
+      })
+      .from(charityDonations)
+      .where(and(
+        eq(charityDonations.charityId, charityId),
+        eq(charityDonations.status, "completed"),
+        eq(charityDonations.isAnonymous, false)
+      ))
+      .groupBy(charityDonations.userId)
+      .orderBy(sql`totalDonated DESC`)
+      .limit(limit);
+
+    // Get user details for each donor
+    const results = [];
+    for (const stat of donorStats) {
+      const user = await this.getUser(stat.userId);
+      if (user) {
+        results.push({
+          user,
+          totalDonated: stat.totalDonated || "0",
+          donationCount: stat.donationCount
+        });
+      }
+    }
+
+    return results;
+  }
+
+  async createDonationPost(userId: string, charityId: string, donationAmount: string, currencyType: string, isAnonymous: boolean = false): Promise<Post> {
+    // Get charity details
+    const charity = await this.getCharityById(charityId);
+    if (!charity) {
+      throw new Error("Charity not found");
+    }
+
+    // Create donation announcement post
+    const content = isAnonymous 
+      ? `An anonymous donor contributed ${donationAmount} ${currencyType.toUpperCase()} to ${charity.name}! 🎯💚`
+      : `I just donated ${donationAmount} ${currencyType.toUpperCase()} to ${charity.name}! Join me in supporting this cause. 🎯💚`;
+
+    const [post] = await db
+      .insert(posts)
+      .values({
+        authorId: userId,
+        content,
+        type: "charity_donation",
+        tags: ["charity", "donation", charity.category],
+        image: charity.image
+      })
+      .returning();
+
+    return post;
   }
 
   // Blockchain utility methods
