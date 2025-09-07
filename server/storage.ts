@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, storeItems, userPurchases, subscriptionRewards, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -1336,7 +1336,7 @@ export class DatabaseStorage implements IStorage {
 
   // Store and Marketplace Implementation
   async getStoreItems(category?: string, type?: string): Promise<StoreItem[]> {
-    let query = db.select().from(storeItems).where(eq(storeItems.isActive, true));
+    let query = db.select().from(storeItems);
     
     if (category) {
       query = query.where(eq(storeItems.category, category)) as any;
@@ -1374,7 +1374,7 @@ export class DatabaseStorage implements IStorage {
       .from(userPurchases)
       .where(and(
         eq(userPurchases.userId, userId),
-        eq(userPurchases.storeItemId, storeItemId)
+        eq(userPurchases.itemId, storeItemId)
       ))
       .limit(1);
 
@@ -1405,8 +1405,7 @@ export class DatabaseStorage implements IStorage {
     // Record purchase
     const [purchase] = await db.insert(userPurchases).values({
       userId,
-      storeItemId,
-      transactionId: transaction.id,
+      itemId: storeItemId,
       purchasePrice: storeItem.price
     }).returning();
 
@@ -1422,7 +1421,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select()
       .from(userPurchases)
       .where(eq(userPurchases.userId, userId))
-      .orderBy(desc(userPurchases.createdAt));
+      .orderBy(desc(userPurchases.purchasedAt));
   }
 
   async checkUserPurchase(userId: string, storeItemId: string): Promise<boolean> {
@@ -1430,7 +1429,7 @@ export class DatabaseStorage implements IStorage {
       .from(userPurchases)
       .where(and(
         eq(userPurchases.userId, userId),
-        eq(userPurchases.storeItemId, storeItemId)
+        eq(userPurchases.itemId, storeItemId)
       ))
       .limit(1);
     return !!purchase;

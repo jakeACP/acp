@@ -406,7 +406,7 @@ export const acpBlocks = pgTable("acp_blocks", {
 });
 
 // Profile Store and Marketplace
-export const storeItems = pgTable("store_items", {
+export const storeItems = pgTable("marketplace_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   description: text("description"),
@@ -418,17 +418,15 @@ export const storeItems = pgTable("store_items", {
   previewImage: text("preview_image"),
   downloadCount: integer("download_count").default(0),
   rating: text("rating").default("0"),
-  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const userPurchases = pgTable("user_purchases", {
+export const userPurchases = pgTable("marketplace_purchases", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  storeItemId: varchar("store_item_id").notNull().references(() => storeItems.id),
-  transactionId: varchar("transaction_id").references(() => acpTransactions.id),
+  itemId: varchar("item_id").notNull().references(() => storeItems.id),
   purchasePrice: text("purchase_price").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  purchasedAt: timestamp("purchased_at").defaultNow(),
 });
 
 export const subscriptionRewards = pgTable("subscription_rewards", {
