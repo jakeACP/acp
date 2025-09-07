@@ -8,16 +8,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Post, Comment } from "@shared/schema";
+import { Post, PostWithAuthor, Comment } from "@shared/schema";
 import { Heart, MessageCircle, Share, Flag, Send } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 
 interface PostCardProps {
-  post: Post;
+  post: PostWithAuthor;
 }
 
 export function PostCard({ post }: PostCardProps) {
+  const getDisplayName = () => {
+    if (post.author?.firstName && post.author?.lastName) {
+      return `${post.author.firstName} ${post.author.lastName}`;
+    } else if (post.author?.username) {
+      return post.author.username;
+    }
+    return "Community Member";
+  };
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -198,7 +206,7 @@ export function PostCard({ post }: PostCardProps) {
               </AvatarFallback>
             </Avatar>
             <div>
-              <h4 className="font-semibold text-slate-900">Community Member</h4>
+              <h4 className="font-semibold text-slate-900">{getDisplayName()}</h4>
               <p className="text-sm text-slate-500">
                 {timeAgo || "Recently"}
               </p>
@@ -297,7 +305,7 @@ export function PostCard({ post }: PostCardProps) {
                                 {comment.authorId.slice(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="text-sm font-medium">Community Member</span>
+                            <span className="text-sm font-medium">{getDisplayName()}</span>
                             <span className="text-xs text-slate-500">
                               {comment.createdAt && formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                             </span>

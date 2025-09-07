@@ -536,6 +536,13 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Post = typeof posts.$inferSelect;
 export type InsertPost = z.infer<typeof insertPostSchema>;
+export type PostWithAuthor = Post & {
+  author: {
+    username: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+};
 export type Poll = typeof polls.$inferSelect;
 export type InsertPoll = z.infer<typeof insertPollSchema>;
 export type Group = typeof groups.$inferSelect;

@@ -11,7 +11,7 @@ import { CreatePollForm } from "@/components/create-poll-form";
 import { BlockchainTransparency } from "@/components/blockchain-transparency";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { Post, Poll } from "@shared/schema";
+import { PostWithAuthor, Poll } from "@shared/schema";
 import { Loader2, MessageSquare, BarChart3, Shield } from "lucide-react";
 
 export function MainFeed() {
@@ -19,7 +19,7 @@ export function MainFeed() {
   const [showCreatePoll, setShowCreatePoll] = useState(false);
   const [showBlockchain, setShowBlockchain] = useState(false);
 
-  const { data: posts = [], isLoading } = useQuery<Post[]>({
+  const { data: posts = [], isLoading } = useQuery<PostWithAuthor[]>({
     queryKey: ["/api/posts"],
   });
 
@@ -90,7 +90,7 @@ export function MainFeed() {
         feedItems.map((item, index) => (
           <div key={`${item.type}-${item.data.id || index}`}>
             {item.type === 'post' ? (
-              <PostCard post={item.data as Post} />
+              <PostCard post={item.data as PostWithAuthor} />
             ) : (
               (item.data as Poll).votingType === 'ranked_choice' ? (
                 <RankedChoicePoll poll={item.data as Poll} />

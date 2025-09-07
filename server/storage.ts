@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, type User, type InsertUser, type Post, type InsertPost, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -18,7 +18,7 @@ export interface IStorage {
   updateUserPassword(userId: string, hashedPassword: string): Promise<User>;
 
   // Posts
-  getPosts(limit?: number, offset?: number): Promise<Post[]>;
+  getPosts(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
   getPostById(id: string): Promise<Post | undefined>;
   createPost(post: InsertPost): Promise<Post>;
   getPostsByUser(userId: string): Promise<Post[]>;
@@ -212,10 +212,26 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getPosts(limit = 20, offset = 0): Promise<Post[]> {
+  async getPosts(limit = 20, offset = 0): Promise<PostWithAuthor[]> {
     return await db
-      .select()
+      .select({
+        id: posts.id,
+        authorId: posts.authorId,
+        content: posts.content,
+        type: posts.type,
+        tags: posts.tags,
+        image: posts.image,
+        likesCount: posts.likesCount,
+        commentsCount: posts.commentsCount,
+        createdAt: posts.createdAt,
+        author: {
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
       .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
       .orderBy(desc(posts.createdAt))
       .limit(limit)
       .offset(offset);
