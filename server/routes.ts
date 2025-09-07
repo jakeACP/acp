@@ -4,7 +4,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertFlagSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1107,6 +1107,220 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating profile customization:", error);
       res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  // Charity API Endpoints
+  app.get("/api/charities", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const category = req.query.category as string;
+      const isActive = req.query.isActive ? req.query.isActive === "true" : undefined;
+      
+      const filters = { category, isActive };
+      const charities = await storage.getCharities(limit, offset, filters);
+      res.json(charities);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/charities/:id", async (req, res) => {
+    try {
+      const charity = await storage.getCharityById(req.params.id);
+      if (!charity) {
+        return res.status(404).json({ message: "Charity not found" });
+      }
+      res.json(charity);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/charities", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const charityData = insertCharitySchema.parse({
+        ...req.body,
+        creatorId: req.user.id,
+      });
+      const charity = await storage.createCharity(charityData);
+      res.status(201).json(charity);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/charities/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const charity = await storage.getCharityById(req.params.id);
+      if (!charity) {
+        return res.status(404).json({ message: "Charity not found" });
+      }
+
+      // Only charity creator or admin can edit
+      if (charity.creatorId !== req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ message: "Not authorized to edit this charity" });
+      }
+
+      const updatedCharity = await storage.updateCharity(req.params.id, req.body);
+      res.json(updatedCharity);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/charities/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const charity = await storage.getCharityById(req.params.id);
+      if (!charity) {
+        return res.status(404).json({ message: "Charity not found" });
+      }
+
+      // Only charity creator or admin can delete
+      if (charity.creatorId !== req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ message: "Not authorized to delete this charity" });
+      }
+
+      await storage.deleteCharity(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/charities/user/:userId", async (req, res) => {
+    try {
+      const charities = await storage.getUserCharities(req.params.userId);
+      res.json(charities);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/charities/category/:category", async (req, res) => {
+    try {
+      const charities = await storage.getCharitiesByCategory(req.params.category);
+      res.json(charities);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Charity Donation Endpoints
+  app.post("/api/charities/:id/donate", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { amount, currencyType, isAnonymous, message } = req.body;
+      const charityId = req.params.id;
+      const userId = req.user.id;
+
+      // Validate charity exists
+      const charity = await storage.getCharityById(charityId);
+      if (!charity) {
+        return res.status(404).json({ message: "Charity not found" });
+      }
+
+      if (!charity.isActive) {
+        return res.status(400).json({ message: "This charity is no longer accepting donations" });
+      }
+
+      let transactionId = null;
+
+      // Handle ACP coin donations
+      if (currencyType === "acp_coin") {
+        const userBalance = parseFloat(await storage.getUserBalance(userId));
+        const donationAmount = parseFloat(amount);
+
+        if (userBalance < donationAmount) {
+          return res.status(400).json({ message: "Insufficient ACP coins" });
+        }
+
+        // Create transaction for ACP coin donation
+        const transaction = await storage.createTransaction({
+          fromUserId: userId,
+          toUserId: charity.creatorId,
+          amount: amount,
+          transactionType: "charity_donation",
+          description: `Donation to ${charity.name}`,
+          relatedItemId: charityId
+        });
+
+        transactionId = transaction.id;
+
+        // Update user balance
+        const newBalance = (userBalance - donationAmount).toFixed(8);
+        await storage.updateUserBalance(userId, newBalance);
+      }
+
+      // Create donation record
+      const donation = await storage.donateToCharity({
+        charityId,
+        userId,
+        amount,
+        currencyType,
+        transactionId,
+        isAnonymous: isAnonymous || false,
+        message: message || null,
+        status: "completed"
+      });
+
+      // Create donation post to news feed (if not anonymous)
+      if (!isAnonymous) {
+        await storage.createDonationPost(userId, charityId, amount, currencyType, false);
+      }
+
+      res.status(201).json(donation);
+    } catch (error: any) {
+      console.error("Donation error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/charities/:id/donations", async (req, res) => {
+    try {
+      const donations = await storage.getCharityDonations(req.params.id);
+      res.json(donations);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/charities/:id/top-donors", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const topDonors = await storage.getTopDonors(req.params.id, limit);
+      res.json(topDonors);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/user/donations", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const donations = await storage.getUserDonations(req.user.id);
+      res.json(donations);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 
