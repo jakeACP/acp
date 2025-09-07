@@ -32,6 +32,7 @@ export function PollCard({ poll }: PollCardProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls"] });
       queryClient.invalidateQueries({ queryKey: ["/api/polls", poll.id, "my-vote"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/vote-count"] });
       toast({
         title: "Vote submitted",
         description: "Your vote has been recorded successfully",
