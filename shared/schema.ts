@@ -34,7 +34,7 @@ export const posts = pgTable("posts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   authorId: varchar("author_id").notNull().references(() => users.id),
   content: text("content").notNull(),
-  type: text("type").notNull().default("post"), // post, poll, announcement
+  type: text("type").notNull().default("post"), // post, poll, announcement, charity_donation
   tags: text("tags").array().default([]),
   image: text("image"),
   likesCount: integer("likes_count").default(0),
@@ -320,6 +320,29 @@ export const eventAttendeesRelations = relations(eventAttendees, ({ one }) => ({
   }),
 }));
 
+export const charitiesRelations = relations(charities, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [charities.creatorId],
+    references: [users.id],
+  }),
+  donations: many(charityDonations),
+}));
+
+export const charityDonationsRelations = relations(charityDonations, ({ one }) => ({
+  charity: one(charities, {
+    fields: [charityDonations.charityId],
+    references: [charities.id],
+  }),
+  user: one(users, {
+    fields: [charityDonations.userId],
+    references: [users.id],
+  }),
+  transaction: one(acpTransactions, {
+    fields: [charityDonations.transactionId],
+    references: [acpTransactions.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -440,6 +463,39 @@ export const subscriptionRewards = pgTable("subscription_rewards", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Charity Tables
+export const charities = pgTable("charities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(), // environment, education, healthcare, poverty, etc.
+  goalAmount: text("goal_amount").notNull(), // USD goal amount (using text for precision)
+  raisedAmount: text("raised_amount").default("0.00"), // Total raised in USD
+  acpCoinRaised: text("acp_coin_raised").default("0.00000000"), // Total ACP coins raised
+  creatorId: varchar("creator_id").notNull().references(() => users.id),
+  image: text("image"), // Charity image/logo
+  website: text("website"),
+  endDate: timestamp("end_date"), // Optional fundraising deadline
+  isActive: boolean("is_active").default(true),
+  isVerified: boolean("is_verified").default(false), // Admin verification
+  donorCount: integer("donor_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const charityDonations = pgTable("charity_donations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  charityId: varchar("charity_id").notNull().references(() => charities.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  amount: text("amount").notNull(), // Donation amount
+  currencyType: text("currency_type").notNull(), // "usd" or "acp_coin"
+  transactionId: varchar("transaction_id").references(() => acpTransactions.id), // For ACP coin donations
+  paymentMethodId: text("payment_method_id"), // For USD donations (Stripe payment intent ID)
+  isAnonymous: boolean("is_anonymous").default(false),
+  message: text("message"), // Optional message to charity
+  status: text("status").default("completed"), // pending, completed, failed, refunded
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertEventAttendeeSchema = createInsertSchema(eventAttendees).omit({
   id: true,
   registeredAt: true,
@@ -460,6 +516,19 @@ export const insertACPTransactionSchema = createInsertSchema(acpTransactions).om
 });
 
 export const insertSubscriptionRewardSchema = createInsertSchema(subscriptionRewards).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCharitySchema = createInsertSchema(charities).omit({
+  id: true,
+  createdAt: true,
+  raisedAmount: true,
+  acpCoinRaised: true,
+  donorCount: true,
+});
+
+export const insertCharityDonationSchema = createInsertSchema(charityDonations).omit({
   id: true,
   createdAt: true,
 });
@@ -501,3 +570,7 @@ export type InsertStoreItem = z.infer<typeof insertStoreItemSchema>;
 export type UserPurchase = typeof userPurchases.$inferSelect;
 export type SubscriptionReward = typeof subscriptionRewards.$inferSelect;
 export type InsertSubscriptionReward = z.infer<typeof insertSubscriptionRewardSchema>;
+export type Charity = typeof charities.$inferSelect;
+export type InsertCharity = z.infer<typeof insertCharitySchema>;
+export type CharityDonation = typeof charityDonations.$inferSelect;
+export type InsertCharityDonation = z.infer<typeof insertCharityDonationSchema>;
