@@ -11,7 +11,7 @@ import { Plus, Search, Filter, Heart, Loader2 } from "lucide-react";
 import type { Charity } from "@shared/schema";
 
 const categoryOptions = [
-  { value: "", label: "All Categories" },
+  { value: "all", label: "All Categories" },
   { value: "environment", label: "Environment" },
   { value: "education", label: "Education" },
   { value: "healthcare", label: "Healthcare" },
@@ -24,14 +24,14 @@ const categoryOptions = [
 export default function CharitiesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [showActiveOnly, setShowActiveOnly] = useState(true);
 
   const { data: charities, isLoading, error } = useQuery({
     queryKey: ["/api/charities", { category: selectedCategory, isActive: showActiveOnly }],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (selectedCategory) params.append("category", selectedCategory);
+      if (selectedCategory && selectedCategory !== "all") params.append("category", selectedCategory);
       if (showActiveOnly !== undefined) params.append("isActive", showActiveOnly.toString());
       
       const response = await fetch(`/api/charities?${params}`);
@@ -147,11 +147,11 @@ export default function CharitiesPage() {
           <CardContent className="p-8 text-center">
             <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">
-              {searchQuery || selectedCategory
+              {searchQuery || (selectedCategory && selectedCategory !== "all")
                 ? "No charities match your search criteria."
                 : "No charities available. Be the first to create one!"}
             </p>
-            {!searchQuery && !selectedCategory && (
+            {!searchQuery && (!selectedCategory || selectedCategory === "all") && (
               <Button
                 onClick={() => setShowCreateForm(true)}
                 className="mt-4"
