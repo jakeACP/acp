@@ -55,6 +55,7 @@ export function RankedChoicePoll({ poll }: RankedChoicePollProps) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/polls"] });
       queryClient.invalidateQueries({ queryKey: ["/api/polls", poll.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/vote-count"] });
       toast({
         title: "Vote Recorded",
         description: data.blockchainHash ? 
