@@ -1,0 +1,225 @@
+Here’s a crisp, copy-paste Replit Agent Mode prompt to build the ACP role system (volunteer-run, election-driven, no salaries). It’s written as a single instruction block Replit can execute step-by-step.
+
+⸻
+
+Replit Agent Prompt — ACP Roles, Elections, and Privileges
+
+Goal: Implement a production-ready backend + minimal admin UI for the ACP app’s role hierarchy, elections, trust/merit scoring, transparent moderation, and privilege gating. The platform must be volunteer-run: higher roles are earned via behavior, verified identity (when required), and democratic elections. No paid roles.
+
+Tech Stack (use defaults if not specified):
+	•	Backend: Node.js (TypeScript) + Express
+	•	DB: PostgreSQL + Prisma
+	•	Auth: JWT + email/OTP; optional ID verification flag
+	•	Queue: BullMQ + Redis
+	•	Tests: Vitest
+	•	Infra: Docker compose (api, db, redis)
+	•	UI (minimal ops console): Next.js (TypeScript) + Tailwind (admin-only)
+
+⸻
+
+1) Data Model (Prisma)
+
+Implement these tables with indexes and foreign keys:
+	•	User(id, handle, email, isVerified:boolean, kycLevel:enum(None|Basic|GovID), createdAt)
+	•	Role(id, key, name, tier:int, track:enum(Media|Analysis|Political|Governance|Technical|Watchdog|General), isElective:boolean, requiresKYCLevel, minScore:int, description)
+	•	UserRole(userId, roleId, status:enum(Active|Revoked|Expired|Pending), grantedBy, grantedAt, expiresAt, reason)
+	•	Permission(id, key, description)
+	•	RolePermission(roleId, permissionId) // many-to-many
+	•	Reputation(userId, truthScore:float, civilityScore:float, contributionScore:float, corruptionFighterScore:float, lastUpdatedAt)
+	•	EventLog(id, actorUserId, action, targetType, targetId, metadata JSONB, createdAt) // append-only transparency log
+	•	Election(id, roleId, scope:enum(Global|Region|IssueArea), nominationsOpenAt, votingOpenAt, votingCloseAt, status, method:enum(Approval|RankedChoice|Plurality))
+	•	Candidate(id, electionId, userId, statement, approved:boolean)
+	•	Ballot(id, electionId, voterId, data JSONB, createdAt) // store encrypted/hashed ballot data
+	•	ModerationAction(id, moderatorId, targetType, targetId, actionType, reason, createdAt) // also mirrored into EventLog
+	•	Content(id, authorId, type, issueTags string[], text, mediaUrl, createdAt) // for basic posts, debates, reports
+	•	FactCheck(id, contentId, checkerId, verdict:enum(True|False|Mixed|Unsubstantiated), sources JSONB, confidence:0..1, createdAt)
+
+Add necessary composite indexes for performance (e.g., UserRole(userId, roleId), Reputation(userId), Election(roleId, status)).
+
+⸻
+
+2) Role Ladder & Keys
+
+Seed the Role table with these (ordered by tier; higher = rarer/more power):
+
+Base / Non-privileged
+	•	bot (tier 0, General, isElective:false, requiresKYC:None, minScore:0)
+	•	unverified_user (tier 0)
+	•	voter (tier 1, requiresKYC:Basic)
+
+Engagement & Media
+	•	citizen_journalist (tier 2, Media)
+	•	media_curator (tier 3, Media, isElective:true)
+	•	press_liaison (tier 4, Media, isElective:true)
+
+Analysis & Research
+	•	policy_analyst (tier 3, Analysis, isElective:true)
+	•	data_analyst (tier 3, Analysis)
+	•	watchdog (tier 4, Watchdog)
+
+Political Track
+	•	staffer (tier 2, Political, requiresKYC:Basic)
+	•	candidate (tier 2, Political, requiresKYC:GovID)
+	•	elected_representative (tier 5, Political, isElective:true)
+
+Governance & Community
+	•	debate_judge (tier 3, Governance, isElective:true)
+	•	moderator (tier 3, Governance, isElective:true)
+	•	committee_member (tier 4, Governance, isElective:true)
+	•	ethics_advocate (tier 5, Watchdog/Governance, isElective:true)
+	•	party_auditor (tier 5, Governance, isElective:true)
+	•	party_admin (tier 6, Governance, requiresKYC:GovID)
+
+Technical
+	•	developer (tier 3, Technical)
+	•	infrastructure_steward (tier 4, Technical, requiresKYC:Basic)
+	•	algorithm_council (tier 5, Technical/Governance, isElective:true)
+
+Apex
+	•	super_admin (tier 7, Governance, requiresKYC:GovID) // single seat; used only as constitutional backstop
+
+⸻
+
+3) Permissions Matrix (seed Permission + RolePermission)
+
+Define permission keys and attach to roles:
+	•	Content & Community:
+content.create, content.curate, content.feature, debate.host, debate.judge, factcheck.create, moderation.act, moderation.view_ledger
+	•	Elections & Governance:
+election.nominate, election.manage, election.vote, policy.propose, committee.vote, audit.read_all
+	•	Technical & Admin:
+dev.read_code, dev.merge_code, infra.manage, algo.view_config, algo.update_config
+	•	Finance/Compliance (no salaries):
+finance.view_public, finance.view_internal, finance.export_reports
+	•	Apex:
+admin.override_emergency, admin.assign_role, admin.revoke_role
+
+Attach highlights:
+	•	voter: content.create, election.vote, election.nominate
+	•	citizen_journalist: content.create, factcheck.create
+	•	media_curator: content.curate, content.feature
+	•	debate_judge: debate.judge
+	•	moderator: moderation.act, moderation.view_ledger
+	•	committee_member: policy.propose, committee.vote, audit.read_all
+	•	party_auditor: audit.read_all, finance.view_internal
+	•	developer: dev.read_code, dev.merge_code (via protected workflow)
+	•	infrastructure_steward: infra.manage
+	•	algorithm_council: algo.view_config, algo.update_config
+	•	party_admin: subset of admin ops (no algo tampering without council)
+	•	super_admin: all above + admin.override_emergency (all actions must auto-log)
+
+⸻
+
+4) Reputation & Advancement
+
+Implement a periodic job to compute Reputation:
+	•	truthScore: based on fact-check outcomes on authored content; up for corroborated posts, down for flagged misinformation.
+	•	civilityScore: community reports (weighted), moderator decisions, tone heuristics (lightweight).
+	•	contributionScore: accepted proposals, hosted debates, volunteer hours, curated content featured.
+	•	corruptionFighterScore: verified watchdog actions (exposed donations, FOIA docs, whistleblower validations).
+
+Advancement Rules:
+	•	Auto-eligibility when isVerified meets role’s requiresKYCLevel and sumScores ≥ minScore.
+	•	If isElective = true, user becomes eligible candidate for the next election cycle for that role.
+	•	Revocation: Dropping below thresholds, severe moderation hits, or auditor findings → UserRole.status = Revoked (and auto-log to EventLog).
+
+⸻
+
+5) Elections
+
+Implement generic elections for any Role.isElective = true.
+	•	Methods supported: Approval Voting (default), Ranked Choice (IRV), Plurality.
+	•	Phases: Nominations → Vetting (KYC/eligibility) → Voting → Results → Automatic role grant.
+	•	Prevent conflicts: party_admin, algorithm_council, party_auditor cannot be concurrent with candidate or elected_representative.
+	•	Add regional/issue scopes using Election.scope.
+
+APIs:
+	•	POST /elections (admin/council)
+	•	POST /elections/:id/nominations
+	•	POST /elections/:id/ballots (enforce one-person-one-vote via auth + anti-sybil checks)
+	•	GET /elections/:id/results (publish anonymized tallies + cryptographic proofs where possible)
+
+⸻
+
+6) Transparency & Moderation
+	•	EventLog: append-only. Every privileged action (role changes, moderation, election state changes, algo updates) writes a structured log entry.
+	•	ModerationAction entries mirrored to EventLog; public ledger API:
+	•	GET /ledger?type=moderation (redact victim PII where required)
+	•	Changelog endpoint for code/config updates by developer and algorithm_council.
+
+⸻
+
+7) API Endpoints (Express + Zod validation)
+	•	Auth: POST /auth/signup, POST /auth/login, POST /auth/request-otp, POST /auth/verify-otp
+	•	Users/Roles:
+GET /me, GET /roles, GET /users/:id/roles,
+POST /roles/assign (restricted), POST /roles/revoke (restricted),
+GET /permissions/mine
+	•	Reputation: GET /reputation/me, POST /reputation/recompute (cron/queue)
+	•	Content: POST /content, GET /content?issue=..., POST /factchecks
+	•	Elections: as above
+	•	Ledger: GET /ledger with filters
+
+Include OpenAPI (Swagger) doc generation.
+
+⸻
+
+8) Admin Console (Next.js)
+
+Minimal pages:
+	•	Dashboard: role counts, upcoming elections, recent ledger entries
+	•	Roles & Permissions matrix (read-only)
+	•	Elections manager: create, advance phase, view results
+	•	Moderation ledger browser
+	•	Reputation overview per user
+	•	Changelog viewer (dev/algo updates)
+
+⸻
+
+9) Security & Compliance
+	•	Rate limit auth and voting endpoints.
+	•	Anti-sybil basics: email+OTP, device fingerprint, optional KYC step for higher roles.
+	•	RBAC middleware that resolves UserRole → RolePermission on each request.
+	•	Tests for privilege escalation (attempt forbidden actions), election integrity, revocation flows.
+
+⸻
+
+10) Seed & Fixtures
+
+Create seed script:
+	•	25 demo users across KYC levels
+	•	Mixed reputations
+	•	A sample election for moderator (Approval Voting) and committee_member (RCV)
+	•	Content with a few fact-checks
+	•	Example moderation actions
+	•	Pre-filled roles + permissions
+
+⸻
+
+11) Acceptance Tests (Vitest)
+	•	Users advance from unverified_user → voter upon verification.
+	•	Reputation thresholds gate eligibility for media_curator, debate_judge, watchdog.
+	•	Election lifecycle produces deterministic winners and grants roles.
+	•	RBAC denies forbidden actions and logs attempts.
+	•	Revoked roles lose permissions immediately; ledger records the event.
+
+⸻
+
+12) Deliverables
+	•	docker-compose.yml (api, db, redis)
+	•	apps/api (Express TS + Prisma + Swagger + tests)
+	•	apps/admin (Next.js + Tailwind)
+	•	prisma/schema.prisma with migrations
+	•	scripts/seed.ts
+	•	README.md with setup, env vars, and run commands
+
+⸻
+
+13) Stretch (optional if time allows)
+	•	Cryptographic ballot receipts (hash chain) for verifiable elections
+	•	Simple debate module (debate.host, debate.judge)
+	•	“Democracy Wrapped” endpoint that summarizes user stats for social sharing
+
+⸻
+
+Start by scaffolding the repo with the above structure, then implement DB schema, seeds, RBAC middleware, and the Elections module. Prioritize transparent logging and tests.
