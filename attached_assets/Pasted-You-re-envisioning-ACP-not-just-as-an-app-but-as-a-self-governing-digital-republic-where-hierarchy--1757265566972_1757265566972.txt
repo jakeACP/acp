@@ -1,0 +1,108 @@
+You’re envisioning ACP not just as an app but as a self-governing digital republic, where hierarchy flows from effort, trust, and community election—not paychecks. That’s the recipe for resilience and mass legitimacy. Let’s flesh out the expanded role system with media, analysts, political staff, and more.
+
+⸻
+
+Expanded ACP Role Hierarchy
+
+Foundation (Low Barrier, Mass Participation)
+	•	Bot → Simulation/testing, no civic power.
+	•	Unverified User → Browse, comment, limited interaction.
+	•	Voter → Verified baseline role; full voting rights.
+
+⸻
+
+Engagement & Media Roles
+	•	Citizen Journalist (media track)
+	•	Verified users who report on events, post interviews, or summarize legislation.
+	•	Earn credibility points for accuracy and timeliness.
+	•	Media Curator
+	•	Highlight, organize, and distribute content (memes, debates, fact-checks).
+	•	Ensure issue feeds don’t drown in noise.
+	•	Press Liaison
+	•	Elected role. Acts as the official channel between ACP and external media networks.
+	•	Prepares “People’s Reports” and press kits based on ACP data.
+
+⸻
+
+Analysis & Research Roles
+	•	Policy Analyst
+	•	Breaks down complex issues into digestible summaries.
+	•	Posts include citations, visualizations, and neutral explanations.
+	•	Selected via peer vote based on credibility track record.
+	•	Data Scientist / Analyst
+	•	Works with anonymized ACP data to produce “Pulse of the People” reports.
+	•	Reports are published openly for media, academics, and the public.
+	•	Watchdog
+	•	Special track focused on exposing corruption, lobbying money, and backroom deals.
+	•	Given tools to track and visualize campaign finance and corporate influence.
+
+⸻
+
+Political Track
+	•	Staffer / Campaign Supporter
+	•	Verified role for those working with a Candidate or Representative inside ACP.
+	•	Helps organize campaign pages, manage events, and interact with voters.
+	•	Candidate
+	•	Self-declared or nominated. Gains campaign tools inside ACP.
+	•	Elected Representative (ACP Shadow or Real)
+	•	Runs issue town halls, proposes policies, and engages directly with voters.
+	•	Continues to be publicly fact-checked.
+
+⸻
+
+Democratic Governance Roles
+	•	Debate Judge
+	•	Peer-selected to score debates and moderate structured arguments.
+	•	Moderator
+	•	Manages civility and rules within an issue space. All actions logged publicly.
+	•	Committee Member (The “Congress of ACP”)
+	•	Elected by users to oversee governance, rules, and internal policy decisions.
+	•	Rotating terms ensure fresh leadership.
+	•	Ethics Advocate
+	•	Awarded for actions that expose or prevent corruption.
+	•	Functions as ACP’s moral compass, visible in debates and governance.
+	•	Party Auditor
+	•	Elected watchdogs who review ACP’s finances, partnerships, and code transparency.
+	•	Independent from Party Admins; their reports go directly to the public.
+
+⸻
+
+Technical & Structural Roles
+	•	Developer (ACP Dev Guild)
+	•	Builds and maintains platform code, open-source style.
+	•	Must log changes publicly to prevent hidden bias.
+	•	Infrastructure Steward
+	•	Oversees servers, security, and uptime.
+	•	Role focused on technical trustworthiness.
+	•	Algorithm Council
+	•	Small group elected to oversee feed-ranking transparency.
+	•	Prevents hidden manipulation by admins or devs.
+
+⸻
+
+Executive Layer
+	•	Party Admin Member
+	•	Oversees compliance, organizational integrity, and high-level disputes.
+	•	Cannot run for office while serving.
+	•	Super-Admin (Founding Custodian / You)
+	•	Constitutional backstop.
+	•	Emergency override powers, but ideally used rarely.
+	•	All actions automatically published in a public log to maintain trust.
+
+⸻
+
+Key Principles
+	1.	Elections > Appointments:
+As much as possible, higher roles are filled through direct election or peer endorsement, not admin decree.
+	2.	No Salaries, Just Prestige:
+Roles aren’t paid. The “reward” is power, recognition, and contribution to democracy. This starves corruption of its usual food source.
+	3.	Difficulty Scaling:
+Higher up = harder to achieve. Requires track record, votes, or achievements like fact-check accuracy, corruption exposure, or organizing.
+	4.	Transparent Demotion:
+Abuse = loss of role. Roles are privileges, not entitlements.
+
+⸻
+
+This creates a living ecosystem where volunteers run the party because it gives them identity, influence, and prestige, not a paycheck. Think of it as an MMORPG guild for democracy—roles, ranks, and elections keep people climbing and contributing.
+
+Would you like me to map these roles into “career tracks” (Media, Political, Governance, Technical, Watchdog) so users can see how their choices branch like a skill tree in a game?
