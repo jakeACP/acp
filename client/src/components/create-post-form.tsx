@@ -43,9 +43,23 @@ export function CreatePostForm() {
   const [tagInput, setTagInput] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [postType, setPostType] = useState<PostType>('news');
+  
+  // Event-specific fields
+  const [eventDate, setEventDate] = useState("");
+  const [eventTime, setEventTime] = useState("");
+  const [eventLocation, setEventLocation] = useState("");
+  
+  // Poll-specific fields
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+  
+  // Charity-specific fields
+  const [charityGoal, setCharityGoal] = useState("");
+  
+  // Debate-specific fields
+  const [debatePositions, setDebatePositions] = useState<string[]>(['', '']);
 
   const createPostMutation = useMutation({
-    mutationFn: async (postData: { content: string; tags: string[]; type: string }) => {
+    mutationFn: async (postData: any) => {
       const res = await apiRequest("/api/posts", "POST", postData);
       return res.json();
     },
@@ -53,10 +67,16 @@ export function CreatePostForm() {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
       setContent("");
       setTags([]);
+      setEventDate("");
+      setEventTime("");
+      setEventLocation("");
+      setPollOptions(['', '']);
+      setCharityGoal("");
+      setDebatePositions(['', '']);
       setShowForm(false);
       toast({
-        title: "Post Created",
-        description: "Your post has been shared with the community.",
+        title: "Content Created",
+        description: `Your ${postType} has been shared with the community.`,
       });
     },
     onError: (error: any) => {
@@ -91,11 +111,47 @@ export function CreatePostForm() {
     }
   };
 
+  const addPollOption = () => {
+    if (pollOptions.length < 6) {
+      setPollOptions([...pollOptions, '']);
+    }
+  };
+
+  const removePollOption = (index: number) => {
+    if (pollOptions.length > 2) {
+      setPollOptions(pollOptions.filter((_, i) => i !== index));
+    }
+  };
+
+  const updatePollOption = (index: number, value: string) => {
+    const newOptions = [...pollOptions];
+    newOptions[index] = value;
+    setPollOptions(newOptions);
+  };
+
+  const addDebatePosition = () => {
+    if (debatePositions.length < 4) {
+      setDebatePositions([...debatePositions, '']);
+    }
+  };
+
+  const removeDebatePosition = (index: number) => {
+    if (debatePositions.length > 2) {
+      setDebatePositions(debatePositions.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateDebatePosition = (index: number, value: string) => {
+    const newPositions = [...debatePositions];
+    newPositions[index] = value;
+    setDebatePositions(newPositions);
+  };
+
   const handleSubmit = () => {
     if (!content.trim()) {
       toast({
         title: "Content Required",
-        description: "Please enter some content for your post",
+        description: "Please enter some content",
         variant: "destructive",
       });
       return;
@@ -103,14 +159,75 @@ export function CreatePostForm() {
     
     if (content.trim().length > 5000) {
       toast({
-        title: "Post Too Long",
-        description: "Posts cannot exceed 5000 characters",
+        title: "Content Too Long",
+        description: "Content cannot exceed 5000 characters",
         variant: "destructive",
       });
       return;
     }
+
+    // Type-specific validation
+    if (postType === 'event') {
+      if (!eventDate || !eventTime) {
+        toast({
+          title: "Event Details Required",
+          description: "Please provide event date and time",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (postType === 'poll') {
+      const validOptions = pollOptions.filter(option => option.trim());
+      if (validOptions.length < 2) {
+        toast({
+          title: "Poll Options Required",
+          description: "Please provide at least 2 poll options",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (postType === 'charity' && charityGoal) {
+      const goalNumber = parseFloat(charityGoal);
+      if (isNaN(goalNumber) || goalNumber <= 0) {
+        toast({
+          title: "Invalid Goal Amount",
+          description: "Please enter a valid fundraising goal",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Prepare submission data based on post type
+    let submissionData: any = {
+      content: content.trim(),
+      tags,
+      type: postType
+    };
+
+    if (postType === 'event') {
+      submissionData.eventDate = eventDate;
+      submissionData.eventTime = eventTime;
+      submissionData.eventLocation = eventLocation.trim();
+    }
+
+    if (postType === 'poll') {
+      submissionData.pollOptions = pollOptions.filter(option => option.trim());
+    }
+
+    if (postType === 'charity' && charityGoal) {
+      submissionData.charityGoal = parseFloat(charityGoal);
+    }
+
+    if (postType === 'debate') {
+      submissionData.debatePositions = debatePositions.filter(pos => pos.trim());
+    }
     
-    createPostMutation.mutate({ content: content.trim(), tags, type: postType });
+    createPostMutation.mutate(submissionData);
   };
 
   const currentPostType = postTypeOptions.find(option => option.value === postType) || postTypeOptions[0];
@@ -180,6 +297,151 @@ export function CreatePostForm() {
               autoFocus
             />
 
+            {/* Type-specific fields */}
+            {postType === 'event' && (
+              <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-medium text-blue-900 flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Event Details
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <Input
+                      type="date"
+                      value={eventDate}
+                      onChange={(e) => setEventDate(e.target.value)}
+                      className="w-full"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                    <Input
+                      type="time"
+                      value={eventTime}
+                      onChange={(e) => setEventTime(e.target.value)}
+                      className="w-full"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Location (Optional)</label>
+                  <Input
+                    placeholder="e.g., City Hall, 123 Main St, or Virtual Event"
+                    value={eventLocation}
+                    onChange={(e) => setEventLocation(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            )}
+
+            {postType === 'poll' && (
+              <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                <h4 className="font-medium text-green-900 flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Poll Options
+                </h4>
+                {pollOptions.map((option, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      placeholder={`Option ${index + 1}`}
+                      value={option}
+                      onChange={(e) => updatePollOption(index, e.target.value)}
+                      className="flex-1"
+                    />
+                    {pollOptions.length > 2 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removePollOption(index)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {pollOptions.length < 6 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addPollOption}
+                    className="w-full border-dashed"
+                  >
+                    Add Option
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {postType === 'charity' && (
+              <div className="space-y-4 p-4 bg-pink-50 rounded-lg border border-pink-200">
+                <h4 className="font-medium text-pink-900 flex items-center gap-2">
+                  <Heart className="h-4 w-4" />
+                  Fundraising Goal
+                </h4>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Target Amount (Optional)</label>
+                  <Input
+                    type="number"
+                    placeholder="e.g., 5000"
+                    value={charityGoal}
+                    onChange={(e) => setCharityGoal(e.target.value)}
+                    className="w-full"
+                    min="1"
+                    step="0.01"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Leave blank if no specific target</p>
+                </div>
+              </div>
+            )}
+
+            {postType === 'debate' && (
+              <div className="space-y-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <h4 className="font-medium text-purple-900 flex items-center gap-2">
+                  <MessageCircleReply className="h-4 w-4" />
+                  Debate Positions
+                </h4>
+                {debatePositions.map((position, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      placeholder={`Position ${index + 1}`}
+                      value={position}
+                      onChange={(e) => updateDebatePosition(index, e.target.value)}
+                      className="flex-1"
+                    />
+                    {debatePositions.length > 2 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeDebatePosition(index)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {debatePositions.length < 4 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addDebatePosition}
+                    className="w-full border-dashed"
+                  >
+                    Add Position
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Tags Section */}
             <div className="space-y-2">
               {tags.length > 0 && (
@@ -239,6 +501,12 @@ export function CreatePostForm() {
                     setShowForm(false);
                     setContent("");
                     setTags([]);
+                    setEventDate("");
+                    setEventTime("");
+                    setEventLocation("");
+                    setPollOptions(['', '']);
+                    setCharityGoal("");
+                    setDebatePositions(['', '']);
                     setPostType('news');
                   }}
                   className="hover:bg-gray-100 transition-colors"
