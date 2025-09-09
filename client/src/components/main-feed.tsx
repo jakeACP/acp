@@ -10,7 +10,6 @@ import { RankedChoicePoll } from "@/components/ranked-choice-poll";
 import { CharityCard } from "@/components/charity-card";
 
 import { CreatePostForm } from "@/components/create-post-form";
-import { CreatePollForm } from "@/components/create-poll-form";
 import { BlockchainTransparency } from "@/components/blockchain-transparency";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
@@ -75,7 +74,6 @@ function EventFeedCard({ event }: { event: Event }) {
 
 export function MainFeed() {
   const { user } = useAuth();
-  const [showCreatePoll, setShowCreatePoll] = useState(false);
   const [showBlockchain, setShowBlockchain] = useState(false);
   const [activeFeed, setActiveFeed] = useState<FeedType>('all');
 
@@ -95,7 +93,7 @@ export function MainFeed() {
     queryKey: ["/api/charities"],
   });
 
-  const { data: userGroups = [] } = useQuery({
+  const { data: userGroups = [] } = useQuery<any[]>({
     queryKey: ["/api/groups/user", user?.id],
     enabled: !!user?.id,
   });
@@ -169,14 +167,6 @@ export function MainFeed() {
   };
 
   const feedItems = getFilteredFeedItems();
-
-  if (showCreatePoll) {
-    return (
-      <div className="space-y-6">
-        <CreatePollForm onCancel={() => setShowCreatePoll(false)} />
-      </div>
-    );
-  }
 
   return (
     <div className="md:space-y-6">
