@@ -34,28 +34,32 @@ type FeedType = 'all' | 'news' | 'friends' | 'polls' | 'events' | 'charities' | 
 // Simple EventFeedCard component
 function EventFeedCard({ event }: { event: Event }) {
   return (
-    <Card className="w-full">
-      <CardContent className="p-6">
+    <Card className="w-full border-0 shadow-none md:border md:shadow-sm bg-transparent md:bg-white">
+      <CardContent className="p-4 md:p-6">
         <div className="flex items-start gap-4">
-          <Calendar className="h-6 w-6 text-blue-600 mt-1" />
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg mb-2">{event.title}</h3>
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <Calendar className="h-6 w-6 text-white" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-lg md:text-xl mb-2 text-gray-900">{event.title}</h3>
             {event.description && (
-              <p className="text-muted-foreground mb-3">{event.description}</p>
+              <p className="text-gray-600 mb-4 leading-relaxed">{event.description}</p>
             )}
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                <span>{format(new Date(event.startDate), 'PPP p')}</span>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-3 text-gray-500">
+                <Calendar className="h-4 w-4 text-blue-500" />
+                <span className="font-medium">{format(new Date(event.startDate), 'PPP p')}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                <span>{event.city}, {event.state}</span>
+              <div className="flex items-center gap-3 text-gray-500">
+                <Users className="h-4 w-4 text-green-500" />
+                <span className="font-medium">{event.city}, {event.state}</span>
               </div>
               {event.tags && event.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
+                <div className="flex flex-wrap gap-2 mt-3">
                   {event.tags.map((tag, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
+                    <Badge key={index} variant="secondary" className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100">
                       {tag}
                     </Badge>
                   ))}
@@ -175,107 +179,173 @@ export function MainFeed() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Feed Type Switcher */}
-      <Card>
-        <CardContent className="p-4">
-          <Tabs value={activeFeed} onValueChange={(value) => setActiveFeed(value as FeedType)} className="w-full">
-            <TabsList className="grid w-full grid-cols-7 mb-4">
-              <TabsTrigger value="all" className="flex items-center gap-1">
-                <Globe className="h-4 w-4" />
-                All
-              </TabsTrigger>
-              <TabsTrigger value="news" className="flex items-center gap-1">
-                <Newspaper className="h-4 w-4" />
-                News
-              </TabsTrigger>
-              <TabsTrigger value="friends" className="flex items-center gap-1">
-                <Users className="h-4 w-4" />
-                Groups
-              </TabsTrigger>
-              <TabsTrigger value="polls" className="flex items-center gap-1">
-                <BarChart3 className="h-4 w-4" />
-                Polls
-              </TabsTrigger>
-              <TabsTrigger value="events" className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                Events
-              </TabsTrigger>
-              <TabsTrigger value="charities" className="flex items-center gap-1">
-                <Heart className="h-4 w-4" />
-                Charities
-              </TabsTrigger>
-              <TabsTrigger value="debates" className="flex items-center gap-1">
-                <MessageCircleReply className="h-4 w-4" />
-                Debates
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </CardContent>
-      </Card>
+    <div className="md:space-y-6">
+      {/* Feed Type Switcher - Desktop */}
+      <div className="hidden md:block">
+        <Card className="shadow-sm border-0 bg-white/80 backdrop-blur-sm">
+          <CardContent className="p-6">
+            <Tabs value={activeFeed} onValueChange={(value) => setActiveFeed(value as FeedType)} className="w-full">
+              <TabsList className="grid w-full grid-cols-7 h-12 bg-gray-100/50 mb-4 rounded-xl">
+                <TabsTrigger value="all" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <Globe className="h-4 w-4" />
+                  <span className="hidden lg:inline">All</span>
+                </TabsTrigger>
+                <TabsTrigger value="news" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <Newspaper className="h-4 w-4" />
+                  <span className="hidden lg:inline">News</span>
+                </TabsTrigger>
+                <TabsTrigger value="friends" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <Users className="h-4 w-4" />
+                  <span className="hidden lg:inline">Groups</span>
+                </TabsTrigger>
+                <TabsTrigger value="polls" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <BarChart3 className="h-4 w-4" />
+                  <span className="hidden lg:inline">Polls</span>
+                </TabsTrigger>
+                <TabsTrigger value="events" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <Calendar className="h-4 w-4" />
+                  <span className="hidden lg:inline">Events</span>
+                </TabsTrigger>
+                <TabsTrigger value="charities" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <Heart className="h-4 w-4" />
+                  <span className="hidden lg:inline">Charities</span>
+                </TabsTrigger>
+                <TabsTrigger value="debates" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <MessageCircleReply className="h-4 w-4" />
+                  <span className="hidden lg:inline">Debates</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Quick Actions */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCreatePoll(true)}
-              className="flex items-center gap-2"
-            >
-              <BarChart3 className="h-4 w-4" />
-              Create Poll
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowBlockchain(!showBlockchain)}
-              className="flex items-center gap-2"
-            >
-              <Shield className="h-4 w-4" />
-              Blockchain Transparency
-            </Button>
+      {/* Mobile Feed Type Switcher - Horizontal Scroll */}
+      <div className="md:hidden sticky top-0 z-40 bg-slate-50/95 backdrop-blur-sm border-b border-gray-200">
+        <div className="px-4 py-3">
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide">
+            {[
+              { key: 'all', label: 'All', icon: Globe, count: allFeedItems.length },
+              { key: 'news', label: 'News', icon: Newspaper, count: allFeedItems.filter(item => item.type === 'post' && isNewsContent(item.data as PostWithAuthor)).length },
+              { key: 'friends', label: 'Groups', icon: Users, count: allFeedItems.filter(item => item.type === 'post' && groupMemberIds.includes((item.data as PostWithAuthor).authorId)).length },
+              { key: 'polls', label: 'Polls', icon: BarChart3, count: polls.length },
+              { key: 'events', label: 'Events', icon: Calendar, count: events.length },
+              { key: 'charities', label: 'Charities', icon: Heart, count: charities.length },
+              { key: 'debates', label: 'Debates', icon: MessageCircleReply, count: allFeedItems.filter(item => item.type === 'post' && isDebateContent(item.data as PostWithAuthor)).length }
+            ].map(({ key, label, icon: Icon, count }) => (
+              <button
+                key={key}
+                onClick={() => setActiveFeed(key as FeedType)}
+                className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  activeFeed === key 
+                    ? 'bg-primary text-primary-foreground shadow-lg scale-105' 
+                    : 'bg-white/80 text-gray-600 hover:bg-white hover:shadow-md'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{label}</span>
+                {count > 0 && (
+                  <Badge variant="secondary" className="h-5 min-w-5 text-xs bg-gray-100 text-gray-600">
+                    {count}
+                  </Badge>
+                )}
+              </button>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* Quick Actions - Desktop Only */}
+      <div className="hidden md:block">
+        <Card className="shadow-sm border-0 bg-white/80 backdrop-blur-sm">
+          <CardContent className="p-6">
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCreatePoll(true)}
+                className="flex items-center gap-2 hover:bg-primary hover:text-primary-foreground transition-colors duration-200 border-gray-200 hover:border-primary"
+              >
+                <BarChart3 className="h-4 w-4" />
+                Create Poll
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBlockchain(!showBlockchain)}
+                className="flex items-center gap-2 hover:bg-primary hover:text-primary-foreground transition-colors duration-200 border-gray-200 hover:border-primary"
+              >
+                <Shield className="h-4 w-4" />
+                Blockchain Transparency
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Blockchain Transparency Panel */}
       {showBlockchain && (
         <BlockchainTransparency />
       )}
       
-      {/* Create Post Form */}
-      <CreatePostForm />
+      {/* Create Post Form - Desktop Only */}
+      <div className="hidden md:block">
+        <CreatePostForm />
+      </div>
+
+      {/* Mobile Create Post Button */}
+      <div className="md:hidden px-4 py-3">
+        <Button 
+          className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white shadow-lg rounded-full py-3 text-base font-semibold"
+          onClick={() => {/* TODO: Add mobile create post modal */}}
+        >
+          <MessageSquare className="h-5 w-5 mr-2" />
+          What's on your mind?
+        </Button>
+      </div>
 
       {/* Feed Items */}
       {feedItems.length > 0 ? (
         <>
-          {/* Feed stats */}
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <Badge variant="outline">{feedItems.length} items</Badge>
+          {/* Feed stats - Desktop Only */}
+          <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground px-1">
+            <Badge variant="outline" className="bg-white/80">{feedItems.length} items</Badge>
             {activeFeed !== 'all' && (
-              <span>Filtered by: {activeFeed.charAt(0).toUpperCase() + activeFeed.slice(1)}</span>
+              <span className="text-gray-500">Filtered by: {activeFeed.charAt(0).toUpperCase() + activeFeed.slice(1)}</span>
             )}
           </div>
           
-          {feedItems.map((item, index) => (
-            <div key={`${item.type}-${item.data.id || index}`}>
-              {item.type === 'post' ? (
-                <PostCard post={item.data as PostWithAuthor} />
-              ) : item.type === 'poll' ? (
-                (item.data as Poll).votingType === 'ranked_choice' ? (
-                  <RankedChoicePoll poll={item.data as Poll} />
-                ) : (
-                  <EnhancedPollCard poll={item.data as Poll} />
-                )
-              ) : item.type === 'event' ? (
-                <EventFeedCard event={item.data as Event} />
-              ) : item.type === 'charity' ? (
-                <CharityCard charity={item.data as Charity} />
-              ) : null}
-            </div>
-          ))}
+          {/* Feed Content */}
+          <div className="md:space-y-6 space-y-0">
+            {feedItems.map((item, index) => (
+              <div 
+                key={`${item.type}-${item.data.id || index}`}
+                className="md:mb-0 mb-4 md:rounded-lg rounded-none md:mx-0 mx-0"
+              >
+                {item.type === 'post' ? (
+                  <div className="md:shadow-sm md:border md:rounded-lg border-0 bg-white md:bg-white/80 md:backdrop-blur-sm">
+                    <PostCard post={item.data as PostWithAuthor} />
+                  </div>
+                ) : item.type === 'poll' ? (
+                  <div className="md:shadow-sm md:border md:rounded-lg border-0 bg-white md:bg-white/80 md:backdrop-blur-sm">
+                    {(item.data as Poll).votingType === 'ranked_choice' ? (
+                      <RankedChoicePoll poll={item.data as Poll} />
+                    ) : (
+                      <EnhancedPollCard poll={item.data as Poll} />
+                    )}
+                  </div>
+                ) : item.type === 'event' ? (
+                  <div className="md:shadow-sm md:border md:rounded-lg border-0 bg-white md:bg-white/80 md:backdrop-blur-sm">
+                    <EventFeedCard event={item.data as Event} />
+                  </div>
+                ) : item.type === 'charity' ? (
+                  <div className="md:shadow-sm md:border md:rounded-lg border-0 bg-white md:bg-white/80 md:backdrop-blur-sm">
+                    <CharityCard charity={item.data as Charity} />
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </>
       ) : (
         <Card>
