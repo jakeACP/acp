@@ -255,33 +255,6 @@ export function MainFeed() {
         </div>
       </div>
 
-      {/* Quick Actions - Desktop Only */}
-      <div className="hidden md:block">
-        <Card className="shadow-sm border-0 bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowCreatePoll(true)}
-                className="flex items-center gap-2 hover:bg-primary hover:text-primary-foreground transition-colors duration-200 border-gray-200 hover:border-primary"
-              >
-                <BarChart3 className="h-4 w-4" />
-                Create Poll
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowBlockchain(!showBlockchain)}
-                className="flex items-center gap-2 hover:bg-primary hover:text-primary-foreground transition-colors duration-200 border-gray-200 hover:border-primary"
-              >
-                <Shield className="h-4 w-4" />
-                Blockchain Transparency
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Blockchain Transparency Panel */}
       {showBlockchain && (
