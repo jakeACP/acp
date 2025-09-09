@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Navigation } from "@/components/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -183,7 +184,9 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
+    <div className="bg-slate-50 min-h-screen">
+      <Navigation />
+      <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" size="sm" asChild>
           <a href="/" className="flex items-center gap-2">
@@ -657,6 +660,7 @@ export default function EventsPage() {
           </Button>
         </div>
       )}
+      </div>
     </div>
   );
 }

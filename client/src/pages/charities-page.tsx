@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Navigation } from "@/components/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,17 +52,22 @@ export default function CharitiesPage() {
 
   if (showCreateForm) {
     return (
-      <div className="container max-w-4xl mx-auto py-6">
-        <CharityCreationForm
-          onSuccess={handleCreateSuccess}
-          onCancel={() => setShowCreateForm(false)}
-        />
+      <div className="bg-slate-50 min-h-screen">
+        <Navigation />
+        <div className="container max-w-4xl mx-auto py-6">
+          <CharityCreationForm
+            onSuccess={handleCreateSuccess}
+            onCancel={() => setShowCreateForm(false)}
+          />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container max-w-7xl mx-auto py-6 space-y-6">
+    <div className="bg-slate-50 min-h-screen">
+      <Navigation />
+      <div className="container max-w-7xl mx-auto py-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -185,6 +191,7 @@ export default function CharitiesPage() {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
