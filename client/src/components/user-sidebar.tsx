@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Group } from "@shared/schema";
-import { Leaf, GraduationCap, Scale, Users } from "lucide-react";
+import { Leaf, GraduationCap, Scale, Users, Coins, Wallet } from "lucide-react";
+import { Link } from "wouter";
 import logoPath from "@assets/logo1_1753819424851.png";
 
 export function UserSidebar() {
@@ -18,6 +19,11 @@ export function UserSidebar() {
 
   const { data: voteData } = useQuery<{ voteCount: number }>({
     queryKey: ["/api/user/vote-count"],
+    enabled: !!user?.id,
+  });
+
+  const { data: balanceData } = useQuery<{ balance: string }>({
+    queryKey: ["/api/user/balance"],
     enabled: !!user?.id,
   });
 
@@ -122,6 +128,41 @@ export function UserSidebar() {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ACP Credits Balance */}
+      <Card className="bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Coins className="h-4 w-4 text-blue-600" />
+            ACP Credits
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <Coins className="h-6 w-6 text-blue-600" />
+              <span className="text-2xl font-bold text-slate-900">
+                {balanceData?.balance ? parseFloat(balanceData.balance).toFixed(2) : '0.00'}
+              </span>
+              <span className="text-sm text-slate-600 font-medium">ACP</span>
+            </div>
+            
+            <Link href="/crypto">
+              <Button 
+                size="sm" 
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md"
+              >
+                <Wallet className="h-4 w-4 mr-2" />
+                Open Wallet
+              </Button>
+            </Link>
+            
+            <p className="text-xs text-slate-500 mt-2">
+              Earn credits through participation and subscriptions
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
