@@ -20,7 +20,7 @@ export function Navigation() {
     { href: "/candidates", label: "Candidates" },
     { href: "/events", label: "Events" },
     { href: "/charities", label: "Charities" },
-    { href: "/representatives", label: "Know Your Reps" },
+    { href: "/representatives", label: "Your Reps" },
     { href: "/messages", label: "Messages" },
     { href: "/crypto", label: "ACP Store" },
   ];
