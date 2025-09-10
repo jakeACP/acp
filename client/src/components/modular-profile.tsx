@@ -38,7 +38,8 @@ import {
   Video,
   Zap,
   Calendar,
-  Star
+  Star,
+  Target
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -47,7 +48,7 @@ import { apiRequest } from "@/lib/queryClient";
 interface ProfileModule {
   id: string;
   name: string;
-  type: "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "custom";
+  type: "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "political-compass" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "custom";
   isPremium: boolean;
   isEnabled: boolean;
   position: number;
@@ -74,9 +75,87 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   const [editMode, setEditMode] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [showPoliticalQuiz, setShowPoliticalQuiz] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
+  const [currentQuizStep, setCurrentQuizStep] = useState(0);
   const [editingModule, setEditingModule] = useState<string | null>(null);
+
+  // Political Compass Quiz Questions
+  const politicalQuizQuestions = [
+    // Economic Questions
+    { id: 1, text: "Private companies should provide most public services", category: "economic", weight: 1 },
+    { id: 2, text: "The government should regulate businesses to protect workers", category: "economic", weight: -1 },
+    { id: 3, text: "Free market capitalism is the best economic system", category: "economic", weight: 1 },
+    { id: 4, text: "Wealth should be redistributed from rich to poor", category: "economic", weight: -1 },
+    { id: 5, text: "Healthcare should be publicly funded for everyone", category: "economic", weight: -1 },
+    { id: 6, text: "Lower taxes are more important than public services", category: "economic", weight: 1 },
+    { id: 7, text: "Workers should have more control over their workplaces", category: "economic", weight: -1 },
+    { id: 8, text: "International trade benefits everyone", category: "economic", weight: 1 },
+    
+    // Social Questions  
+    { id: 9, text: "Traditional family values should be promoted by government", category: "social", weight: 1 },
+    { id: 10, text: "People should be free to live however they choose", category: "social", weight: -1 },
+    { id: 11, text: "Law and order must be maintained at all costs", category: "social", weight: 1 },
+    { id: 12, text: "Individual privacy is more important than national security", category: "social", weight: -1 },
+    { id: 13, text: "Immigration should be strictly controlled", category: "social", weight: 1 },
+    { id: 14, text: "Marijuana should be legalized", category: "social", weight: -1 },
+    { id: 15, text: "Government surveillance is necessary for safety", category: "social", weight: 1 },
+    { id: 16, text: "Same-sex marriage should be legal everywhere", category: "social", weight: -1 }
+  ];
   const [showAddModule, setShowAddModule] = useState(false);
   const [newModuleType, setNewModuleType] = useState<string>("");
+
+  // Calculate political compass position
+  const calculatePoliticalPosition = (answers: Record<number, number>) => {
+    let economicTotal = 0;
+    let socialTotal = 0;
+    let economicCount = 0;
+    let socialCount = 0;
+
+    politicalQuizQuestions.forEach(question => {
+      const answer = answers[question.id];
+      if (answer !== undefined) {
+        const score = (answer - 3) * question.weight; // Convert 1-5 scale to -2 to 2, then apply weight
+        
+        if (question.category === 'economic') {
+          economicTotal += score;
+          economicCount++;
+        } else if (question.category === 'social') {
+          socialTotal += score;
+          socialCount++;
+        }
+      }
+    });
+
+    // Normalize to 0-200 range for SVG coordinates
+    const economicPosition = economicCount > 0 ? 100 + (economicTotal / economicCount) * 40 : 100;
+    const socialPosition = socialCount > 0 ? 100 - (socialTotal / socialCount) * 40 : 100; // Inverted for SVG
+    
+    return {
+      economicPosition: Math.max(10, Math.min(190, economicPosition)),
+      socialPosition: Math.max(10, Math.min(190, socialPosition)),
+      economicScore: economicCount > 0 ? economicTotal / economicCount : 0,
+      socialScore: socialCount > 0 ? socialTotal / socialCount : 0
+    };
+  };
+
+  const finishQuiz = () => {
+    const results = calculatePoliticalPosition(quizAnswers);
+    
+    // Update the political compass module with results
+    setProfileModules(prev => prev.map(mod => 
+      mod.type === 'political-compass' 
+        ? { ...mod, customData: { ...results, hasResults: true } }
+        : mod
+    ));
+    
+    setShowPoliticalQuiz(false);
+    
+    toast({
+      title: "Political Compass Complete!",
+      description: "Your political position has been calculated and saved to your profile.",
+    });
+  };
 
   const { data: user, isLoading: userLoading } = useQuery<UserProfile>({
     queryKey: userId ? [`/api/user/${userId}`] : ["/api/user"],
@@ -729,6 +808,73 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
               </Button>
             </div>
           );
+        case "political-compass":
+          return (
+            <div className="space-y-3">
+              <div className="text-center mb-3">
+                <h4 className="font-medium text-sm">My Political Position</h4>
+              </div>
+              <div className="relative bg-gradient-to-br from-gray-50 to-gray-100 border rounded-lg p-4">
+                {/* Political Compass Grid */}
+                <svg viewBox="0 0 200 200" className="w-full h-40">
+                  {/* Grid lines */}
+                  <defs>
+                    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e5e7eb" strokeWidth="0.5"/>
+                    </pattern>
+                  </defs>
+                  <rect width="200" height="200" fill="url(#grid)" />
+                  
+                  {/* Main axes */}
+                  <line x1="100" y1="0" x2="100" y2="200" stroke="#9ca3af" strokeWidth="2"/>
+                  <line x1="0" y1="100" x2="200" y2="100" stroke="#9ca3af" strokeWidth="2"/>
+                  
+                  {/* Quadrant colors */}
+                  <rect x="0" y="0" width="100" height="100" fill="#ef4444" fillOpacity="0.1"/>
+                  <rect x="100" y="0" width="100" height="100" fill="#3b82f6" fillOpacity="0.1"/>
+                  <rect x="0" y="100" width="100" height="100" fill="#10b981" fillOpacity="0.1"/>
+                  <rect x="100" y="100" width="100" height="100" fill="#f59e0b" fillOpacity="0.1"/>
+                  
+                  {/* User position - Sample data for now */}
+                  <circle 
+                    cx={module.customData?.economicPosition || 120} 
+                    cy={module.customData?.socialPosition || 80} 
+                    r="6" 
+                    fill="#dc2626" 
+                    stroke="#fff" 
+                    strokeWidth="2"
+                  />
+                </svg>
+                
+                {/* Axis labels */}
+                <div className="flex justify-between text-xs text-gray-600 mt-2">
+                  <span>Socialist</span>
+                  <span>Capitalist</span>
+                </div>
+                <div className="flex flex-col items-center justify-between h-12 absolute left-0 top-0 -ml-1 text-xs text-gray-600">
+                  <span className="transform -rotate-90 whitespace-nowrap">Authoritarian</span>
+                </div>
+                <div className="flex flex-col items-center justify-between h-12 absolute left-0 bottom-0 -ml-1 text-xs text-gray-600">
+                  <span className="transform -rotate-90 whitespace-nowrap">Libertarian</span>
+                </div>
+              </div>
+              
+              {/* Take Quiz Button */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => {
+                  setShowPoliticalQuiz(true);
+                  setCurrentQuizStep(0);
+                  setQuizAnswers({});
+                }}
+              >
+                <Target className="h-4 w-4 mr-2" />
+                {module.customData?.hasResults ? "Retake Quiz" : "Take Political Quiz"}
+              </Button>
+            </div>
+          );
         default:
           return <p className="text-gray-500">Module content coming soon...</p>;
       }
@@ -1180,6 +1326,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                           { type: "pinned-post", name: "Pinned Post", icon: Star, description: "Highlight a personal statement, meme, or campaign" },
                           { type: "debate-history", name: "Debate History", icon: MessageSquare, description: "Timeline of debates with win/loss tallies" },
                           { type: "events", name: "Event Participation", icon: Calendar, description: "Rallies, protests, town halls you've RSVP'd to" },
+                          { type: "political-compass", name: "Political Compass", icon: Target, description: "Show your political position on economic and social axes" },
                           { type: "youtube", name: "YouTube Video", icon: Youtube, description: "Embed a YouTube video with custom size" }
                         ].map((moduleType) => {
                           const IconComponent = moduleType.icon;
@@ -1273,6 +1420,118 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
           </Card>
         )}
       </div>
+
+      {/* Political Compass Quiz Dialog */}
+      <Dialog open={showPoliticalQuiz} onOpenChange={setShowPoliticalQuiz}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Political Compass Quiz
+            </DialogTitle>
+          </DialogHeader>
+          
+          {currentQuizStep < politicalQuizQuestions.length ? (
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600">
+                Question {currentQuizStep + 1} of {politicalQuizQuestions.length}
+              </div>
+              
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all" 
+                  style={{ width: `${((currentQuizStep + 1) / politicalQuizQuestions.length) * 100}%` }}
+                />
+              </div>
+              
+              <div className="py-4">
+                <h3 className="font-medium mb-4">
+                  {politicalQuizQuestions[currentQuizStep]?.text}
+                </h3>
+                
+                <div className="space-y-2">
+                  {[
+                    { value: 1, label: "Strongly Disagree", color: "bg-red-100 hover:bg-red-200 text-red-800" },
+                    { value: 2, label: "Disagree", color: "bg-orange-100 hover:bg-orange-200 text-orange-800" },
+                    { value: 3, label: "Neutral", color: "bg-gray-100 hover:bg-gray-200 text-gray-800" },
+                    { value: 4, label: "Agree", color: "bg-blue-100 hover:bg-blue-200 text-blue-800" },
+                    { value: 5, label: "Strongly Agree", color: "bg-green-100 hover:bg-green-200 text-green-800" }
+                  ].map((option) => (
+                    <Button
+                      key={option.value}
+                      variant="outline"
+                      className={`w-full justify-start h-auto p-3 ${option.color} ${quizAnswers[politicalQuizQuestions[currentQuizStep]?.id] === option.value ? 'ring-2 ring-blue-500' : ''}`}
+                      onClick={() => {
+                        const questionId = politicalQuizQuestions[currentQuizStep]?.id;
+                        if (questionId) {
+                          setQuizAnswers(prev => ({ ...prev, [questionId]: option.value }));
+                          
+                          // Auto-advance after a short delay
+                          setTimeout(() => {
+                            if (currentQuizStep < politicalQuizQuestions.length - 1) {
+                              setCurrentQuizStep(prev => prev + 1);
+                            }
+                          }, 300);
+                        }
+                      }}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex justify-between">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setCurrentQuizStep(prev => Math.max(0, prev - 1))}
+                  disabled={currentQuizStep === 0}
+                >
+                  Previous
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (currentQuizStep < politicalQuizQuestions.length - 1) {
+                      setCurrentQuizStep(prev => prev + 1);
+                    }
+                  }}
+                  disabled={!quizAnswers[politicalQuizQuestions[currentQuizStep]?.id] || currentQuizStep >= politicalQuizQuestions.length - 1}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          ) : (
+            // Quiz Results
+            <div className="space-y-4 text-center">
+              <div className="text-green-600 mb-4">
+                <Target className="h-12 w-12 mx-auto mb-2" />
+                <h3 className="text-lg font-semibold">Quiz Complete!</h3>
+              </div>
+              
+              <p className="text-gray-600">
+                You've answered all {politicalQuizQuestions.length} questions. 
+                Your political position will be calculated and displayed on your profile.
+              </p>
+              
+              <div className="flex gap-2 justify-center">
+                <Button onClick={finishQuiz}>
+                  Save Results
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setCurrentQuizStep(0);
+                    setQuizAnswers({});
+                  }}
+                >
+                  Retake Quiz
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {!isPremiumUser && isOwner && (
         <Card className="bg-gradient-to-r from-purple-50 to-blue-50">
