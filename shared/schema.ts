@@ -643,6 +643,14 @@ export const representatives = pgTable("representatives", {
   district: text("district"), // congressional district, state district, etc.
   state: text("state"),
   zipCodes: text("zip_codes").array().default([]), // Array of zip codes this rep serves
+  // Election and term tracking
+  electedDate: timestamp("elected_date"), // When they were last elected
+  termStart: timestamp("term_start"), // When current term started
+  termEnd: timestamp("term_end"), // When current term ends
+  termLength: text("term_length"), // e.g., "4 years", "6 years", "2 years"
+  isCurrentlyServing: boolean("is_currently_serving").default(true),
+  lastVerified: timestamp("last_verified").defaultNow(), // Last time data was verified as current
+  verificationSource: text("verification_source"), // "chatgpt", "official_source", "manual"
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
