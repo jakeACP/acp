@@ -37,8 +37,7 @@ export function Navigation() {
           <div className="flex items-center">
             <Link href="/">
               <div className="flex-shrink-0 flex items-center cursor-pointer">
-                <img src={logoPath} alt="Anti-Corruption Party" className="h-10 w-10 mr-3" />
-                <span className="text-xl font-bold text-slate-900">ACP Democracy</span>
+                <img src={logoPath} alt="Anti-Corruption Party" className="h-12 w-12" />
               </div>
             </Link>
           </div>
