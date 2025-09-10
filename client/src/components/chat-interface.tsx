@@ -10,6 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useWebSocket } from "@/hooks/use-websocket";
+import { VideoChat } from "@/components/video-chat";
 
 interface ChatInterfaceProps {
   channelId: string | null;
@@ -21,6 +22,7 @@ export function ChatInterface({ channelId, conversationId, userId }: ChatInterfa
   const [message, setMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -123,20 +125,7 @@ export function ChatInterface({ channelId, conversationId, userId }: ChatInterfa
 
   // Start video call (premium feature)
   const handleVideoCall = () => {
-    if (!isUserPremium) {
-      toast({
-        title: "Premium Feature",
-        description: "Video calling is available for premium users only",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // TODO: Implement video calling functionality
-    toast({
-      title: "Coming Soon",
-      description: "Video calling feature is being developed",
-    });
+    setIsVideoCallOpen(true);
   };
 
   // Auto-scroll to bottom when new messages arrive
@@ -328,6 +317,22 @@ export function ChatInterface({ channelId, conversationId, userId }: ChatInterfa
           </Button>
         </div>
       </div>
+
+      {/* Video Chat Component */}
+      {conversationId && (
+        <VideoChat
+          isOpen={isVideoCallOpen}
+          onClose={() => setIsVideoCallOpen(false)}
+          recipientName={
+            conversation?.otherUser?.firstName && conversation?.otherUser?.lastName
+              ? `${conversation.otherUser.firstName} ${conversation.otherUser.lastName}`
+              : conversation?.otherUser?.username || "Unknown User"
+          }
+          recipientId={conversation?.otherUser?.id || ""}
+          currentUserId={userId}
+          isUserPremium={isUserPremium}
+        />
+      )}
     </div>
   );
 }
