@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
   User, 
   Camera, 
@@ -23,7 +24,8 @@ import {
   Layout,
   Save,
   Eye,
-  Upload
+  Upload,
+  Edit
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -36,6 +38,7 @@ interface ProfileModule {
   isPremium: boolean;
   isEnabled: boolean;
   position: number;
+  itemCount: number;
   customData?: any;
 }
 
@@ -58,6 +61,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   const [editMode, setEditMode] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [editingModule, setEditingModule] = useState<string | null>(null);
 
   const { data: user, isLoading: userLoading } = useQuery<UserProfile>({
     queryKey: userId ? [`/api/user/${userId}`] : ["/api/user"],
@@ -70,7 +74,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       type: "photos",
       isPremium: false,
       isEnabled: true,
-      position: 1
+      position: 1,
+      itemCount: 6
     },
     {
       id: "feed",
@@ -78,7 +83,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       type: "feed", 
       isPremium: false,
       isEnabled: true,
-      position: 2
+      position: 2,
+      itemCount: 3
     },
     {
       id: "friends",
@@ -86,7 +92,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       type: "friends",
       isPremium: false,
       isEnabled: true,
-      position: 3
+      position: 3,
+      itemCount: 8
     },
     {
       id: "following",
@@ -94,7 +101,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       type: "following",
       isPremium: false,
       isEnabled: true,
-      position: 4
+      position: 4,
+      itemCount: 5
     },
     {
       id: "music",
@@ -102,7 +110,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       type: "music",
       isPremium: true,
       isEnabled: user?.subscriptionStatus === "premium",
-      position: 5
+      position: 5,
+      itemCount: 1
     },
     {
       id: "background",
@@ -110,7 +119,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       type: "background",
       isPremium: true,
       isEnabled: user?.subscriptionStatus === "premium",
-      position: 6
+      position: 6,
+      itemCount: 1
     }
   ]);
 
@@ -284,8 +294,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
         case "photos":
           return (
             <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="aspect-square bg-gray-200 rounded-lg flex items-center justify-center">
+              {Array.from({ length: module.itemCount }, (_, i) => (
+                <div key={i + 1} className="aspect-square bg-gray-200 rounded-lg flex items-center justify-center">
                   <Camera className="h-6 w-6 text-gray-400" />
                 </div>
               ))}
@@ -294,8 +304,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
         case "feed":
           return (
             <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="p-3 border rounded-lg">
+              {Array.from({ length: module.itemCount }, (_, i) => (
+                <div key={i + 1} className="p-3 border rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-6 h-6 bg-gray-300 rounded-full"></div>
                     <span className="text-sm font-medium">{user?.username}</span>
@@ -308,10 +318,10 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
         case "friends":
           return (
             <div className="grid grid-cols-4 gap-2">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div key={i} className="text-center">
+              {Array.from({ length: module.itemCount }, (_, i) => (
+                <div key={i + 1} className="text-center">
                   <div className="w-12 h-12 bg-gray-300 rounded-full mx-auto mb-1"></div>
-                  <span className="text-xs">Friend {i}</span>
+                  <span className="text-xs">Friend {i + 1}</span>
                 </div>
               ))}
             </div>
@@ -319,10 +329,10 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
         case "following":
           return (
             <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center gap-2">
+              {Array.from({ length: module.itemCount }, (_, i) => (
+                <div key={i + 1} className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-gray-300 rounded-full"></div>
-                  <span className="text-sm">Following {i}</span>
+                  <span className="text-sm">Following {i + 1}</span>
                 </div>
               ))}
             </div>
@@ -357,25 +367,106 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
               {module.name}
               {module.isPremium && <Crown className="h-3 w-3 text-yellow-500" />}
             </span>
-            {editMode && isOwner && (
-              <Switch
-                checked={module.isEnabled}
-                onCheckedChange={(checked) => {
-                  if (module.isPremium && !isPremiumUser && checked) {
-                    toast({
-                      title: "Premium Feature",
-                      description: "This feature requires ACP+ subscription.",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-                  setProfileModules(modules => 
-                    modules.map(m => m.id === module.id ? {...m, isEnabled: checked} : m)
-                  );
-                }}
-                disabled={module.isPremium && !isPremiumUser}
-              />
-            )}
+            <div className="flex items-center gap-2">
+              {isOwner && (
+                <Dialog open={editingModule === module.id} onOpenChange={(open) => setEditingModule(open ? module.id : null)}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 w-6 p-0"
+                      data-testid={`edit-module-${module.type}`}
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Edit {module.name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id={`enabled-${module.id}`}
+                          checked={module.isEnabled}
+                          onCheckedChange={(checked) => {
+                            if (module.isPremium && !isPremiumUser && checked) {
+                              toast({
+                                title: "Premium Feature",
+                                description: "This feature requires ACP+ subscription.",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+                            setProfileModules(modules => 
+                              modules.map(m => m.id === module.id ? {...m, isEnabled: checked} : m)
+                            );
+                          }}
+                          disabled={module.isPremium && !isPremiumUser}
+                        />
+                        <Label htmlFor={`enabled-${module.id}`} className="text-sm">
+                          Show this module on profile
+                        </Label>
+                      </div>
+                      
+                      {module.isEnabled && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Number of items to display</Label>
+                          <Select 
+                            value={module.itemCount.toString()} 
+                            onValueChange={(value) => {
+                              setProfileModules(modules => 
+                                modules.map(m => m.id === module.id ? {...m, itemCount: parseInt(value)} : m)
+                              );
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20].map((count) => (
+                                <SelectItem key={count} value={count.toString()}>
+                                  {count} {count === 1 ? 'item' : 'items'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-end pt-4">
+                        <Button 
+                          onClick={() => setEditingModule(null)}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Done
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
+              {editMode && isOwner && (
+                <Switch
+                  checked={module.isEnabled}
+                  onCheckedChange={(checked) => {
+                    if (module.isPremium && !isPremiumUser && checked) {
+                      toast({
+                        title: "Premium Feature",
+                        description: "This feature requires ACP+ subscription.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    setProfileModules(modules => 
+                      modules.map(m => m.id === module.id ? {...m, isEnabled: checked} : m)
+                    );
+                  }}
+                  disabled={module.isPremium && !isPremiumUser}
+                />
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
