@@ -1,10 +1,8 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import { WebSocket } from 'ws';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
 import * as schema from "@shared/schema";
 
-// Configure WebSocket for Neon serverless in Node.js environment
-neonConfig.webSocketConstructor = WebSocket;
+const { Pool } = pg;
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -14,8 +12,10 @@ if (!process.env.DATABASE_URL) {
 
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
-  max: 10,  // Maximum number of connections in pool
-  idleTimeoutMillis: 30000,  // Close idle connections after 30 seconds
-  connectionTimeoutMillis: 2000,  // Timeout for establishing connection
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+  ssl: { rejectUnauthorized: false }
 });
-export const db = drizzle({ client: pool, schema });
+
+export const db = drizzle(pool, { schema });
