@@ -20,9 +20,9 @@ interface RepresentativeData {
 
 export const federalRepresentatives: RepresentativeData[] = [
   {
-    name: "Joe Biden",
+    name: "Donald Trump",
     office: "President of the United States",
-    party: "Democratic Party",
+    party: "Republican Party",
     phones: ["202-456-1414"],
     urls: ["https://www.whitehouse.gov"],
     address: [{
@@ -33,11 +33,11 @@ export const federalRepresentatives: RepresentativeData[] = [
     }]
   },
   {
-    name: "Kamala Harris",
+    name: "JD Vance",
     office: "Vice President of the United States",
-    party: "Democratic Party",
+    party: "Republican Party",
     phones: ["202-456-1414"],
-    urls: ["https://www.whitehouse.gov/administration/vice-president-harris/"]
+    urls: ["https://www.whitehouse.gov/administration/vice-president/"]
   }
 ];
 
