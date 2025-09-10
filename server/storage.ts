@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -108,6 +108,12 @@ export interface IStorage {
   saveUserAddress(userId: string, address: string): Promise<void>;
   followRepresentative(userId: string, repData: { name: string; office: string; party?: string }): Promise<void>;
   getFollowedRepresentatives(userId: string): Promise<FollowedRepresentative[]>;
+  
+  // Representatives ChatGPT Integration
+  getRepresentativesByZipCode(zipCode: string): Promise<any[]>;
+  saveRepresentatives(representatives: any[]): Promise<any[]>;
+  markZipCodeAsSearched(zipCode: string, representativeIds: string[]): Promise<void>;
+  hasZipCodeBeenSearched(zipCode: string): Promise<boolean>;
 
   // Password Reset
   createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken>;
@@ -1354,6 +1360,78 @@ export class DatabaseStorage implements IStorage {
       .from(followedRepresentatives)
       .where(eq(followedRepresentatives.userId, userId))
       .orderBy(desc(followedRepresentatives.followedAt));
+  }
+
+  // Representatives ChatGPT Integration Methods
+  async getRepresentativesByZipCode(zipCode: string): Promise<Representative[]> {
+    const lookup = await db
+      .select()
+      .from(zipCodeLookups)
+      .where(eq(zipCodeLookups.zipCode, zipCode));
+
+    if (lookup.length === 0) {
+      return [];
+    }
+
+    const representativeIds = lookup[0].representativeIds;
+    if (representativeIds.length === 0) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(representatives)
+      .where(inArray(representatives.id, representativeIds))
+      .orderBy(representatives.level, representatives.office);
+  }
+
+  async saveRepresentatives(repData: InsertRepresentative[]): Promise<Representative[]> {
+    if (repData.length === 0) {
+      return [];
+    }
+
+    const saved = await db
+      .insert(representatives)
+      .values(repData)
+      .returning();
+
+    return saved;
+  }
+
+  async markZipCodeAsSearched(zipCode: string, representativeIds: string[]): Promise<void> {
+    // Check if zip code already exists
+    const existing = await db
+      .select()
+      .from(zipCodeLookups)
+      .where(eq(zipCodeLookups.zipCode, zipCode));
+
+    if (existing.length > 0) {
+      // Update existing record
+      await db
+        .update(zipCodeLookups)
+        .set({
+          representativeIds,
+          searchedAt: new Date(),
+        })
+        .where(eq(zipCodeLookups.zipCode, zipCode));
+    } else {
+      // Create new record
+      await db
+        .insert(zipCodeLookups)
+        .values({
+          zipCode,
+          representativeIds,
+        });
+    }
+  }
+
+  async hasZipCodeBeenSearched(zipCode: string): Promise<boolean> {
+    const lookup = await db
+      .select()
+      .from(zipCodeLookups)
+      .where(eq(zipCodeLookups.zipCode, zipCode));
+    
+    return lookup.length > 0;
   }
 
   async createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken> {

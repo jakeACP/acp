@@ -628,6 +628,43 @@ export const insertCharityDonationSchema = createInsertSchema(charityDonations).
   createdAt: true,
 });
 
+// Representatives Tables for ChatGPT integration
+export const representatives = pgTable("representatives", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  office: text("office").notNull(), // e.g., "President", "Senator", "Representative"
+  level: text("level").notNull(), // federal, state, local
+  party: text("party"),
+  phone: text("phone"),
+  email: text("email"),
+  website: text("website"),
+  address: text("address"),
+  photoUrl: text("photo_url"),
+  district: text("district"), // congressional district, state district, etc.
+  state: text("state"),
+  zipCodes: text("zip_codes").array().default([]), // Array of zip codes this rep serves
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const zipCodeLookups = pgTable("zip_code_lookups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  zipCode: text("zip_code").notNull().unique(),
+  searchedAt: timestamp("searched_at").defaultNow(),
+  representativeIds: text("representative_ids").array().default([]), // IDs of representatives found
+});
+
+export const insertRepresentativeSchema = createInsertSchema(representatives).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertZipCodeLookupSchema = createInsertSchema(zipCodeLookups).omit({
+  id: true,
+  searchedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -682,3 +719,7 @@ export type Charity = typeof charities.$inferSelect;
 export type InsertCharity = z.infer<typeof insertCharitySchema>;
 export type CharityDonation = typeof charityDonations.$inferSelect;
 export type InsertCharityDonation = z.infer<typeof insertCharityDonationSchema>;
+export type Representative = typeof representatives.$inferSelect;
+export type InsertRepresentative = z.infer<typeof insertRepresentativeSchema>;
+export type ZipCodeLookup = typeof zipCodeLookups.$inferSelect;
+export type InsertZipCodeLookup = z.infer<typeof insertZipCodeLookupSchema>;

@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
 import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema } from "@shared/schema";
+import { findRepresentativesByZipCode } from "./openai";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1030,6 +1031,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(followed);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ChatGPT-powered representatives lookup by zip code
+  app.post("/api/representatives/zip-lookup", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { zipCode } = req.body;
+      
+      if (!zipCode) {
+        return res.status(400).json({ message: "Zip code is required" });
+      }
+
+      // Validate zip code format (5 digits or 5+4 format)
+      const zipRegex = /^\d{5}(-\d{4})?$/;
+      if (!zipRegex.test(zipCode)) {
+        return res.status(400).json({ message: "Invalid zip code format" });
+      }
+
+      // Check if we already have representatives for this zip code
+      const hasBeenSearched = await storage.hasZipCodeBeenSearched(zipCode);
+      
+      if (hasBeenSearched) {
+        // Return cached results
+        const cachedRepresentatives = await storage.getRepresentativesByZipCode(zipCode);
+        return res.json({
+          representatives: cachedRepresentatives,
+          fromCache: true,
+          message: "Representatives loaded from database"
+        });
+      }
+
+      // Check if OpenAI API key is available
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(500).json({ message: "OpenAI API key not configured" });
+      }
+
+      // Use ChatGPT to find representatives
+      const representativesData = await findRepresentativesByZipCode(zipCode);
+      
+      if (representativesData.length === 0) {
+        return res.json({
+          representatives: [],
+          fromCache: false,
+          message: "No representatives found for this zip code"
+        });
+      }
+
+      // Save representatives to database
+      const savedRepresentatives = await storage.saveRepresentatives(representativesData);
+      const representativeIds = savedRepresentatives.map(rep => rep.id);
+      
+      // Mark zip code as searched
+      await storage.markZipCodeAsSearched(zipCode, representativeIds);
+
+      res.json({
+        representatives: savedRepresentatives,
+        fromCache: false,
+        message: `Found ${savedRepresentatives.length} representatives via ChatGPT`
+      });
+
+    } catch (error: any) {
+      console.error("ChatGPT representatives lookup error:", error);
+      res.status(500).json({ 
+        message: error.message || "Failed to find representatives",
+        error: "ChatGPT lookup failed"
+      });
     }
   });
 
