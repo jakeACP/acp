@@ -25,7 +25,9 @@ import {
   Save,
   Eye,
   Upload,
-  Edit
+  Edit,
+  Plus,
+  Youtube
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -34,7 +36,7 @@ import { apiRequest } from "@/lib/queryClient";
 interface ProfileModule {
   id: string;
   name: string;
-  type: "photos" | "feed" | "friends" | "following" | "music" | "background" | "custom";
+  type: "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "custom";
   isPremium: boolean;
   isEnabled: boolean;
   position: number;
@@ -62,6 +64,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   const [previewMode, setPreviewMode] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [editingModule, setEditingModule] = useState<string | null>(null);
+  const [showAddModule, setShowAddModule] = useState(false);
+  const [newModuleType, setNewModuleType] = useState<string>("");
 
   const { data: user, isLoading: userLoading } = useQuery<UserProfile>({
     queryKey: userId ? [`/api/user/${userId}`] : ["/api/user"],
@@ -173,6 +177,34 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   }
 
   const isPremiumUser = user?.subscriptionStatus === "premium";
+
+  const addNewModule = (type: string) => {
+    const moduleTypes = {
+      youtube: { name: "YouTube Video", itemCount: 1, customData: { videoUrl: "", height: "200" } },
+      photos: { name: "Photo Gallery", itemCount: 6, customData: {} },
+      feed: { name: "Recent Posts", itemCount: 3, customData: {} },
+      friends: { name: "Friends List", itemCount: 8, customData: {} },
+      following: { name: "Following", itemCount: 5, customData: {} }
+    };
+
+    const moduleConfig = moduleTypes[type as keyof typeof moduleTypes];
+    if (!moduleConfig) return;
+
+    const newModule: ProfileModule = {
+      id: `${type}-${Date.now()}`,
+      name: moduleConfig.name,
+      type: type as any,
+      isPremium: false,
+      isEnabled: true,
+      position: profileModules.length + 1,
+      itemCount: moduleConfig.itemCount,
+      customData: moduleConfig.customData
+    };
+
+    setProfileModules(prev => [...prev, newModule]);
+    setShowAddModule(false);
+    setNewModuleType("");
+  };
   const themes = [
     { value: "default", label: "Classic Blue" },
     { value: "dark", label: "Dark Mode" },
@@ -354,6 +386,29 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
               )}
             </div>
           );
+        case "youtube":
+          return (
+            <div className="text-center">
+              {module.customData?.videoUrl ? (
+                <div className="relative">
+                  <iframe
+                    width="100%"
+                    height={module.customData?.height || "200"}
+                    src={`https://www.youtube.com/embed/${module.customData.videoUrl.split('v=')[1]?.split('&')[0] || module.customData.videoUrl.split('/').pop()}`}
+                    title="YouTube video"
+                    frameBorder="0"
+                    allowFullScreen
+                    className="rounded-lg"
+                  />
+                </div>
+              ) : (
+                <div className="p-4 border-dashed border-2 border-gray-300 rounded-lg">
+                  <Youtube className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p className="text-sm text-gray-500">No YouTube video set</p>
+                </div>
+              )}
+            </div>
+          );
         default:
           return <p className="text-gray-500">Module content coming soon...</p>;
       }
@@ -410,31 +465,89 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                       </div>
                       
                       {module.isEnabled && (
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Number of items to display</Label>
-                          <Select 
-                            value={module.itemCount.toString()} 
-                            onValueChange={(value) => {
-                              setProfileModules(modules => 
-                                modules.map(m => m.id === module.id ? {...m, itemCount: parseInt(value)} : m)
-                              );
-                            }}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20].map((count) => (
-                                <SelectItem key={count} value={count.toString()}>
-                                  {count} {count === 1 ? 'item' : 'items'}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Number of items to display</Label>
+                            <Select 
+                              value={module.itemCount.toString()} 
+                              onValueChange={(value) => {
+                                setProfileModules(modules => 
+                                  modules.map(m => m.id === module.id ? {...m, itemCount: parseInt(value)} : m)
+                                );
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20].map((count) => (
+                                  <SelectItem key={count} value={count.toString()}>
+                                    {count} {count === 1 ? 'item' : 'items'}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          {/* YouTube-specific configuration */}
+                          {module.type === "youtube" && (
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">YouTube Video URL</Label>
+                              <Input
+                                type="url"
+                                placeholder="https://www.youtube.com/watch?v=..."
+                                value={module.customData?.videoUrl || ""}
+                                onChange={(e) => {
+                                  setProfileModules(modules => 
+                                    modules.map(m => m.id === module.id ? {
+                                      ...m, 
+                                      customData: { ...m.customData, videoUrl: e.target.value }
+                                    } : m)
+                                  );
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Video Height</Label>
+                              <Select 
+                                value={module.customData?.height || "200"} 
+                                onValueChange={(value) => {
+                                  setProfileModules(modules => 
+                                    modules.map(m => m.id === module.id ? {
+                                      ...m, 
+                                      customData: { ...m.customData, height: value }
+                                    } : m)
+                                  );
+                                }}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="150">Small (150px)</SelectItem>
+                                  <SelectItem value="200">Medium (200px)</SelectItem>
+                                  <SelectItem value="300">Large (300px)</SelectItem>
+                                  <SelectItem value="400">Extra Large (400px)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )}
+                        </>
                       )}
                       
-                      <div className="flex justify-end pt-4">
+                      <div className="flex justify-between pt-4">
+                        <Button 
+                          onClick={() => {
+                            setProfileModules(modules => modules.filter(m => m.id !== module.id));
+                            setEditingModule(null);
+                          }}
+                          variant="destructive"
+                          size="sm"
+                        >
+                          Delete Module
+                        </Button>
                         <Button 
                           onClick={() => setEditingModule(null)}
                           variant="outline"
@@ -653,6 +766,68 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
           .sort((a, b) => a.position - b.position)
           .map(renderProfileModule)
         }
+        
+        {/* Add Module Card - Only show when logged in and in edit mode */}
+        {isOwner && (
+          <Card className="relative border-dashed border-2 border-gray-300 hover:border-gray-400 transition-colors" data-testid="add-module-card">
+            <Dialog open={showAddModule} onOpenChange={setShowAddModule}>
+              <DialogTrigger asChild>
+                <div className="p-6 text-center cursor-pointer h-full flex flex-col items-center justify-center min-h-[200px]">
+                  <Plus className="h-12 w-12 text-gray-400 mb-2" />
+                  <p className="text-gray-600 font-medium">Add Module</p>
+                  <p className="text-sm text-gray-500">Customize your profile</p>
+                </div>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Add a Module</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">Choose a module type to add to your profile:</p>
+                  
+                  <div className="space-y-2">
+                    {[
+                      { type: "youtube", name: "YouTube Video", icon: Youtube, description: "Embed a YouTube video with custom size" },
+                      { type: "photos", name: "Photo Gallery", icon: Camera, description: "Display your photos in a grid" },
+                      { type: "feed", name: "Recent Posts", icon: MessageSquare, description: "Show your latest posts" },
+                      { type: "friends", name: "Friends List", icon: Users, description: "Display your friends" },
+                      { type: "following", name: "Following", icon: Heart, description: "Show who you follow" }
+                    ].map((moduleType) => {
+                      const IconComponent = moduleType.icon;
+                      return (
+                        <Button
+                          key={moduleType.type}
+                          variant="outline"
+                          className="w-full justify-start h-auto p-4"
+                          onClick={() => addNewModule(moduleType.type)}
+                          data-testid={`add-module-${moduleType.type}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <IconComponent className="h-5 w-5" />
+                            <div className="text-left">
+                              <p className="font-medium">{moduleType.name}</p>
+                              <p className="text-xs text-gray-500">{moduleType.description}</p>
+                            </div>
+                          </div>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="flex justify-end pt-4">
+                    <Button 
+                      onClick={() => setShowAddModule(false)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </Card>
+        )}
       </div>
 
       {!isPremiumUser && isOwner && (
