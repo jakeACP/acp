@@ -160,10 +160,14 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   }, [user]);
 
   const [customization, setCustomization] = useState({
-    theme: "default",
+    theme: "blue",
     background: "",
     favoriteSong: "",
-    customCSS: ""
+    customCSS: "",
+    customColors: {
+      primary: "#3b82f6",
+      secondary: "#1e40af"
+    }
   });
 
   // Update customization state when user data loads
@@ -273,20 +277,32 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
     setNewModuleType("");
   };
   const themes = [
-    { value: "default", label: "Classic Blue" },
-    { value: "dark", label: "Dark Mode" },
-    { value: "neon", label: "Neon Purple", premium: true },
-    { value: "retro", label: "Retro Wave", premium: true },
-    { value: "minimalist", label: "Minimalist", premium: true }
+    // Free patriotic themes
+    { value: "red", label: "🔴 Patriot Red" },
+    { value: "white", label: "⚪ Classic White" },
+    { value: "blue", label: "🔵 Freedom Blue" },
+    // Premium gradient themes
+    { value: "sunset", label: "🌅 Sunset Gradient", premium: true },
+    { value: "ocean", label: "🌊 Ocean Waves", premium: true },
+    { value: "purple-galaxy", label: "🌌 Purple Galaxy", premium: true },
+    { value: "rainbow", label: "🌈 Rainbow Pride", premium: true },
+    { value: "fire", label: "🔥 Fire Gradient", premium: true },
+    { value: "emerald", label: "💎 Emerald Dream", premium: true },
+    { value: "custom", label: "🎨 Custom Colors", premium: true }
   ];
 
   const getProfileStyle = () => {
     const baseStyle: React.CSSProperties = {};
     
-    if (customization.background) {
+    if (customization.background && isPremiumUser) {
       baseStyle.backgroundImage = `url(${customization.background})`;
       baseStyle.backgroundSize = "cover";
       baseStyle.backgroundPosition = "center";
+    }
+    
+    // Apply custom gradient for custom theme
+    if (customization.theme === 'custom' && isPremiumUser && customization.customColors) {
+      baseStyle.background = `linear-gradient(135deg, ${customization.customColors.primary} 0%, ${customization.customColors.secondary} 100%)`;
     }
     
     return baseStyle;
@@ -294,16 +310,30 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
 
   const getThemeClasses = () => {
     switch (customization.theme) {
-      case "dark":
-        return "bg-gray-900 text-white";
-      case "neon":
-        return "bg-gradient-to-br from-purple-900 to-pink-900 text-white";
-      case "retro":
-        return "bg-gradient-to-br from-cyan-900 to-purple-900 text-white";
-      case "minimalist":
-        return "bg-gray-50 text-gray-900";
+      // Free patriotic themes
+      case "red":
+        return "bg-gradient-to-br from-red-600 to-red-800 text-white";
+      case "white":
+        return "bg-gradient-to-br from-gray-50 to-white text-gray-900 border border-gray-200";
+      case "blue":
+        return "bg-gradient-to-br from-blue-600 to-blue-800 text-white";
+      // Premium gradient themes
+      case "sunset":
+        return "bg-gradient-to-br from-orange-400 via-pink-500 to-red-500 text-white";
+      case "ocean":
+        return "bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600 text-white";
+      case "purple-galaxy":
+        return "bg-gradient-to-br from-purple-900 via-purple-600 to-pink-500 text-white";
+      case "rainbow":
+        return "bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-blue-500 to-purple-500 text-white";
+      case "fire":
+        return "bg-gradient-to-br from-yellow-400 via-red-500 to-red-900 text-white";
+      case "emerald":
+        return "bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600 text-white";
+      case "custom":
+        return "text-white"; // Custom colors handled by inline styles
       default:
-        return "bg-white text-gray-900";
+        return "bg-gradient-to-br from-blue-600 to-blue-800 text-white";
     }
   };
 
@@ -1015,6 +1045,66 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                 </div>
               )}
             </div>
+
+            {/* Custom Color Pickers for Premium Users */}
+            {isPremiumUser && customization.theme === 'custom' && (
+              <div className="grid grid-cols-2 gap-4 p-4 border rounded-lg bg-gradient-to-r from-purple-50 to-blue-50">
+                <div>
+                  <Label className="flex items-center gap-2">
+                    <Crown className="h-3 w-3 text-yellow-500" />
+                    Primary Color
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="color"
+                      value={customization.customColors?.primary || "#3b82f6"}
+                      onChange={(e) => setCustomization(prev => ({
+                        ...prev, 
+                        customColors: { ...prev.customColors, primary: e.target.value }
+                      }))}
+                      className="w-16 h-10 p-1 border rounded cursor-pointer"
+                    />
+                    <Input
+                      type="text"
+                      value={customization.customColors?.primary || "#3b82f6"}
+                      onChange={(e) => setCustomization(prev => ({
+                        ...prev, 
+                        customColors: { ...prev.customColors, primary: e.target.value }
+                      }))}
+                      placeholder="#3b82f6"
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="flex items-center gap-2">
+                    <Crown className="h-3 w-3 text-yellow-500" />
+                    Secondary Color
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="color"
+                      value={customization.customColors?.secondary || "#1e40af"}
+                      onChange={(e) => setCustomization(prev => ({
+                        ...prev, 
+                        customColors: { ...prev.customColors, secondary: e.target.value }
+                      }))}
+                      className="w-16 h-10 p-1 border rounded cursor-pointer"
+                    />
+                    <Input
+                      type="text"
+                      value={customization.customColors?.secondary || "#1e40af"}
+                      onChange={(e) => setCustomization(prev => ({
+                        ...prev, 
+                        customColors: { ...prev.customColors, secondary: e.target.value }
+                      }))}
+                      placeholder="#1e40af"
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {isPremiumUser && (
               <div>
