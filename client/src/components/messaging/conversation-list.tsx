@@ -7,8 +7,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { MessageCircle, Plus, Search, Users } from "lucide-react";
+import { MessageCircle, Plus, Search, Users, Hash } from "lucide-react";
 import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns";
 import type { User } from "@shared/schema";
 
@@ -33,13 +35,29 @@ interface Conversation {
 
 export function ConversationList({ onSelectConversation, selectedPartnerId }: ConversationListProps) {
   const [showNewMessageDialog, setShowNewMessageDialog] = useState(false);
+  const [showCreateChannelDialog, setShowCreateChannelDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [newChannelName, setNewChannelName] = useState("");
+  const [newChannelType, setNewChannelType] = useState<"public" | "private">("public");
+  const [newChannelGroupId, setNewChannelGroupId] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: conversations = [], isLoading } = useQuery<Conversation[]>({
     queryKey: ["/api/conversations"],
     refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Fetch user channels
+  const { data: channels = [] } = useQuery({
+    queryKey: ["/api/channels/user"],
+    refetchInterval: 30000,
+  });
+
+  // Fetch user groups for channel creation
+  const { data: userGroups = [] } = useQuery({
+    queryKey: ["/api/groups/user"],
+    enabled: showCreateChannelDialog,
   });
 
   const { data: users = [] } = useQuery<User[]>({
@@ -82,6 +100,47 @@ export function ConversationList({ onSelectConversation, selectedPartnerId }: Co
       });
     },
   });
+
+  // Create channel mutation
+  const createChannelMutation = useMutation({
+    mutationFn: async (channelData: { name: string; type: "public" | "private"; groupId?: string }) => {
+      return apiRequest("/api/channels", "POST", channelData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/channels/user"] });
+      setShowCreateChannelDialog(false);
+      setNewChannelName("");
+      setNewChannelGroupId("");
+      toast({
+        title: "Success",
+        description: "Channel created successfully!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create channel",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateChannel = () => {
+    if (!newChannelName.trim()) {
+      toast({
+        title: "Error",
+        description: "Channel name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createChannelMutation.mutate({
+      name: newChannelName,
+      type: newChannelType,
+      groupId: newChannelGroupId || undefined,
+    });
+  };
 
   const filteredUsers = users.filter(user => {
     if (!searchQuery) return true;
@@ -169,12 +228,79 @@ export function ConversationList({ onSelectConversation, selectedPartnerId }: Co
             )}
           </CardTitle>
           
-          <Dialog open={showNewMessageDialog} onOpenChange={setShowNewMessageDialog}>
-            <DialogTrigger asChild>
-              <Button size="sm" data-testid="button-new-message">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Dialog open={showCreateChannelDialog} onOpenChange={setShowCreateChannelDialog}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" data-testid="button-add-channel">
+                  <Hash className="h-4 w-4 mr-1" />
+                  Add Channel
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Channel</DialogTitle>
+                  <DialogDescription>
+                    Create a channel for group discussions
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="channel-name">Channel Name</Label>
+                    <Input
+                      id="channel-name"
+                      value={newChannelName}
+                      onChange={(e) => setNewChannelName(e.target.value)}
+                      placeholder="Enter channel name"
+                      data-testid="input-channel-name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="channel-type">Channel Type</Label>
+                    <Select value={newChannelType} onValueChange={(value: "public" | "private") => setNewChannelType(value)}>
+                      <SelectTrigger data-testid="select-channel-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="public">Public</SelectItem>
+                        <SelectItem value="private">Private</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="channel-group">Connect to Group (Optional)</Label>
+                    <Select value={newChannelGroupId} onValueChange={setNewChannelGroupId}>
+                      <SelectTrigger data-testid="select-channel-group">
+                        <SelectValue placeholder="Select a group" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">No group</SelectItem>
+                        {Array.isArray(userGroups) && userGroups.map((group: any) => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={() => setShowCreateChannelDialog(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateChannel} data-testid="button-create-channel-submit">
+                      Create Channel
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            <Dialog open={showNewMessageDialog} onOpenChange={setShowNewMessageDialog}>
+              <DialogTrigger asChild>
+                <Button size="sm" data-testid="button-new-message">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>New Message</DialogTitle>
@@ -227,6 +353,7 @@ export function ConversationList({ onSelectConversation, selectedPartnerId }: Co
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
         <CardDescription>
           Direct conversations with community members
@@ -234,6 +361,46 @@ export function ConversationList({ onSelectConversation, selectedPartnerId }: Co
       </CardHeader>
       
       <CardContent className="p-0">
+        {/* Channels Section */}
+        {channels.length > 0 && (
+          <div className="p-4 border-b">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+              <Hash className="h-4 w-4" />
+              Channels
+            </h3>
+            <div className="space-y-1">
+              {channels.map((channel: any) => (
+                <div
+                  key={channel.id}
+                  className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
+                  onClick={() => onSelectConversation(channel.id, `#${channel.name}`)}
+                  data-testid={`channel-item-${channel.id}`}
+                >
+                  <Hash className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{channel.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {channel.type === "private" ? "Private" : "Public"} channel
+                      {channel.group && ` • ${channel.group.name}`}
+                    </p>
+                  </div>
+                  {channel.type === "private" && (
+                    <Badge variant="outline" className="text-xs">Private</Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Conversations Section */}
+        <div className="p-4">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+            <MessageCircle className="h-4 w-4" />
+            Direct Messages
+          </h3>
+        </div>
+        
         {conversations.length === 0 ? (
           <div className="p-6 text-center">
             <MessageCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
