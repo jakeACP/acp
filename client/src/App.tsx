@@ -23,6 +23,9 @@ import ProfilePage from "@/pages/profile-page";
 import CharitiesPage from "@/pages/charities-page";
 import CharityDetailPage from "@/pages/charity-detail-page";
 import BoycottsPage from "@/pages/boycotts-page";
+import InitiativesPage from "@/pages/InitiativesPage";
+import InitiativeFormPage from "@/pages/InitiativeFormPage";
+import InitiativeDetailPage from "@/pages/InitiativeDetailPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -41,6 +44,10 @@ function Router() {
       <ProtectedRoute path="/charities" component={CharitiesPage} />
       <ProtectedRoute path="/charities/:id" component={CharityDetailPage} />
       <ProtectedRoute path="/boycotts" component={BoycottsPage} />
+      <ProtectedRoute path="/initiatives" component={InitiativesPage} />
+      <ProtectedRoute path="/initiatives/new" component={InitiativeFormPage} />
+      <ProtectedRoute path="/initiatives/edit/:id" component={InitiativeFormPage} />
+      <ProtectedRoute path="/initiatives/:id" component={InitiativeDetailPage} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />

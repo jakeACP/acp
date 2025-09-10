@@ -18,6 +18,7 @@ export function Navigation() {
     { href: "/polls", label: "Polls" },
     { href: "/groups", label: "Groups" },
     { href: "/candidates", label: "Candidates" },
+    { href: "/initiatives", label: "Initiatives" },
     { href: "/events", label: "Events" },
     { href: "/charities", label: "Charities" },
     { href: "/boycotts", label: "Boycotts" },
