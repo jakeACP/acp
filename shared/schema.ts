@@ -166,7 +166,7 @@ export const channelMessages = pgTable("channel_messages", {
   content: text("content").notNull(),
   messageType: text("message_type").default("text"), // text, image, file, system
   attachmentUrl: text("attachment_url"),
-  replyToId: varchar("reply_to_id").references(() => channelMessages.id),
+  replyToId: varchar("reply_to_id"),
   isEdited: boolean("is_edited").default(false),
   editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
