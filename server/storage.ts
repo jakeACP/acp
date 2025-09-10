@@ -114,6 +114,12 @@ export interface IStorage {
   saveRepresentatives(representatives: any[]): Promise<any[]>;
   markZipCodeAsSearched(zipCode: string, representativeIds: string[]): Promise<void>;
   hasZipCodeBeenSearched(zipCode: string): Promise<boolean>;
+  
+  // Representative Auto-Refresh System
+  getRepresentativeById(id: string): Promise<Representative | undefined>;
+  updateRepresentative(id: string, updateData: Partial<Representative>): Promise<Representative>;
+  markRepresentativeAsInactive(id: string): Promise<void>;
+  refreshRepresentativeIfExpired(id: string): Promise<Representative | null>;
 
   // Password Reset
   createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken>;
@@ -1422,6 +1428,103 @@ export class DatabaseStorage implements IStorage {
       .where(eq(zipCodeLookups.zipCode, zipCode));
     
     return lookup.length > 0;
+  }
+
+  // Representative Auto-Refresh System Methods
+  async getRepresentativeById(id: string): Promise<Representative | undefined> {
+    const [representative] = await db
+      .select()
+      .from(representatives)
+      .where(eq(representatives.id, id));
+    return representative || undefined;
+  }
+
+  async updateRepresentative(id: string, updateData: Partial<Representative>): Promise<Representative> {
+    const [updated] = await db
+      .update(representatives)
+      .set({
+        ...updateData,
+        updatedAt: new Date(),
+        lastVerified: new Date(),
+      })
+      .where(eq(representatives.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markRepresentativeAsInactive(id: string): Promise<void> {
+    await db
+      .update(representatives)
+      .set({ 
+        isCurrentlyServing: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(representatives.id, id));
+  }
+
+  async refreshRepresentativeIfExpired(id: string): Promise<Representative | null> {
+    const representative = await this.getRepresentativeById(id);
+    if (!representative) {
+      return null;
+    }
+
+    // Import the helper functions from openai.ts
+    const { hasTermExpired, findCurrentOfficeholder } = await import('./openai');
+    
+    // Check if term has expired
+    if (!hasTermExpired(representative)) {
+      return representative; // Still current, return as-is
+    }
+
+    console.log(`Representative ${representative.name} (${representative.office}) term has expired, checking for replacement...`);
+
+    try {
+      // Query ChatGPT for current officeholder
+      const currentOfficeholder = await findCurrentOfficeholder(
+        representative.office,
+        representative.district || undefined,
+        representative.state || undefined
+      );
+
+      if (!currentOfficeholder) {
+        console.log(`No current officeholder found for ${representative.office}`);
+        // Mark as inactive if no replacement found
+        await this.markRepresentativeAsInactive(id);
+        return representative;
+      }
+
+      // Check if it's the same person (name match)
+      if (currentOfficeholder.name.toLowerCase() === representative.name.toLowerCase()) {
+        console.log(`Same person ${representative.name} still in office, updating term dates`);
+        // Same person, just update term dates and verification
+        return await this.updateRepresentative(id, {
+          termStart: currentOfficeholder.termStart,
+          termEnd: currentOfficeholder.termEnd,
+          termLength: currentOfficeholder.termLength,
+          electedDate: currentOfficeholder.electedDate,
+          party: currentOfficeholder.party,
+          phone: currentOfficeholder.phone,
+          email: currentOfficeholder.email,
+          website: currentOfficeholder.website,
+          verificationSource: "chatgpt",
+        });
+      } else {
+        console.log(`New person ${currentOfficeholder.name} replaced ${representative.name}`);
+        // Different person, mark old as inactive and create new representative
+        await this.markRepresentativeAsInactive(id);
+        
+        // Create new representative with same zip codes
+        const newRepresentative = await this.saveRepresentatives([{
+          ...currentOfficeholder,
+          zipCodes: representative.zipCodes, // Inherit zip codes
+        }]);
+        
+        return newRepresentative[0] || null;
+      }
+    } catch (error) {
+      console.error('Error refreshing representative:', error);
+      return representative; // Return original on error
+    }
   }
 
   async createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken> {
