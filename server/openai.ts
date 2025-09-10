@@ -16,6 +16,10 @@ interface RepresentativeResponse {
     office: string;
     level: "federal" | "state" | "local";
     party?: string;
+    electedDate?: string;
+    termStart?: string;
+    termEnd?: string;
+    termLength?: string;
     phone?: string;
     email?: string;
     website?: string;
@@ -29,19 +33,27 @@ export async function findRepresentativesByZipCode(zipCode: string): Promise<Ins
   try {
     const openai = getOpenAIClient();
     
-    const prompt = `Find all elected representatives for zip code ${zipCode}. Include federal (President, Vice President, Senators, House Representative), state (Governor, State Senator, State Representative), and local officials (Mayor, City Council, County officials) where possible.
+    const prompt = `Find all CURRENTLY SERVING elected representatives for zip code ${zipCode} as of January 2025. Include federal (President, Vice President, Senators, House Representative), state (Governor, State Senator, State Representative), and local officials (Mayor, City Council, County officials) where possible.
+
+IMPORTANT: Only include officials who are currently serving in office as of 2025. Verify election dates and terms.
 
 For each representative, provide:
-- Full name
+- Full name of CURRENT officeholder
 - Office title (e.g., "President", "U.S. Senator", "Governor", "Mayor") 
 - Level (federal, state, or local)
 - Political party (if known)
+- When they were last elected (YYYY-MM-DD format)
+- Current term start date (YYYY-MM-DD format)
+- Current term end date (YYYY-MM-DD format)
+- Term length (e.g., "4 years", "6 years", "2 years")
 - Phone number (if publicly available)
 - Email address (if publicly available)
 - Official website URL (if available)
 - Office address (if available)
 - District information (congressional district, state district, ward, etc.)
 - State abbreviation
+
+Note: Donald Trump is the current President (inaugurated January 2025), JD Vance is Vice President. Make sure all other officials are also current as of 2025.
 
 Please respond with JSON in this exact format:
 {
@@ -51,6 +63,10 @@ Please respond with JSON in this exact format:
       "office": "Office Title",
       "level": "federal|state|local",
       "party": "Party Name",
+      "electedDate": "YYYY-MM-DD",
+      "termStart": "YYYY-MM-DD",
+      "termEnd": "YYYY-MM-DD",
+      "termLength": "X years",
       "phone": "Phone Number",
       "email": "Email Address",
       "website": "Website URL",
@@ -96,6 +112,14 @@ Please respond with JSON in this exact format:
       district: rep.district || null,
       state: rep.state || null,
       zipCodes: [zipCode], // Associate with the searched zip code
+      // Election and term tracking
+      electedDate: rep.electedDate ? new Date(rep.electedDate) : null,
+      termStart: rep.termStart ? new Date(rep.termStart) : null,
+      termEnd: rep.termEnd ? new Date(rep.termEnd) : null,
+      termLength: rep.termLength || null,
+      isCurrentlyServing: true, // We only ask for current officials
+      lastVerified: new Date(),
+      verificationSource: "chatgpt",
       createdAt: new Date(),
       updatedAt: new Date(),
     }));
