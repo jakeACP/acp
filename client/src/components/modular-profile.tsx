@@ -143,13 +143,17 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
     const results = calculatePoliticalPosition(quizAnswers);
     
     // Update the political compass module with results
-    setProfileModules(prev => prev.map(mod => 
+    const updatedModules = profileModules.map(mod => 
       mod.type === 'political-compass' 
         ? { ...mod, customData: { ...results, hasResults: true } }
         : mod
-    ));
+    );
     
+    setProfileModules(updatedModules);
     setShowPoliticalQuiz(false);
+    
+    // Auto-save the changes
+    saveModulesAutomatically(updatedModules);
     
     toast({
       title: "Political Compass Complete!",
@@ -308,6 +312,20 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
 
   const isPremiumUser = user?.subscriptionStatus === "premium";
 
+  // Helper function to save modules automatically
+  const saveModulesAutomatically = (updatedModules: ProfileModule[]) => {
+    const currentData = {
+      theme: customization.theme,
+      background: customization.background,
+      favoriteSong: customization.favoriteSong
+    };
+    
+    saveCustomizationMutation.mutate({
+      ...currentData,
+      profileLayout: updatedModules
+    });
+  };
+
   const addNewModule = (type: string) => {
     const moduleTypes = {
       // Free modules
@@ -351,9 +369,13 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       customData: moduleConfig.customData
     };
 
-    setProfileModules(prev => [...prev, newModule]);
+    const updatedModules = [...profileModules, newModule];
+    setProfileModules(updatedModules);
     setShowAddModule(false);
     setNewModuleType("");
+    
+    // Auto-save the changes
+    saveModulesAutomatically(updatedModules);
   };
   const themes = [
     // Free patriotic themes
@@ -919,9 +941,9 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                               });
                               return;
                             }
-                            setProfileModules(modules => 
-                              modules.map(m => m.id === module.id ? {...m, isEnabled: checked} : m)
-                            );
+                            const updatedModules = profileModules.map(m => m.id === module.id ? {...m, isEnabled: checked} : m);
+                            setProfileModules(updatedModules);
+                            saveModulesAutomatically(updatedModules);
                           }}
                           disabled={module.isPremium && !isPremiumUser}
                         />
@@ -937,9 +959,9 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                             <Select 
                               value={module.itemCount.toString()} 
                               onValueChange={(value) => {
-                                setProfileModules(modules => 
-                                  modules.map(m => m.id === module.id ? {...m, itemCount: parseInt(value)} : m)
-                                );
+                                const updatedModules = profileModules.map(m => m.id === module.id ? {...m, itemCount: parseInt(value)} : m);
+                                setProfileModules(updatedModules);
+                                saveModulesAutomatically(updatedModules);
                               }}
                             >
                               <SelectTrigger className="w-full">
@@ -965,12 +987,12 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                                 placeholder="https://www.youtube.com/watch?v=..."
                                 value={module.customData?.videoUrl || ""}
                                 onChange={(e) => {
-                                  setProfileModules(modules => 
-                                    modules.map(m => m.id === module.id ? {
-                                      ...m, 
-                                      customData: { ...m.customData, videoUrl: e.target.value }
-                                    } : m)
-                                  );
+                                  const updatedModules = profileModules.map(m => m.id === module.id ? {
+                                    ...m, 
+                                    customData: { ...m.customData, videoUrl: e.target.value }
+                                  } : m);
+                                  setProfileModules(updatedModules);
+                                  saveModulesAutomatically(updatedModules);
                                 }}
                               />
                             </div>
@@ -979,12 +1001,12 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                               <Select 
                                 value={module.customData?.height || "200"} 
                                 onValueChange={(value) => {
-                                  setProfileModules(modules => 
-                                    modules.map(m => m.id === module.id ? {
-                                      ...m, 
-                                      customData: { ...m.customData, height: value }
-                                    } : m)
-                                  );
+                                  const updatedModules = profileModules.map(m => m.id === module.id ? {
+                                    ...m, 
+                                    customData: { ...m.customData, height: value }
+                                  } : m);
+                                  setProfileModules(updatedModules);
+                                  saveModulesAutomatically(updatedModules);
                                 }}
                               >
                                 <SelectTrigger className="w-full">
@@ -1006,8 +1028,10 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                       <div className="flex justify-between pt-4">
                         <Button 
                           onClick={() => {
-                            setProfileModules(modules => modules.filter(m => m.id !== module.id));
+                            const updatedModules = profileModules.filter(m => m.id !== module.id);
+                            setProfileModules(updatedModules);
                             setEditingModule(null);
+                            saveModulesAutomatically(updatedModules);
                           }}
                           variant="destructive"
                           size="sm"
@@ -1038,9 +1062,9 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                       });
                       return;
                     }
-                    setProfileModules(modules => 
-                      modules.map(m => m.id === module.id ? {...m, isEnabled: checked} : m)
-                    );
+                    const updatedModules = profileModules.map(m => m.id === module.id ? {...m, isEnabled: checked} : m);
+                    setProfileModules(updatedModules);
+                    saveModulesAutomatically(updatedModules);
                   }}
                   disabled={module.isPremium && !isPremiumUser}
                 />
