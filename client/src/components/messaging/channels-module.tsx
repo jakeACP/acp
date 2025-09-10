@@ -25,13 +25,13 @@ export function ChannelsModule({ onSelectChannel, selectedChannelId }: ChannelsM
   const queryClient = useQueryClient();
 
   // Fetch user channels
-  const { data: channels = [], isLoading } = useQuery({
+  const { data: channels = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/channels/user"],
     refetchInterval: 30000,
   });
 
   // Fetch user groups for channel creation
-  const { data: userGroups = [] } = useQuery({
+  const { data: userGroups = [] } = useQuery<any[]>({
     queryKey: ["/api/groups/user"],
     enabled: showCreateChannelDialog,
   });

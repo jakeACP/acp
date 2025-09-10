@@ -563,13 +563,29 @@ export class DatabaseStorage implements IStorage {
       .insert(groupMembers)
       .values({ groupId, userId, role: "member" });
 
-    // Add user to the group's chat channel
-    const groupChannel = await db
+    // Auto-create and add user to the group's chat channel
+    let groupChannel = await db
       .select()
       .from(channels)
       .where(eq(channels.groupId, groupId))
       .limit(1);
 
+    // If no channel exists for the group, create one
+    if (groupChannel.length === 0) {
+      const [newChannel] = await db
+        .insert(channels)
+        .values({
+          name: `${group.name.toLowerCase().replace(/\s+/g, '-')}-general`,
+          type: group.isPublic ? "public" : "private",
+          groupId: groupId,
+          createdBy: userId,
+        })
+        .returning();
+      
+      groupChannel = [newChannel];
+    }
+
+    // Add user to the channel
     if (groupChannel.length > 0) {
       // Check if user is already a channel member
       const existingChannelMembership = await db

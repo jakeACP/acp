@@ -23,8 +23,13 @@ export function ChatInterface({ partnerId, partnerName, currentUserId }: ChatInt
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Determine if this is a channel or user conversation
+  const isChannel = partnerName?.startsWith('#');
+
   const { data: messages = [], isLoading } = useQuery<Message[]>({
-    queryKey: ["/api/conversations", partnerId],
+    queryKey: isChannel 
+      ? [`/api/channels/${partnerId}/messages`]
+      : ["/api/conversations", partnerId],
     refetchInterval: 5000, // Refresh every 5 seconds for real-time feel
     enabled: !!partnerId,
   });
@@ -32,17 +37,30 @@ export function ChatInterface({ partnerId, partnerName, currentUserId }: ChatInt
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
       setIsTyping(true);
-      return apiRequest("/api/messages", "POST", {
-        recipientId: partnerId,
-        content: content.trim(),
-      });
+      if (isChannel) {
+        // Send channel message
+        return apiRequest(`/api/channels/${partnerId}/messages`, "POST", {
+          content: content.trim(),
+        });
+      } else {
+        // Send user message
+        return apiRequest("/api/messages", "POST", {
+          recipientId: partnerId,
+          content: content.trim(),
+        });
+      }
     },
     onSuccess: () => {
       setNewMessage("");
       setIsTyping(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/conversations", partnerId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/messages/unread-count"] });
+      if (isChannel) {
+        queryClient.invalidateQueries({ queryKey: [`/api/channels/${partnerId}/messages`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/channels/user"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/conversations", partnerId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/messages/unread-count"] });
+      }
       
       // Scroll to bottom after new message
       setTimeout(() => {
