@@ -1115,6 +1115,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get user profile by ID
+  app.get("/api/user/:id", async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Return user profile data without sensitive information
+      const {
+        id,
+        username,
+        firstName,
+        lastName,
+        bio,
+        avatar,
+        subscriptionStatus,
+        profileTheme,
+        profileBackground,
+        favoriteSong,
+        profileLayout,
+        createdAt
+      } = user;
+      
+      res.json({
+        id,
+        username,
+        firstName,
+        lastName,
+        bio,
+        avatar,
+        subscriptionStatus,
+        profileTheme,
+        profileBackground,
+        favoriteSong,
+        profileLayout,
+        createdAt
+      });
+    } catch (error: any) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ message: "Failed to fetch user profile" });
+    }
+  });
+
   // Events API endpoints
   app.get("/api/events", async (req, res) => {
     try {

@@ -60,7 +60,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const { data: user, isLoading: userLoading } = useQuery<UserProfile>({
-    queryKey: ["/api/user", userId || "current"],
+    queryKey: userId ? [`/api/user/${userId}`] : ["/api/user"],
   });
 
   const [profileModules, setProfileModules] = useState<ProfileModule[]>([
