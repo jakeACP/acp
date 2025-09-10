@@ -70,6 +70,121 @@ function validateRepresentativeTerms(rep: any): boolean {
   return true;
 }
 
+// Check if a representative's term has expired
+export function hasTermExpired(representative: any): boolean {
+  if (!representative.termEnd) {
+    return false; // No term end date, assume still current
+  }
+  
+  const termEndDate = new Date(representative.termEnd);
+  const now = new Date();
+  
+  return termEndDate < now;
+}
+
+// Query ChatGPT for current officeholder of a specific position
+export async function findCurrentOfficeholder(office: string, district?: string, state?: string): Promise<InsertRepresentative | null> {
+  try {
+    const openai = getOpenAIClient();
+    
+    let locationInfo = "";
+    if (state) locationInfo += ` in ${state}`;
+    if (district) locationInfo += ` (${district})`;
+    
+    const prompt = `Who is the current ${office}${locationInfo} as of January 2025? 
+
+IMPORTANT: Only provide information about the CURRENT officeholder who is serving right now in 2025.
+
+Please provide:
+- Full name of current officeholder
+- Political party
+- When they were last elected (YYYY-MM-DD format)
+- Current term start date (YYYY-MM-DD format)  
+- Current term end date (YYYY-MM-DD format)
+- Term length (e.g., "4 years", "6 years", "2 years")
+- Phone number (if publicly available)
+- Email address (if publicly available)
+- Official website URL
+- Office address
+- District information (if applicable)
+
+If the position is vacant or unknown, respond with: {"vacant": true}
+
+Please respond with JSON in this exact format:
+{
+  "name": "Full Name",
+  "office": "${office}",
+  "level": "federal|state|local",
+  "party": "Party Name",
+  "electedDate": "YYYY-MM-DD",
+  "termStart": "YYYY-MM-DD", 
+  "termEnd": "YYYY-MM-DD",
+  "termLength": "X years",
+  "phone": "Phone Number",
+  "email": "Email Address",
+  "website": "Website URL",
+  "address": "Office Address",
+  "district": "District Info",
+  "state": "State Abbreviation"
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that provides accurate information about current elected representatives. Respond only with valid JSON data."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    if (result.vacant) {
+      return null; // Position is vacant
+    }
+
+    if (!result.name) {
+      throw new Error("Invalid response format from OpenAI");
+    }
+
+    // Convert to our Representative format
+    return {
+      name: result.name,
+      office: result.office || office,
+      level: result.level || "federal",
+      party: result.party || null,
+      phone: result.phone || null,
+      email: result.email || null,
+      website: result.website || null,
+      address: result.address || null,
+      photoUrl: null,
+      district: result.district || district || null,
+      state: result.state || state || null,
+      zipCodes: [], // Will be updated when associated with zip codes
+      // Election and term tracking
+      electedDate: result.electedDate ? new Date(result.electedDate) : null,
+      termStart: result.termStart ? new Date(result.termStart) : null,
+      termEnd: result.termEnd ? new Date(result.termEnd) : null,
+      termLength: result.termLength || null,
+      isCurrentlyServing: true,
+      lastVerified: new Date(),
+      verificationSource: "chatgpt",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+  } catch (error) {
+    console.error("Error finding current officeholder:", error);
+    return null;
+  }
+}
+
 export async function findRepresentativesByZipCode(zipCode: string): Promise<InsertRepresentative[]> {
   try {
     const openai = getOpenAIClient();
