@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
@@ -1623,6 +1624,186 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // WebSocket setup for real-time messaging
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  // Store active connections by user ID
+  const userConnections = new Map<string, Set<WebSocket>>();
+  const channelConnections = new Map<string, Set<WebSocket>>();
+  
+  wss.on('connection', (ws: WebSocket, req) => {
+    console.log('WebSocket connection established');
+    
+    // Handle authentication and setup
+    let userId: string | null = null;
+    let userChannels: string[] = [];
+    
+    ws.on('message', async (message: Buffer) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        switch (data.type) {
+          case 'auth':
+            // Authenticate user
+            userId = data.userId;
+            if (userId) {
+              // Add to user connections
+              if (!userConnections.has(userId)) {
+                userConnections.set(userId, new Set());
+              }
+              userConnections.get(userId)!.add(ws);
+              
+              // Get user channels and subscribe to them
+              try {
+                const channels = await storage.getUserChannels(userId);
+                userChannels = channels.map(c => c.id);
+                
+                // Subscribe to all user channels
+                for (const channelId of userChannels) {
+                  if (!channelConnections.has(channelId)) {
+                    channelConnections.set(channelId, new Set());
+                  }
+                  channelConnections.get(channelId)!.add(ws);
+                }
+                
+                ws.send(JSON.stringify({ 
+                  type: 'auth_success', 
+                  channels: userChannels 
+                }));
+              } catch (error) {
+                console.error('Error getting user channels:', error);
+                ws.send(JSON.stringify({ type: 'auth_error', message: 'Failed to authenticate' }));
+              }
+            }
+            break;
+            
+          case 'join_channel':
+            if (userId && data.channelId) {
+              // Check if user is member of the channel
+              try {
+                const isMember = await storage.isChannelMember(data.channelId, userId);
+                if (isMember) {
+                  if (!channelConnections.has(data.channelId)) {
+                    channelConnections.set(data.channelId, new Set());
+                  }
+                  channelConnections.get(data.channelId)!.add(ws);
+                  userChannels.push(data.channelId);
+                  
+                  ws.send(JSON.stringify({ 
+                    type: 'channel_joined', 
+                    channelId: data.channelId 
+                  }));
+                }
+              } catch (error) {
+                console.error('Error joining channel:', error);
+              }
+            }
+            break;
+            
+          case 'leave_channel':
+            if (data.channelId && channelConnections.has(data.channelId)) {
+              channelConnections.get(data.channelId)!.delete(ws);
+              userChannels = userChannels.filter(id => id !== data.channelId);
+              
+              ws.send(JSON.stringify({ 
+                type: 'channel_left', 
+                channelId: data.channelId 
+              }));
+            }
+            break;
+            
+          case 'channel_message':
+            // Broadcast new channel message to all channel members
+            if (data.channelId && channelConnections.has(data.channelId)) {
+              const channelWs = channelConnections.get(data.channelId)!;
+              const messageData = JSON.stringify({
+                type: 'new_channel_message',
+                channelId: data.channelId,
+                message: data.message,
+                timestamp: new Date().toISOString()
+              });
+              
+              channelWs.forEach((clientWs) => {
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(messageData);
+                }
+              });
+            }
+            break;
+            
+          case 'direct_message':
+            // Send direct message to specific user
+            if (data.recipientId && userConnections.has(data.recipientId)) {
+              const recipientWs = userConnections.get(data.recipientId)!;
+              const messageData = JSON.stringify({
+                type: 'new_direct_message',
+                message: data.message,
+                senderId: userId,
+                timestamp: new Date().toISOString()
+              });
+              
+              recipientWs.forEach((clientWs) => {
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(messageData);
+                }
+              });
+            }
+            break;
+            
+          case 'typing':
+            // Broadcast typing indicator
+            if (data.channelId && channelConnections.has(data.channelId)) {
+              const channelWs = channelConnections.get(data.channelId)!;
+              const typingData = JSON.stringify({
+                type: 'user_typing',
+                channelId: data.channelId,
+                userId: userId,
+                isTyping: data.isTyping,
+                timestamp: new Date().toISOString()
+              });
+              
+              channelWs.forEach((clientWs) => {
+                if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(typingData);
+                }
+              });
+            }
+            break;
+        }
+      } catch (error) {
+        console.error('WebSocket message error:', error);
+        ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+      }
+    });
+    
+    ws.on('close', () => {
+      console.log('WebSocket connection closed');
+      
+      // Clean up connections
+      if (userId && userConnections.has(userId)) {
+        userConnections.get(userId)!.delete(ws);
+        if (userConnections.get(userId)!.size === 0) {
+          userConnections.delete(userId);
+        }
+      }
+      
+      // Clean up channel connections
+      for (const channelId of userChannels) {
+        if (channelConnections.has(channelId)) {
+          channelConnections.get(channelId)!.delete(ws);
+          if (channelConnections.get(channelId)!.size === 0) {
+            channelConnections.delete(channelId);
+          }
+        }
+      }
+    });
+    
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+  });
+  
   return httpServer;
 }
 
