@@ -1034,7 +1034,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ChatGPT-powered representatives lookup by zip code
+  // ChatGPT-powered representatives lookup by zip code (regular endpoint)
   app.post("/api/representatives/zip-lookup", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
@@ -1102,6 +1102,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: "ChatGPT lookup failed"
       });
     }
+  });
+
+  // Streaming ChatGPT representatives lookup with progress updates
+  app.get("/api/representatives/zip-lookup-stream/:zipCode", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    const { zipCode } = req.params;
+    
+    // Validate zip code format
+    const zipRegex = /^\d{5}(-\d{4})?$/;
+    if (!zipRegex.test(zipCode)) {
+      return res.status(400).json({ message: "Invalid zip code format" });
+    }
+
+    // Setup Server-Sent Events
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control'
+    });
+
+    const sendUpdate = (data: any) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      // Check if already cached
+      const hasBeenSearched = await storage.hasZipCodeBeenSearched(zipCode);
+      
+      if (hasBeenSearched) {
+        sendUpdate({ type: 'progress', step: 'cache', message: 'Loading from database...', progress: 0 });
+        await new Promise(resolve => setTimeout(resolve, 500)); // Brief delay for UX
+        
+        const cachedRepresentatives = await storage.getRepresentativesByZipCode(zipCode);
+        sendUpdate({ type: 'progress', step: 'complete', message: 'Loaded from cache', progress: 100 });
+        sendUpdate({ type: 'complete', representatives: cachedRepresentatives, fromCache: true });
+        return res.end();
+      }
+
+      // Check OpenAI API key
+      if (!process.env.OPENAI_API_KEY) {
+        sendUpdate({ type: 'error', message: 'OpenAI API key not configured' });
+        return res.end();
+      }
+
+      // Start ChatGPT search with progress updates
+      sendUpdate({ type: 'progress', step: 'searching', message: 'Asking ChatGPT to find representatives...', progress: 10 });
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      sendUpdate({ type: 'progress', step: 'analyzing', message: 'Analyzing zip code location...', progress: 25 });
+      
+      await new Promise(resolve => setTimeout(resolve, 800));
+      sendUpdate({ type: 'progress', step: 'federal', message: 'Finding federal representatives...', progress: 40 });
+      
+      await new Promise(resolve => setTimeout(resolve, 600));
+      sendUpdate({ type: 'progress', step: 'state', message: 'Finding state officials...', progress: 60 });
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      sendUpdate({ type: 'progress', step: 'local', message: 'Finding local officials...', progress: 80 });
+
+      // Actually call ChatGPT
+      const representativesData = await findRepresentativesByZipCode(zipCode);
+      
+      if (representativesData.length === 0) {
+        sendUpdate({ type: 'complete', representatives: [], fromCache: false, message: 'No representatives found' });
+        return res.end();
+      }
+
+      sendUpdate({ type: 'progress', step: 'saving', message: `Found ${representativesData.length} representatives! Saving to database...`, progress: 90 });
+      
+      // Show some representative names as they're being processed
+      for (let i = 0; i < Math.min(3, representativesData.length); i++) {
+        const rep = representativesData[i];
+        sendUpdate({ 
+          type: 'candidate', 
+          name: rep.name, 
+          office: rep.office,
+          message: `Found: ${rep.name} - ${rep.office}` 
+        });
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
+
+      // Save to database
+      const savedRepresentatives = await storage.saveRepresentatives(representativesData);
+      const representativeIds = savedRepresentatives.map(rep => rep.id);
+      await storage.markZipCodeAsSearched(zipCode, representativeIds);
+
+      sendUpdate({ type: 'progress', step: 'complete', message: 'Search complete!', progress: 100 });
+      sendUpdate({ type: 'complete', representatives: savedRepresentatives, fromCache: false });
+      
+    } catch (error: any) {
+      console.error("Streaming representatives lookup error:", error);
+      sendUpdate({ type: 'error', message: error.message || 'Failed to find representatives' });
+    }
+    
+    res.end();
   });
 
   // Object Storage API endpoints for profile picture uploads

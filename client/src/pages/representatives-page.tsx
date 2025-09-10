@@ -12,9 +12,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { MapPin, Phone, Mail, Globe, Heart, Search, User, Building2 } from "lucide-react";
+import { MapPin, Phone, Mail, Globe, Heart, Search, User, Building2, Zap } from "lucide-react";
 import { TestApiButton } from "@/components/test-api-button";
 import { ApiStatusNotice } from "@/components/api-status-notice";
+import { RepresentativesLoading } from "@/components/representatives-loading";
 
 interface Representative {
   name: string;
@@ -45,6 +46,7 @@ interface CivicData {
     roles?: string[];
   }>;
   officials: Representative[];
+  fallbackMode?: boolean;
 }
 
 export default function RepresentativesPage() {
@@ -54,6 +56,12 @@ export default function RepresentativesPage() {
   const [searchedAddress, setSearchedAddress] = useState("");
   const [civicData, setCivicData] = useState<CivicData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // ChatGPT zip code search state
+  const [zipCode, setZipCode] = useState("");
+  const [showZipLoading, setShowZipLoading] = useState(false);
+  const [zipRepresentatives, setZipRepresentatives] = useState<any[]>([]);
+  const [searchedZip, setSearchedZip] = useState("");
 
   const searchRepresentatives = async () => {
     if (!address.trim()) {
@@ -96,6 +104,56 @@ export default function RepresentativesPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ChatGPT zip code search functions
+  const searchByZipCode = () => {
+    if (!zipCode.trim()) {
+      toast({
+        title: "Zip Code Required",
+        description: "Please enter a zip code to find representatives",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate zip code format
+    const zipRegex = /^\d{5}(-\d{4})?$/;
+    if (!zipRegex.test(zipCode.trim())) {
+      toast({
+        title: "Invalid Zip Code",
+        description: "Please enter a valid zip code (e.g., 12345 or 12345-6789)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setShowZipLoading(true);
+    setZipRepresentatives([]);
+    setSearchedZip(zipCode.trim());
+  };
+
+  const handleZipLoadingComplete = (representatives: any[], fromCache: boolean) => {
+    setZipRepresentatives(representatives);
+    setShowZipLoading(false);
+    
+    toast({
+      title: fromCache ? "Representatives Loaded" : "New Representatives Found",
+      description: fromCache 
+        ? `Found ${representatives.length} cached representatives for ${searchedZip}`
+        : `ChatGPT found ${representatives.length} representatives for ${searchedZip}`,
+    });
+  };
+
+  const handleZipLoadingError = (error: string) => {
+    setShowZipLoading(false);
+    setZipRepresentatives([]);
+    
+    toast({
+      title: "ChatGPT Search Failed",
+      description: error,
+      variant: "destructive",
+    });
   };
 
   const followRepresentative = useMutation({
@@ -323,7 +381,151 @@ export default function RepresentativesPage() {
           </CardContent>
         </Card>
 
-        {/* Results */}
+        {/* ChatGPT Zip Code Search */}
+        <Card className="mb-8 border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-orange-500" />
+              ChatGPT-Powered Zip Code Search
+              <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                New!
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Get comprehensive representative data powered by ChatGPT. Results are cached for instant future lookups.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <Label htmlFor="zipcode" className="sr-only">Zip Code</Label>
+                <Input
+                  id="zipcode"
+                  placeholder="Enter zip code (e.g., 12345)"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && searchByZipCode()}
+                  disabled={showZipLoading}
+                />
+              </div>
+              <Button 
+                onClick={searchByZipCode}
+                disabled={showZipLoading}
+                className="px-6 bg-orange-600 hover:bg-orange-700"
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                {showZipLoading ? "Loading..." : "ChatGPT Search"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ChatGPT Loading Screen */}
+        {showZipLoading && (
+          <RepresentativesLoading
+            zipCode={searchedZip}
+            onComplete={handleZipLoadingComplete}
+            onError={handleZipLoadingError}
+          />
+        )}
+
+        {/* ChatGPT Results */}
+        {zipRepresentatives.length > 0 && !showZipLoading && (
+          <div className="space-y-6 mb-8">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-slate-900">
+                ChatGPT Representatives for: {searchedZip}
+              </h2>
+              <p className="text-slate-600">
+                Found {zipRepresentatives.length} representatives via ChatGPT
+              </p>
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 mt-2">
+                Cached for future instant access
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {zipRepresentatives.map((rep, index) => (
+                <Card key={index} className="border-green-200 bg-green-50/50">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-slate-900">{rep.name}</h3>
+                        <p className="text-sm text-slate-600 mb-2">{rep.office}</p>
+                        
+                        {rep.party && (
+                          <Badge variant="outline" className="mb-3">
+                            {rep.party}
+                          </Badge>
+                        )}
+                        
+                        <div className="space-y-2 text-sm">
+                          {rep.level && (
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-slate-500" />
+                              <span className="capitalize">{rep.level} Level</span>
+                            </div>
+                          )}
+                          
+                          {rep.phone && (
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-slate-500" />
+                              <span>{rep.phone}</span>
+                            </div>
+                          )}
+                          
+                          {rep.email && (
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-slate-500" />
+                              <span>{rep.email}</span>
+                            </div>
+                          )}
+                          
+                          {rep.website && (
+                            <div className="flex items-center gap-2">
+                              <Globe className="h-4 w-4 text-slate-500" />
+                              <a 
+                                href={rep.website} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                              >
+                                Official Website
+                              </a>
+                            </div>
+                          )}
+                          
+                          {rep.district && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-slate-500" />
+                              <span>{rep.district}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => followRepresentative.mutate({
+                          name: rep.name,
+                          office: rep.office,
+                          party: rep.party
+                        })}
+                        disabled={followRepresentative.isPending}
+                      >
+                        <Heart className="h-4 w-4 mr-1" />
+                        Follow
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Traditional Address Search Results */}
         {civicData && (
           <div className="space-y-6">
             <div className="text-center">
