@@ -29,6 +29,47 @@ interface RepresentativeResponse {
   }>;
 }
 
+// Validation function to check if representative data is current
+function validateRepresentativeTerms(rep: any): boolean {
+  const now = new Date();
+  
+  // If we have term end date, check if it's current
+  if (rep.termEnd) {
+    const termEndDate = new Date(rep.termEnd);
+    if (termEndDate < now) {
+      console.warn(`Warning: ${rep.name} (${rep.office}) term ended on ${rep.termEnd}`);
+      return false;
+    }
+  }
+  
+  // Check for realistic term lengths based on office
+  const standardTerms: { [key: string]: number } = {
+    'President': 4,
+    'Vice President': 4,
+    'U.S. Senator': 6,
+    'Senator': 6,
+    'U.S. Representative': 2,
+    'Representative': 2,
+    'Governor': 4,
+    'Mayor': 4
+  };
+  
+  const officeKey = Object.keys(standardTerms).find(key => 
+    rep.office.toLowerCase().includes(key.toLowerCase())
+  );
+  
+  if (officeKey && rep.termLength) {
+    const expectedYears = standardTerms[officeKey];
+    const actualYears = parseInt(rep.termLength.match(/(\d+)/)?.[1] || '0');
+    
+    if (actualYears !== expectedYears) {
+      console.warn(`Warning: ${rep.name} (${rep.office}) has ${actualYears}-year term, expected ${expectedYears} years`);
+    }
+  }
+  
+  return true;
+}
+
 export async function findRepresentativesByZipCode(zipCode: string): Promise<InsertRepresentative[]> {
   try {
     const openai = getOpenAIClient();
@@ -98,8 +139,19 @@ Please respond with JSON in this exact format:
       throw new Error("Invalid response format from OpenAI");
     }
 
+    // Validate representative data before processing
+    const validatedReps = result.representatives.filter(rep => {
+      const isValid = validateRepresentativeTerms(rep);
+      if (!isValid) {
+        console.log(`Skipping ${rep.name} due to validation issues`);
+      }
+      return isValid;
+    });
+
+    console.log(`Found ${result.representatives.length} representatives, ${validatedReps.length} passed validation`);
+
     // Convert to our Representative format (omit id to let database generate it)
-    return result.representatives.map(rep => ({
+    return validatedReps.map(rep => ({
       name: rep.name,
       office: rep.office,
       level: rep.level,
