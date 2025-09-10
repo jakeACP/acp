@@ -500,6 +500,26 @@ export class DatabaseStorage implements IStorage {
         role: "admin"
       });
 
+    // Automatically create a chat channel for the group
+    const [groupChannel] = await db
+      .insert(channels)
+      .values({
+        name: `${newGroup.name} Chat`,
+        type: newGroup.isPublic ? "public" : "private",
+        groupId: newGroup.id,
+        createdBy: group.createdBy,
+      })
+      .returning();
+
+    // Add creator as channel member
+    await db
+      .insert(channelMembers)
+      .values({
+        channelId: groupChannel.id,
+        userId: group.createdBy,
+        role: "admin"
+      });
+
     return newGroup;
   }
 
@@ -543,6 +563,34 @@ export class DatabaseStorage implements IStorage {
       .insert(groupMembers)
       .values({ groupId, userId, role: "member" });
 
+    // Add user to the group's chat channel
+    const groupChannel = await db
+      .select()
+      .from(channels)
+      .where(eq(channels.groupId, groupId))
+      .limit(1);
+
+    if (groupChannel.length > 0) {
+      // Check if user is already a channel member
+      const existingChannelMembership = await db
+        .select()
+        .from(channelMembers)
+        .where(and(
+          eq(channelMembers.channelId, groupChannel[0].id), 
+          eq(channelMembers.userId, userId)
+        ));
+
+      if (existingChannelMembership.length === 0) {
+        await db
+          .insert(channelMembers)
+          .values({
+            channelId: groupChannel[0].id,
+            userId,
+            role: "member"
+          });
+      }
+    }
+
     // Get actual member count and update
     const memberCount = await db
       .select({ count: count() })
@@ -581,6 +629,22 @@ export class DatabaseStorage implements IStorage {
     const deleteResult = await db
       .delete(groupMembers)
       .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
+
+    // Remove user from the group's chat channel
+    const groupChannel = await db
+      .select()
+      .from(channels)
+      .where(eq(channels.groupId, groupId))
+      .limit(1);
+
+    if (groupChannel.length > 0) {
+      await db
+        .delete(channelMembers)
+        .where(and(
+          eq(channelMembers.channelId, groupChannel[0].id), 
+          eq(channelMembers.userId, userId)
+        ));
+    }
 
     // Get actual member count and update
     const memberCount = await db
