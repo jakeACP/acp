@@ -74,7 +74,6 @@ Please respond with JSON in this exact format:
         }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.1, // Low temperature for factual accuracy
     });
 
     const result: RepresentativeResponse = JSON.parse(response.choices[0].message.content || "{}");
