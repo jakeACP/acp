@@ -1,0 +1,51 @@
+# Florida Initiative Rules  
+jurisdiction:
+  name: "Florida"
+  code: "US-FL"
+  scope_level: "state"
+
+signature_threshold:
+  type: "percent_of_last_gubernatorial_vote"
+  value: 0.08  # 8% for constitutional amendments
+
+distribution_requirement:
+  congressional_districts_min: 14
+  per_district_min: 0.02
+
+timeline:
+  max_days_collecting: 240
+  submission_cutoff_days_before_election: 120
+
+eligibility:
+  resident_required: true
+  registered_voter_required: true
+  age_min: 18
+
+initiative_modes:
+  direct: true
+  indirect: false
+
+initiative_types:
+  statute: 
+    enabled: false
+  constitutional_amendment:
+    enabled: true
+    signature_percent: 0.08
+  ordinance:
+    enabled: false
+
+circulator_rules:
+  must_be_resident: true
+  paid_circulator_disclosure: true
+  registration_required: true
+
+verification:
+  e_signature_permitted: "statement_of_support_only"
+  duplicate_detection: true
+  address_validation: true
+  voter_registration_check: true
+
+validation:
+  auto_verification_threshold: 0.90
+  manual_review_threshold: 0.80
+  random_sample_size: 1000

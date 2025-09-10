@@ -1,0 +1,52 @@
+# California Initiative Rules
+jurisdiction:
+  name: "California"
+  code: "US-CA"
+  scope_level: "state"
+
+signature_threshold:
+  type: "percent_of_last_gubernatorial_vote"
+  value: 0.06  # 6% for statutes, 8% for constitutional amendments
+
+distribution_requirement:
+  counties_min: 5
+  per_county_min: 0.01
+
+timeline:
+  max_days_collecting: 180
+  submission_cutoff_days_before_election: 120
+
+eligibility:
+  resident_required: true
+  registered_voter_required: true
+  age_min: 18
+
+initiative_modes:
+  direct: true
+  indirect: false
+
+initiative_types:
+  statute: 
+    enabled: true
+    signature_percent: 0.06
+  constitutional_amendment:
+    enabled: true 
+    signature_percent: 0.08
+  ordinance:
+    enabled: false
+
+circulator_rules:
+  must_be_resident: false
+  paid_circulator_disclosure: true
+  registration_required: false
+
+verification:
+  e_signature_permitted: "collect_plus_export"  # collect + export for verification
+  duplicate_detection: true
+  address_validation: true
+  voter_registration_check: true
+
+validation:
+  auto_verification_threshold: 0.95  # Auto-pass if 95%+ confidence
+  manual_review_threshold: 0.85      # Manual review if below 85% confidence
+  random_sample_size: 500            # Random sample for validation

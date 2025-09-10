@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -136,6 +136,57 @@ export interface IStorage {
   isSubscribedToBoycott(boycottId: string, userId: string): Promise<boolean>;
   getBoycottSubscribers(boycottId: string): Promise<User[]>;
   getUserBoycottSubscriptions(userId: string): Promise<Boycott[]>;
+
+  // Citizen Initiative System
+  // Jurisdictions
+  getJurisdictions(): Promise<Jurisdiction[]>;
+  getJurisdictionById(id: string): Promise<Jurisdiction | undefined>;
+  getJurisdictionByCode(code: string): Promise<Jurisdiction | undefined>;
+  createJurisdiction(jurisdiction: InsertJurisdiction): Promise<Jurisdiction>;
+  
+  // Rulesets
+  getRulesetByJurisdiction(jurisdictionId: string): Promise<Ruleset | undefined>;
+  createRuleset(ruleset: InsertRuleset): Promise<Ruleset>;
+  
+  // Initiatives
+  getInitiatives(limit?: number, offset?: number, filters?: { status?: string; jurisdictionId?: string }): Promise<Initiative[]>;
+  getInitiativeById(id: string): Promise<Initiative | undefined>;
+  getInitiativeBySlug(slug: string): Promise<Initiative | undefined>;
+  createInitiative(initiative: InsertInitiative): Promise<Initiative>;
+  updateInitiative(initiativeId: string, updateData: Partial<Initiative>): Promise<Initiative>;
+  deleteInitiative(initiativeId: string): Promise<void>;
+  getUserInitiatives(userId: string): Promise<Initiative[]>;
+  
+  // Initiative Versions
+  getInitiativeVersions(initiativeId: string): Promise<InitiativeVersion[]>;
+  createInitiativeVersion(version: InsertInitiativeVersion): Promise<InitiativeVersion>;
+  getInitiativeVersionById(versionId: string): Promise<InitiativeVersion | undefined>;
+  
+  // Petitions
+  getPetitionsByInitiative(initiativeId: string): Promise<Petition[]>;
+  createPetition(petition: InsertPetition): Promise<Petition>;
+  getPetitionById(petitionId: string): Promise<Petition | undefined>;
+  updatePetitionSignatureCount(petitionId: string, count: number): Promise<void>;
+  
+  // Signatures
+  createSignature(signature: InsertSignature): Promise<Signature>;
+  getSignaturesByPetition(petitionId: string, limit?: number, offset?: number): Promise<Signature[]>;
+  updateSignatureVerification(signatureId: string, status: string, failureReason?: string): Promise<void>;
+  getSignatureById(signatureId: string): Promise<Signature | undefined>;
+  checkDuplicateSignature(petitionId: string, emailHash: string): Promise<boolean>;
+  
+  // Validation Events
+  createValidationEvent(event: InsertValidationEvent): Promise<ValidationEvent>;
+  getValidationEventsBySignature(signatureId: string): Promise<ValidationEvent[]>;
+  
+  // Sponsors
+  getInitiativeSponsors(initiativeId: string): Promise<Sponsor[]>;
+  createSponsor(sponsor: InsertSponsor): Promise<Sponsor>;
+  deleteSponsor(sponsorId: string): Promise<void>;
+  
+  // Audit Logs
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogsByEntity(entityType: string, entityId: string, limit?: number): Promise<AuditLog[]>;
 
   // Password Reset
   createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken>;
@@ -2411,6 +2462,229 @@ export class DatabaseStorage implements IStorage {
         eq(boycotts.isActive, true)
       ))
       .orderBy(desc(boycottSubscriptions.subscribedAt));
+  }
+
+  // Citizen Initiative System Implementation
+  // Jurisdictions
+  async getJurisdictions(): Promise<Jurisdiction[]> {
+    return await db
+      .select()
+      .from(jurisdictions)
+      .where(eq(jurisdictions.active, true))
+      .orderBy(jurisdictions.name);
+  }
+
+  async getJurisdictionById(id: string): Promise<Jurisdiction | undefined> {
+    const [jurisdiction] = await db.select().from(jurisdictions).where(eq(jurisdictions.id, id));
+    return jurisdiction || undefined;
+  }
+
+  async getJurisdictionByCode(code: string): Promise<Jurisdiction | undefined> {
+    const [jurisdiction] = await db.select().from(jurisdictions).where(eq(jurisdictions.code, code));
+    return jurisdiction || undefined;
+  }
+
+  async createJurisdiction(jurisdictionData: InsertJurisdiction): Promise<Jurisdiction> {
+    const [jurisdiction] = await db
+      .insert(jurisdictions)
+      .values(jurisdictionData)
+      .returning();
+    return jurisdiction;
+  }
+
+  // Rulesets
+  async getRulesetByJurisdiction(jurisdictionId: string): Promise<Ruleset | undefined> {
+    const [ruleset] = await db
+      .select()
+      .from(rulesets)
+      .where(and(
+        eq(rulesets.jurisdictionId, jurisdictionId),
+        eq(rulesets.effectiveTo, null)
+      ))
+      .orderBy(desc(rulesets.effectiveFrom))
+      .limit(1);
+    return ruleset || undefined;
+  }
+
+  async createRuleset(rulesetData: InsertRuleset): Promise<Ruleset> {
+    const [ruleset] = await db
+      .insert(rulesets)
+      .values(rulesetData)
+      .returning();
+    return ruleset;
+  }
+
+  // Initiatives
+  async getInitiatives(limit = 50, offset = 0, filters?: { status?: string; jurisdictionId?: string }): Promise<Initiative[]> {
+    let query = db.select().from(initiatives);
+
+    if (filters?.status) {
+      query = query.where(eq(initiatives.status, filters.status));
+    }
+    if (filters?.jurisdictionId) {
+      query = query.where(eq(initiatives.jurisdictionId, filters.jurisdictionId));
+    }
+
+    return await query
+      .orderBy(desc(initiatives.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getInitiativeById(id: string): Promise<Initiative | undefined> {
+    const [initiative] = await db.select().from(initiatives).where(eq(initiatives.id, id));
+    return initiative || undefined;
+  }
+
+  async getInitiativeBySlug(slug: string): Promise<Initiative | undefined> {
+    const [initiative] = await db.select().from(initiatives).where(eq(initiatives.slug, slug));
+    return initiative || undefined;
+  }
+
+  async createInitiative(initiativeData: InsertInitiative): Promise<Initiative> {
+    const [initiative] = await db
+      .insert(initiatives)
+      .values(initiativeData)
+      .returning();
+
+    // Create first version
+    await this.createInitiativeVersion({
+      initiativeId: initiative.id,
+      title: initiative.title,
+      summary: initiative.summary,
+      fullTextMd: initiative.fullTextMd,
+      changelog: "Initial version",
+      authorId: initiative.createdBy,
+    });
+
+    return initiative;
+  }
+
+  async updateInitiative(initiativeId: string, updateData: Partial<Initiative>): Promise<Initiative> {
+    const [updatedInitiative] = await db
+      .update(initiatives)
+      .set({
+        ...updateData,
+        updatedAt: new Date(),
+      })
+      .where(eq(initiatives.id, initiativeId))
+      .returning();
+    return updatedInitiative;
+  }
+
+  async deleteInitiative(initiativeId: string): Promise<void> {
+    await db.delete(initiatives).where(eq(initiatives.id, initiativeId));
+  }
+
+  async getUserInitiatives(userId: string): Promise<Initiative[]> {
+    return await db
+      .select()
+      .from(initiatives)
+      .where(eq(initiatives.createdBy, userId))
+      .orderBy(desc(initiatives.createdAt));
+  }
+
+  // Initiative Versions
+  async getInitiativeVersions(initiativeId: string): Promise<InitiativeVersion[]> {
+    return await db
+      .select()
+      .from(initiativeVersions)
+      .where(eq(initiativeVersions.initiativeId, initiativeId))
+      .orderBy(desc(initiativeVersions.createdAt));
+  }
+
+  async createInitiativeVersion(versionData: InsertInitiativeVersion): Promise<InitiativeVersion> {
+    const [version] = await db
+      .insert(initiativeVersions)
+      .values(versionData)
+      .returning();
+    return version;
+  }
+
+  async getInitiativeVersionById(versionId: string): Promise<InitiativeVersion | undefined> {
+    const [version] = await db.select().from(initiativeVersions).where(eq(initiativeVersions.id, versionId));
+    return version || undefined;
+  }
+
+  // Placeholder implementations for remaining methods (to satisfy interface)
+  async getPetitionsByInitiative(initiativeId: string): Promise<Petition[]> {
+    return [];
+  }
+
+  async createPetition(petition: InsertPetition): Promise<Petition> {
+    const [newPetition] = await db.insert(petitions).values(petition).returning();
+    return newPetition;
+  }
+
+  async getPetitionById(petitionId: string): Promise<Petition | undefined> {
+    const [petition] = await db.select().from(petitions).where(eq(petitions.id, petitionId));
+    return petition || undefined;
+  }
+
+  async updatePetitionSignatureCount(petitionId: string, count: number): Promise<void> {
+    await db.update(petitions).set({ currentSignatureCount: count }).where(eq(petitions.id, petitionId));
+  }
+
+  async createSignature(signature: InsertSignature): Promise<Signature> {
+    const [newSignature] = await db.insert(signatures).values(signature).returning();
+    return newSignature;
+  }
+
+  async getSignaturesByPetition(petitionId: string, limit = 50, offset = 0): Promise<Signature[]> {
+    return await db.select().from(signatures)
+      .where(eq(signatures.petitionId, petitionId))
+      .limit(limit).offset(offset);
+  }
+
+  async updateSignatureVerification(signatureId: string, status: string, failureReason?: string): Promise<void> {
+    await db.update(signatures)
+      .set({ verified: status, failureReason })
+      .where(eq(signatures.id, signatureId));
+  }
+
+  async getSignatureById(signatureId: string): Promise<Signature | undefined> {
+    const [signature] = await db.select().from(signatures).where(eq(signatures.id, signatureId));
+    return signature || undefined;
+  }
+
+  async checkDuplicateSignature(petitionId: string, emailHash: string): Promise<boolean> {
+    const existing = await db.select().from(signatures)
+      .where(and(eq(signatures.petitionId, petitionId), eq(signatures.emailHash, emailHash)));
+    return existing.length > 0;
+  }
+
+  async createValidationEvent(event: InsertValidationEvent): Promise<ValidationEvent> {
+    const [validationEvent] = await db.insert(validationEvents).values(event).returning();
+    return validationEvent;
+  }
+
+  async getValidationEventsBySignature(signatureId: string): Promise<ValidationEvent[]> {
+    return await db.select().from(validationEvents).where(eq(validationEvents.signatureId, signatureId));
+  }
+
+  async getInitiativeSponsors(initiativeId: string): Promise<Sponsor[]> {
+    return await db.select().from(sponsors).where(eq(sponsors.initiativeId, initiativeId));
+  }
+
+  async createSponsor(sponsor: InsertSponsor): Promise<Sponsor> {
+    const [newSponsor] = await db.insert(sponsors).values(sponsor).returning();
+    return newSponsor;
+  }
+
+  async deleteSponsor(sponsorId: string): Promise<void> {
+    await db.delete(sponsors).where(eq(sponsors.id, sponsorId));
+  }
+
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const [auditLog] = await db.insert(auditLogs).values(log).returning();
+    return auditLog;
+  }
+
+  async getAuditLogsByEntity(entityType: string, entityId: string, limit = 100): Promise<AuditLog[]> {
+    return await db.select().from(auditLogs)
+      .where(and(eq(auditLogs.entityType, entityType), eq(auditLogs.entityId, entityId)))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit);
   }
 }
 

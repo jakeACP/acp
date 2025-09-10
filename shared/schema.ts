@@ -693,6 +693,115 @@ export const boycottSubscriptions = pgTable("boycott_subscriptions", {
 
 // Unique constraint handled by the database UNIQUE(boycott_id, user_id) constraint
 
+// Citizen Initiative System Tables
+export const jurisdictions = pgTable("jurisdictions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(), // e.g., "California", "Los Angeles County", "San Francisco"
+  code: text("code").notNull().unique(), // e.g., "US-CA", "US-CA-LA", "US-CA-SF"
+  parentId: varchar("parent_id"), // hierarchical jurisdictions - reference added later
+  geojson: json("geojson"), // geographic boundaries
+  active: boolean("active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const rulesets = pgTable("rulesets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jurisdictionId: varchar("jurisdiction_id").notNull().references(() => jurisdictions.id),
+  yamlBlob: text("yaml_blob").notNull(), // YAML configuration for jurisdiction rules
+  effectiveFrom: timestamp("effective_from").notNull().defaultNow(),
+  effectiveTo: timestamp("effective_to"), // nullable for current rules
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const initiatives = pgTable("initiatives", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  slug: text("slug").notNull().unique(), // URL-friendly identifier
+  title: text("title").notNull(),
+  summary: text("summary").notNull(), // 100-200 words
+  fullTextMd: text("full_text_md").notNull(), // full text in markdown
+  jurisdictionId: varchar("jurisdiction_id").notNull().references(() => jurisdictions.id),
+  scopeLevel: text("scope_level").notNull(), // state, county, city
+  status: text("status").notNull().default("draft"), // draft, in_review, collecting, submitted, qualified, failed, withdrawn
+  initiativeType: text("initiative_type").notNull(), // statute, constitutional_amendment, ordinance
+  directOrIndirect: text("direct_or_indirect").notNull(), // direct, indirect
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  currentVersionId: varchar("current_version_id"), // references initiative_versions.id
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const initiativeVersions = pgTable("initiative_versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  initiativeId: varchar("initiative_id").notNull().references(() => initiatives.id),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  fullTextMd: text("full_text_md").notNull(),
+  changelog: text("changelog"), // description of changes
+  authorId: varchar("author_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const petitions = pgTable("petitions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  initiativeId: varchar("initiative_id").notNull().references(() => initiatives.id),
+  targetSignatureCount: integer("target_signature_count").notNull(),
+  currentSignatureCount: integer("current_signature_count").default(0),
+  startDate: timestamp("start_date").notNull(),
+  deadline: timestamp("deadline").notNull(),
+  visible: boolean("visible").default(true),
+  circulatorRequirements: json("circulator_requirements"), // JSON rules for circulators
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const signatures = pgTable("signatures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  petitionId: varchar("petition_id").notNull().references(() => petitions.id),
+  userId: varchar("user_id").references(() => users.id), // nullable for anonymous signatures
+  legalNameHash: text("legal_name_hash").notNull(), // salted hash
+  addressHash: text("address_hash").notNull(), // salted hash
+  emailHash: text("email_hash").notNull(), // salted hash
+  phoneHash: text("phone_hash"), // salted hash, optional
+  voterIdHash: text("voter_id_hash"), // salted hash, optional
+  signedAt: timestamp("signed_at").defaultNow(),
+  ipHash: text("ip_hash").notNull(), // salted hash for fraud detection
+  deviceFingerprintHash: text("device_fingerprint_hash"), // salted hash
+  verified: text("verified").default("unverified"), // unverified, auto_pass, auto_fail, manual_pass, manual_fail
+  failureReason: text("failure_reason"), // reason for verification failure
+  circulatorId: varchar("circulator_id").references(() => users.id), // who collected this signature
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const validationEvents = pgTable("validation_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signatureId: varchar("signature_id").notNull().references(() => signatures.id),
+  eventType: text("event_type").notNull(), // verification_started, auto_verified, manual_review, etc.
+  payloadJson: json("payload_json"), // event-specific data
+  actorId: varchar("actor_id").references(() => users.id), // who performed the action
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const sponsors = pgTable("sponsors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  initiativeId: varchar("initiative_id").notNull().references(() => initiatives.id),
+  name: text("name").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  isFinancialSponsor: boolean("is_financial_sponsor").default(false),
+  sponsorshipAmount: decimal("sponsorship_amount", { precision: 10, scale: 2 }), // optional funding amount
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  actorId: varchar("actor_id").references(() => users.id),
+  entityType: text("entity_type").notNull(), // "initiative", "signature", "petition", etc.
+  entityId: varchar("entity_id").notNull(),
+  action: text("action").notNull(), // "created", "updated", "verified", "rejected", etc.
+  diffJson: json("diff_json"), // before/after state
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertRepresentativeSchema = createInsertSchema(representatives).omit({
   id: true,
   createdAt: true,
@@ -778,3 +887,73 @@ export type Boycott = typeof boycotts.$inferSelect;
 export type InsertBoycott = z.infer<typeof insertBoycottSchema>;
 export type BoycottSubscription = typeof boycottSubscriptions.$inferSelect;
 export type InsertBoycottSubscription = z.infer<typeof insertBoycottSubscriptionSchema>;
+
+// Citizen Initiative schema exports
+export const insertJurisdictionSchema = createInsertSchema(jurisdictions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRulesetSchema = createInsertSchema(rulesets).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertInitiativeSchema = createInsertSchema(initiatives).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  currentVersionId: true,
+});
+
+export const insertInitiativeVersionSchema = createInsertSchema(initiativeVersions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPetitionSchema = createInsertSchema(petitions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSignatureSchema = createInsertSchema(signatures).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertValidationEventSchema = createInsertSchema(validationEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSponsorSchema = createInsertSchema(sponsors).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Citizen Initiative type exports
+export type Jurisdiction = typeof jurisdictions.$inferSelect;
+export type InsertJurisdiction = z.infer<typeof insertJurisdictionSchema>;
+export type Ruleset = typeof rulesets.$inferSelect;
+export type InsertRuleset = z.infer<typeof insertRulesetSchema>;
+export type Initiative = typeof initiatives.$inferSelect;
+export type InsertInitiative = z.infer<typeof insertInitiativeSchema>;
+export type InitiativeVersion = typeof initiativeVersions.$inferSelect;
+export type InsertInitiativeVersion = z.infer<typeof insertInitiativeVersionSchema>;
+export type Petition = typeof petitions.$inferSelect;
+export type InsertPetition = z.infer<typeof insertPetitionSchema>;
+export type Signature = typeof signatures.$inferSelect;
+export type InsertSignature = z.infer<typeof insertSignatureSchema>;
+export type ValidationEvent = typeof validationEvents.$inferSelect;
+export type InsertValidationEvent = z.infer<typeof insertValidationEventSchema>;
+export type Sponsor = typeof sponsors.$inferSelect;
+export type InsertSponsor = z.infer<typeof insertSponsorSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;

@@ -1,0 +1,42 @@
+TITLE: Build “Citizen Initiative” (Ballot Measure) Feature for ACP
+
+ROLE
+You are a full-stack engineer + product designer. Ship a production-ready, auditable “Citizen Initiative” module that supports proposing measures, gathering signatures, validating eligibility by jurisdiction, and tracking qualification status.
+
+CONTEXT
+ACP (Anti-Corruption Party) is a neutral civic platform (social + democracy tooling). This feature lets residents draft a measure, run a signature drive, and progress toward ballot qualification or legislative submission (direct/indirect initiative). Jurisdiction rules vary; build a rules engine + data model to handle state/local differences without code changes.
+
+PRIMARY OBJECTIVES
+1) Drafting: create, edit, version, and publish initiative text with title, summary (100–200 words), and full text. Track authors, sponsors, and circulating committee.
+2) Jurisdiction rules engine: thresholds, deadlines, circulator rules, direct vs. indirect initiative, county/city scope, and validation heuristics must be data-driven (YAML/JSON).
+3) Signature collection: secure petition pages gated by residency/eligibility checks; dedupe and validate signatures; show real-time counts vs. threshold.
+4) Validation workflow: automated checks + admin review queue + auditable logs; exportable packets for election officials.
+5) Public transparency: initiative profile pages, progress meters, timeline, version history, fiscal-note status, pro/con statements, comment moderation.
+6) Security & compliance: KYC-light verification options, rate limiting, salted hashing of sensitive identifiers, and clear consent/attestation language.
+
+SCOPE OF WORK
+A) DATA MODEL (SQL; adjust to target DB)
+- initiatives(id, slug, title, summary, full_text_md, jurisdiction_id, scope_level ENUM[state, county, city], status ENUM[draft, in_review, collecting, submitted, qualified, failed, withdrawn], initiative_type ENUM[statute, constitutional_amendment, ordinance], direct_or_indirect ENUM[direct, indirect], created_by, created_at, updated_at, current_version_id)
+- initiative_versions(id, initiative_id, title, summary, full_text_md, changelog, author_id, created_at)
+- jurisdictions(id, name, code, parent_id, geojson, active)
+- rulesets(id, jurisdiction_id, yaml_blob, effective_from, effective_to NULLABLE)
+- petitions(id, initiative_id, target_signature_count, start_date, deadline, visible BOOL, circulator_requirements JSON)
+- signatures(id, petition_id, user_id NULLABLE, legal_name_hash, address_hash, email_hash, phone_hash, voter_id_hash NULLABLE, signed_at, ip_hash, device_fingerprint_hash, verified ENUM[unverified, auto_pass, auto_fail, manual_pass, manual_fail], failure_reason)
+- validation_events(id, signature_id, event_type, payload_json, created_at, actor_id)
+- sponsors(id, initiative_id, name, contact_email, is_financial_sponsor BOOL)
+- audit_logs(id, actor_id, entity_type, entity_id, action, diff_json, created_at)
+
+B) JURISDICTION RULES ENGINE
+- Load rules from YAML; no hardcoding. Example schema (PLACEHOLDER—populate from official sources):
+  - signature_threshold:
+      type: "percent_of_last_gubernatorial_vote" | "fixed_number"
+      value: 0.06
+  - distribution_requirement: { counties_min: 15, per_county_min: 0.01 }
+  - timeline: { max_days_collecting: 180, submission_cutoff_days_before_election: 120 }
+  - eligibility: { resident_required: true, registered_voter_required: true, age_min: 18 }
+  - initiative_modes: { direct: true, indirect: false }
+  - circulator_rules: { must_be_resident: false, paid_circulator_disclosure: true }
+  - e_signature_permitted: "collect + export for verification" | "statement-of-support only"
+- Include a `rules/` directory with seeded examples:
+  - rules/US-CA.yaml (example thresholds)
+  - rules/US-FL.yaml (example thresholds

@@ -1,0 +1,49 @@
+# Texas Initiative Rules - Limited
+jurisdiction:
+  name: "Texas"
+  code: "US-TX" 
+  scope_level: "state"
+
+# Note: Texas has very limited citizen initiative process at state level
+signature_threshold:
+  type: "not_applicable"
+  value: 0
+
+timeline:
+  max_days_collecting: 0
+  submission_cutoff_days_before_election: 0
+
+eligibility:
+  resident_required: true
+  registered_voter_required: true
+  age_min: 18
+
+initiative_modes:
+  direct: false
+  indirect: false
+
+initiative_types:
+  statute: 
+    enabled: false
+  constitutional_amendment:
+    enabled: false  # Requires legislative action
+  ordinance:
+    enabled: true   # Only at local level
+
+circulator_rules:
+  must_be_resident: true
+  paid_circulator_disclosure: false
+  registration_required: false
+
+verification:
+  e_signature_permitted: "not_applicable"
+  duplicate_detection: false
+  address_validation: false
+  voter_registration_check: false
+
+validation:
+  auto_verification_threshold: 0.0
+  manual_review_threshold: 0.0
+  random_sample_size: 0
+
+notes: "Texas has very limited citizen initiative process. Most initiatives must go through local jurisdictions or legislative process."
