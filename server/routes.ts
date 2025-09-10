@@ -1224,6 +1224,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.end();
   });
 
+  // Representative Auto-Refresh Endpoint
+  app.get("/api/representatives/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { id } = req.params;
+      
+      // Auto-refresh representative if term has expired
+      const refreshedRepresentative = await storage.refreshRepresentativeIfExpired(id);
+      
+      if (!refreshedRepresentative) {
+        return res.status(404).json({ message: "Representative not found" });
+      }
+
+      res.json(refreshedRepresentative);
+    } catch (error: any) {
+      console.error("Error getting representative:", error);
+      res.status(500).json({ message: error.message || "Failed to get representative" });
+    }
+  });
+
   // Object Storage API endpoints for profile picture uploads
   const { ObjectStorageService, ObjectNotFoundError, ObjectPermission } = await import("./objectStorage");
 
