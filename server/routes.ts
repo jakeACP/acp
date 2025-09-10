@@ -1174,27 +1174,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.end();
       }
 
-      sendUpdate({ type: 'progress', step: 'saving', message: `Found ${representativesData.length} representatives! Saving to database...`, progress: 90 });
+      sendUpdate({ type: 'progress', step: 'saving', message: `Found ${representativesData.length} representatives! Loading them...`, progress: 85 });
       
-      // Show some representative names as they're being processed
-      for (let i = 0; i < Math.min(3, representativesData.length); i++) {
+      // Lazy load: Save and send each representative individually as they're found
+      const savedRepresentatives: any[] = [];
+      const progressStep = 10 / representativesData.length; // Remaining 10% split across all reps
+      
+      for (let i = 0; i < representativesData.length; i++) {
         const rep = representativesData[i];
-        sendUpdate({ 
-          type: 'candidate', 
-          name: rep.name, 
-          office: rep.office,
-          message: `Found: ${rep.name} - ${rep.office}` 
-        });
-        await new Promise(resolve => setTimeout(resolve, 400));
+        
+        try {
+          // Save individual representative to database
+          const [savedRep] = await storage.saveRepresentatives([rep]);
+          savedRepresentatives.push(savedRep);
+          
+          // Send immediately to frontend for lazy loading
+          sendUpdate({ 
+            type: 'candidate_found', 
+            representative: savedRep,
+            name: savedRep.name, 
+            office: savedRep.office,
+            level: savedRep.level,
+            party: savedRep.party,
+            message: `Found: ${savedRep.name} - ${savedRep.office}`,
+            progress: 85 + ((i + 1) * progressStep)
+          });
+          
+          // Small delay for smooth UX
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+        } catch (error) {
+          console.error(`Error saving representative ${rep.name}:`, error);
+          // Continue with next representative
+        }
       }
 
-      // Save to database
-      const savedRepresentatives = await storage.saveRepresentatives(representativesData);
+      // Mark zip code as searched with all found representative IDs
       const representativeIds = savedRepresentatives.map(rep => rep.id);
       await storage.markZipCodeAsSearched(zipCode, representativeIds);
 
       sendUpdate({ type: 'progress', step: 'complete', message: 'Search complete!', progress: 100 });
-      sendUpdate({ type: 'complete', representatives: savedRepresentatives, fromCache: false });
+      sendUpdate({ type: 'complete', representatives: savedRepresentatives, fromCache: false, totalFound: savedRepresentatives.length });
       
     } catch (error: any) {
       console.error("Streaming representatives lookup error:", error);

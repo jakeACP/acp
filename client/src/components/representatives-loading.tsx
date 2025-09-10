@@ -5,14 +5,18 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Search, Database, CheckCircle } from "lucide-react";
 
 interface LoadingUpdate {
-  type: 'progress' | 'candidate' | 'complete' | 'error';
+  type: 'progress' | 'candidate' | 'candidate_found' | 'complete' | 'error';
   step?: string;
   message?: string;
   progress?: number;
   name?: string;
   office?: string;
+  level?: string;
+  party?: string;
+  representative?: any;
   representatives?: any[];
   fromCache?: boolean;
+  totalFound?: number;
 }
 
 interface RepresentativesLoadingProps {
@@ -25,7 +29,7 @@ export function RepresentativesLoading({ zipCode, onComplete, onError }: Represe
   const [progress, setProgress] = useState(0);
   const [currentMessage, setCurrentMessage] = useState("Starting search...");
   const [currentStep, setCurrentStep] = useState("");
-  const [foundCandidates, setFoundCandidates] = useState<Array<{ name: string; office: string }>>([]);
+  const [foundCandidates, setFoundCandidates] = useState<Array<{ name: string; office: string; level?: string; party?: string; id?: string }>>([]);
   const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
@@ -53,6 +57,25 @@ export function RepresentativesLoading({ zipCode, onComplete, onError }: Represe
               setFoundCandidates(prev => [...prev, { name: data.name!, office: data.office! }]);
               if (data.message) {
                 setCurrentMessage(data.message);
+              }
+            }
+            break;
+            
+          case 'candidate_found':
+            if (data.representative) {
+              const rep = data.representative;
+              setFoundCandidates(prev => [...prev, { 
+                name: rep.name, 
+                office: rep.office,
+                level: rep.level,
+                party: rep.party,
+                id: rep.id
+              }]);
+              if (data.message) {
+                setCurrentMessage(data.message);
+              }
+              if (data.progress !== undefined) {
+                setProgress(data.progress);
               }
             }
             break;
@@ -128,7 +151,7 @@ export function RepresentativesLoading({ zipCode, onComplete, onError }: Represe
               <h4 className="text-sm font-medium text-green-600">Found Representatives:</h4>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {foundCandidates.map((candidate, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-green-50 rounded-md border border-green-200">
+                  <div key={candidate.id || index} className="flex items-center justify-between p-2 bg-green-50 rounded-md border border-green-200 animate-in slide-in-from-top-1 duration-300">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-green-800 truncate">
                         {candidate.name}
@@ -136,9 +159,21 @@ export function RepresentativesLoading({ zipCode, onComplete, onError }: Represe
                       <p className="text-xs text-green-600 truncate">
                         {candidate.office}
                       </p>
+                      {candidate.level && (
+                        <div className="flex gap-1 mt-1">
+                          <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 text-blue-700 border-blue-200">
+                            {candidate.level}
+                          </Badge>
+                          {candidate.party && (
+                            <Badge variant="outline" className="text-xs px-1 py-0 bg-purple-50 text-purple-700 border-purple-200">
+                              {candidate.party}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
-                      Found
+                      ✓ Saved
                     </Badge>
                   </div>
                 ))}
