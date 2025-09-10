@@ -5,7 +5,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema } from "@shared/schema";
 import { findRepresentativesByZipCode } from "./openai";
 import { z } from "zod";
 
@@ -2239,6 +2239,227 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
     });
+  });
+
+  // Citizen Initiative Routes
+  // Get available jurisdictions
+  app.get("/api/jurisdictions", async (req, res) => {
+    try {
+      const jurisdictions = await storage.getJurisdictions();
+      res.json(jurisdictions);
+    } catch (error) {
+      console.error("Error fetching jurisdictions:", error);
+      res.status(500).json({ error: "Failed to fetch jurisdictions" });
+    }
+  });
+
+  // Get initiatives with optional filters
+  app.get("/api/initiatives", async (req, res) => {
+    try {
+      // Validate query parameters
+      const querySchema = z.object({
+        limit: z.string().optional().default("50"),
+        offset: z.string().optional().default("0"),
+        status: z.enum(["draft", "in_review", "collecting", "submitted", "qualified", "failed", "withdrawn"]).optional(),
+        jurisdictionId: z.string().uuid().optional(),
+      });
+
+      const validatedQuery = querySchema.parse(req.query);
+      
+      // Parse and validate numeric parameters with limits
+      const limit = Math.min(parseInt(validatedQuery.limit), 100); // Max 100 for security
+      const offset = Math.max(parseInt(validatedQuery.offset), 0);
+      
+      if (isNaN(limit) || isNaN(offset)) {
+        return res.status(400).json({ error: "Invalid limit or offset parameter" });
+      }
+
+      // Build secure filter object
+      const filters: { status?: string; jurisdictionId?: string } = {};
+      if (validatedQuery.status) filters.status = validatedQuery.status;
+      if (validatedQuery.jurisdictionId) filters.jurisdictionId = validatedQuery.jurisdictionId;
+      
+      const initiatives = await storage.getInitiatives(limit, offset, filters);
+      res.json(initiatives);
+    } catch (error: any) {
+      console.error("Error fetching initiatives:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: "Invalid query parameters",
+          details: error.issues
+        });
+      }
+      res.status(500).json({ error: "Failed to fetch initiatives" });
+    }
+  });
+
+  // Get specific initiative by ID
+  app.get("/api/initiatives/:id", async (req, res) => {
+    try {
+      // Validate ID parameter
+      const idSchema = z.string().uuid();
+      const validatedId = idSchema.parse(req.params.id);
+      
+      const initiative = await storage.getInitiativeById(validatedId);
+      if (!initiative) {
+        return res.status(404).json({ error: "Initiative not found" });
+      }
+      res.json(initiative);
+    } catch (error: any) {
+      console.error("Error fetching initiative:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: "Invalid initiative ID format",
+          details: error.issues
+        });
+      }
+      res.status(500).json({ error: "Failed to fetch initiative" });
+    }
+  });
+
+  // Create new initiative
+  app.post("/api/initiatives", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const user = req.user as { id: string };
+      
+      // Validate input using Zod schema
+      const validatedData = insertInitiativeSchema.parse({
+        ...req.body,
+        createdBy: user.id,
+        status: "draft"
+      });
+      
+      const initiative = await storage.createInitiative(validatedData);
+      
+      // Log audit trail with proper schema validation
+      const auditData = insertAuditLogSchema.parse({
+        entityType: "initiative",
+        entityId: initiative.id,
+        action: "created",
+        actorId: user.id,
+        diffJson: { status: "draft" }
+      });
+      await storage.createAuditLog(auditData);
+      
+      res.status(201).json(initiative);
+    } catch (error: any) {
+      console.error("Error creating initiative:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: "Invalid initiative data",
+          details: error.issues
+        });
+      }
+      res.status(500).json({ error: "Failed to create initiative" });
+    }
+  });
+
+  // Update initiative (PATCH for security - only allow specific fields)
+  app.patch("/api/initiatives/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const user = req.user as { id: string };
+      const initiativeId = req.params.id;
+      
+      // Check if initiative exists and user has permission
+      const existingInitiative = await storage.getInitiativeById(initiativeId);
+      if (!existingInitiative) {
+        return res.status(404).json({ error: "Initiative not found" });
+      }
+      
+      if (existingInitiative.createdBy !== user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ error: "Not authorized to update this initiative" });
+      }
+
+      // Create a strict schema for updates - only allow safe fields
+      const updateSchema = z.object({
+        title: z.string().optional(),
+        summary: z.string().optional(),
+        fullTextMd: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }).strict();
+
+      // Validate that only allowed fields are being updated
+      const validatedUpdate = updateSchema.parse(req.body);
+      
+      // Add updatedAt timestamp
+      const updateData = {
+        ...validatedUpdate,
+        updatedAt: new Date()
+      };
+
+      const updatedInitiative = await storage.updateInitiative(initiativeId, updateData);
+
+      // Log audit trail
+      const auditData = insertAuditLogSchema.parse({
+        entityType: "initiative",
+        entityId: initiativeId,
+        action: "updated",
+        actorId: user.id,
+        diffJson: validatedUpdate
+      });
+      await storage.createAuditLog(auditData);
+
+      res.json(updatedInitiative);
+    } catch (error: any) {
+      console.error("Error updating initiative:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: "Invalid update data",
+          details: error.issues
+        });
+      }
+      res.status(500).json({ error: "Failed to update initiative" });
+    }
+  });
+
+  // Get initiative versions
+  app.get("/api/initiatives/:id/versions", async (req, res) => {
+    try {
+      // Validate ID parameter
+      const idSchema = z.string().uuid();
+      const validatedId = idSchema.parse(req.params.id);
+      
+      const versions = await storage.getInitiativeVersions(validatedId);
+      res.json(versions);
+    } catch (error: any) {
+      console.error("Error fetching initiative versions:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: "Invalid initiative ID format",
+          details: error.issues
+        });
+      }
+      res.status(500).json({ error: "Failed to fetch versions" });
+    }
+  });
+
+  // Get user's initiatives
+  app.get("/api/users/:userId/initiatives", async (req, res) => {
+    try {
+      // Validate user ID parameter
+      const userIdSchema = z.string().uuid();
+      const validatedUserId = userIdSchema.parse(req.params.userId);
+      
+      const initiatives = await storage.getUserInitiatives(validatedUserId);
+      res.json(initiatives);
+    } catch (error: any) {
+      console.error("Error fetching user initiatives:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: "Invalid user ID format",
+          details: error.issues
+        });
+      }
+      res.status(500).json({ error: "Failed to fetch user initiatives" });
+    }
   });
   
   return httpServer;
