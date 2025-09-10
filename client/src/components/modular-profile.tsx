@@ -22,10 +22,12 @@ import {
   Palette,
   Layout,
   Save,
-  Eye
+  Eye,
+  Upload
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ProfileModule {
   id: string;
@@ -55,6 +57,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   const { toast } = useToast();
   const [editMode, setEditMode] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const { data: user, isLoading: userLoading } = useQuery<UserProfile>({
     queryKey: ["/api/user", userId || "current"],
@@ -195,6 +198,60 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
     }
   };
 
+  const getButtonClasses = () => {
+    const isDarkTheme = ['dark', 'neon', 'retro'].includes(customization.theme);
+    return isDarkTheme ? 
+      "bg-white/20 text-white border-white/30 hover:bg-white/30" : 
+      "bg-white text-gray-900 border-gray-300 hover:bg-gray-50";
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload an image smaller than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      const response = await fetch('/api/user/avatar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "Avatar updated",
+        description: "Your profile photo has been updated successfully",
+      });
+
+      // Refresh user data
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload avatar. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const renderProfileModule = (module: ProfileModule) => {
     if (!module.isEnabled) return null;
 
@@ -312,11 +369,31 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
         <CardContent className="relative z-10 p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+              <div className="relative w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center group">
                 {user?.avatar ? (
                   <img src={user.avatar} alt="Profile" className="w-full h-full rounded-full object-cover" />
                 ) : (
                   <User className="h-10 w-10 text-white" />
+                )}
+                
+                {isOwner && (
+                  <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <label htmlFor="avatar-upload" className="cursor-pointer">
+                      {uploadingAvatar ? (
+                        <LoadingSpinner className="h-6 w-6 text-white" />
+                      ) : (
+                        <Camera className="h-6 w-6 text-white" />
+                      )}
+                    </label>
+                    <input
+                      id="avatar-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                      disabled={uploadingAvatar}
+                      className="hidden"
+                    />
+                  </div>
                 )}
               </div>
               <div>
@@ -338,8 +415,9 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
             {isOwner && (
               <div className="flex gap-2">
                 <Button
-                  variant={editMode ? "default" : "secondary"}
+                  variant="ghost"
                   size="sm"
+                  className={getButtonClasses()}
                   onClick={() => {
                     setEditMode(!editMode);
                     setPreviewMode(false);
@@ -351,8 +429,9 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                 </Button>
                 {editMode && (
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
+                    className={getButtonClasses()}
                     onClick={() => setPreviewMode(!previewMode)}
                     data-testid="button-preview-profile"
                   >
