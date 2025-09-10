@@ -5,9 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>();
-  const { data: currentUser } = useQuery({ queryKey: ["/api/user"] });
+  const { data: currentUser } = useQuery<{id: string}>({ queryKey: ["/api/user"] });
   
-  const isOwner = !userId || userId === currentUser?.id;
+  const isOwner = !userId || (currentUser && userId === currentUser.id);
   const targetUserId = userId || currentUser?.id;
 
   return (

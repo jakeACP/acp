@@ -220,20 +220,44 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
 
     setUploadingAvatar(true);
     try {
-      const formData = new FormData();
-      formData.append('avatar', file);
-
-      const response = await fetch('/api/user/avatar', {
+      // Get upload URL from object storage
+      const uploadResponse = await fetch('/api/objects/upload', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!response.ok) {
-        throw new Error('Upload failed');
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to get upload URL');
       }
 
-      const result = await response.json();
-      
+      const { uploadURL } = await uploadResponse.json();
+
+      // Upload file to object storage
+      const uploadFileResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      if (!uploadFileResponse.ok) {
+        throw new Error('File upload failed');
+      }
+
+      // Update user avatar with the uploaded file URL
+      const updateResponse = await fetch('/api/profile-picture', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profilePictureURL: uploadURL,
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        throw new Error('Failed to update profile picture');
+      }
+
       toast({
         title: "Avatar updated",
         description: "Your profile photo has been updated successfully",
