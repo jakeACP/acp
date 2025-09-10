@@ -1247,6 +1247,185 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Boycott API endpoints
+  app.get("/api/boycotts", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const tag = req.query.tag as string;
+
+      let boycotts;
+      if (tag) {
+        boycotts = await storage.getBoycottsByTag(tag);
+      } else {
+        boycotts = await storage.getBoycotts(limit, offset);
+      }
+
+      res.json(boycotts);
+    } catch (error: any) {
+      console.error("Error fetching boycotts:", error);
+      res.status(500).json({ message: "Failed to fetch boycotts" });
+    }
+  });
+
+  app.get("/api/boycotts/:id", async (req, res) => {
+    try {
+      const boycott = await storage.getBoycottById(req.params.id);
+      if (!boycott) {
+        return res.status(404).json({ message: "Boycott not found" });
+      }
+      res.json(boycott);
+    } catch (error: any) {
+      console.error("Error fetching boycott:", error);
+      res.status(500).json({ message: "Failed to fetch boycott" });
+    }
+  });
+
+  app.post("/api/boycotts", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { insertBoycottSchema } = await import("@shared/schema");
+      const validatedData = insertBoycottSchema.parse({
+        ...req.body,
+        creatorId: req.user.id,
+      });
+
+      const newBoycott = await storage.createBoycott(validatedData);
+      res.status(201).json(newBoycott);
+    } catch (error: any) {
+      console.error("Error creating boycott:", error);
+      if (error.name === 'ZodError') {
+        res.status(400).json({ message: "Invalid boycott data", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create boycott" });
+      }
+    }
+  });
+
+  app.put("/api/boycotts/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const boycott = await storage.getBoycottById(req.params.id);
+      if (!boycott) {
+        return res.status(404).json({ message: "Boycott not found" });
+      }
+
+      if (boycott.creatorId !== req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ message: "Not authorized to update this boycott" });
+      }
+
+      const updatedBoycott = await storage.updateBoycott(req.params.id, req.body);
+      res.json(updatedBoycott);
+    } catch (error: any) {
+      console.error("Error updating boycott:", error);
+      res.status(500).json({ message: "Failed to update boycott" });
+    }
+  });
+
+  app.delete("/api/boycotts/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const boycott = await storage.getBoycottById(req.params.id);
+      if (!boycott) {
+        return res.status(404).json({ message: "Boycott not found" });
+      }
+
+      if (boycott.creatorId !== req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ message: "Not authorized to delete this boycott" });
+      }
+
+      await storage.deleteBoycott(req.params.id);
+      res.json({ message: "Boycott deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting boycott:", error);
+      res.status(500).json({ message: "Failed to delete boycott" });
+    }
+  });
+
+  // Boycott subscription endpoints
+  app.post("/api/boycotts/:id/subscribe", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const success = await storage.subscribeToBoycott(req.params.id, req.user.id);
+      if (success) {
+        res.json({ message: "Subscribed to boycott successfully" });
+      } else {
+        res.status(400).json({ message: "Already subscribed to this boycott" });
+      }
+    } catch (error: any) {
+      console.error("Error subscribing to boycott:", error);
+      res.status(500).json({ message: "Failed to subscribe to boycott" });
+    }
+  });
+
+  app.delete("/api/boycotts/:id/subscribe", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const success = await storage.unsubscribeFromBoycott(req.params.id, req.user.id);
+      if (success) {
+        res.json({ message: "Unsubscribed from boycott successfully" });
+      } else {
+        res.status(400).json({ message: "Not subscribed to this boycott" });
+      }
+    } catch (error: any) {
+      console.error("Error unsubscribing from boycott:", error);
+      res.status(500).json({ message: "Failed to unsubscribe from boycott" });
+    }
+  });
+
+  app.get("/api/boycotts/:id/subscription", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const isSubscribed = await storage.isSubscribedToBoycott(req.params.id, req.user.id);
+      res.json({ isSubscribed });
+    } catch (error: any) {
+      console.error("Error checking boycott subscription:", error);
+      res.status(500).json({ message: "Failed to check subscription" });
+    }
+  });
+
+  app.get("/api/boycotts/:id/subscribers", async (req, res) => {
+    try {
+      const subscribers = await storage.getBoycottSubscribers(req.params.id);
+      res.json(subscribers);
+    } catch (error: any) {
+      console.error("Error fetching boycott subscribers:", error);
+      res.status(500).json({ message: "Failed to fetch subscribers" });
+    }
+  });
+
+  app.get("/api/user/boycotts", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const boycotts = await storage.getUserBoycottSubscriptions(req.user.id);
+      res.json(boycotts);
+    } catch (error: any) {
+      console.error("Error fetching user boycotts:", error);
+      res.status(500).json({ message: "Failed to fetch user boycotts" });
+    }
+  });
+
   // Object Storage API endpoints for profile picture uploads
   const { ObjectStorageService, ObjectNotFoundError, ObjectPermission } = await import("./objectStorage");
 

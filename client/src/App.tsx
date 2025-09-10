@@ -22,6 +22,7 @@ import CryptoDashboardPage from "@/pages/crypto-dashboard-page";
 import ProfilePage from "@/pages/profile-page";
 import CharitiesPage from "@/pages/charities-page";
 import CharityDetailPage from "@/pages/charity-detail-page";
+import BoycottsPage from "@/pages/boycotts-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -39,6 +40,7 @@ function Router() {
       <ProtectedRoute path="/crypto" component={CryptoDashboardPage} />
       <ProtectedRoute path="/charities" component={CharitiesPage} />
       <ProtectedRoute path="/charities/:id" component={CharityDetailPage} />
+      <ProtectedRoute path="/boycotts" component={BoycottsPage} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />

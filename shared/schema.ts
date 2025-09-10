@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, json, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, json, decimal, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -662,6 +662,37 @@ export const zipCodeLookups = pgTable("zip_code_lookups", {
   representativeIds: text("representative_ids").array().default([]), // IDs of representatives found
 });
 
+// Boycotts - Feature for organizing consumer boycotts
+export const boycotts = pgTable("boycotts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  reason: text("reason").notNull(), // Why we should boycott
+  targetCompany: text("target_company").notNull(), // Company/brand being boycotted
+  targetProduct: text("target_product"), // Specific product being boycotted
+  alternativeProduct: text("alternative_product"), // Recommended ethical alternative
+  alternativeCompany: text("alternative_company"), // Company that makes the alternative
+  image: text("image"), // Photo for the boycott
+  creatorId: varchar("creator_id").notNull().references(() => users.id),
+  groupId: varchar("group_id").references(() => groups.id), // Associated group for discussion
+  channelId: varchar("channel_id").references(() => channels.id), // Associated channel for messaging
+  subscriberCount: integer("subscriber_count").default(0),
+  isActive: boolean("is_active").default(true),
+  tags: text("tags").array().default([]), // Categories like "fast-food", "tech", "fashion"
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Boycott Subscriptions - Users who have joined a boycott
+export const boycottSubscriptions = pgTable("boycott_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  boycottId: varchar("boycott_id").notNull().references(() => boycotts.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  subscribedAt: timestamp("subscribed_at").defaultNow(),
+  isActive: boolean("is_active").default(true),
+});
+
+// Unique constraint handled by the database UNIQUE(boycott_id, user_id) constraint
+
 export const insertRepresentativeSchema = createInsertSchema(representatives).omit({
   id: true,
   createdAt: true,
@@ -671,6 +702,18 @@ export const insertRepresentativeSchema = createInsertSchema(representatives).om
 export const insertZipCodeLookupSchema = createInsertSchema(zipCodeLookups).omit({
   id: true,
   searchedAt: true,
+});
+
+export const insertBoycottSchema = createInsertSchema(boycotts).omit({
+  id: true,
+  subscriberCount: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertBoycottSubscriptionSchema = createInsertSchema(boycottSubscriptions).omit({
+  id: true,
+  subscribedAt: true,
 });
 
 // Types
@@ -731,3 +774,7 @@ export type Representative = typeof representatives.$inferSelect;
 export type InsertRepresentative = z.infer<typeof insertRepresentativeSchema>;
 export type ZipCodeLookup = typeof zipCodeLookups.$inferSelect;
 export type InsertZipCodeLookup = z.infer<typeof insertZipCodeLookupSchema>;
+export type Boycott = typeof boycotts.$inferSelect;
+export type InsertBoycott = z.infer<typeof insertBoycottSchema>;
+export type BoycottSubscription = typeof boycottSubscriptions.$inferSelect;
+export type InsertBoycottSubscription = z.infer<typeof insertBoycottSubscriptionSchema>;

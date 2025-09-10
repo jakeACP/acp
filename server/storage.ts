@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -120,6 +120,22 @@ export interface IStorage {
   updateRepresentative(id: string, updateData: Partial<Representative>): Promise<Representative>;
   markRepresentativeAsInactive(id: string): Promise<void>;
   refreshRepresentativeIfExpired(id: string): Promise<Representative | null>;
+
+  // Boycotts
+  getBoycotts(limit?: number, offset?: number): Promise<Boycott[]>;
+  getBoycottById(id: string): Promise<Boycott | undefined>;
+  createBoycott(boycott: InsertBoycott): Promise<Boycott>;
+  updateBoycott(boycottId: string, updateData: Partial<Boycott>): Promise<Boycott>;
+  deleteBoycott(boycottId: string): Promise<void>;
+  getUserBoycotts(userId: string): Promise<Boycott[]>;
+  getBoycottsByTag(tag: string): Promise<Boycott[]>;
+  
+  // Boycott Subscriptions
+  subscribeToBoycott(boycottId: string, userId: string): Promise<boolean>;
+  unsubscribeFromBoycott(boycottId: string, userId: string): Promise<boolean>;
+  isSubscribedToBoycott(boycottId: string, userId: string): Promise<boolean>;
+  getBoycottSubscribers(boycottId: string): Promise<User[]>;
+  getUserBoycottSubscriptions(userId: string): Promise<Boycott[]>;
 
   // Password Reset
   createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken>;
@@ -2133,6 +2149,268 @@ export class DatabaseStorage implements IStorage {
     // Simple hash implementation using crypto
     const crypto = await import('crypto');
     return crypto.createHash('sha256').update(data).digest('hex');
+  }
+
+  // Boycott Methods
+  async getBoycotts(limit = 50, offset = 0): Promise<Boycott[]> {
+    return await db
+      .select()
+      .from(boycotts)
+      .where(eq(boycotts.isActive, true))
+      .orderBy(desc(boycotts.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getBoycottById(id: string): Promise<Boycott | undefined> {
+    const [boycott] = await db.select().from(boycotts).where(eq(boycotts.id, id));
+    return boycott || undefined;
+  }
+
+  async createBoycott(boycottData: InsertBoycott): Promise<Boycott> {
+    const [newBoycott] = await db
+      .insert(boycotts)
+      .values(boycottData)
+      .returning();
+
+    // Create associated group for discussion
+    if (newBoycott.creatorId) {
+      try {
+        const group = await this.createGroup({
+          name: `Boycott: ${newBoycott.title}`,
+          description: `Discussion group for the ${newBoycott.targetCompany} boycott`,
+          category: "boycott",
+          creatorId: newBoycott.creatorId,
+          isPublic: true,
+        });
+
+        // Create associated channel for messaging
+        const channel = await this.createChannel({
+          name: `${newBoycott.title} Chat`,
+          description: `Chat channel for boycott organizers`,
+          type: "text",
+          groupId: group.id,
+          creatorId: newBoycott.creatorId,
+          isPublic: true,
+        });
+
+        // Update boycott with group and channel IDs
+        await this.updateBoycott(newBoycott.id, {
+          groupId: group.id,
+          channelId: channel.id,
+        });
+
+        // Join creator to the group and channel
+        await this.joinGroup(group.id, newBoycott.creatorId);
+        await this.joinChannel(channel.id, newBoycott.creatorId, "admin");
+        
+      } catch (error) {
+        console.error("Error creating boycott group/channel:", error);
+      }
+    }
+
+    return newBoycott;
+  }
+
+  async updateBoycott(boycottId: string, updateData: Partial<Boycott>): Promise<Boycott> {
+    const [updatedBoycott] = await db
+      .update(boycotts)
+      .set({
+        ...updateData,
+        updatedAt: new Date(),
+      })
+      .where(eq(boycotts.id, boycottId))
+      .returning();
+    return updatedBoycott;
+  }
+
+  async deleteBoycott(boycottId: string): Promise<void> {
+    await db.delete(boycotts).where(eq(boycotts.id, boycottId));
+  }
+
+  async getUserBoycotts(userId: string): Promise<Boycott[]> {
+    return await db
+      .select()
+      .from(boycotts)
+      .where(eq(boycotts.creatorId, userId))
+      .orderBy(desc(boycotts.createdAt));
+  }
+
+  async getBoycottsByTag(tag: string): Promise<Boycott[]> {
+    return await db
+      .select()
+      .from(boycotts)
+      .where(and(
+        eq(boycotts.isActive, true),
+        sql`${boycotts.tags} @> ${JSON.stringify([tag])}`
+      ))
+      .orderBy(desc(boycotts.createdAt));
+  }
+
+  // Boycott Subscription Methods
+  async subscribeToBoycott(boycottId: string, userId: string): Promise<boolean> {
+    try {
+      // Check if already subscribed
+      const existing = await db
+        .select()
+        .from(boycottSubscriptions)
+        .where(and(
+          eq(boycottSubscriptions.boycottId, boycottId),
+          eq(boycottSubscriptions.userId, userId),
+          eq(boycottSubscriptions.isActive, true)
+        ));
+
+      if (existing.length > 0) {
+        return false; // Already subscribed
+      }
+
+      // Add subscription
+      await db
+        .insert(boycottSubscriptions)
+        .values({
+          boycottId,
+          userId,
+        });
+
+      // Update subscriber count
+      await db
+        .update(boycotts)
+        .set({
+          subscriberCount: sql`${boycotts.subscriberCount} + 1`
+        })
+        .where(eq(boycotts.id, boycottId));
+
+      // Join user to the boycott's group and channel
+      const boycott = await this.getBoycottById(boycottId);
+      if (boycott) {
+        if (boycott.groupId) {
+          await this.joinGroup(boycott.groupId, userId).catch(console.error);
+        }
+        if (boycott.channelId) {
+          await this.joinChannel(boycott.channelId, userId).catch(console.error);
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error subscribing to boycott:", error);
+      return false;
+    }
+  }
+
+  async unsubscribeFromBoycott(boycottId: string, userId: string): Promise<boolean> {
+    try {
+      // Mark subscription as inactive
+      const result = await db
+        .update(boycottSubscriptions)
+        .set({ isActive: false })
+        .where(and(
+          eq(boycottSubscriptions.boycottId, boycottId),
+          eq(boycottSubscriptions.userId, userId),
+          eq(boycottSubscriptions.isActive, true)
+        ))
+        .returning();
+
+      if (result.length === 0) {
+        return false; // Not subscribed
+      }
+
+      // Update subscriber count
+      await db
+        .update(boycotts)
+        .set({
+          subscriberCount: sql`GREATEST(${boycotts.subscriberCount} - 1, 0)`
+        })
+        .where(eq(boycotts.id, boycottId));
+
+      // Leave associated group and channel
+      const boycott = await this.getBoycottById(boycottId);
+      if (boycott) {
+        if (boycott.groupId) {
+          await this.leaveGroup(boycott.groupId, userId).catch(console.error);
+        }
+        if (boycott.channelId) {
+          await this.leaveChannel(boycott.channelId, userId).catch(console.error);
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error unsubscribing from boycott:", error);
+      return false;
+    }
+  }
+
+  async isSubscribedToBoycott(boycottId: string, userId: string): Promise<boolean> {
+    const subscription = await db
+      .select()
+      .from(boycottSubscriptions)
+      .where(and(
+        eq(boycottSubscriptions.boycottId, boycottId),
+        eq(boycottSubscriptions.userId, userId),
+        eq(boycottSubscriptions.isActive, true)
+      ));
+
+    return subscription.length > 0;
+  }
+
+  async getBoycottSubscribers(boycottId: string): Promise<User[]> {
+    const subscribers = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        avatar: users.avatar,
+        role: users.role,
+        createdAt: users.createdAt,
+      })
+      .from(boycottSubscriptions)
+      .innerJoin(users, eq(boycottSubscriptions.userId, users.id))
+      .where(and(
+        eq(boycottSubscriptions.boycottId, boycottId),
+        eq(boycottSubscriptions.isActive, true)
+      ))
+      .orderBy(desc(boycottSubscriptions.subscribedAt));
+
+    return subscribers.map(subscriber => ({
+      ...subscriber,
+      password: "", // Never return password
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      acpBalance: null,
+    }));
+  }
+
+  async getUserBoycottSubscriptions(userId: string): Promise<Boycott[]> {
+    return await db
+      .select({
+        id: boycotts.id,
+        title: boycotts.title,
+        reason: boycotts.reason,
+        targetCompany: boycotts.targetCompany,
+        targetProduct: boycotts.targetProduct,
+        alternativeProduct: boycotts.alternativeProduct,
+        alternativeCompany: boycotts.alternativeCompany,
+        image: boycotts.image,
+        creatorId: boycotts.creatorId,
+        groupId: boycotts.groupId,
+        channelId: boycotts.channelId,
+        subscriberCount: boycotts.subscriberCount,
+        isActive: boycotts.isActive,
+        tags: boycotts.tags,
+        createdAt: boycotts.createdAt,
+        updatedAt: boycotts.updatedAt,
+      })
+      .from(boycottSubscriptions)
+      .innerJoin(boycotts, eq(boycottSubscriptions.boycottId, boycotts.id))
+      .where(and(
+        eq(boycottSubscriptions.userId, userId),
+        eq(boycottSubscriptions.isActive, true),
+        eq(boycotts.isActive, true)
+      ))
+      .orderBy(desc(boycottSubscriptions.subscribedAt));
   }
 }
 
