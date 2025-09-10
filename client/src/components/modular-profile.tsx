@@ -1,4 +1,5 @@
 import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,69 +82,101 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
     queryKey: userId ? [`/api/user/${userId}`] : ["/api/user"],
   });
 
-  const [profileModules, setProfileModules] = useState<ProfileModule[]>([
-    {
-      id: "photos",
-      name: "Photo Gallery",
-      type: "photos",
-      isPremium: false,
-      isEnabled: true,
-      position: 1,
-      itemCount: 6
-    },
-    {
-      id: "feed",
-      name: "Recent Posts",
-      type: "feed", 
-      isPremium: false,
-      isEnabled: true,
-      position: 2,
-      itemCount: 3
-    },
-    {
-      id: "friends",
-      name: "Friends List",
-      type: "friends",
-      isPremium: false,
-      isEnabled: true,
-      position: 3,
-      itemCount: 8
-    },
-    {
-      id: "following",
-      name: "Following",
-      type: "following",
-      isPremium: false,
-      isEnabled: true,
-      position: 4,
-      itemCount: 5
-    },
-    {
-      id: "music",
-      name: "Favorite Song",
-      type: "music",
-      isPremium: true,
-      isEnabled: user?.subscriptionStatus === "premium",
-      position: 5,
-      itemCount: 1
-    },
-    {
-      id: "background",
-      name: "Custom Background",
-      type: "background",
-      isPremium: true,
-      isEnabled: user?.subscriptionStatus === "premium",
-      position: 6,
-      itemCount: 1
+  const [profileModules, setProfileModules] = useState<ProfileModule[]>([]);
+
+  // Load profile modules from user data or set defaults
+  React.useEffect(() => {
+    if (user) {
+      const defaultModules = [
+        {
+          id: "photos",
+          name: "Photo Gallery",
+          type: "photos" as const,
+          isPremium: false,
+          isEnabled: true,
+          position: 1,
+          itemCount: 6,
+          customData: {}
+        },
+        {
+          id: "feed",
+          name: "Recent Posts",
+          type: "feed" as const, 
+          isPremium: false,
+          isEnabled: true,
+          position: 2,
+          itemCount: 3,
+          customData: {}
+        },
+        {
+          id: "friends",
+          name: "Friends List",
+          type: "friends" as const,
+          isPremium: false,
+          isEnabled: true,
+          position: 3,
+          itemCount: 8,
+          customData: {}
+        },
+        {
+          id: "following",
+          name: "Following",
+          type: "following" as const,
+          isPremium: false,
+          isEnabled: true,
+          position: 4,
+          itemCount: 5,
+          customData: {}
+        },
+        {
+          id: "music",
+          name: "Favorite Song",
+          type: "music" as const,
+          isPremium: true,
+          isEnabled: user.subscriptionStatus === "premium",
+          position: 5,
+          itemCount: 1,
+          customData: {}
+        },
+        {
+          id: "background",
+          name: "Custom Background",
+          type: "background" as const,
+          isPremium: true,
+          isEnabled: user.subscriptionStatus === "premium",
+          position: 6,
+          itemCount: 1,
+          customData: {}
+        }
+      ];
+
+      // Load saved modules or use defaults
+      if (user.profileLayout && Array.isArray(user.profileLayout)) {
+        setProfileModules(user.profileLayout);
+      } else {
+        setProfileModules(defaultModules);
+      }
     }
-  ]);
+  }, [user]);
 
   const [customization, setCustomization] = useState({
-    theme: user?.profileTheme || "default",
-    background: user?.profileBackground || "",
-    favoriteSong: user?.favoriteSong || "",
+    theme: "default",
+    background: "",
+    favoriteSong: "",
     customCSS: ""
   });
+
+  // Update customization state when user data loads
+  React.useEffect(() => {
+    if (user) {
+      setCustomization(prev => ({
+        ...prev,
+        theme: user.profileTheme || "default",
+        background: user.profileBackground || "",
+        favoriteSong: user.favoriteSong || ""
+      }));
+    }
+  }, [user]);
 
   const saveCustomizationMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -171,7 +204,11 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
         description: "Your profile customization has been saved.",
       });
       setEditMode(false);
+      // Invalidate both user queries to refresh the data
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      if (userId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/user/${userId}`] });
+      }
     },
     onError: (error: Error) => {
       toast({
