@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { MapPin, Phone, Mail, Globe, Heart, Building2, Zap } from "lucide-react";
-import { RepresentativesLoading } from "@/components/representatives-loading";
+import { RepresentativesLoading } from "@/components/representatives-loading.tsx";
 
 export default function RepresentativesPage() {
   const { user } = useAuth();
