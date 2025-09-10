@@ -22,7 +22,7 @@ export function Navigation() {
     { href: "/charities", label: "Charities" },
     { href: "/representatives", label: "Your Reps" },
     { href: "/messages", label: "Messages" },
-    { href: "/crypto", label: "ACP Store" },
+    { href: "/crypto", label: "Store" },
   ];
 
   const handleLogout = () => {
@@ -92,7 +92,7 @@ export function Navigation() {
                     <DropdownMenuItem>Profile</DropdownMenuItem>
                   </Link>
                   <Link href="/crypto">
-                    <DropdownMenuItem>ACP Store</DropdownMenuItem>
+                    <DropdownMenuItem>Store</DropdownMenuItem>
                   </Link>
                   <Link href="/settings">
                     <DropdownMenuItem>Settings</DropdownMenuItem>
