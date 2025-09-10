@@ -27,7 +27,17 @@ import {
   Upload,
   Edit,
   Plus,
-  Youtube
+  Youtube,
+  Award,
+  Flag,
+  BarChart3,
+  Crown as CrownIcon,
+  Shield,
+  TrendingUp,
+  Video,
+  Zap,
+  Calendar,
+  Star
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -36,7 +46,7 @@ import { apiRequest } from "@/lib/queryClient";
 interface ProfileModule {
   id: string;
   name: string;
-  type: "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "custom";
+  type: "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "custom";
   isPremium: boolean;
   isEnabled: boolean;
   position: number;
@@ -180,21 +190,41 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
 
   const addNewModule = (type: string) => {
     const moduleTypes = {
-      youtube: { name: "YouTube Video", itemCount: 1, customData: { videoUrl: "", height: "200" } },
+      // Free modules
       photos: { name: "Photo Gallery", itemCount: 6, customData: {} },
       feed: { name: "Recent Posts", itemCount: 3, customData: {} },
       friends: { name: "Friends List", itemCount: 8, customData: {} },
-      following: { name: "Following", itemCount: 5, customData: {} }
+      following: { name: "Following", itemCount: 5, customData: {} },
+      badges: { name: "Badges & Achievements", itemCount: 6, customData: {} },
+      issues: { name: "Issue Interests", itemCount: 5, customData: {} },
+      "civic-tracker": { name: "Civic Activity Tracker", itemCount: 1, customData: {} },
+      "pinned-post": { name: "Pinned Post", itemCount: 1, customData: {} },
+      "debate-history": { name: "Debate History", itemCount: 5, customData: {} },
+      events: { name: "Event Participation", itemCount: 4, customData: {} },
+      youtube: { name: "YouTube Video", itemCount: 1, customData: { videoUrl: "", height: "200" } },
+      // Premium modules
+      analytics: { name: "Analytics Dashboard", itemCount: 1, customData: {} },
+      "campaign-hub": { name: "Campaign Hub", itemCount: 1, customData: {} },
+      "verified-badge": { name: "Verified ID Badge", itemCount: 1, customData: {} },
+      "civic-scorecard": { name: "Civic Scorecard", itemCount: 1, customData: {} },
+      "media-hub": { name: "Media Hub", itemCount: 3, customData: {} },
+      widgets: { name: "Custom Widgets", itemCount: 2, customData: {} },
+      "supporter-wall": { name: "Supporter Wall", itemCount: 8, customData: {} },
+      "democracy-wrapped": { name: "Democracy Wrapped", itemCount: 1, customData: {} },
+      "legacy-timeline": { name: "Legacy Timeline", itemCount: 1, customData: {} }
     };
 
     const moduleConfig = moduleTypes[type as keyof typeof moduleTypes];
     if (!moduleConfig) return;
 
+    const premiumModules = ["analytics", "campaign-hub", "verified-badge", "civic-scorecard", "media-hub", "widgets", "supporter-wall", "democracy-wrapped", "legacy-timeline"];
+    const isPremium = premiumModules.includes(type);
+
     const newModule: ProfileModule = {
       id: `${type}-${Date.now()}`,
       name: moduleConfig.name,
       type: type as any,
-      isPremium: false,
+      isPremium: isPremium,
       isEnabled: true,
       position: profileModules.length + 1,
       itemCount: moduleConfig.itemCount,
@@ -407,6 +437,229 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                   <p className="text-sm text-gray-500">No YouTube video set</p>
                 </div>
               )}
+            </div>
+          );
+        case "badges":
+          return (
+            <div className="grid grid-cols-3 gap-2">
+              {Array.from({ length: module.itemCount }, (_, i) => (
+                <div key={i + 1} className="text-center p-2 border rounded-lg">
+                  <Award className="h-6 w-6 mx-auto mb-1 text-yellow-500" />
+                  <span className="text-xs">Badge {i + 1}</span>
+                </div>
+              ))}
+            </div>
+          );
+        case "issues":
+          return (
+            <div className="space-y-2">
+              {["Healthcare Reform", "Anti-Corruption", "Climate Action", "Education", "Economic Justice"].slice(0, module.itemCount).map((issue, i) => (
+                <div key={i} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
+                  <Flag className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium">{issue}</span>
+                </div>
+              ))}
+            </div>
+          );
+        case "civic-tracker":
+          return (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center p-3 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">23</div>
+                <div className="text-xs text-green-700">Votes Cast</div>
+              </div>
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">8</div>
+                <div className="text-xs text-blue-700">Events Joined</div>
+              </div>
+              <div className="text-center p-3 bg-purple-50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">15</div>
+                <div className="text-xs text-purple-700">Polls Created</div>
+              </div>
+              <div className="text-center p-3 bg-orange-50 rounded-lg">
+                <div className="text-2xl font-bold text-orange-600">42</div>
+                <div className="text-xs text-orange-700">Debates</div>
+              </div>
+            </div>
+          );
+        case "pinned-post":
+          return (
+            <div className="p-4 border-l-4 border-blue-500 bg-blue-50 rounded-lg">
+              <div className="flex items-start gap-2">
+                <Star className="h-5 w-5 text-blue-600 mt-1" />
+                <div>
+                  <p className="font-medium text-blue-900">Pinned Statement</p>
+                  <p className="text-sm text-blue-700 mt-1">"Democracy works best when we all participate. Let's build a better future together! #ACP2024"</p>
+                </div>
+              </div>
+            </div>
+          );
+        case "debate-history":
+          return (
+            <div className="space-y-2">
+              {Array.from({ length: module.itemCount }, (_, i) => (
+                <div key={i + 1} className="flex items-center justify-between p-2 border rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-gray-600" />
+                    <span className="text-sm">Healthcare Debate #{i + 1}</span>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded ${i % 2 === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {i % 2 === 0 ? 'Won' : 'Lost'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        case "events":
+          return (
+            <div className="space-y-2">
+              {Array.from({ length: module.itemCount }, (_, i) => (
+                <div key={i + 1} className="flex items-center gap-2 p-2 border rounded-lg">
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                  <div>
+                    <div className="text-sm font-medium">Town Hall #{i + 1}</div>
+                    <div className="text-xs text-gray-500">RSVP'd • Jan {15 + i}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        case "analytics":
+          return (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Profile Views</span>
+                <span className="font-bold">1,247</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Post Reach</span>
+                <span className="font-bold">3,856</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Follower Growth</span>
+                <span className="font-bold text-green-600">+127</span>
+              </div>
+              <BarChart3 className="h-16 w-full text-gray-300" />
+            </div>
+          );
+        case "campaign-hub":
+          return (
+            <div className="space-y-3">
+              <Button className="w-full" variant="default">
+                <Heart className="h-4 w-4 mr-2" />
+                Donate to Campaign
+              </Button>
+              <Button className="w-full" variant="outline">
+                <Users className="h-4 w-4 mr-2" />
+                Volunteer Sign-Up
+              </Button>
+              <div className="text-center p-2 bg-gray-50 rounded">
+                <div className="text-sm font-medium">Next Event</div>
+                <div className="text-xs text-gray-600">Rally - Jan 20, 2025</div>
+              </div>
+            </div>
+          );
+        case "verified-badge":
+          return (
+            <div className="text-center p-4">
+              <Shield className="h-12 w-12 mx-auto mb-2 text-blue-600" />
+              <div className="font-bold text-blue-900">Verified Citizen</div>
+              <div className="text-xs text-blue-700">ID Verified • ACP+ Member</div>
+            </div>
+          );
+        case "civic-scorecard":
+          return (
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Contribution Score</span>
+                <span className="font-bold text-green-600">A+</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Fact-Check Accuracy</span>
+                <span className="font-bold">94%</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Community Trust</span>
+                <span className="font-bold text-blue-600">High</span>
+              </div>
+              <div className="text-center mt-3">
+                <TrendingUp className="h-8 w-8 mx-auto text-green-500" />
+              </div>
+            </div>
+          );
+        case "media-hub":
+          return (
+            <div className="grid grid-cols-1 gap-2">
+              {Array.from({ length: module.itemCount }, (_, i) => (
+                <div key={i + 1} className="flex items-center gap-2 p-2 border rounded-lg">
+                  <Video className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm">Video Blog #{i + 1}</span>
+                  <span className="text-xs text-gray-500 ml-auto">12:34</span>
+                </div>
+              ))}
+            </div>
+          );
+        case "widgets":
+          return (
+            <div className="space-y-2">
+              <div className="p-3 border rounded-lg bg-yellow-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="h-4 w-4 text-yellow-600" />
+                  <span className="text-sm font-medium">Quick Poll</span>
+                </div>
+                <p className="text-xs text-gray-600">Should we increase healthcare funding?</p>
+              </div>
+              <div className="p-3 border rounded-lg bg-green-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium">Election Countdown</span>
+                </div>
+                <p className="text-xs text-gray-600">127 days until local elections</p>
+              </div>
+            </div>
+          );
+        case "supporter-wall":
+          return (
+            <div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: module.itemCount }, (_, i) => (
+                <div key={i + 1} className="text-center">
+                  <div className="w-10 h-10 bg-green-100 rounded-full mx-auto mb-1 flex items-center justify-center">
+                    <Heart className="h-4 w-4 text-green-600" />
+                  </div>
+                  <span className="text-xs">Supporter {i + 1}</span>
+                </div>
+              ))}
+            </div>
+          );
+        case "democracy-wrapped":
+          return (
+            <div className="bg-gradient-to-r from-purple-500 to-blue-500 text-white p-4 rounded-lg text-center">
+              <Star className="h-8 w-8 mx-auto mb-2" />
+              <div className="font-bold">2024 Democracy Wrapped</div>
+              <div className="text-sm opacity-90">Your year in civic engagement</div>
+              <Button variant="secondary" size="sm" className="mt-2">
+                View Report
+              </Button>
+            </div>
+          );
+        case "legacy-timeline":
+          return (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span className="text-sm">Joined ACP - Jan 2024</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="text-sm">First Vote Cast - Feb 2024</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                <span className="text-sm">Debate Champion - Mar 2024</span>
+              </div>
+              <Button variant="outline" size="sm" className="w-full mt-2">
+                View Full Timeline
+              </Button>
             </div>
           );
         default:
@@ -785,33 +1038,97 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600">Choose a module type to add to your profile:</p>
                   
-                  <div className="space-y-2">
-                    {[
-                      { type: "youtube", name: "YouTube Video", icon: Youtube, description: "Embed a YouTube video with custom size" },
-                      { type: "photos", name: "Photo Gallery", icon: Camera, description: "Display your photos in a grid" },
-                      { type: "feed", name: "Recent Posts", icon: MessageSquare, description: "Show your latest posts" },
-                      { type: "friends", name: "Friends List", icon: Users, description: "Display your friends" },
-                      { type: "following", name: "Following", icon: Heart, description: "Show who you follow" }
-                    ].map((moduleType) => {
-                      const IconComponent = moduleType.icon;
-                      return (
-                        <Button
-                          key={moduleType.type}
-                          variant="outline"
-                          className="w-full justify-start h-auto p-4"
-                          onClick={() => addNewModule(moduleType.type)}
-                          data-testid={`add-module-${moduleType.type}`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <IconComponent className="h-5 w-5" />
-                            <div className="text-left">
-                              <p className="font-medium">{moduleType.name}</p>
-                              <p className="text-xs text-gray-500">{moduleType.description}</p>
-                            </div>
-                          </div>
-                        </Button>
-                      );
-                    })}
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    <div>
+                      <h4 className="font-medium text-sm mb-2 text-gray-900">Free Modules</h4>
+                      <div className="space-y-2">
+                        {[
+                          { type: "photos", name: "Photo Gallery", icon: Camera, description: "Upload and showcase images" },
+                          { type: "feed", name: "Recent Posts", icon: MessageSquare, description: "Personal activity feed" },
+                          { type: "friends", name: "Friends List", icon: Users, description: "Connections you highlight" },
+                          { type: "following", name: "Following", icon: Heart, description: "Who you follow and who follows you" },
+                          { type: "badges", name: "Badges & Achievements", icon: Award, description: "Earned through voting, debates, contributions" },
+                          { type: "issues", name: "Issue Interests", icon: Flag, description: "Healthcare, corruption, climate issues displayed" },
+                          { type: "civic-tracker", name: "Civic Activity Tracker", icon: BarChart3, description: "Votes cast, polls participated, events joined" },
+                          { type: "pinned-post", name: "Pinned Post", icon: Star, description: "Highlight a personal statement, meme, or campaign" },
+                          { type: "debate-history", name: "Debate History", icon: MessageSquare, description: "Timeline of debates with win/loss tallies" },
+                          { type: "events", name: "Event Participation", icon: Calendar, description: "Rallies, protests, town halls you've RSVP'd to" },
+                          { type: "youtube", name: "YouTube Video", icon: Youtube, description: "Embed a YouTube video with custom size" }
+                        ].map((moduleType) => {
+                          const IconComponent = moduleType.icon;
+                          return (
+                            <Button
+                              key={moduleType.type}
+                              variant="outline"
+                              className="w-full justify-start h-auto p-3"
+                              onClick={() => addNewModule(moduleType.type)}
+                              data-testid={`add-module-${moduleType.type}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <IconComponent className="h-4 w-4" />
+                                <div className="text-left">
+                                  <p className="font-medium text-sm">{moduleType.name}</p>
+                                  <p className="text-xs text-gray-500">{moduleType.description}</p>
+                                </div>
+                              </div>
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium text-sm mb-2 text-purple-900 flex items-center gap-1">
+                        <CrownIcon className="h-3 w-3" /> Premium Modules (ACP+)
+                      </h4>
+                      <div className="space-y-2">
+                        {[
+                          { type: "analytics", name: "Analytics Dashboard", icon: TrendingUp, description: "Profile views, post reach, follower growth over time" },
+                          { type: "campaign-hub", name: "Campaign Hub", icon: Users, description: "Donation button, volunteer sign-up, event calendar" },
+                          { type: "verified-badge", name: "Verified ID Badge", icon: Shield, description: "Official verification with premium visual seal" },
+                          { type: "civic-scorecard", name: "Civic Scorecard", icon: BarChart3, description: "AI-curated contribution and community trust report" },
+                          { type: "media-hub", name: "Media Hub", icon: Video, description: "Host videos, podcasts, live streams on your profile" },
+                          { type: "widgets", name: "Custom Widgets", icon: Zap, description: "Poll widget, petition widget, election countdown" },
+                          { type: "supporter-wall", name: "Supporter Wall", icon: Heart, description: "List of people who've donated or endorsed you" },
+                          { type: "democracy-wrapped", name: "Democracy Wrapped", icon: Star, description: "Annual Spotify-style recap with shareable graphics" },
+                          { type: "legacy-timeline", name: "Legacy Timeline", icon: Calendar, description: "Your entire ACP journey as scrollable story" }
+                        ].map((moduleType) => {
+                          const IconComponent = moduleType.icon;
+                          const isDisabled = !isPremiumUser;
+                          return (
+                            <Button
+                              key={moduleType.type}
+                              variant="outline"
+                              className={`w-full justify-start h-auto p-3 ${isDisabled ? 'opacity-50' : ''}`}
+                              onClick={() => {
+                                if (isDisabled) {
+                                  toast({
+                                    title: "Premium Feature",
+                                    description: "This module requires ACP+ subscription.",
+                                    variant: "destructive",
+                                  });
+                                  return;
+                                }
+                                addNewModule(moduleType.type);
+                              }}
+                              data-testid={`add-module-${moduleType.type}`}
+                              disabled={isDisabled}
+                            >
+                              <div className="flex items-center gap-3">
+                                <IconComponent className="h-4 w-4" />
+                                <div className="text-left">
+                                  <p className="font-medium text-sm flex items-center gap-1">
+                                    {moduleType.name}
+                                    <CrownIcon className="h-3 w-3 text-yellow-500" />
+                                  </p>
+                                  <p className="text-xs text-gray-500">{moduleType.description}</p>
+                                </div>
+                              </div>
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                   
                   <div className="flex justify-end pt-4">
