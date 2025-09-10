@@ -298,10 +298,7 @@ export class DatabaseStorage implements IStorage {
   async createPoll(poll: InsertPoll): Promise<Poll> {
     const [newPoll] = await db
       .insert(polls)
-      .values({
-        ...poll,
-        options: Array.isArray(poll.options) ? poll.options : []
-      })
+      .values(poll)
       .returning();
     return newPoll;
   }
@@ -906,10 +903,7 @@ export class DatabaseStorage implements IStorage {
   async createCandidate(candidate: InsertCandidate): Promise<Candidate> {
     const [newCandidate] = await db
       .insert(candidates)
-      .values({
-        ...candidate,
-        proposals: Array.isArray(candidate.proposals) ? candidate.proposals : []
-      })
+      .values(candidate)
       .returning();
     return newCandidate;
   }
@@ -986,16 +980,12 @@ export class DatabaseStorage implements IStorage {
 
   async getCandidateSupporters(candidateId: string): Promise<User[]> {
     return await db
-      .select({
-        id: users.id,
-        username: users.username,
-        firstName: users.firstName,
-        lastName: users.lastName,
-      })
-      .from(candidateSupports)
-      .innerJoin(users, eq(candidateSupports.userId, users.id))
+      .select()
+      .from(users)
+      .innerJoin(candidateSupports, eq(users.id, candidateSupports.userId))
       .where(eq(candidateSupports.candidateId, candidateId))
-      .orderBy(desc(candidateSupports.createdAt));
+      .orderBy(desc(candidateSupports.createdAt))
+      .then(results => results.map(result => result.users));
   }
 
   async getCandidateByUserId(userId: string): Promise<Candidate | undefined> {
@@ -1374,7 +1364,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     const representativeIds = lookup[0].representativeIds;
-    if (representativeIds.length === 0) {
+    if (!representativeIds || representativeIds.length === 0) {
       return [];
     }
 
