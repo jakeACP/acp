@@ -135,6 +135,43 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Slack-like messaging system
+export const channels = pgTable("channels", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  type: text("type").notNull().default("public"), // public, private, group_channel, direct
+  groupId: varchar("group_id").references(() => groups.id), // Links to existing groups
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  memberCount: integer("member_count").default(0),
+  lastMessageAt: timestamp("last_message_at"),
+  isArchived: boolean("is_archived").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const channelMembers = pgTable("channel_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  channelId: varchar("channel_id").notNull().references(() => channels.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  role: text("role").default("member"), // admin, moderator, member
+  joinedAt: timestamp("joined_at").defaultNow(),
+  lastReadAt: timestamp("last_read_at").defaultNow(),
+  isNotificationEnabled: boolean("is_notification_enabled").default(true),
+});
+
+export const channelMessages = pgTable("channel_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  channelId: varchar("channel_id").notNull().references(() => channels.id),
+  senderId: varchar("sender_id").notNull().references(() => users.id),
+  content: text("content").notNull(),
+  messageType: text("message_type").default("text"), // text, image, file, system
+  attachmentUrl: text("attachment_url"),
+  replyToId: varchar("reply_to_id").references(() => channelMessages.id),
+  isEdited: boolean("is_edited").default(false),
+  editedAt: timestamp("edited_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const followedRepresentatives = pgTable("followed_representatives", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
@@ -301,6 +338,46 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   }),
 }));
 
+export const channelsRelations = relations(channels, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [channels.createdBy],
+    references: [users.id],
+  }),
+  group: one(groups, {
+    fields: [channels.groupId],
+    references: [groups.id],
+  }),
+  members: many(channelMembers),
+  messages: many(channelMessages),
+}));
+
+export const channelMembersRelations = relations(channelMembers, ({ one }) => ({
+  channel: one(channels, {
+    fields: [channelMembers.channelId],
+    references: [channels.id],
+  }),
+  user: one(users, {
+    fields: [channelMembers.userId],
+    references: [users.id],
+  }),
+}));
+
+export const channelMessagesRelations = relations(channelMessages, ({ one, many }) => ({
+  channel: one(channels, {
+    fields: [channelMessages.channelId],
+    references: [channels.id],
+  }),
+  sender: one(users, {
+    fields: [channelMessages.senderId],
+    references: [users.id],
+  }),
+  replyTo: one(channelMessages, {
+    fields: [channelMessages.replyToId],
+    references: [channelMessages.id],
+  }),
+  replies: many(channelMessages),
+}));
+
 export const eventsRelations = relations(events, ({ one, many }) => ({
   organizer: one(users, {
     fields: [events.organizerId],
@@ -365,6 +442,26 @@ export const insertCandidateSupportSchema = createInsertSchema(candidateSupports
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertChannelSchema = createInsertSchema(channels).omit({
+  id: true,
+  createdAt: true,
+  memberCount: true,
+  lastMessageAt: true,
+});
+
+export const insertChannelMemberSchema = createInsertSchema(channelMembers).omit({
+  id: true,
+  joinedAt: true,
+  lastReadAt: true,
+});
+
+export const insertChannelMessageSchema = createInsertSchema(channelMessages).omit({
+  id: true,
+  createdAt: true,
+  isEdited: true,
+  editedAt: true,
 });
 
 export const insertFlagSchema = createInsertSchema(flags).omit({
@@ -555,6 +652,12 @@ export type CandidateSupport = typeof candidateSupports.$inferSelect;
 export type InsertCandidateSupport = z.infer<typeof insertCandidateSupportSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type Channel = typeof channels.$inferSelect;
+export type InsertChannel = z.infer<typeof insertChannelSchema>;
+export type ChannelMember = typeof channelMembers.$inferSelect;
+export type InsertChannelMember = z.infer<typeof insertChannelMemberSchema>;
+export type ChannelMessage = typeof channelMessages.$inferSelect;
+export type InsertChannelMessage = z.infer<typeof insertChannelMessageSchema>;
 export type FollowedRepresentative = typeof followedRepresentatives.$inferSelect;
 export type InsertFollowedRepresentative = typeof followedRepresentatives.$inferInsert;
 export type UserAddress = typeof userAddresses.$inferSelect;
