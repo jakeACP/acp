@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -80,6 +80,29 @@ export interface IStorage {
   getConversationsList(userId: string): Promise<any[]>;
   getUnreadMessageCount(userId: string): Promise<number>;
   getUsersForMessaging(): Promise<User[]>;
+
+  // Channels
+  getChannels(): Promise<Channel[]>;
+  getUserChannels(userId: string): Promise<Channel[]>;
+  getChannelById(id: string): Promise<Channel | undefined>;
+  createChannel(channel: InsertChannel): Promise<Channel>;
+  updateChannel(channelId: string, updateData: Partial<Channel>): Promise<Channel>;
+  deleteChannel(channelId: string): Promise<void>;
+  getChannelsByGroup(groupId: string): Promise<Channel[]>;
+  
+  // Channel Members
+  joinChannel(channelId: string, userId: string, role?: string): Promise<void>;
+  leaveChannel(channelId: string, userId: string): Promise<void>;
+  isChannelMember(channelId: string, userId: string): Promise<boolean>;
+  getChannelMembers(channelId: string): Promise<ChannelMember[]>;
+  updateChannelMemberRole(channelId: string, userId: string, role: string): Promise<void>;
+  
+  // Channel Messages  
+  getChannelMessages(channelId: string, limit?: number, offset?: number): Promise<ChannelMessage[]>;
+  sendChannelMessage(message: InsertChannelMessage): Promise<ChannelMessage>;
+  editChannelMessage(messageId: string, content: string): Promise<ChannelMessage>;
+  deleteChannelMessage(messageId: string): Promise<void>;
+  getChannelMessage(messageId: string): Promise<ChannelMessage | undefined>;
 
   // Representatives
   saveUserAddress(userId: string, address: string): Promise<void>;
@@ -1000,6 +1023,205 @@ export class DatabaseStorage implements IStorage {
       })
       .from(users)
       .orderBy(users.username);
+  }
+
+  // Channels
+  async getChannels(): Promise<Channel[]> {
+    return await db
+      .select()
+      .from(channels)
+      .where(eq(channels.isArchived, false))
+      .orderBy(desc(channels.lastMessageAt), desc(channels.createdAt));
+  }
+
+  async getUserChannels(userId: string): Promise<Channel[]> {
+    return await db
+      .select({
+        id: channels.id,
+        name: channels.name,
+        description: channels.description,
+        type: channels.type,
+        groupId: channels.groupId,
+        createdBy: channels.createdBy,
+        memberCount: channels.memberCount,
+        lastMessageAt: channels.lastMessageAt,
+        isArchived: channels.isArchived,
+        createdAt: channels.createdAt,
+      })
+      .from(channels)
+      .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
+      .where(and(eq(channelMembers.userId, userId), eq(channels.isArchived, false)))
+      .orderBy(desc(channels.lastMessageAt), desc(channels.createdAt));
+  }
+
+  async getChannelById(id: string): Promise<Channel | undefined> {
+    const [channel] = await db
+      .select()
+      .from(channels)
+      .where(eq(channels.id, id));
+    return channel;
+  }
+
+  async createChannel(channel: InsertChannel): Promise<Channel> {
+    const [newChannel] = await db
+      .insert(channels)
+      .values(channel)
+      .returning();
+    
+    // Add creator as admin
+    await db
+      .insert(channelMembers)
+      .values({
+        channelId: newChannel.id,
+        userId: newChannel.createdBy,
+        role: "admin"
+      });
+
+    // Update member count
+    await db
+      .update(channels)
+      .set({ memberCount: 1 })
+      .where(eq(channels.id, newChannel.id));
+
+    return newChannel;
+  }
+
+  async updateChannel(channelId: string, updateData: Partial<Channel>): Promise<Channel> {
+    const [updatedChannel] = await db
+      .update(channels)
+      .set(updateData)
+      .where(eq(channels.id, channelId))
+      .returning();
+    return updatedChannel;
+  }
+
+  async deleteChannel(channelId: string): Promise<void> {
+    // Delete channel messages first
+    await db.delete(channelMessages).where(eq(channelMessages.channelId, channelId));
+    // Delete channel members
+    await db.delete(channelMembers).where(eq(channelMembers.channelId, channelId));
+    // Delete channel
+    await db.delete(channels).where(eq(channels.id, channelId));
+  }
+
+  async getChannelsByGroup(groupId: string): Promise<Channel[]> {
+    return await db
+      .select()
+      .from(channels)
+      .where(and(eq(channels.groupId, groupId), eq(channels.isArchived, false)))
+      .orderBy(desc(channels.createdAt));
+  }
+
+  // Channel Members
+  async joinChannel(channelId: string, userId: string, role: string = "member"): Promise<void> {
+    // Check if already a member
+    const existingMember = await db
+      .select()
+      .from(channelMembers)
+      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)));
+
+    if (existingMember.length === 0) {
+      await db
+        .insert(channelMembers)
+        .values({ channelId, userId, role });
+
+      // Update member count
+      await db
+        .update(channels)
+        .set({ memberCount: sql`${channels.memberCount} + 1` })
+        .where(eq(channels.id, channelId));
+    }
+  }
+
+  async leaveChannel(channelId: string, userId: string): Promise<void> {
+    const deletedMembers = await db
+      .delete(channelMembers)
+      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)))
+      .returning();
+
+    if (deletedMembers.length > 0) {
+      // Update member count
+      await db
+        .update(channels)
+        .set({ memberCount: sql`${channels.memberCount} - 1` })
+        .where(eq(channels.id, channelId));
+    }
+  }
+
+  async isChannelMember(channelId: string, userId: string): Promise<boolean> {
+    const [member] = await db
+      .select()
+      .from(channelMembers)
+      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)));
+    return !!member;
+  }
+
+  async getChannelMembers(channelId: string): Promise<ChannelMember[]> {
+    return await db
+      .select()
+      .from(channelMembers)
+      .where(eq(channelMembers.channelId, channelId))
+      .orderBy(channelMembers.joinedAt);
+  }
+
+  async updateChannelMemberRole(channelId: string, userId: string, role: string): Promise<void> {
+    await db
+      .update(channelMembers)
+      .set({ role })
+      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)));
+  }
+
+  // Channel Messages
+  async getChannelMessages(channelId: string, limit: number = 50, offset: number = 0): Promise<ChannelMessage[]> {
+    return await db
+      .select()
+      .from(channelMessages)
+      .where(eq(channelMessages.channelId, channelId))
+      .orderBy(desc(channelMessages.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async sendChannelMessage(message: InsertChannelMessage): Promise<ChannelMessage> {
+    const [newMessage] = await db
+      .insert(channelMessages)
+      .values(message)
+      .returning();
+
+    // Update channel's last message time
+    await db
+      .update(channels)
+      .set({ lastMessageAt: new Date() })
+      .where(eq(channels.id, message.channelId));
+
+    return newMessage;
+  }
+
+  async editChannelMessage(messageId: string, content: string): Promise<ChannelMessage> {
+    const [editedMessage] = await db
+      .update(channelMessages)
+      .set({ 
+        content, 
+        isEdited: true, 
+        editedAt: new Date() 
+      })
+      .where(eq(channelMessages.id, messageId))
+      .returning();
+    return editedMessage;
+  }
+
+  async deleteChannelMessage(messageId: string): Promise<void> {
+    await db
+      .delete(channelMessages)
+      .where(eq(channelMessages.id, messageId));
+  }
+
+  async getChannelMessage(messageId: string): Promise<ChannelMessage | undefined> {
+    const [message] = await db
+      .select()
+      .from(channelMessages)
+      .where(eq(channelMessages.id, messageId));
+    return message;
   }
 
   async saveUserAddress(userId: string, address: string): Promise<void> {

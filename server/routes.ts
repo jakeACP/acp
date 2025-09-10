@@ -4,7 +4,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -637,6 +637,271 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error marking message as read:", error);
       res.status(500).json({ message: "Failed to mark message as read" });
+    }
+  });
+
+  // Channels API
+  app.get("/api/channels", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const channels = await storage.getChannels();
+      res.json(channels);
+    } catch (error: any) {
+      console.error("Error fetching channels:", error);
+      res.status(500).json({ message: "Failed to fetch channels" });
+    }
+  });
+
+  app.get("/api/channels/user", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const channels = await storage.getUserChannels(req.user.id);
+      res.json(channels);
+    } catch (error: any) {
+      console.error("Error fetching user channels:", error);
+      res.status(500).json({ message: "Failed to fetch user channels" });
+    }
+  });
+
+  app.get("/api/channels/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const channel = await storage.getChannelById(req.params.id);
+      if (!channel) {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+
+      // Check if user is a member
+      const isMember = await storage.isChannelMember(req.params.id, req.user.id);
+      if (!isMember && channel.type === "private") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(channel);
+    } catch (error: any) {
+      console.error("Error fetching channel:", error);
+      res.status(500).json({ message: "Failed to fetch channel" });
+    }
+  });
+
+  app.post("/api/channels", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const channelData = insertChannelSchema.parse({
+        ...req.body,
+        createdBy: req.user.id,
+      });
+
+      const channel = await storage.createChannel(channelData);
+      res.status(201).json(channel);
+    } catch (error: any) {
+      console.error("Error creating channel:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid channel data" });
+      }
+      res.status(500).json({ message: "Failed to create channel" });
+    }
+  });
+
+  app.post("/api/channels/:id/join", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { role } = req.body;
+      await storage.joinChannel(req.params.id, req.user.id, role || "member");
+      res.json({ message: "Joined channel successfully" });
+    } catch (error: any) {
+      console.error("Error joining channel:", error);
+      res.status(500).json({ message: "Failed to join channel" });
+    }
+  });
+
+  app.post("/api/channels/:id/leave", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.leaveChannel(req.params.id, req.user.id);
+      res.json({ message: "Left channel successfully" });
+    } catch (error: any) {
+      console.error("Error leaving channel:", error);
+      res.status(500).json({ message: "Failed to leave channel" });
+    }
+  });
+
+  app.get("/api/channels/:id/members", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // Check if user is a member
+      const isMember = await storage.isChannelMember(req.params.id, req.user.id);
+      if (!isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const members = await storage.getChannelMembers(req.params.id);
+      res.json(members);
+    } catch (error: any) {
+      console.error("Error fetching channel members:", error);
+      res.status(500).json({ message: "Failed to fetch channel members" });
+    }
+  });
+
+  // Channel Messages API
+  app.get("/api/channels/:id/messages", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // Check if user is a member
+      const isMember = await storage.isChannelMember(req.params.id, req.user.id);
+      if (!isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      const messages = await storage.getChannelMessages(req.params.id, limit, offset);
+      res.json(messages);
+    } catch (error: any) {
+      console.error("Error fetching channel messages:", error);
+      res.status(500).json({ message: "Failed to fetch channel messages" });
+    }
+  });
+
+  app.post("/api/channels/:id/messages", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // Check if user is a member
+      const isMember = await storage.isChannelMember(req.params.id, req.user.id);
+      if (!isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { content, messageType, attachmentUrl, replyToId } = req.body;
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ message: "Message content cannot be empty" });
+      }
+
+      if (content.length > 2000) {
+        return res.status(400).json({ message: "Message too long. Maximum 2000 characters." });
+      }
+
+      const messageData = insertChannelMessageSchema.parse({
+        channelId: req.params.id,
+        senderId: req.user.id,
+        content: content.trim(),
+        messageType: messageType || "text",
+        attachmentUrl,
+        replyToId,
+      });
+
+      const message = await storage.sendChannelMessage(messageData);
+      res.status(201).json(message);
+    } catch (error: any) {
+      console.error("Error sending channel message:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid message data" });
+      }
+      res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  app.patch("/api/channel-messages/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { content } = req.body;
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ message: "Message content cannot be empty" });
+      }
+
+      // Get the message to check ownership
+      const message = await storage.getChannelMessage(req.params.id);
+      if (!message) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      if (message.senderId !== req.user.id) {
+        return res.status(403).json({ message: "Can only edit your own messages" });
+      }
+
+      const editedMessage = await storage.editChannelMessage(req.params.id, content.trim());
+      res.json(editedMessage);
+    } catch (error: any) {
+      console.error("Error editing channel message:", error);
+      res.status(500).json({ message: "Failed to edit message" });
+    }
+  });
+
+  app.delete("/api/channel-messages/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // Get the message to check ownership
+      const message = await storage.getChannelMessage(req.params.id);
+      if (!message) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      if (message.senderId !== req.user.id) {
+        return res.status(403).json({ message: "Can only delete your own messages" });
+      }
+
+      await storage.deleteChannelMessage(req.params.id);
+      res.json({ message: "Message deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting channel message:", error);
+      res.status(500).json({ message: "Failed to delete message" });
+    }
+  });
+
+  // Get channels by group
+  app.get("/api/groups/:id/channels", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // Check if user is a group member
+      const isMember = await storage.isGroupMember(req.params.id, req.user.id);
+      if (!isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const channels = await storage.getChannelsByGroup(req.params.id);
+      res.json(channels);
+    } catch (error: any) {
+      console.error("Error fetching group channels:", error);
+      res.status(500).json({ message: "Failed to fetch group channels" });
     }
   });
 
