@@ -19,6 +19,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Heart, Users, MessageCircle, Building2, ShoppingBag, Plus, Target, Store, AlertTriangle } from "lucide-react";
 import { z } from "zod";
 import type { Boycott } from "@shared/schema";
+import { Navigation } from "@/components/navigation";
 
 const createBoycottSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -154,14 +155,19 @@ export default function BoycottsPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">Loading boycotts...</div>
+      <div className="bg-slate-50 min-h-screen">
+        <Navigation />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">Loading boycotts...</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="bg-slate-50 min-h-screen">
+      <Navigation />
+      <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">Active Boycotts</h1>
@@ -488,6 +494,7 @@ export default function BoycottsPage() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
