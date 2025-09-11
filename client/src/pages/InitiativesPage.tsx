@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { PlusCircle, Search, Filter, FileText, Users, Calendar } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import { Navigation } from "@/components/navigation";
 
 interface Initiative {
   id: string;
@@ -77,7 +78,9 @@ export default function InitiativesPage() {
 
   if (initiativesLoading) {
     return (
-      <div className="container max-w-6xl mx-auto px-4 py-8">
+      <div className="bg-slate-50 min-h-screen">
+        <Navigation />
+        <div className="container max-w-6xl mx-auto px-4 py-8">
         <div className="space-y-6">
           <Skeleton className="h-8 w-64" />
           <div className="grid gap-6">
@@ -86,12 +89,15 @@ export default function InitiativesPage() {
             ))}
           </div>
         </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container max-w-6xl mx-auto px-4 py-8">
+    <div className="bg-slate-50 min-h-screen">
+      <Navigation />
+      <div className="container max-w-6xl mx-auto px-4 py-8">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -235,6 +241,7 @@ export default function InitiativesPage() {
             ))}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

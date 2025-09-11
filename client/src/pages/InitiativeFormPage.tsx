@@ -16,6 +16,7 @@ import { ArrowLeft, Save, Eye, AlertCircle, Plus, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { Navigation } from "@/components/navigation";
 
 // Form validation schema
 const initiativeFormSchema = z.object({
@@ -178,18 +179,23 @@ export default function InitiativeFormPage() {
 
   if (isEditMode && loadingInitiative) {
     return (
-      <div className="container max-w-4xl mx-auto px-4 py-8">
+      <div className="bg-slate-50 min-h-screen">
+        <Navigation />
+        <div className="container max-w-4xl mx-auto px-4 py-8">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
           <div className="h-40 bg-gray-200 dark:bg-gray-700 rounded"></div>
           <div className="h-40 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container max-w-4xl mx-auto px-4 py-8">
+    <div className="bg-slate-50 min-h-screen">
+      <Navigation />
+      <div className="container max-w-4xl mx-auto px-4 py-8">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -527,6 +533,7 @@ export default function InitiativeFormPage() {
             </form>
           </Form>
         )}
+        </div>
       </div>
     </div>
   );

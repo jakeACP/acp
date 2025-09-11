@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Calendar, FileText, Users, MapPin, Edit, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
+import { Navigation } from "@/components/navigation";
 
 interface Initiative {
   id: string;
@@ -66,7 +67,9 @@ export default function InitiativeDetailPage() {
 
   if (isLoadingInitiative) {
     return (
-      <div className="container max-w-4xl mx-auto px-4 py-8">
+      <div className="bg-slate-50 min-h-screen">
+        <Navigation />
+        <div className="container max-w-4xl mx-auto px-4 py-8">
         <div className="space-y-6">
           <div className="flex items-center gap-4">
             <Skeleton className="h-10 w-32" />
@@ -75,13 +78,16 @@ export default function InitiativeDetailPage() {
           <Skeleton className="h-64 w-full" />
           <Skeleton className="h-32 w-full" />
         </div>
+        </div>
       </div>
     );
   }
 
   if (!initiative) {
     return (
-      <div className="container max-w-4xl mx-auto py-6">
+      <div className="bg-slate-50 min-h-screen">
+        <Navigation />
+        <div className="container max-w-4xl mx-auto py-6">
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-muted-foreground">Initiative not found</p>
@@ -92,6 +98,7 @@ export default function InitiativeDetailPage() {
             </Link>
           </CardContent>
         </Card>
+        </div>
       </div>
     );
   }
@@ -116,7 +123,9 @@ export default function InitiativeDetailPage() {
   const canEdit = user && initiative.createdBy === user.id;
 
   return (
-    <div className="container max-w-4xl mx-auto px-4 py-8">
+    <div className="bg-slate-50 min-h-screen">
+      <Navigation />
+      <div className="container max-w-4xl mx-auto px-4 py-8">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -227,6 +236,7 @@ export default function InitiativeDetailPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     </div>
   );
