@@ -23,7 +23,9 @@ const initiativeFormSchema = z.object({
   summary: z.string().min(50, "Summary must be at least 50 characters").max(1000, "Summary must be less than 1000 characters"),
   fullTextMd: z.string().min(100, "Full text must be at least 100 characters"),
   jurisdictionId: z.string().min(1, "Please select a jurisdiction"),
+  scopeLevel: z.string().min(1, "Please select a scope level"),
   initiativeType: z.string().min(1, "Please select an initiative type"),
+  directOrIndirect: z.string().min(1, "Please select direct or indirect"),
   tags: z.array(z.string()).default([])
 });
 
@@ -57,7 +59,9 @@ export default function InitiativeFormPage() {
       summary: "",
       fullTextMd: "",
       jurisdictionId: "",
+      scopeLevel: "",
       initiativeType: "statute",
+      directOrIndirect: "",
       tags: []
     }
   });
@@ -69,7 +73,9 @@ export default function InitiativeFormPage() {
     summary: string;
     fullTextMd: string;
     jurisdictionId: string;
+    scopeLevel: string;
     initiativeType: string;
+    directOrIndirect: string;
     tags: string[];
   }>({
     queryKey: ["/api/initiatives", initiativeId],
@@ -90,7 +96,9 @@ export default function InitiativeFormPage() {
         summary: existingInitiative.summary,
         fullTextMd: existingInitiative.fullTextMd,
         jurisdictionId: existingInitiative.jurisdictionId,
+        scopeLevel: existingInitiative.scopeLevel || "",
         initiativeType: existingInitiative.initiativeType || "statute",
+        directOrIndirect: existingInitiative.directOrIndirect || "",
         tags: existingInitiative.tags || []
       });
     }
@@ -99,7 +107,10 @@ export default function InitiativeFormPage() {
   // Create initiative mutation
   const createMutation = useMutation({
     mutationFn: async (data: InitiativeFormData) => {
-      const response = await apiRequest("/api/initiatives", "POST", data);
+      // Generate slug from title
+      const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const initiativeData = { ...data, slug };
+      const response = await apiRequest("/api/initiatives", "POST", initiativeData);
       return response.json();
     },
     onSuccess: (data) => {
@@ -281,7 +292,7 @@ export default function InitiativeFormPage() {
                     )}
                   />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormField
                       control={form.control}
                       name="jurisdictionId"
@@ -312,10 +323,37 @@ export default function InitiativeFormPage() {
 
                     <FormField
                       control={form.control}
+                      name="scopeLevel"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Scope Level</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-scope-level">
+                                <SelectValue placeholder="Select scope level" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="federal">Federal</SelectItem>
+                              <SelectItem value="state">State</SelectItem>
+                              <SelectItem value="county">County</SelectItem>
+                              <SelectItem value="city">City</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            Level of government this initiative targets
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
                       name="initiativeType"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Initiative Type</FormLabel>
+                          <FormLabel>Measure Type</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger data-testid="select-type">
@@ -331,6 +369,31 @@ export default function InitiativeFormPage() {
                           </Select>
                           <FormDescription>
                             Type of ballot measure you want to propose
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="directOrIndirect"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Process Type</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-direct-indirect">
+                                <SelectValue placeholder="Direct or Indirect" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="direct">Direct Initiative</SelectItem>
+                              <SelectItem value="indirect">Indirect Initiative</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            Direct goes to voters, indirect goes to legislature first
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
