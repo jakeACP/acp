@@ -1,0 +1,283 @@
+Here’s a clean, copy-pasteable prompt you can drop into Replit’s chat to implement the three feeds with clear rules, data models, endpoints, ranking, and test criteria.
+
+---
+
+**TASK TITLE:** Implement “All”, “Following”, and “News” Feeds with Bias Meter and Monetization Rules
+
+**CONTEXT**
+This is for the ACP social democracy app. We’re renaming “Latest” → “Following”. We need three feeds:
+
+1. **All** – most engaging posts across the whole network (users, orgs, events, news).
+2. **Following** – strictly chronological posts from accounts the user follows (no algorithm).
+3. **News** – posts from accounts marked as “News Organization,” ranked by a neutrality/bias meter. Neutral is favored and monetized; highly biased is de-monetized and ranked last.
+
+Implement backend + minimal UI hooks, plus tests.
+
+---
+
+## Requirements (high level)
+
+* Add/confirm models for: `Account`, `Post`, `Follow`, `Reaction`, `Flag`, `BiasVote`, `OrgProfile` (for news org metadata).
+* Implement feed endpoints with cursor pagination:
+
+  * `GET /api/feed/all?cursor=&limit=&viewerId=`
+  * `GET /api/feed/following?cursor=&limit=&viewerId=`
+  * `GET /api/feed/news?cursor=&limit=&viewerId=`
+* Implement write endpoints:
+
+  * `POST /api/reactions` (like, emoji, gif, comment, share)
+  * `POST /api/flags` (spam, abuse, misinformation, other)
+  * `POST /api/bias-votes` (Neutral | LeftBias | RightBias)
+* Add light anti-brigading + confidence math for the bias meter.
+* Apply monetization policy in the News feed ranker based on neutrality.
+* Expose minimal UI components/props so the front end can render quickly:
+
+  * `<FeedToggle tabs={['All','Following','News']}/>`
+  * `<PostCard post={...} onReact={...} onFlag={...}/>`
+  * `<NewsBiasMeter score={...} votes={...} breakdown={{neutral,left,right}}/>`
+
+---
+
+## Data Model (SQL/Prisma-style; adapt to current stack)
+
+```sql
+-- Accounts
+id PK, handle TEXT UNIQUE, display_name TEXT, is_news_org BOOLEAN DEFAULT FALSE,
+created_at DATETIME
+
+-- Follow
+follower_id FK -> Account.id, followee_id FK -> Account.id, created_at DATETIME
+UNIQUE(follower_id, followee_id)
+
+-- Post
+id PK, author_id FK -> Account.id, kind TEXT CHECK(kind IN ('text','image','video','event','news')),
+title TEXT, body TEXT, url TEXT, created_at DATETIME, is_deleted BOOLEAN DEFAULT FALSE,
+news_source_name TEXT NULL -- optional for news posts
+
+-- Reaction
+id PK, post_id FK, actor_id FK, type TEXT CHECK(type IN ('like','emoji','gif','comment','share','bookmark')),
+emoji TEXT NULL, comment_text TEXT NULL, created_at DATETIME
+INDEX(post_id, type, created_at)
+
+-- Flag
+id PK, post_id FK, actor_id FK, reason TEXT CHECK(reason IN ('spam','abuse','misinfo','other')),
+created_at DATETIME
+INDEX(post_id)
+
+-- BiasVote (per post)
+id PK, post_id FK, voter_id FK, vote TEXT CHECK(vote IN ('Neutral','LeftBias','RightBias')),
+created_at DATETIME
+UNIQUE(post_id, voter_id) -- one vote per user per post
+
+-- OrgProfile (for news orgs)
+account_id PK FK -> Account.id,
+political_lean FLOAT DEFAULT 0.0, -- trailing average in [-1,1], optional
+trust_score FLOAT DEFAULT 0.0,    -- optional org-level quality score
+```
+
+---
+
+## Feed Logic
+
+### 1) Following (rename “Latest” → “Following”)
+
+* **Definition:** All posts from accounts the viewer follows, ordered `created_at DESC`, cursor by `(created_at, id)`.
+* **No algorithmic re-ordering.** Only filter out `is_deleted = true` and hard-blocked/hidden accounts if that exists.
+* **Acceptance tests:**
+
+  * When A follows B and C, A sees B/C posts newest first.
+  * Unfollow removes future posts from that author.
+  * No personalization, no post reshuffle between requests for same cursor window.
+
+### 2) All
+
+* **Definition:** Mixed content (users, orgs, events, news) ranked by engagement + recency with light anti-spam.
+* **Engagement score (per post p):**
+
+  ```
+  base = 1*likes + 3*comments + 4*shares + 0.5*emojis + 1.5*gifs + 4*bookmarks
+  penalty = 6*confirmed_flags + 1*unreviewed_flags
+  score_engagement = max(base - penalty, 0)
+  ```
+* **Time decay:** `decay = exp(- age_hours / 18)` (tuneable)
+* **Author spam cap:** at most 1 post per author per 8 items; apply small penalty if an author is overrepresented in the current window.
+* **Final score:** `rank_all = score_engagement * decay * quality_boost`
+
+  * `quality_boost` default 1.0; reserve for future signals (e.g., completion rate on long reads).
+* **Acceptance tests:**
+
+  * Higher-engagement but much older content shouldn’t dominate fresh high-quality content.
+  * Posts with many flags sink quickly or get removed if threshold exceeded.
+
+### 3) News (with Bias Meter + Monetization)
+
+* **Per-post votes:** count `N = neutral`, `L = left`, `R = right`, `T = N+L+R`.
+* **Bias index:** `bias_index = (R - L) / max(T,1)` in \[-1,1].
+* **Neutrality ratio:** `neutral_ratio = N / max(T,1)`.
+* **Confidence (Wilson score on neutral ratio)** to avoid tiny-sample noise. Require `T >= 20` for confident labeling; else show “Unrated”.
+* **Neutrality index (ranking multiplier):**
+
+  ```
+  neutrality_index = neutral_ratio * (1 - abs(bias_index))
+  ```
+
+  This rewards many Neutral votes and penalizes lopsided Left/Right votes.
+* **News ranking:**
+
+  ```
+  base_news = log1p(score_engagement)        -- same engagement as All, but log dampened
+  decay = exp(- age_hours / 24)
+  rank_news = base_news * decay * neutrality_index
+  ```
+* **Monetization policy:**
+
+  * Monetize when `T >= 20` AND `neutrality_index >= 0.50` → `monetized = true`
+  * De-monetize when `T >= 20` AND `abs(bias_index) >= 0.60` OR `neutrality_index < 0.35`
+  * Unrated (`T < 20`) → show, but neither boost nor monetize.
+* **Anti-brigading safeguards:**
+
+  * One vote per user per post (enforced by unique index).
+  * Require account age ≥ 7 days or verified email/phone to cast a bias vote.
+  * Optional soft trust weights: weight votes by `log1p(account_age_days)` (keep simple at first; implement later).
+* **Acceptance tests:**
+
+  * Highly Neutral posts surface above biased posts of similar engagement.
+  * A post can move from Unrated → Monetized as it accrues votes.
+  * Biased posts remain visible but rank lower and are de-monetized.
+
+---
+
+## Endpoints (example contracts)
+
+```http
+GET /api/feed/all?cursor=<opaque>&limit=25&viewerId=abc
+→ { items: PostCardDTO[], nextCursor }
+
+GET /api/feed/following?cursor=&limit=50&viewerId=abc
+→ { items: PostCardDTO[], nextCursor }
+
+GET /api/feed/news?cursor=&limit=25&viewerId=abc
+→ { items: NewsPostDTO[], nextCursor }
+
+POST /api/reactions
+Body: { postId, actorId, type: 'like'|'emoji'|'gif'|'comment'|'share'|'bookmark', emoji?, comment_text? }
+→ 200 { ok:true, counts:{...} }
+
+POST /api/flags
+Body: { postId, actorId, reason: 'spam'|'abuse'|'misinfo'|'other' }
+→ 200 { ok:true }
+
+POST /api/bias-votes
+Body: { postId, voterId, vote: 'Neutral'|'LeftBias'|'RightBias' }
+→ 200 { ok:true, tallies:{N,L,R,T}, bias_index, neutrality_index, monetized }
+```
+
+**DTO hints**
+
+```ts
+type PostCardDTO = {
+  id, author:{id, handle, display_name, is_news_org},
+  kind, title, body, url, created_at,
+  engagement:{likes,comments,shares,emojis,gifs,bookmarks},
+  flags_count, viewer_has_reacted:boolean
+}
+
+type NewsPostDTO = PostCardDTO & {
+  bias:{neutral:N, left:L, right:R, total:T, bias_index, neutrality_index, confident:boolean, monetized:boolean}
+}
+```
+
+---
+
+## UI hooks (minimal; wire to your framework)
+
+* Replace “Latest” tab label with **“Following”**.
+* Add `<NewsBiasMeter>` showing:
+
+  * Bar or dial with Neutral/Left/Right distribution.
+  * Badge: `Neutral`, `Leans Left`, or `Leans Right` when `T ≥ 20` (else `Unrated`).
+  * Monetization badge: `Monetized` or `De-monetized` per policy.
+
+**Reactions & Echo-chambers note:** For friend content in **All**, ranking relies on reactions (likes, comments, gifs, emojis) and down-ranks flagged content. **Following** stays purely chronological to avoid algorithmic echo chambers.
+
+---
+
+## Config (single source of truth; put in `config/feed.ts`)
+
+```ts
+export const FEED_CONFIG = {
+  all: {
+    decayHours: 18,
+    weights: { like:1, comment:3, share:4, emoji:0.5, gif:1.5, bookmark:4, flagPenalty: {confirmed:6, unreviewed:1} },
+    authorRepeatWindow: 8
+  },
+  news: {
+    minVotesForConfidence: 20,
+    decayHours: 24,
+    monetizeThreshold: 0.50,
+    demonetizeBiasAbs: 0.60,
+    demonetizeNeutralityBelow: 0.35
+  },
+  voting: { minAccountAgeDays: 7 }
+}
+```
+
+---
+
+## Tests (add unit + integration)
+
+* Ranking math:
+
+  * All: newer high-engagement beats older equal-engagement; heavy flags reduce rank.
+  * News: same engagement → higher neutrality\_index ranks higher.
+* Bias meter:
+
+  * With votes N=60, L=20, R=20 → neutrality\_index = 0.6 \* (1 - 0) = 0.6 → monetized.
+  * With N=10, L=80, R=10 (T=100) → bias\_index = (10-80)/100 = -0.70 → de-monetized.
+  * With T=5 → Unrated, no monetization.
+* Following:
+
+  * Exact chronological order, stable pagination, no re-ordering.
+* Security:
+
+  * Unique constraint on `BiasVote(postId, voterId)`.
+  * Rate-limit `POST /api/flags` and `POST /api/bias-votes`.
+
+---
+
+## Deliverables
+
+1. Migrations for new tables/indexes.
+2. Feed services: `buildAllFeed(viewerId, cursor, limit)`, `buildFollowingFeed(...)`, `buildNewsFeed(...)`.
+3. Bias meter math utility with tests.
+4. REST endpoints wired with cursor pagination.
+5. Minimal front-end components/props to render tabs, posts, reaction bar, and bias meter.
+6. Seed script producing: 20 normal users, 5 news orgs, 200 posts (mixed kinds), randomized reactions/flags/votes to validate ranking.
+
+---
+
+## Non-functional
+
+* Cursor-based pagination only; no offset.
+* Indexes: `Post(created_at)`, `Reaction(post_id, created_at)`, `BiasVote(post_id)`.
+* Logging/metrics: count views, reaction rates, vote rates; expose simple `/api/debug/feed-sample` for QA.
+
+---
+
+**Acceptance Criteria (must all pass)**
+
+* “Latest” is renamed everywhere to **“Following”**.
+* `/api/feed/following` returns strictly chronological posts from followees with stable cursors.
+* `/api/feed/all` returns a diverse, engagement-ranked mix with decay and flag penalties.
+* `/api/feed/news` ranks by neutrality and recency; monetization flags reflect thresholds and update as votes accrue.
+* Bias voting is one-per-user-per-post, requires minimum account age, and returns updated tallies and scores.
+* Test suite includes math checks for ranking and monetization decisions.
+
+---
+
+**Notes**
+
+* Use plain constants/config for thresholds; no need for a full feature flag system yet.
+* Keep math readable and covered by tests so we can adjust weights without regressions.
+
+End of task.
