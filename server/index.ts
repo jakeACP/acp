@@ -36,36 +36,100 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  const server = await registerRoutes(app);
+async function startServer() {
+  try {
+    log("Starting server...");
+    
+    // Test database connection before starting routes
+    try {
+      const { pool } = await import("./db");
+      await pool.query('SELECT 1');
+      log("Database connection verified");
+    } catch (dbError: any) {
+      log(`Database connection warning: ${dbError.message}`);
+      log("Server will continue starting, database operations may fail until connection is restored");
+    }
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const server = await registerRoutes(app);
 
-    res.status(status).json({ message });
-    throw err;
-  });
+    // Global error handler - don't throw errors, just log them
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+      log(`Server error: ${status} - ${message}`);
+      res.status(status).json({ message });
+      // Don't throw the error - this prevents server crashes
+    });
+
+    // importantly only setup vite in development and after
+    // setting up all the other routes so the catch-all route
+    // doesn't interfere with the other routes
+    if (app.get("env") === "development") {
+      await setupVite(app, server);
+    } else {
+      serveStatic(app);
+    }
+
+    // ALWAYS serve the app on the port specified in the environment variable PORT
+    // Other ports are firewalled. Default to 5000 if not specified.
+    // this serves both the API and the client.
+    // It is the only port that is not firewalled.
+    const port = parseInt(process.env.PORT || '5000', 10);
+    
+    server.listen({
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    }, () => {
+      log(`serving on port ${port}`);
+    });
+
+    // Handle server errors gracefully
+    server.on('error', (error: any) => {
+      log(`Server error: ${error.message}`);
+      if (error.code === 'EADDRINUSE') {
+        log(`Port ${port} is already in use. Trying to restart...`);
+        setTimeout(() => {
+          server.close();
+          startServer();
+        }, 1000);
+      }
+    });
+
+    // Handle process termination gracefully
+    process.on('SIGTERM', () => {
+      log('SIGTERM received, shutting down gracefully');
+      server.close(() => {
+        log('Server closed');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', () => {
+      log('SIGINT received, shutting down gracefully');
+      server.close(() => {
+        log('Server closed');
+        process.exit(0);
+      });
+    });
+
+  } catch (error: any) {
+    log(`Failed to start server: ${error.message}`);
+    log("Retrying in 5 seconds...");
+    setTimeout(startServer, 5000);
   }
+}
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
-})();
+// Handle uncaught exceptions and unhandled promise rejections
+process.on('uncaughtException', (error) => {
+  log(`Uncaught Exception: ${error.message}`);
+  log("Server will continue running...");
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  log(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
+  log("Server will continue running...");
+});
+
+startServer();
