@@ -1,7 +1,7 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
 import { db } from "./db";
-import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
+import { eq, desc, and, or, sql, count, inArray, gte } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -36,6 +36,14 @@ export interface IStorage {
   isFollowing(followerId: string, followeeId: string): Promise<boolean>;
   getFollowers(userId: string): Promise<User[]>;
   getFollowing(userId: string): Promise<User[]>;
+
+  // Invitation System
+  createInvitation(invitationData: InsertInvitation): Promise<Invitation>;
+  getInvitationByToken(token: string): Promise<Invitation | undefined>;
+  validateInvitation(token: string, email?: string): Promise<{ valid: boolean; reason?: string; invitation?: Invitation }>;
+  useInvitation(token: string, userId: string): Promise<void>;
+  getInvitationsByUser(userId: string): Promise<Invitation[]>;
+  deleteInvitation(id: string): Promise<void>;
 
   // Enhanced Reactions
   addReaction(userId: string, postId: string, type: string, emoji?: string): Promise<void>;
@@ -336,6 +344,77 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return user;
+  }
+
+  // Invitation System
+  async createInvitation(invitationData: InsertInvitation): Promise<Invitation> {
+    const [invitation] = await db
+      .insert(invitations)
+      .values(invitationData)
+      .returning();
+    return invitation;
+  }
+
+  async getInvitationByToken(token: string): Promise<Invitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(eq(invitations.token, token))
+      .limit(1);
+    return invitation;
+  }
+
+  async validateInvitation(token: string, email?: string): Promise<{ valid: boolean; reason?: string; invitation?: Invitation }> {
+    const invitation = await this.getInvitationByToken(token);
+    
+    if (!invitation) {
+      return { valid: false, reason: "Invitation not found" };
+    }
+    
+    if (invitation.isUsed && invitation.usageCount >= invitation.maxUses) {
+      return { valid: false, reason: "Invitation has already been used" };
+    }
+    
+    if (invitation.expiresAt && new Date() > invitation.expiresAt) {
+      return { valid: false, reason: "Invitation has expired" };
+    }
+    
+    if (invitation.email && email && invitation.email !== email) {
+      return { valid: false, reason: "Invitation is restricted to a different email address" };
+    }
+    
+    return { valid: true, invitation };
+  }
+
+  async useInvitation(token: string, userId: string): Promise<void> {
+    const invitation = await this.getInvitationByToken(token);
+    if (!invitation) {
+      throw new Error("Invitation not found");
+    }
+    
+    await db
+      .update(invitations)
+      .set({
+        usedBy: userId,
+        isUsed: invitation.usageCount + 1 >= invitation.maxUses,
+        usageCount: invitation.usageCount + 1,
+        usedAt: new Date(),
+      })
+      .where(eq(invitations.id, invitation.id));
+  }
+
+  async getInvitationsByUser(userId: string): Promise<Invitation[]> {
+    return await db
+      .select()
+      .from(invitations)
+      .where(eq(invitations.invitedBy, userId))
+      .orderBy(desc(invitations.createdAt));
+  }
+
+  async deleteInvitation(id: string): Promise<void> {
+    await db
+      .delete(invitations)
+      .where(eq(invitations.id, id));
   }
 
   async getPosts(limit = 20, offset = 0): Promise<PostWithAuthor[]> {

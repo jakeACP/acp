@@ -51,6 +51,25 @@ export const userFollows = pgTable("user_follows", {
   noSelfFollow: sql`CHECK (${table.followerId} <> ${table.followeeId})`,
 }));
 
+// Invitation system for controlled user registration
+export const invitations = pgTable("invitations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  token: varchar("token").notNull().unique(), // URL-safe invitation token
+  email: text("email"), // Optional: pre-assign to specific email
+  invitedBy: varchar("invited_by").notNull().references(() => users.id),
+  usedBy: varchar("used_by").references(() => users.id), // Who used this invitation
+  isUsed: boolean("is_used").default(false),
+  expiresAt: timestamp("expires_at"), // Optional expiration
+  maxUses: integer("max_uses").default(1), // How many times this invite can be used
+  usageCount: integer("usage_count").default(0), // How many times it has been used
+  createdAt: timestamp("created_at").defaultNow(),
+  usedAt: timestamp("used_at"), // When it was used
+}, (table) => ({
+  tokenIndex: index("invitations_token_idx").on(table.token),
+  invitedByIndex: index("invitations_invited_by_idx").on(table.invitedBy),
+  usedByIndex: index("invitations_used_by_idx").on(table.usedBy),
+}));
+
 export const posts = pgTable("posts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   authorId: varchar("author_id").notNull().references(() => users.id),
@@ -506,6 +525,15 @@ export const eventAttendeesRelations = relations(eventAttendees, ({ one }) => ({
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertInvitationSchema = createInsertSchema(invitations).omit({
+  id: true,
+  createdAt: true,
+  usedAt: true,
+  usageCount: true,
+  isUsed: true,
+  usedBy: true,
 });
 
 export const insertPostSchema = createInsertSchema(posts).omit({
@@ -1090,3 +1118,7 @@ export type Sponsor = typeof sponsors.$inferSelect;
 export type InsertSponsor = z.infer<typeof insertSponsorSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
+// Invitation types
+export type Invitation = typeof invitations.$inferSelect;
+export type InsertInvitation = z.infer<typeof insertInvitationSchema>;

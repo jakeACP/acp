@@ -60,20 +60,36 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      const existingUser = await storage.getUserByUsername(req.body.username);
+      const { invitationToken, ...userData } = req.body;
+      
+      // Validate invitation token is required
+      if (!invitationToken) {
+        return res.status(400).json({ message: "Invitation token is required" });
+      }
+
+      // Validate the invitation
+      const validation = await storage.validateInvitation(invitationToken, userData.email);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.reason || "Invalid invitation" });
+      }
+
+      const existingUser = await storage.getUserByUsername(userData.username);
       if (existingUser) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      const existingEmail = await storage.getUserByEmail(req.body.email);
+      const existingEmail = await storage.getUserByEmail(userData.email);
       if (existingEmail) {
         return res.status(400).json({ message: "Email already exists" });
       }
 
       const user = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
+        ...userData,
+        password: await hashPassword(userData.password),
       });
+
+      // Mark invitation as used
+      await storage.useInvitation(invitationToken, user.id);
 
       req.login(user, (err) => {
         if (err) return next(err);
