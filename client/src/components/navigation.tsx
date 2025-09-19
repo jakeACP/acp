@@ -20,6 +20,7 @@ export function Navigation() {
     { href: "/candidates", label: "Candidates" },
     { href: "/initiatives", label: "Initiatives" },
     { href: "/events", label: "Events" },
+    { href: "/friends", label: "Friends" },
     { href: "/charities", label: "Charities" },
     { href: "/boycotts", label: "Boycotts" },
     { href: "/representatives", label: "Your Reps" },
