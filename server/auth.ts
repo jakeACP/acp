@@ -218,4 +218,93 @@ export function setupAuth(app: Express) {
       res.status(500).json({ message: "Failed to reset password" });
     }
   });
+
+  // Invitation Management Routes
+
+  // Create invitation (admin-only)
+  app.post("/api/invitations", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    // Check if user is admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    
+    try {
+      const { email, expiresAt, maxUses = 1 } = req.body;
+      
+      // Generate secure invitation token
+      const invitationToken = randomBytes(32).toString('hex');
+      
+      const invitation = await storage.createInvitation({
+        token: invitationToken,
+        email: email || null,
+        invitedBy: req.user.id,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        maxUses: maxUses,
+      });
+      
+      // Return invitation with full URL
+      const invitationUrl = `${req.protocol}://${req.get('host')}/register?invitation=${invitationToken}`;
+      
+      res.status(201).json({
+        ...invitation,
+        invitationUrl,
+      });
+    } catch (error: any) {
+      console.error("Create invitation error:", error);
+      res.status(500).json({ message: "Failed to create invitation" });
+    }
+  });
+
+  // Get invitations (admin-only)
+  app.get("/api/invitations", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    // Check if user is admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    
+    try {
+      const invitations = await storage.getInvitationsByUser(req.user.id);
+      res.json(invitations);
+    } catch (error: any) {
+      console.error("Get invitations error:", error);
+      res.status(500).json({ message: "Failed to get invitations" });
+    }
+  });
+
+  // Validate invitation (public route for checking invitation validity)
+  app.get("/api/invitations/:token/validate", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { email } = req.query as { email?: string };
+      
+      const validation = await storage.validateInvitation(token, email);
+      res.json(validation);
+    } catch (error: any) {
+      console.error("Validate invitation error:", error);
+      res.status(500).json({ message: "Failed to validate invitation" });
+    }
+  });
+
+  // Delete invitation (admin-only)
+  app.delete("/api/invitations/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    // Check if user is admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    
+    try {
+      const { id } = req.params;
+      await storage.deleteInvitation(id);
+      res.json({ message: "Invitation deleted successfully" });
+    } catch (error: any) {
+      console.error("Delete invitation error:", error);
+      res.status(500).json({ message: "Failed to delete invitation" });
+    }
+  });
 }
