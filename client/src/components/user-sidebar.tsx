@@ -5,12 +5,16 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Group } from "@shared/schema";
-import { Leaf, GraduationCap, Scale, Users, Coins, Wallet } from "lucide-react";
+import { Leaf, GraduationCap, Scale, Users, Coins, Wallet, Copy, Check, Share2 } from "lucide-react";
 import { Link } from "wouter";
 import logoPath from "@assets/logo1_1753819424851.png";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 export function UserSidebar() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
   
   const { data: userGroups = [] } = useQuery<Group[]>({
     queryKey: ["/api/groups/user", user?.id],
@@ -42,6 +46,26 @@ export function UserSidebar() {
       case "education": return "bg-blue-500";
       case "corruption": return "bg-red-500";
       default: return "bg-slate-500";
+    }
+  };
+
+  const personalInviteUrl = user ? `${window.location.origin}/auth?invite=${user.id}` : '';
+
+  const handleCopyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(personalInviteUrl);
+      setCopied(true);
+      toast({
+        title: "Link copied!",
+        description: "Your personal invitation link has been copied to clipboard.",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast({
+        title: "Copy failed",
+        description: "Unable to copy link. Please copy it manually.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -161,6 +185,52 @@ export function UserSidebar() {
             
             <p className="text-xs text-slate-500 mt-2">
               Earn credits through participation and subscriptions
+            </p>
+          </div>
+          
+          {/* Personal Invitation Section */}
+          <div className="mt-6 pt-4 border-t border-blue-200">
+            <div className="flex items-center gap-2 mb-3">
+              <Share2 className="h-4 w-4 text-blue-600" />
+              <h4 className="text-sm font-medium text-slate-900">Invite Friends</h4>
+            </div>
+            
+            <div className="bg-white rounded-lg p-3 border border-blue-200 mb-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={personalInviteUrl}
+                  readOnly
+                  className="flex-1 text-xs text-slate-600 bg-transparent border-none outline-none"
+                  data-testid="input-personal-invite-url"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCopyInviteLink}
+                  className="px-2 py-1 h-auto border-blue-300 text-blue-600 hover:bg-blue-50"
+                  data-testid="button-copy-invite-link"
+                >
+                  {copied ? (
+                    <Check className="h-3 w-3" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            
+            <Button
+              onClick={handleCopyInviteLink}
+              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white text-sm"
+              data-testid="button-copy-share-link"
+            >
+              <Share2 className="h-4 w-4 mr-2" />
+              Copy Share Link
+            </Button>
+            
+            <p className="text-xs text-center text-slate-600 mt-2 font-medium">
+              💰 Get 20 ACP Credits for each person who joins!
             </p>
           </div>
         </CardContent>
