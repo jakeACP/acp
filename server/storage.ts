@@ -1,4 +1,5 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
+import { FEED_CONFIG } from "@shared/feed-config";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -23,6 +24,29 @@ export interface IStorage {
   createPost(post: InsertPost): Promise<Post>;
   getPostsByUser(userId: string): Promise<Post[]>;
   getPostsByTag(tag: string): Promise<Post[]>;
+
+  // Feed System
+  getAllFeed(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
+  getFollowingFeed(userId: string, limit?: number, offset?: number): Promise<PostWithAuthor[]>;
+  getNewsFeed(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
+  
+  // User Following
+  followUser(followerId: string, followeeId: string): Promise<void>;
+  unfollowUser(followerId: string, followeeId: string): Promise<void>;
+  isFollowing(followerId: string, followeeId: string): Promise<boolean>;
+  getFollowers(userId: string): Promise<User[]>;
+  getFollowing(userId: string): Promise<User[]>;
+
+  // Enhanced Reactions
+  addReaction(userId: string, postId: string, type: string, emoji?: string): Promise<void>;
+  removeReaction(userId: string, postId: string, type: string): Promise<void>;
+  getPostReactions(postId: string): Promise<any[]>;
+  getUserReaction(userId: string, postId: string, type: string): Promise<boolean>;
+
+  // Bias Voting
+  voteBias(userId: string, postId: string, vote: string): Promise<void>;
+  removeBiasVote(userId: string, postId: string): Promise<void>;
+  getPostBiasScore(postId: string): Promise<{ neutrality: number; bias: number; confidence: number }>;
 
   // Polls
   createPoll(poll: InsertPoll): Promise<Poll>;
@@ -325,6 +349,17 @@ export class DatabaseStorage implements IStorage {
         image: posts.image,
         likesCount: posts.likesCount,
         commentsCount: posts.commentsCount,
+        // News fields
+        url: posts.url,
+        title: posts.title,
+        newsSourceName: posts.newsSourceName,
+        // Enhanced engagement fields
+        sharesCount: posts.sharesCount,
+        emojiReactionsCount: posts.emojiReactionsCount,
+        gifReactionsCount: posts.gifReactionsCount,
+        bookmarksCount: posts.bookmarksCount,
+        flagsCount: posts.flagsCount,
+        isDeleted: posts.isDeleted,
         createdAt: posts.createdAt,
         author: {
           username: users.username,
@@ -366,6 +401,346 @@ export class DatabaseStorage implements IStorage {
       .from(posts)
       .where(sql`${tag} = ANY(${posts.tags})`)
       .orderBy(desc(posts.createdAt));
+  }
+
+  // Feed System Implementation
+  async getAllFeed(limit = 20, offset = 0): Promise<PostWithAuthor[]> {
+    const decayHours = FEED_CONFIG.all.decayHours;
+    const weights = FEED_CONFIG.all.weights;
+    
+    // Engagement-based ranking with time decay
+    return await db
+      .select({
+        id: posts.id,
+        authorId: posts.authorId,
+        content: posts.content,
+        type: posts.type,
+        tags: posts.tags,
+        image: posts.image,
+        likesCount: posts.likesCount,
+        commentsCount: posts.commentsCount,
+        url: posts.url,
+        title: posts.title,
+        newsSourceName: posts.newsSourceName,
+        sharesCount: posts.sharesCount,
+        emojiReactionsCount: posts.emojiReactionsCount,
+        gifReactionsCount: posts.gifReactionsCount,
+        bookmarksCount: posts.bookmarksCount,
+        flagsCount: posts.flagsCount,
+        isDeleted: posts.isDeleted,
+        createdAt: posts.createdAt,
+        author: {
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
+      .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .where(and(
+        eq(posts.isDeleted, false),
+        sql`${posts.createdAt} > NOW() - INTERVAL '72 hours'`
+      ))
+      .orderBy(sql`
+        (
+          COALESCE(${posts.likesCount}, 0) * ${weights.like.toString()} +
+          COALESCE(${posts.commentsCount}, 0) * ${weights.comment.toString()} +
+          COALESCE(${posts.sharesCount}, 0) * ${weights.share.toString()} +
+          COALESCE(${posts.emojiReactionsCount}, 0) * ${weights.emoji.toString()} +
+          COALESCE(${posts.gifReactionsCount}, 0) * ${weights.gif.toString()} +
+          COALESCE(${posts.bookmarksCount}, 0) * ${weights.bookmark.toString()} -
+          COALESCE(${posts.flagsCount}, 0) * ${weights.flagPenalty.unreviewed.toString()}
+        ) * EXP(-EXTRACT(EPOCH FROM (NOW() - ${posts.createdAt})) / 3600.0 / ${decayHours.toString()}) DESC
+      `)
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getFollowingFeed(userId: string, limit = 20, offset = 0): Promise<PostWithAuthor[]> {
+    // Chronological posts from followed users
+    return await db
+      .select({
+        id: posts.id,
+        authorId: posts.authorId,
+        content: posts.content,
+        type: posts.type,
+        tags: posts.tags,
+        image: posts.image,
+        likesCount: posts.likesCount,
+        commentsCount: posts.commentsCount,
+        url: posts.url,
+        title: posts.title,
+        newsSourceName: posts.newsSourceName,
+        sharesCount: posts.sharesCount,
+        emojiReactionsCount: posts.emojiReactionsCount,
+        gifReactionsCount: posts.gifReactionsCount,
+        bookmarksCount: posts.bookmarksCount,
+        flagsCount: posts.flagsCount,
+        isDeleted: posts.isDeleted,
+        createdAt: posts.createdAt,
+        author: {
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
+      .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .innerJoin(userFollows, eq(userFollows.followeeId, posts.authorId))
+      .where(and(
+        eq(userFollows.followerId, userId),
+        eq(posts.isDeleted, false)
+      ))
+      .orderBy(desc(posts.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getNewsFeed(limit = 20, offset = 0): Promise<PostWithAuthor[]> {
+    const { minVotesForConfidence, decayHours } = FEED_CONFIG.news;
+    
+    // Calculate cutoff timestamp in TypeScript to avoid parameter binding issues
+    const cutoffTimestamp = new Date(Date.now() - decayHours * 3600 * 1000);
+    
+    // News posts ranked by bias score and neutrality with aggregated scoring
+    return await db
+      .select({
+        id: posts.id,
+        authorId: posts.authorId,
+        content: posts.content,
+        type: posts.type,
+        tags: posts.tags,
+        image: posts.image,
+        likesCount: posts.likesCount,
+        commentsCount: posts.commentsCount,
+        url: posts.url,
+        title: posts.title,
+        newsSourceName: posts.newsSourceName,
+        sharesCount: posts.sharesCount,
+        emojiReactionsCount: posts.emojiReactionsCount,
+        gifReactionsCount: posts.gifReactionsCount,
+        bookmarksCount: posts.bookmarksCount,
+        flagsCount: posts.flagsCount,
+        isDeleted: posts.isDeleted,
+        createdAt: posts.createdAt,
+        author: {
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
+      .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(biasVotes, eq(biasVotes.postId, posts.id))
+      .where(and(
+        eq(posts.type, 'news'),
+        eq(posts.isDeleted, false),
+        gte(posts.createdAt, cutoffTimestamp)
+      ))
+      .groupBy(posts.id, users.id)
+      .orderBy(sql`
+        COUNT(CASE WHEN ${biasVotes.vote} = 'Neutral' THEN 1 END) DESC,
+        COUNT(${biasVotes.vote}) DESC,
+        ${posts.createdAt} DESC
+      `)
+      .limit(limit)
+      .offset(offset);
+  }
+
+  // User Following Methods
+  async followUser(followerId: string, followeeId: string): Promise<void> {
+    await db.insert(userFollows).values({
+      followerId,
+      followeeId,
+    }).onConflictDoNothing();
+  }
+
+  async unfollowUser(followerId: string, followeeId: string): Promise<void> {
+    await db.delete(userFollows)
+      .where(and(
+        eq(userFollows.followerId, followerId),
+        eq(userFollows.followeeId, followeeId)
+      ));
+  }
+
+  async isFollowing(followerId: string, followeeId: string): Promise<boolean> {
+    const [result] = await db.select()
+      .from(userFollows)
+      .where(and(
+        eq(userFollows.followerId, followerId),
+        eq(userFollows.followeeId, followeeId)
+      ))
+      .limit(1);
+    return !!result;
+  }
+
+  async getFollowers(userId: string): Promise<User[]> {
+    return await db.select({
+      id: users.id,
+      username: users.username,
+      email: users.email,
+      password: users.password,
+      role: users.role,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      location: users.location,
+      bio: users.bio,
+      avatar: users.avatar,
+      subscriptionStatus: users.subscriptionStatus,
+      subscriptionStartDate: users.subscriptionStartDate,
+      subscriptionEndDate: users.subscriptionEndDate,
+      stripeCustomerId: users.stripeCustomerId,
+      stripeSubscriptionId: users.stripeSubscriptionId,
+      acpCoinBalance: users.acpCoinBalance,
+      profileBackground: users.profileBackground,
+      favoriteSong: users.favoriteSong,
+      profileLayout: users.profileLayout,
+      createdAt: users.createdAt,
+      isNewsOrganization: users.isNewsOrganization,
+      organizationName: users.organizationName,
+      politicalLean: users.politicalLean,
+      trustScore: users.trustScore,
+    })
+      .from(users)
+      .innerJoin(userFollows, eq(userFollows.followerId, users.id))
+      .where(eq(userFollows.followeeId, userId));
+  }
+
+  async getFollowing(userId: string): Promise<User[]> {
+    return await db.select({
+      id: users.id,
+      username: users.username,
+      email: users.email,
+      password: users.password,
+      role: users.role,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      location: users.location,
+      bio: users.bio,
+      avatar: users.avatar,
+      subscriptionStatus: users.subscriptionStatus,
+      subscriptionStartDate: users.subscriptionStartDate,
+      subscriptionEndDate: users.subscriptionEndDate,
+      stripeCustomerId: users.stripeCustomerId,
+      stripeSubscriptionId: users.stripeSubscriptionId,
+      acpCoinBalance: users.acpCoinBalance,
+      profileBackground: users.profileBackground,
+      favoriteSong: users.favoriteSong,
+      profileLayout: users.profileLayout,
+      createdAt: users.createdAt,
+      isNewsOrganization: users.isNewsOrganization,
+      organizationName: users.organizationName,
+      politicalLean: users.politicalLean,
+      trustScore: users.trustScore,
+    })
+      .from(users)
+      .innerJoin(userFollows, eq(userFollows.followeeId, users.id))
+      .where(eq(userFollows.followerId, userId));
+  }
+
+  // Enhanced Reactions Methods
+  async addReaction(userId: string, postId: string, type: string, emoji?: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      const result = await tx.insert(reactions).values({
+        userId,
+        postId,
+        type,
+        emoji,
+      }).onConflictDoNothing().returning({ id: reactions.id });
+      
+      // Only increment counter if reaction was actually inserted
+      if (result.length > 0) {
+        const field = type === 'emoji' ? 'emojiReactionsCount' : 
+                      type === 'gif' ? 'gifReactionsCount' :
+                      type === 'share' ? 'sharesCount' : 'bookmarksCount';
+        
+        await tx.update(posts)
+          .set({ [field]: sql`COALESCE(${posts[field]}, 0) + 1` })
+          .where(eq(posts.id, postId));
+      }
+    });
+  }
+
+  async removeReaction(userId: string, postId: string, type: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      const result = await tx.delete(reactions)
+        .where(and(
+          eq(reactions.userId, userId),
+          eq(reactions.postId, postId),
+          eq(reactions.type, type)
+        )).returning({ id: reactions.id });
+      
+      // Only decrement counter if reaction was actually deleted
+      if (result.length > 0) {
+        const field = type === 'emoji' ? 'emojiReactionsCount' : 
+                      type === 'gif' ? 'gifReactionsCount' :
+                      type === 'share' ? 'sharesCount' : 'bookmarksCount';
+        
+        await tx.update(posts)
+          .set({ [field]: sql`GREATEST(COALESCE(${posts[field]}, 0) - 1, 0)` })
+          .where(eq(posts.id, postId));
+      }
+    });
+  }
+
+  async getPostReactions(postId: string): Promise<any[]> {
+    return await db.select()
+      .from(reactions)
+      .where(eq(reactions.postId, postId))
+      .orderBy(desc(reactions.createdAt));
+  }
+
+  async getUserReaction(userId: string, postId: string, type: string): Promise<boolean> {
+    const [result] = await db.select()
+      .from(reactions)
+      .where(and(
+        eq(reactions.userId, userId),
+        eq(reactions.postId, postId),
+        eq(reactions.type, type)
+      ))
+      .limit(1);
+    return !!result;
+  }
+
+  // Bias Voting Methods
+  async voteBias(userId: string, postId: string, vote: string): Promise<void> {
+    await db.insert(biasVotes).values({
+      voterId: userId,
+      postId,
+      vote,
+    }).onConflictDoUpdate({
+      target: [biasVotes.voterId, biasVotes.postId],
+      set: { vote }
+    });
+  }
+
+  async removeBiasVote(userId: string, postId: string): Promise<void> {
+    await db.delete(biasVotes)
+      .where(and(
+        eq(biasVotes.voterId, userId),
+        eq(biasVotes.postId, postId)
+      ));
+  }
+
+  async getPostBiasScore(postId: string): Promise<{ neutrality: number; bias: number; confidence: number }> {
+    const [result] = await db.select({
+      totalVotes: sql<number>`COUNT(*)`,
+      neutralVotes: sql<number>`COUNT(*) FILTER (WHERE ${biasVotes.vote} = 'Neutral')`,
+      leftVotes: sql<number>`COUNT(*) FILTER (WHERE ${biasVotes.vote} = 'LeftBias')`,
+      rightVotes: sql<number>`COUNT(*) FILTER (WHERE ${biasVotes.vote} = 'RightBias')`,
+    })
+      .from(biasVotes)
+      .where(eq(biasVotes.postId, postId));
+
+    if (!result || result.totalVotes === 0) {
+      return { neutrality: 0, bias: 0, confidence: 0 };
+    }
+
+    const neutrality = result.neutralVotes / result.totalVotes;
+    const bias = (result.rightVotes - result.leftVotes) / result.totalVotes;
+    const confidence = Math.min(result.totalVotes / 20, 1); // Max confidence at 20+ votes
+
+    return { neutrality, bias, confidence };
   }
 
   async createPoll(poll: InsertPoll): Promise<Poll> {

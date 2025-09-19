@@ -5,7 +5,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { db } from "./db";
 import { findRepresentativesByZipCode } from "./openai";
 import { z } from "zod";
@@ -67,6 +67,202 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const posts = await storage.getPostsByTag(req.params.tag);
       res.json(posts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Feed System API
+  app.get("/api/feeds/all", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const posts = await storage.getAllFeed(limit, offset);
+      res.json(posts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/feeds/following", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const posts = await storage.getFollowingFeed(req.user.id, limit, offset);
+      res.json(posts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/feeds/news", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const posts = await storage.getNewsFeed(limit, offset);
+      res.json(posts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // User Following API
+  app.post("/api/follow", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const followData = insertUserFollowSchema.parse({
+        followerId: req.user.id,
+        followeeId: req.body.userId,
+      });
+      await storage.followUser(followData.followerId, followData.followeeId);
+      res.status(201).json({ message: "User followed successfully" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/follow/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.unfollowUser(req.user.id, req.params.userId);
+      res.json({ message: "User unfollowed successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/follow/status/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const isFollowing = await storage.isFollowing(req.user.id, req.params.userId);
+      res.json({ isFollowing });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/users/:userId/followers", async (req, res) => {
+    try {
+      const followers = await storage.getFollowers(req.params.userId);
+      res.json(followers);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/users/:userId/following", async (req, res) => {
+    try {
+      const following = await storage.getFollowing(req.params.userId);
+      res.json(following);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Enhanced Reactions API
+  app.post("/api/reactions", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const reactionData = insertReactionSchema.parse({
+        userId: req.user.id,
+        postId: req.body.postId,
+        type: req.body.type,
+        emoji: req.body.emoji || undefined,
+      });
+      await storage.addReaction(reactionData.userId, reactionData.postId, reactionData.type, reactionData.emoji);
+      res.status(201).json({ message: "Reaction added successfully" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/reactions/:postId/:type", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.removeReaction(req.user.id, req.params.postId, req.params.type);
+      res.json({ message: "Reaction removed successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/reactions/:postId", async (req, res) => {
+    try {
+      const reactions = await storage.getPostReactions(req.params.postId);
+      res.json(reactions);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/reactions/:postId/:type/status", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const hasReaction = await storage.getUserReaction(req.user.id, req.params.postId, req.params.type);
+      res.json({ hasReaction });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Bias Voting API
+  app.post("/api/bias-votes", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const voteData = insertBiasVoteSchema.parse({
+        voterId: req.user.id,
+        postId: req.body.postId,
+        vote: req.body.vote,
+      });
+      await storage.voteBias(voteData.voterId, voteData.postId, voteData.vote);
+      res.status(201).json({ message: "Bias vote recorded successfully" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/bias-votes/:postId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.removeBiasVote(req.user.id, req.params.postId);
+      res.json({ message: "Bias vote removed successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/bias-votes/:postId/score", async (req, res) => {
+    try {
+      const score = await storage.getPostBiasScore(req.params.postId);
+      res.json(score);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

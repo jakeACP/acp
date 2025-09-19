@@ -6,8 +6,8 @@ export const FEED_CONFIG = {
       like: 1, 
       comment: 3, 
       share: 4, 
-      emoji: 0.5, 
-      gif: 1.5, 
+      emoji: 1, // Scaled from 0.5 * 2 to avoid decimal casting issues
+      gif: 3, // Scaled from 1.5 * 2 to avoid decimal casting issues 
       bookmark: 4, 
       flagPenalty: { confirmed: 6, unreviewed: 1 } 
     },

@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-type FeedType = 'all' | 'news' | 'friends' | 'polls' | 'events' | 'charities' | 'debates';
+type FeedType = 'all' | 'news' | 'following' | 'polls' | 'events' | 'charities' | 'debates';
 
 // Simple EventFeedCard component
 function EventFeedCard({ event }: { event: Event }) {
@@ -77,26 +77,44 @@ export function MainFeed() {
   const [showBlockchain, setShowBlockchain] = useState(false);
   const [activeFeed, setActiveFeed] = useState<FeedType>('all');
 
-  const { data: posts = [], isLoading } = useQuery<PostWithAuthor[]>({
-    queryKey: ["/api/posts"],
+  // Three-tier feed system queries
+  const { data: allFeedPosts = [], isLoading: isLoadingAll } = useQuery<PostWithAuthor[]>({
+    queryKey: ["/api/feeds/all"],
+    enabled: activeFeed === 'all',
   });
 
+  const { data: followingFeedPosts = [], isLoading: isLoadingFollowing } = useQuery<PostWithAuthor[]>({
+    queryKey: ["/api/feeds/following"],
+    enabled: activeFeed === 'following' && !!user,
+  });
+
+  const { data: newsFeedPosts = [], isLoading: isLoadingNews } = useQuery<PostWithAuthor[]>({
+    queryKey: ["/api/feeds/news"],
+    enabled: activeFeed === 'news',
+  });
+
+  // Legacy content queries for other tabs
   const { data: polls = [] } = useQuery<Poll[]>({
     queryKey: ["/api/polls"],
+    enabled: activeFeed === 'polls',
   });
 
   const { data: events = [] } = useQuery<Event[]>({
     queryKey: ["/api/events"],
+    enabled: activeFeed === 'events',
   });
 
   const { data: charities = [] } = useQuery<Charity[]>({
     queryKey: ["/api/charities"],
+    enabled: activeFeed === 'charities',
   });
 
   const { data: userGroups = [] } = useQuery<any[]>({
     queryKey: ["/api/groups/user", user?.id],
-    enabled: !!user?.id,
+    enabled: !!user?.id && (activeFeed === 'debates' || activeFeed === 'charities'),
   });
+
+  const isLoading = isLoadingAll || isLoadingFollowing || isLoadingNews;
 
   if (isLoading) {
     return (
@@ -106,7 +124,23 @@ export function MainFeed() {
     );
   }
 
-  // Get user group member IDs for friends feed
+  // Get current feed posts based on active feed
+  const getCurrentFeedPosts = () => {
+    switch (activeFeed) {
+      case 'all':
+        return allFeedPosts;
+      case 'following':
+        return followingFeedPosts;
+      case 'news':
+        return newsFeedPosts;
+      default:
+        return [];
+    }
+  };
+
+  const currentPosts = getCurrentFeedPosts();
+
+  // Get user group member IDs for debates feed
   const groupMemberIds = userGroups.flatMap((group: any) => 
     group.members?.map((member: any) => member.userId) || []
   );
@@ -130,43 +164,31 @@ export function MainFeed() {
            tags.some(tag => newsKeywords.includes(tag.toLowerCase()));
   };
 
-  // Combine all content for feed display
-  const allFeedItems = [
-    ...posts.map(post => ({ type: 'post' as const, data: post, createdAt: post.createdAt })),
-    ...polls.map(poll => ({ type: 'poll' as const, data: poll, createdAt: poll.createdAt })),
-    ...events.map(event => ({ type: 'event' as const, data: event, createdAt: event.createdAt })),
-    ...charities.map(charity => ({ type: 'charity' as const, data: charity, createdAt: charity.createdAt }))
-  ].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-
-  // Filter feed items based on active feed type
-  const getFilteredFeedItems = () => {
+  // Combine content for feed display based on active feed
+  const getFeedItems = () => {
     switch (activeFeed) {
-      case 'news':
-        return allFeedItems.filter(item => 
-          item.type === 'post' && isNewsContent(item.data as PostWithAuthor)
-        );
-      case 'friends':
-        return allFeedItems.filter(item => 
-          item.type === 'post' && 
-          groupMemberIds.includes((item.data as PostWithAuthor).authorId)
-        );
-      case 'polls':
-        return allFeedItems.filter(item => item.type === 'poll');
-      case 'events':
-        return allFeedItems.filter(item => item.type === 'event');
-      case 'charities':
-        return allFeedItems.filter(item => item.type === 'charity');
-      case 'debates':
-        return allFeedItems.filter(item => 
-          item.type === 'post' && isDebateContent(item.data as PostWithAuthor)
-        );
       case 'all':
+      case 'following':
+      case 'news':
+        // Use server-ranked posts for three-tier feed system
+        return currentPosts.map(post => ({ type: 'post' as const, data: post, createdAt: post.createdAt }));
+      case 'polls':
+        return polls.map(poll => ({ type: 'poll' as const, data: poll, createdAt: poll.createdAt }));
+      case 'events':
+        return events.map(event => ({ type: 'event' as const, data: event, createdAt: event.createdAt }));
+      case 'charities':
+        return charities.map(charity => ({ type: 'charity' as const, data: charity, createdAt: charity.createdAt }));
+      case 'debates':
+        // Legacy client-side filtering for debates
+        return currentPosts
+          .filter(post => isDebateContent(post))
+          .map(post => ({ type: 'post' as const, data: post, createdAt: post.createdAt }));
       default:
-        return allFeedItems;
+        return [];
     }
   };
 
-  const feedItems = getFilteredFeedItems();
+  const feedItems = getFeedItems();
 
   return (
     <div className="md:space-y-6">
@@ -184,9 +206,9 @@ export function MainFeed() {
                   <Newspaper className="h-4 w-4" />
                   <span className="hidden lg:inline">News</span>
                 </TabsTrigger>
-                <TabsTrigger value="friends" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                <TabsTrigger value="following" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
                   <Users className="h-4 w-4" />
-                  <span className="hidden lg:inline">Groups</span>
+                  <span className="hidden lg:inline">Following</span>
                 </TabsTrigger>
                 <TabsTrigger value="polls" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
                   <BarChart3 className="h-4 w-4" />
@@ -215,13 +237,13 @@ export function MainFeed() {
         <div className="px-4 py-3">
           <div className="flex gap-3 overflow-x-auto scrollbar-hide">
             {[
-              { key: 'all', label: 'All', icon: Globe, count: allFeedItems.length },
-              { key: 'news', label: 'News', icon: Newspaper, count: allFeedItems.filter(item => item.type === 'post' && isNewsContent(item.data as PostWithAuthor)).length },
-              { key: 'friends', label: 'Groups', icon: Users, count: allFeedItems.filter(item => item.type === 'post' && groupMemberIds.includes((item.data as PostWithAuthor).authorId)).length },
+              { key: 'all', label: 'All', icon: Globe, count: allFeedPosts.length },
+              { key: 'news', label: 'News', icon: Newspaper, count: newsFeedPosts.length },
+              { key: 'following', label: 'Following', icon: Users, count: followingFeedPosts.length },
               { key: 'polls', label: 'Polls', icon: BarChart3, count: polls.length },
               { key: 'events', label: 'Events', icon: Calendar, count: events.length },
               { key: 'charities', label: 'Charities', icon: Heart, count: charities.length },
-              { key: 'debates', label: 'Debates', icon: MessageCircleReply, count: allFeedItems.filter(item => item.type === 'post' && isDebateContent(item.data as PostWithAuthor)).length }
+              { key: 'debates', label: 'Debates', icon: MessageCircleReply, count: 0 }
             ].map(({ key, label, icon: Icon, count }) => (
               <button
                 key={key}
@@ -325,7 +347,7 @@ export function MainFeed() {
               ) : (
                 <>
                   {activeFeed === 'news' && <Newspaper className="h-12 w-12 mx-auto mb-2" />}
-                  {activeFeed === 'friends' && <Users className="h-12 w-12 mx-auto mb-2" />}
+                  {activeFeed === 'following' && <Users className="h-12 w-12 mx-auto mb-2" />}
                   {activeFeed === 'polls' && <BarChart3 className="h-12 w-12 mx-auto mb-2" />}
                   {activeFeed === 'events' && <Calendar className="h-12 w-12 mx-auto mb-2" />}
                   {activeFeed === 'charities' && <Heart className="h-12 w-12 mx-auto mb-2" />}
@@ -335,7 +357,7 @@ export function MainFeed() {
                   </h3>
                   <p className="text-slate-500 mt-2">
                     {activeFeed === 'news' && 'No news or announcements to display'}
-                    {activeFeed === 'friends' && 'No posts from your group members yet'}
+                    {activeFeed === 'following' && 'No posts from people you follow yet'}
                     {activeFeed === 'polls' && 'No polls available. Create the first one!'}
                     {activeFeed === 'events' && 'No upcoming events. Create the first one!'}
                     {activeFeed === 'charities' && 'No charities to display. Create the first one!'}
