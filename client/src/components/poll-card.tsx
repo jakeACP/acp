@@ -78,15 +78,15 @@ export function PollCard({ poll }: PollCardProps) {
   };
 
   return (
-    <Card>
+    <Card className="floating-card bg-card border border-border dark:border-border">
       <CardHeader>
         <div className="flex items-center mb-4">
           <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center mr-3">
             <BarChart3 className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-900">Community Poll</h3>
-            <div className="flex items-center gap-4 text-sm text-slate-500">
+            <h3 className="font-semibold text-foreground">Community Poll</h3>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
                 {getTimeRemaining()}
@@ -100,7 +100,7 @@ export function PollCard({ poll }: PollCardProps) {
         </div>
         
         <h4 
-          className="text-lg font-medium text-slate-900 mb-4 cursor-pointer hover:text-primary transition-colors"
+          className="text-lg font-medium text-foreground mb-4 cursor-pointer hover:text-primary transition-colors"
           onClick={() => window.location.href = `/polls/${poll.id}`}
           data-testid="link-poll-title"
         >
@@ -108,7 +108,7 @@ export function PollCard({ poll }: PollCardProps) {
         </h4>
         
         {poll.description && (
-          <p className="text-slate-600 mb-4">{poll.description}</p>
+          <p className="text-muted-foreground mb-4">{poll.description}</p>
         )}
       </CardHeader>
 
@@ -127,22 +127,22 @@ export function PollCard({ poll }: PollCardProps) {
                     className={`p-3 rounded-lg border-2 ${
                       isMyVote 
                         ? "border-primary bg-primary/5" 
-                        : "border-slate-200"
+                        : "border-border dark:border-border"
                     }`}
                   >
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium text-slate-900">
+                      <span className="font-medium text-foreground">
                         {option.text}
                         {isMyVote && <span className="text-primary ml-2">✓</span>}
                       </span>
-                      <span className="text-sm font-semibold text-slate-600">
+                      <span className="text-sm font-semibold text-muted-foreground">
                         {percentage}%
                       </span>
                     </div>
-                    <div className="bg-slate-200 rounded-full h-2">
+                    <div className="bg-muted rounded-full h-2">
                       <div
                         className={`h-2 rounded-full transition-all duration-500 ${
-                          isMyVote ? "bg-primary" : "bg-slate-400"
+                          isMyVote ? "bg-primary" : "bg-muted-foreground"
                         }`}
                         style={{ width: `${percentage}%` }}
                       />
@@ -162,7 +162,7 @@ export function PollCard({ poll }: PollCardProps) {
                 {poll.options.map((option) => (
                   <div
                     key={option.id}
-                    className="flex items-center space-x-3 p-3 rounded-lg border-2 border-slate-200 hover:border-slate-300 cursor-pointer"
+                    className="flex items-center space-x-3 p-3 rounded-lg border-2 border-border hover:border-muted-foreground cursor-pointer dark:border-border dark:hover:border-muted-foreground"
                   >
                     <RadioGroupItem value={option.id} id={option.id} />
                     <Label htmlFor={option.id} className="flex-1 cursor-pointer">
@@ -185,7 +185,7 @@ export function PollCard({ poll }: PollCardProps) {
               {voteMutation.isPending ? "Submitting..." : "Cast Vote"}
             </Button>
           ) : (
-            <div className="text-sm text-slate-600">
+            <div className="text-sm text-muted-foreground">
               You voted on this poll
             </div>
           )}

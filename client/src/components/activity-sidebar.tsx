@@ -47,13 +47,13 @@ export function ActivitySidebar() {
             <div className="space-y-4">
               {activePolls.slice(0, 3).map((poll, index) => (
                 <div key={poll.id} className={`border-l-4 pl-3 ${getPollColor(index)}`}>
-                  <h5 className="text-sm font-medium text-slate-900 line-clamp-2">
+                  <h5 className="text-sm font-medium text-foreground line-clamp-2">
                     {poll.title}
                   </h5>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     Ends in {Math.ceil(Math.random() * 5)} days • {poll.totalVotes || 0} votes
                   </p>
-                  <div className="mt-2 bg-slate-200 rounded-full h-1.5">
+                  <div className="mt-2 bg-muted rounded-full h-1.5">
                     <div 
                       className="bg-primary h-1.5 rounded-full transition-all duration-500" 
                       style={{ width: `${getPollProgress(poll)}%` }}
@@ -67,7 +67,7 @@ export function ActivitySidebar() {
               </Button>
             </div>
           ) : (
-            <p className="text-sm text-slate-600 text-center py-4">
+            <p className="text-sm text-muted-foreground text-center py-4">
               No active polls at the moment
             </p>
           )}
@@ -90,10 +90,10 @@ export function ActivitySidebar() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <h5 className="text-sm font-semibold text-slate-900">
+                    <h5 className="text-sm font-semibold text-foreground">
                       Candidate Name
                     </h5>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       Running for {candidate.position}
                     </p>
                     <p className="text-xs text-primary">
@@ -111,7 +111,7 @@ export function ActivitySidebar() {
               </Button>
             </div>
           ) : (
-            <p className="text-sm text-slate-600 text-center py-4">
+            <p className="text-sm text-muted-foreground text-center py-4">
               No featured candidates available
             </p>
           )}
@@ -133,7 +133,7 @@ export function ActivitySidebar() {
                 <span className="text-sm font-medium text-primary hover:underline cursor-pointer">
                   {topic.tag}
                 </span>
-                <span className="text-xs text-slate-500">{topic.posts} posts</span>
+                <span className="text-xs text-muted-foreground">{topic.posts} posts</span>
               </div>
             ))}
           </div>
@@ -159,14 +159,14 @@ export function ActivitySidebar() {
             <Button 
               variant="secondary" 
               size="sm"
-              className="bg-white text-primary hover:bg-slate-50"
+              className="bg-card text-primary hover:bg-muted"
             >
               {user?.stripeSubscriptionId ? "Manage" : "Upgrade"}
             </Button>
             <Button 
               variant="ghost" 
               size="sm"
-              className="text-white hover:bg-white/20"
+              className="text-primary-foreground hover:bg-primary-foreground/20"
             >
               {user?.stripeSubscriptionId ? "Billing" : "Learn More"}
             </Button>

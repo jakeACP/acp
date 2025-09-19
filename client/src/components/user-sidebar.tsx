@@ -72,7 +72,7 @@ export function UserSidebar() {
   return (
     <div className="space-y-6">
       {/* User Profile Card */}
-      <Card>
+      <Card className="floating-card bg-card border border-border dark:border-border">
         <CardContent className="p-6">
           <div className="text-center">
             <Avatar className="h-20 w-20 mx-auto mb-4">
@@ -82,7 +82,7 @@ export function UserSidebar() {
               </AvatarFallback>
             </Avatar>
             
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 className="text-lg font-semibold text-foreground">
               {user?.firstName ? `${user.firstName} ${user.lastName}` : user?.username}
             </h3>
             
@@ -94,25 +94,25 @@ export function UserSidebar() {
             </div>
             
             {user?.location && (
-              <p className="text-xs text-slate-500 mt-1">{user.location}</p>
+              <p className="text-xs text-muted-foreground mt-1">{user.location}</p>
             )}
           </div>
           
           <div className="mt-6 grid grid-cols-2 gap-4 text-center">
             <div>
-              <p className="text-2xl font-bold text-slate-900">{voteData?.voteCount || 0}</p>
-              <p className="text-xs text-slate-500">Votes Cast</p>
+              <p className="text-2xl font-bold text-foreground">{voteData?.voteCount || 0}</p>
+              <p className="text-xs text-muted-foreground">Votes Cast</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{userGroups.length}</p>
-              <p className="text-xs text-slate-500">Groups</p>
+              <p className="text-2xl font-bold text-foreground">{userGroups.length}</p>
+              <p className="text-xs text-muted-foreground">Groups</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* My Groups */}
-      <Card>
+      <Card className="floating-card bg-card border border-border dark:border-border">
         <CardHeader>
           <CardTitle className="text-base">My Groups</CardTitle>
         </CardHeader>
@@ -125,10 +125,10 @@ export function UserSidebar() {
                     {getGroupIcon(group.category)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {group.name}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {group.memberCount} members
                     </p>
                   </div>
@@ -143,8 +143,8 @@ export function UserSidebar() {
             </div>
           ) : (
             <div className="text-center py-4">
-              <Users className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-              <p className="text-sm text-slate-600 mb-3">
+              <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground mb-3">
                 You haven't joined any groups yet
               </p>
               <Button size="sm" className="w-full">
@@ -156,21 +156,21 @@ export function UserSidebar() {
       </Card>
 
       {/* ACP Credits Balance */}
-      <Card className="bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200">
+      <Card className="floating-card-lg bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Coins className="h-4 w-4 text-blue-600" />
+          <CardTitle className="text-base flex items-center gap-2 text-foreground">
+            <Coins className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             ACP Credits
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-3">
-              <Coins className="h-6 w-6 text-blue-600" />
-              <span className="text-2xl font-bold text-slate-900">
+              <Coins className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <span className="text-2xl font-bold text-foreground">
                 {balanceData?.balance ? parseFloat(balanceData.balance).toFixed(2) : '0.00'}
               </span>
-              <span className="text-sm text-slate-600 font-medium">ACP</span>
+              <span className="text-sm text-muted-foreground font-medium">ACP</span>
             </div>
             
             <Link href="/crypto">
@@ -183,32 +183,32 @@ export function UserSidebar() {
               </Button>
             </Link>
             
-            <p className="text-xs text-slate-500 mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               Earn credits through participation and subscriptions
             </p>
           </div>
           
           {/* Personal Invitation Section */}
-          <div className="mt-6 pt-4 border-t border-blue-200">
+          <div className="mt-6 pt-4 border-t border-blue-200 dark:border-blue-800">
             <div className="flex items-center gap-2 mb-3">
-              <Share2 className="h-4 w-4 text-blue-600" />
-              <h4 className="text-sm font-medium text-slate-900">Invite Friends</h4>
+              <Share2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <h4 className="text-sm font-medium text-foreground">Invite Friends</h4>
             </div>
             
-            <div className="bg-white rounded-lg p-3 border border-blue-200 mb-3">
+            <div className="bg-white dark:bg-card rounded-lg p-3 border border-blue-200 dark:border-blue-800 mb-3">
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={personalInviteUrl}
                   readOnly
-                  className="flex-1 text-xs text-slate-600 bg-transparent border-none outline-none"
+                  className="flex-1 text-xs text-muted-foreground bg-transparent border-none outline-none"
                   data-testid="input-personal-invite-url"
                 />
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleCopyInviteLink}
-                  className="px-2 py-1 h-auto border-blue-300 text-blue-600 hover:bg-blue-50"
+                  className="px-2 py-1 h-auto border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                   data-testid="button-copy-invite-link"
                 >
                   {copied ? (
@@ -229,7 +229,7 @@ export function UserSidebar() {
               Copy Share Link
             </Button>
             
-            <p className="text-xs text-center text-slate-600 mt-2 font-medium">
+            <p className="text-xs text-center text-muted-foreground mt-2 font-medium">
               💰 Get 20 ACP Credits for each person who joins!
             </p>
           </div>

@@ -234,7 +234,7 @@ export function CreatePostForm() {
 
   if (!showForm) {
     return (
-      <Card className="shadow-sm border-0 bg-white/80 backdrop-blur-sm">
+      <Card className="shadow-sm border-0 bg-card/80 backdrop-blur-sm">
         <CardContent className="p-6">
           <div className="flex items-center space-x-3">
             <Avatar className="ring-2 ring-primary/20">
@@ -245,7 +245,7 @@ export function CreatePostForm() {
             </Avatar>
             <Button
               variant="outline"
-              className="flex-1 justify-start text-slate-500 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border-slate-200 hover:border-primary/30 transition-all duration-200"
+              className="flex-1 justify-start text-muted-foreground hover:text-foreground bg-muted hover:bg-accent border-border hover:border-primary/30 transition-all duration-200"
               onClick={() => setShowForm(true)}
             >
               <currentPostType.icon className="h-4 w-4 mr-2 text-primary" />
@@ -258,7 +258,7 @@ export function CreatePostForm() {
   }
 
   return (
-    <Card className="shadow-sm border-0 bg-white/90 backdrop-blur-sm">
+    <Card className="shadow-sm border-0 bg-card/90 backdrop-blur-sm">
       <CardContent className="p-6">
         <div className="flex items-start space-x-3">
           <Avatar className="ring-2 ring-primary/20">
@@ -271,9 +271,9 @@ export function CreatePostForm() {
           <div className="flex-1 space-y-4">
             {/* Post Type Selector */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Content Type</label>
+              <label className="text-sm font-medium text-foreground">Content Type</label>
               <Select value={postType} onValueChange={(value) => setPostType(value as PostType)}>
-                <SelectTrigger className="border-gray-200 hover:border-primary/50 transition-colors">
+                <SelectTrigger className="border-border hover:border-primary/50 transition-colors">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -293,7 +293,7 @@ export function CreatePostForm() {
               placeholder={currentPostType.placeholder}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="min-h-[120px] border-0 p-0 resize-none focus:ring-0 text-lg placeholder:text-slate-400"
+              className="min-h-[120px] border-0 p-0 resize-none focus:ring-0 text-lg placeholder:text-muted-foreground"
               autoFocus
             />
 
@@ -306,7 +306,7 @@ export function CreatePostForm() {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <label className="block text-sm font-medium text-foreground mb-1">Date</label>
                     <Input
                       type="date"
                       value={eventDate}
@@ -316,7 +316,7 @@ export function CreatePostForm() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                    <label className="block text-sm font-medium text-foreground mb-1">Time</label>
                     <Input
                       type="time"
                       value={eventTime}
@@ -327,7 +327,7 @@ export function CreatePostForm() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location (Optional)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Location (Optional)</label>
                   <Input
                     placeholder="e.g., City Hall, 123 Main St, or Virtual Event"
                     value={eventLocation}
@@ -386,7 +386,7 @@ export function CreatePostForm() {
                   Fundraising Goal
                 </h4>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Target Amount (Optional)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Target Amount (Optional)</label>
                   <Input
                     type="number"
                     placeholder="e.g., 5000"
@@ -396,7 +396,7 @@ export function CreatePostForm() {
                     min="1"
                     step="0.01"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Leave blank if no specific target</p>
+                  <p className="text-xs text-muted-foreground mt-1">Leave blank if no specific target</p>
                 </div>
               </div>
             )}
@@ -481,9 +481,9 @@ export function CreatePostForm() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+            <div className="flex justify-between items-center pt-4 border-t border-border">
               <div className="flex items-center space-x-4">
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <currentPostType.icon className="h-4 w-4 text-primary" />
                   <span className="font-medium">{currentPostType.label}</span>
                 </div>
@@ -509,7 +509,7 @@ export function CreatePostForm() {
                     setDebatePositions(['', '']);
                     setPostType('news');
                   }}
-                  className="hover:bg-gray-100 transition-colors"
+                  className="hover:bg-muted transition-colors"
                 >
                   Cancel
                 </Button>
