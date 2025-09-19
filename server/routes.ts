@@ -5,7 +5,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema } from "@shared/schema";
 import { db } from "./db";
 import { findRepresentativesByZipCode } from "./openai";
 import { z } from "zod";
@@ -2516,6 +2516,247 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const donations = await storage.getUserDonations(req.user.id);
       res.json(donations);
     } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Owner Admin Security Middleware
+  function ensureOwnerAdmin(req: any, res: any, next: any) {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    // Check if user is admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+
+    // Check if user is the owner admin
+    storage.getAdminUserId().then(adminUserId => {
+      if (!adminUserId || req.user.id !== adminUserId) {
+        return res.status(403).json({ message: "Owner admin access required" });
+      }
+      next();
+    }).catch(error => {
+      console.error("Error checking admin user:", error);
+      return res.status(500).json({ message: "Authentication error" });
+    });
+  }
+
+  // Admin Representatives Management API
+  app.get("/api/admin/representatives", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const filters = {
+        officeLevel: req.query.officeLevel as string,
+        active: req.query.active === "true" ? true : req.query.active === "false" ? false : undefined,
+        search: req.query.search as string
+      };
+      const pagination = {
+        limit: parseInt(req.query.limit as string) || 50,
+        offset: parseInt(req.query.offset as string) || 0
+      };
+
+      const result = await storage.listRepresentatives(filters, pagination);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Admin list representatives error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/representatives/:id", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const representative = await storage.getRepresentative(req.params.id);
+      if (!representative) {
+        return res.status(404).json({ message: "Representative not found" });
+      }
+      res.json(representative);
+    } catch (error: any) {
+      console.error("Admin get representative error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/representatives", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const repData = insertRepresentativeSchema.parse(req.body);
+      const representative = await storage.createRepresentative(repData);
+      res.status(201).json(representative);
+    } catch (error: any) {
+      console.error("Admin create representative error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/representatives/:id", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const updateData = insertRepresentativeSchema.partial().parse(req.body);
+      const representative = await storage.updateRepresentativeAdmin(req.params.id, updateData);
+      res.json(representative);
+    } catch (error: any) {
+      console.error("Admin update representative error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      if (error.message === "Representative not found") {
+        return res.status(404).json({ message: error.message });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/representatives/:id", ensureOwnerAdmin, async (req, res) => {
+    try {
+      await storage.deleteRepresentative(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Admin delete representative error:", error);
+      if (error.message === "Representative not found") {
+        return res.status(404).json({ message: error.message });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin Zip Code Mappings Management API
+  app.get("/api/admin/zip-mappings", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const zipCode = req.query.zipCode as string;
+      const mappings = await storage.listZipMappings(zipCode);
+      res.json(mappings);
+    } catch (error: any) {
+      console.error("Admin list zip mappings error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/zip-mappings", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const mappingData = insertZipCodeLookupSchema.parse(req.body);
+      const mapping = await storage.upsertZipMapping(mappingData);
+      res.status(201).json(mapping);
+    } catch (error: any) {
+      console.error("Admin create zip mapping error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/zip-mappings/:id", ensureOwnerAdmin, async (req, res) => {
+    try {
+      await storage.deleteZipMapping(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Admin delete zip mapping error:", error);
+      if (error.message === "Zip mapping not found") {
+        return res.status(404).json({ message: error.message });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin Import/Export Operations
+  app.get("/api/admin/representatives/export", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const representatives = await storage.exportRepresentatives();
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', 'attachment; filename="representatives.json"');
+      res.json(representatives);
+    } catch (error: any) {
+      console.error("Admin export representatives error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/representatives/import", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const { items } = req.body;
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ message: "Items must be an array" });
+      }
+
+      // Validate each item
+      const validatedItems = items.map(item => insertRepresentativeSchema.parse(item));
+      
+      const result = await storage.importRepresentatives(validatedItems, req.user.id);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Admin import representatives error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/zip-mappings/export", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const mappings = await storage.exportZipMappings();
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', 'attachment; filename="zip-mappings.json"');
+      res.json(mappings);
+    } catch (error: any) {
+      console.error("Admin export zip mappings error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/zip-mappings/import", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const { items } = req.body;
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ message: "Items must be an array" });
+      }
+
+      // Validate each item
+      const validatedItems = items.map(item => insertZipCodeLookupSchema.parse(item));
+      
+      const result = await storage.importZipMappings(validatedItems, req.user.id);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Admin import zip mappings error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin Audit Logs API
+  app.get("/api/admin/audit-logs", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const entityType = req.query.entityType as string;
+      const entityId = req.query.entityId as string;
+      const limit = parseInt(req.query.limit as string) || 50;
+
+      if (!entityType || !entityId) {
+        return res.status(400).json({ message: "entityType and entityId are required" });
+      }
+
+      const logs = await storage.getAuditLogsByEntity(entityType, entityId, limit);
+      res.json(logs);
+    } catch (error: any) {
+      console.error("Admin get audit logs error:", error);
       res.status(500).json({ message: error.message });
     }
   });

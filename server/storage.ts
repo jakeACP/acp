@@ -154,6 +154,24 @@ export interface IStorage {
   markRepresentativeAsInactive(id: string): Promise<void>;
   refreshRepresentativeIfExpired(id: string): Promise<Representative | null>;
 
+  // Admin Representatives Management
+  listRepresentatives(filters?: { officeLevel?: string; active?: boolean; search?: string }, pagination?: { limit: number; offset: number }): Promise<{ representatives: Representative[]; total: number }>;
+  getRepresentative(id: string): Promise<Representative | undefined>;
+  createRepresentative(data: InsertRepresentative): Promise<Representative>;
+  updateRepresentativeAdmin(id: string, patch: Partial<Representative>): Promise<Representative>;
+  deleteRepresentative(id: string): Promise<void>;
+  
+  // Admin Zip Code Mappings Management
+  listZipMappings(zipCode?: string): Promise<ZipCodeLookup[]>;
+  upsertZipMapping(data: InsertZipCodeLookup): Promise<ZipCodeLookup>;
+  deleteZipMapping(id: string): Promise<void>;
+  
+  // Admin Import/Export Operations
+  exportRepresentatives(): Promise<Representative[]>;
+  importRepresentatives(items: InsertRepresentative[], adminUserId: string): Promise<{ imported: number; errors: string[] }>;
+  exportZipMappings(): Promise<ZipCodeLookup[]>;
+  importZipMappings(items: InsertZipCodeLookup[], adminUserId: string): Promise<{ imported: number; errors: string[] }>;
+
   // Boycotts
   getBoycotts(limit?: number, offset?: number): Promise<Boycott[]>;
   getBoycottById(id: string): Promise<Boycott | undefined>;
@@ -2077,6 +2095,276 @@ export class DatabaseStorage implements IStorage {
       console.error('Error refreshing representative:', error);
       return representative; // Return original on error
     }
+  }
+
+  // Admin Representatives Management Implementation
+  async listRepresentatives(
+    filters?: { officeLevel?: string; active?: boolean; search?: string }, 
+    pagination?: { limit: number; offset: number }
+  ): Promise<{ representatives: Representative[]; total: number }> {
+    const limit = pagination?.limit || 50;
+    const offset = pagination?.offset || 0;
+
+    let query = db.select().from(representatives);
+    let countQuery = db.select({ count: count() }).from(representatives);
+
+    const conditions = [];
+    if (filters) {
+      if (filters.officeLevel) {
+        conditions.push(eq(representatives.officeLevel, filters.officeLevel));
+      }
+      if (filters.active !== undefined) {
+        conditions.push(eq(representatives.active, filters.active));
+      }
+      if (filters.search) {
+        conditions.push(
+          or(
+            sql`${representatives.name} ILIKE ${`%${filters.search}%`}`,
+            sql`${representatives.officeTitle} ILIKE ${`%${filters.search}%`}`,
+            sql`${representatives.party} ILIKE ${`%${filters.search}%`}`,
+            sql`${representatives.district} ILIKE ${`%${filters.search}%`}`,
+            sql`${representatives.jurisdiction} ILIKE ${`%${filters.search}%`}`
+          )
+        );
+      }
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+      countQuery = countQuery.where(and(...conditions));
+    }
+
+    const [reps, totalResult] = await Promise.all([
+      query.orderBy(representatives.name).limit(limit).offset(offset),
+      countQuery
+    ]);
+
+    return {
+      representatives: reps,
+      total: totalResult[0]?.count || 0
+    };
+  }
+
+  async getRepresentative(id: string): Promise<Representative | undefined> {
+    const [representative] = await db
+      .select()
+      .from(representatives)
+      .where(eq(representatives.id, id));
+    return representative || undefined;
+  }
+
+  async createRepresentative(data: InsertRepresentative): Promise<Representative> {
+    const [newRep] = await db
+      .insert(representatives)
+      .values(data)
+      .returning();
+    
+    // Create audit log
+    await this.createAuditLog({
+      entityType: "representative",
+      entityId: newRep.id,
+      action: "created",
+      diffJson: { new: newRep }
+    });
+    
+    return newRep;
+  }
+
+  async updateRepresentativeAdmin(id: string, patch: Partial<Representative>): Promise<Representative> {
+    const existing = await this.getRepresentative(id);
+    if (!existing) {
+      throw new Error("Representative not found");
+    }
+
+    const [updated] = await db
+      .update(representatives)
+      .set({
+        ...patch,
+        updatedAt: new Date()
+      })
+      .where(eq(representatives.id, id))
+      .returning();
+
+    // Create audit log
+    await this.createAuditLog({
+      entityType: "representative",
+      entityId: id,
+      action: "updated",
+      diffJson: { old: existing, new: updated }
+    });
+
+    return updated;
+  }
+
+  async deleteRepresentative(id: string): Promise<void> {
+    const existing = await this.getRepresentative(id);
+    if (!existing) {
+      throw new Error("Representative not found");
+    }
+
+    // Delete related zip mappings first (cascade will handle this automatically due to FK constraint)
+    await db.delete(representatives).where(eq(representatives.id, id));
+
+    // Create audit log
+    await this.createAuditLog({
+      entityType: "representative",
+      entityId: id,
+      action: "deleted",
+      diffJson: { old: existing }
+    });
+  }
+
+  // Admin Zip Code Mappings Management Implementation
+  async listZipMappings(zipCode?: string): Promise<ZipCodeLookup[]> {
+    let query = db
+      .select({
+        id: zipCodeLookups.id,
+        zipCode: zipCodeLookups.zipCode,
+        representativeId: zipCodeLookups.representativeId,
+        officeLevel: zipCodeLookups.officeLevel,
+        district: zipCodeLookups.district,
+        jurisdiction: zipCodeLookups.jurisdiction,
+        priority: zipCodeLookups.priority,
+        createdAt: zipCodeLookups.createdAt,
+        updatedAt: zipCodeLookups.updatedAt,
+        representativeName: representatives.name,
+        representativeOfficeTitle: representatives.officeTitle
+      })
+      .from(zipCodeLookups)
+      .innerJoin(representatives, eq(zipCodeLookups.representativeId, representatives.id));
+
+    if (zipCode) {
+      query = query.where(eq(zipCodeLookups.zipCode, zipCode));
+    }
+
+    return await query.orderBy(zipCodeLookups.zipCode, zipCodeLookups.priority);
+  }
+
+  async upsertZipMapping(data: InsertZipCodeLookup): Promise<ZipCodeLookup> {
+    // Check for existing mapping with same zipCode + officeLevel + representativeId
+    const existing = await db
+      .select()
+      .from(zipCodeLookups)
+      .where(and(
+        eq(zipCodeLookups.zipCode, data.zipCode),
+        eq(zipCodeLookups.officeLevel, data.officeLevel),
+        eq(zipCodeLookups.representativeId, data.representativeId)
+      ));
+
+    if (existing.length > 0) {
+      // Update existing
+      const [updated] = await db
+        .update(zipCodeLookups)
+        .set({
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(eq(zipCodeLookups.id, existing[0].id))
+        .returning();
+
+      await this.createAuditLog({
+        entityType: "zip_mapping",
+        entityId: updated.id,
+        action: "updated",
+        diffJson: { old: existing[0], new: updated }
+      });
+
+      return updated;
+    } else {
+      // Create new
+      const [newMapping] = await db
+        .insert(zipCodeLookups)
+        .values(data)
+        .returning();
+
+      await this.createAuditLog({
+        entityType: "zip_mapping",
+        entityId: newMapping.id,
+        action: "created",
+        diffJson: { new: newMapping }
+      });
+
+      return newMapping;
+    }
+  }
+
+  async deleteZipMapping(id: string): Promise<void> {
+    const existing = await db
+      .select()
+      .from(zipCodeLookups)
+      .where(eq(zipCodeLookups.id, id));
+
+    if (existing.length === 0) {
+      throw new Error("Zip mapping not found");
+    }
+
+    await db.delete(zipCodeLookups).where(eq(zipCodeLookups.id, id));
+
+    await this.createAuditLog({
+      entityType: "zip_mapping",
+      entityId: id,
+      action: "deleted",
+      diffJson: { old: existing[0] }
+    });
+  }
+
+  // Admin Import/Export Operations Implementation
+  async exportRepresentatives(): Promise<Representative[]> {
+    return await db.select().from(representatives).orderBy(representatives.name);
+  }
+
+  async importRepresentatives(items: InsertRepresentative[], adminUserId: string): Promise<{ imported: number; errors: string[] }> {
+    const errors: string[] = [];
+    let imported = 0;
+
+    for (const item of items) {
+      try {
+        await this.createRepresentative(item);
+        imported++;
+      } catch (error: any) {
+        errors.push(`Error importing ${item.name}: ${error.message}`);
+      }
+    }
+
+    // Create audit log for bulk import
+    await this.createAuditLog({
+      actorId: adminUserId,
+      entityType: "representative",
+      entityId: "bulk_import",
+      action: "bulk_imported",
+      diffJson: { imported, errors: errors.length, totalItems: items.length }
+    });
+
+    return { imported, errors };
+  }
+
+  async exportZipMappings(): Promise<ZipCodeLookup[]> {
+    return await db.select().from(zipCodeLookups).orderBy(zipCodeLookups.zipCode, zipCodeLookups.priority);
+  }
+
+  async importZipMappings(items: InsertZipCodeLookup[], adminUserId: string): Promise<{ imported: number; errors: string[] }> {
+    const errors: string[] = [];
+    let imported = 0;
+
+    for (const item of items) {
+      try {
+        await this.upsertZipMapping(item);
+        imported++;
+      } catch (error: any) {
+        errors.push(`Error importing zip mapping ${item.zipCode}: ${error.message}`);
+      }
+    }
+
+    // Create audit log for bulk import
+    await this.createAuditLog({
+      actorId: adminUserId,
+      entityType: "zip_mapping",
+      entityId: "bulk_import",
+      action: "bulk_imported",
+      diffJson: { imported, errors: errors.length, totalItems: items.length }
+    });
+
+    return { imported, errors };
   }
 
   async createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken> {

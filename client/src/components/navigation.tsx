@@ -5,7 +5,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
-import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield } from "lucide-react";
 import logoPath from "@assets/logo1_1753819424851.png";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,19 @@ export function Navigation() {
   const { user, logoutMutation } = useAuth();
   const { theme, setTheme, actualTheme } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Check if user is owner admin
+  const { data: adminUserId } = useQuery({
+    queryKey: ["/api/admin/user-id"],
+    queryFn: async () => {
+      const response = await fetch("/api/admin/user-id");
+      if (!response.ok) return null;
+      return response.text();
+    },
+    enabled: user?.role === "admin"
+  });
+
+  const isOwnerAdmin = user?.role === "admin" && adminUserId && user.id === adminUserId;
 
   const navItems = [
     { href: "/", label: "Feed" },
@@ -127,6 +141,18 @@ export function Navigation() {
                   <Link href="/settings">
                     <DropdownMenuItem className="cursor-pointer">Settings</DropdownMenuItem>
                   </Link>
+                  {isOwnerAdmin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <Link href="/admin/representatives">
+                        <DropdownMenuItem className="cursor-pointer" data-testid="link-admin-representatives">
+                          <Shield className="mr-2 h-4 w-4" />
+                          Admin Portal
+                        </DropdownMenuItem>
+                      </Link>
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 dark:text-red-400">
                     Sign Out
                   </DropdownMenuItem>
@@ -208,6 +234,19 @@ export function Navigation() {
                   Profile
                 </Button>
               </Link>
+              {isOwnerAdmin && (
+                <Link href="/admin/representatives">
+                  <Button 
+                    variant="ghost" 
+                    className="w-full justify-start"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    data-testid="mobile-link-admin-representatives"
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    Admin Portal
+                  </Button>
+                </Link>
+              )}
               <Link href="/subscription">
                 <Button 
                   variant="ghost" 

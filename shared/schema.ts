@@ -990,39 +990,47 @@ export const insertCharityDonationSchema = createInsertSchema(charityDonations).
   createdAt: true,
 });
 
-// Representatives Tables for ChatGPT integration
+// Representatives Tables for Admin Management
 export const representatives = pgTable("representatives", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  office: text("office").notNull(), // e.g., "President", "Senator", "Representative"
-  level: text("level").notNull(), // federal, state, local
+  officeTitle: text("office_title").notNull(), // e.g., "President", "Senator", "Representative"
+  officeLevel: text("office_level").notNull(), // federal, state, local
   party: text("party"),
-  phone: text("phone"),
   email: text("email"),
+  phone: text("phone"),
   website: text("website"),
-  address: text("address"),
-  photoUrl: text("photo_url"),
   district: text("district"), // congressional district, state district, etc.
-  state: text("state"),
-  zipCodes: text("zip_codes").array().default([]), // Array of zip codes this rep serves
-  // Election and term tracking
-  electedDate: timestamp("elected_date"), // When they were last elected
+  jurisdiction: text("jurisdiction"), // geographic area of representation
   termStart: timestamp("term_start"), // When current term started
   termEnd: timestamp("term_end"), // When current term ends
-  termLength: text("term_length"), // e.g., "4 years", "6 years", "2 years"
-  isCurrentlyServing: boolean("is_currently_serving").default(true),
-  lastVerified: timestamp("last_verified").defaultNow(), // Last time data was verified as current
-  verificationSource: text("verification_source"), // "chatgpt", "official_source", "manual"
+  photoUrl: text("photo_url"),
+  socials: json("socials"), // JSON object for social media links
+  notes: text("notes"), // Admin notes about the representative
+  active: boolean("active").default(true), // Whether the representative is currently active
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  nameIndex: index("representatives_name_idx").on(table.name),
+  officeLevelIndex: index("representatives_office_level_idx").on(table.officeLevel),
+  activeIndex: index("representatives_active_idx").on(table.active),
+}));
 
 export const zipCodeLookups = pgTable("zip_code_lookups", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  zipCode: text("zip_code").notNull().unique(),
-  searchedAt: timestamp("searched_at").defaultNow(),
-  representativeIds: text("representative_ids").array().default([]), // IDs of representatives found
-});
+  zipCode: text("zip_code").notNull(),
+  representativeId: varchar("representative_id").notNull().references(() => representatives.id, { onDelete: "cascade" }),
+  officeLevel: text("office_level").notNull(), // federal, state, local
+  district: text("district"),
+  jurisdiction: text("jurisdiction"),
+  priority: integer("priority").default(0), // Priority for ordering representatives
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  zipCodeIndex: index("zip_code_lookups_zip_code_idx").on(table.zipCode),
+  representativeIndex: index("zip_code_lookups_representative_idx").on(table.representativeId),
+  uniqueZipRepOffice: sql`UNIQUE(${table.zipCode}, ${table.officeLevel}, ${table.representativeId})`,
+}));
 
 // Boycotts - Feature for organizing consumer boycotts
 export const boycotts = pgTable("boycotts", {
@@ -1172,7 +1180,8 @@ export const insertRepresentativeSchema = createInsertSchema(representatives).om
 
 export const insertZipCodeLookupSchema = createInsertSchema(zipCodeLookups).omit({
   id: true,
-  searchedAt: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertBoycottSchema = createInsertSchema(boycotts).omit({

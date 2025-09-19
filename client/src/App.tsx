@@ -30,6 +30,7 @@ import InitiativeFormPage from "@/pages/InitiativeFormPage";
 import InitiativeDetailPage from "@/pages/InitiativeDetailPage";
 import SubscriptionPage from "@/pages/subscription-page";
 import AdminInvitationsPage from "@/pages/admin-invitations-page";
+import AdminRepresentativesPage from "@/pages/admin-representatives-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -58,6 +59,7 @@ function Router() {
       <ProtectedRoute path="/subscription" component={SubscriptionPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/admin/invitations" component={AdminInvitationsPage} />
+      <ProtectedRoute path="/admin/representatives" component={AdminRepresentativesPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />  
       <Route path="/reset-password" component={ResetPasswordPage} />
