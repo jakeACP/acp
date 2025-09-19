@@ -12,7 +12,9 @@ import { CharityCard } from "@/components/charity-card";
 import { CreatePostForm } from "@/components/create-post-form";
 import { BlockchainTransparency } from "@/components/blockchain-transparency";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { PostWithAuthor, Poll, Event, Charity } from "@shared/schema";
 import { 
   Loader2, 
@@ -24,11 +26,15 @@ import {
   Calendar, 
   Heart, 
   MessageCircleReply,
-  Globe 
+  Globe,
+  Ban,
+  FileText,
+  ScrollText,
+  Building2
 } from "lucide-react";
 import { format } from "date-fns";
 
-type FeedType = 'all' | 'news' | 'following' | 'polls' | 'events' | 'charities' | 'debates';
+type FeedType = 'all' | 'news' | 'following' | 'polls' | 'events' | 'charities' | 'debates' | 'boycotts' | 'initiatives' | 'petitions' | 'unions';
 
 // Simple EventFeedCard component
 function EventFeedCard({ event }: { event: Event }) {
@@ -72,6 +78,239 @@ function EventFeedCard({ event }: { event: Event }) {
   );
 }
 
+// Simple PetitionFeedCard component
+function PetitionFeedCard({ petition }: { petition: any }) {
+  const { toast } = useToast();
+  const progressPercentage = petition.targetSignatures ? 
+    Math.min((petition.currentSignatures / petition.targetSignatures) * 100, 100) : 0;
+
+  const signPetitionMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/petitions/${petition.id}/sign`, { 
+        method: "POST", 
+        body: { isAnonymous: false } 
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success!",
+        description: "You have successfully signed this petition.",
+      });
+      // Invalidate petitions to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["/api/petitions"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to sign petition. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Card className="w-full border-0 shadow-none md:border md:shadow-sm bg-transparent md:bg-white">
+      <CardContent className="p-4 md:p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
+              <ScrollText className="h-6 w-6 text-white" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-lg md:text-xl mb-2 text-gray-900">{petition.title}</h3>
+            <p className="text-sm font-medium text-gray-600 mb-3">Objective: {petition.objective}</p>
+            {petition.description && (
+              <p className="text-gray-600 mb-4 leading-relaxed">{petition.description}</p>
+            )}
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between text-sm">
+                <span>{petition.currentSignatures || 0} signatures</span>
+                <span>Goal: {petition.targetSignatures || 1000}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+              <span className="text-sm text-gray-500">
+                {petition.isActive ? '🟢 Active' : '🔴 Expired'}
+              </span>
+              <button 
+                onClick={() => signPetitionMutation.mutate()}
+                disabled={signPetitionMutation.isPending}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                data-testid={`button-sign-petition-${petition.id}`}
+              >
+                {signPetitionMutation.isPending ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Signing...
+                  </div>
+                ) : (
+                  "e-Sign Petition"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Simple UnionFeedCard component
+function UnionFeedCard({ union }: { union: any }) {
+  const { toast } = useToast();
+
+  const joinUnionMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/unions/${union.id}/join`, { 
+        method: "POST" 
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success!",
+        description: "You have successfully joined this union.",
+      });
+      // Invalidate unions to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["/api/unions"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to join union. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Card className="w-full border-0 shadow-none md:border md:shadow-sm bg-transparent md:bg-white">
+      <CardContent className="p-4 md:p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
+              <Building2 className="h-6 w-6 text-white" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-lg md:text-xl mb-2 text-gray-900 flex items-center gap-2">
+              {union.name}
+              {union.isVerified && <Shield className="h-4 w-4 text-blue-500" title="Verified Union" />}
+            </h3>
+            {union.industry && (
+              <p className="text-sm text-gray-600 mb-2">{union.industry}</p>
+            )}
+            {union.description && (
+              <p className="text-gray-600 mb-4 leading-relaxed">{union.description}</p>
+            )}
+            <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+              <span className="text-sm text-gray-500">
+                👥 {union.memberCount || 0} members (private membership)
+              </span>
+              <button 
+                onClick={() => joinUnionMutation.mutate()}
+                disabled={joinUnionMutation.isPending}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-50"
+                data-testid={`button-join-union-${union.id}`}
+              >
+                {joinUnionMutation.isPending ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Joining...
+                  </div>
+                ) : (
+                  "Join Union"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Simple BoycottFeedCard and InitiativeFeedCard components
+function BoycottFeedCard({ boycott }: { boycott: any }) {
+  return (
+    <Card className="w-full border-0 shadow-none md:border md:shadow-sm bg-transparent md:bg-white">
+      <CardContent className="p-4 md:p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center">
+              <Ban className="h-6 w-6 text-white" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-lg md:text-xl mb-2 text-gray-900">{boycott.title}</h3>
+            {boycott.targetCompany && (
+              <p className="text-sm text-gray-600 mb-2">Target: {boycott.targetCompany}</p>
+            )}
+            {boycott.description && (
+              <p className="text-gray-600 mb-4 leading-relaxed">{boycott.description}</p>
+            )}
+            <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+              <span className="text-sm text-gray-500">
+                👥 {boycott.subscriberCount || 0} participating
+              </span>
+              <button 
+                className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+                data-testid={`button-join-boycott-${boycott.id}`}
+              >
+                Join Boycott
+              </button>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InitiativeFeedCard({ initiative }: { initiative: any }) {
+  return (
+    <Card className="w-full border-0 shadow-none md:border md:shadow-sm bg-transparent md:bg-white">
+      <CardContent className="p-4 md:p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center">
+              <FileText className="h-6 w-6 text-white" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-lg md:text-xl mb-2 text-gray-900">{initiative.title}</h3>
+            {(initiative.jurisdictionLevel || initiative.status) && (
+              <p className="text-sm text-gray-600 mb-2">
+                {initiative.jurisdictionLevel} {initiative.status && `• ${initiative.status}`}
+              </p>
+            )}
+            {initiative.summary && (
+              <p className="text-gray-600 mb-4 leading-relaxed">{initiative.summary}</p>
+            )}
+            <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+              <span className="text-sm text-gray-500">
+                📝 {initiative.type || 'Initiative'}
+              </span>
+              <button 
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                data-testid={`button-support-initiative-${initiative.id}`}
+              >
+                Support Initiative
+              </button>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function MainFeed() {
   const { user } = useAuth();
   const [showBlockchain, setShowBlockchain] = useState(false);
@@ -107,6 +346,26 @@ export function MainFeed() {
   const { data: charities = [] } = useQuery<Charity[]>({
     queryKey: ["/api/charities"],
     enabled: activeFeed === 'charities',
+  });
+
+  const { data: boycotts = [] } = useQuery<any[]>({
+    queryKey: ["/api/boycotts"],
+    enabled: activeFeed === 'boycotts',
+  });
+
+  const { data: initiatives = [] } = useQuery<any[]>({
+    queryKey: ["/api/initiatives"],
+    enabled: activeFeed === 'initiatives',
+  });
+
+  const { data: petitions = [] } = useQuery<any[]>({
+    queryKey: ["/api/petitions"],
+    enabled: activeFeed === 'petitions',
+  });
+
+  const { data: unions = [] } = useQuery<any[]>({
+    queryKey: ["/api/unions"],
+    enabled: activeFeed === 'unions',
   });
 
   const { data: userGroups = [] } = useQuery<any[]>({
@@ -178,6 +437,14 @@ export function MainFeed() {
         return events.map(event => ({ type: 'event' as const, data: event, createdAt: event.createdAt }));
       case 'charities':
         return charities.map(charity => ({ type: 'charity' as const, data: charity, createdAt: charity.createdAt }));
+      case 'boycotts':
+        return boycotts.map(boycott => ({ type: 'boycott' as const, data: boycott, createdAt: boycott.createdAt }));
+      case 'initiatives':
+        return initiatives.map(initiative => ({ type: 'initiative' as const, data: initiative, createdAt: initiative.createdAt }));
+      case 'petitions':
+        return petitions.map(petition => ({ type: 'petition' as const, data: petition, createdAt: petition.createdAt }));
+      case 'unions':
+        return unions.map(union => ({ type: 'union' as const, data: union, createdAt: union.createdAt }));
       case 'debates':
         // Legacy client-side filtering for debates
         return currentPosts
@@ -197,7 +464,7 @@ export function MainFeed() {
         <Card className="shadow-sm border-0 bg-white/80 backdrop-blur-sm">
           <CardContent className="p-6">
             <Tabs value={activeFeed} onValueChange={(value) => setActiveFeed(value as FeedType)} className="w-full">
-              <TabsList className="grid w-full grid-cols-7 h-12 bg-gray-100/50 mb-4 rounded-xl">
+              <TabsList className="grid w-full grid-cols-5 lg:grid-cols-11 h-12 bg-gray-100/50 mb-4 rounded-xl overflow-x-auto">
                 <TabsTrigger value="all" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
                   <Globe className="h-4 w-4" />
                   <span className="hidden lg:inline">All</span>
@@ -222,6 +489,22 @@ export function MainFeed() {
                   <Heart className="h-4 w-4" />
                   <span className="hidden lg:inline">Charities</span>
                 </TabsTrigger>
+                <TabsTrigger value="boycotts" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <Ban className="h-4 w-4" />
+                  <span className="hidden lg:inline">Boycotts</span>
+                </TabsTrigger>
+                <TabsTrigger value="initiatives" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <FileText className="h-4 w-4" />
+                  <span className="hidden lg:inline">Initiatives</span>
+                </TabsTrigger>
+                <TabsTrigger value="petitions" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <ScrollText className="h-4 w-4" />
+                  <span className="hidden lg:inline">Petitions</span>
+                </TabsTrigger>
+                <TabsTrigger value="unions" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
+                  <Building2 className="h-4 w-4" />
+                  <span className="hidden lg:inline">Unions</span>
+                </TabsTrigger>
                 <TabsTrigger value="debates" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg">
                   <MessageCircleReply className="h-4 w-4" />
                   <span className="hidden lg:inline">Debates</span>
@@ -243,6 +526,10 @@ export function MainFeed() {
               { key: 'polls', label: 'Polls', icon: BarChart3, count: polls.length },
               { key: 'events', label: 'Events', icon: Calendar, count: events.length },
               { key: 'charities', label: 'Charities', icon: Heart, count: charities.length },
+              { key: 'boycotts', label: 'Boycotts', icon: Ban, count: boycotts.length },
+              { key: 'initiatives', label: 'Initiatives', icon: FileText, count: initiatives.length },
+              { key: 'petitions', label: 'Petitions', icon: ScrollText, count: petitions.length },
+              { key: 'unions', label: 'Unions', icon: Building2, count: unions.length },
               { key: 'debates', label: 'Debates', icon: MessageCircleReply, count: 0 }
             ].map(({ key, label, icon: Icon, count }) => (
               <button
@@ -326,6 +613,22 @@ export function MainFeed() {
                 ) : item.type === 'charity' ? (
                   <div className="md:shadow-sm md:border md:rounded-lg border-0 bg-white md:bg-white/80 md:backdrop-blur-sm">
                     <CharityCard charity={item.data as Charity} />
+                  </div>
+                ) : item.type === 'petition' ? (
+                  <div className="md:shadow-sm md:border md:rounded-lg border-0 bg-white md:bg-white/80 md:backdrop-blur-sm">
+                    <PetitionFeedCard petition={item.data} />
+                  </div>
+                ) : item.type === 'union' ? (
+                  <div className="md:shadow-sm md:border md:rounded-lg border-0 bg-white md:bg-white/80 md:backdrop-blur-sm">
+                    <UnionFeedCard union={item.data} />
+                  </div>
+                ) : item.type === 'boycott' ? (
+                  <div className="md:shadow-sm md:border md:rounded-lg border-0 bg-white md:bg-white/80 md:backdrop-blur-sm">
+                    <BoycottFeedCard boycott={item.data} />
+                  </div>
+                ) : item.type === 'initiative' ? (
+                  <div className="md:shadow-sm md:border md:rounded-lg border-0 bg-white md:bg-white/80 md:backdrop-blur-sm">
+                    <InitiativeFeedCard initiative={item.data} />
                   </div>
                 ) : null}
               </div>

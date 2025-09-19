@@ -127,6 +127,92 @@ export const userReferrals = pgTable("user_referrals", {
   uniqueReferral: sql`UNIQUE(${table.referrerId}, ${table.referredUserId})`,
 }));
 
+// Petitions system - e-signing petitions with stated objectives
+export const petitions = pgTable("petitions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  objective: text("objective").notNull(), // Stated objective of the petition
+  description: text("description"),
+  creatorId: varchar("creator_id").notNull().references(() => users.id),
+  targetSignatures: integer("target_signatures").default(1000),
+  currentSignatures: integer("current_signatures").default(0),
+  isActive: boolean("is_active").default(true),
+  expiresAt: timestamp("expires_at"),
+  tags: text("tags").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  creatorIndex: index("petitions_creator_idx").on(table.creatorId),
+  statusIndex: index("petitions_status_idx").on(table.isActive),
+  signaturesIndex: index("petitions_signatures_idx").on(table.currentSignatures),
+}));
+
+// Petition signatures - e-signing capability
+export const petitionSignatures = pgTable("petition_signatures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  petitionId: varchar("petition_id").notNull().references(() => petitions.id, { onDelete: "cascade" }),
+  signerId: varchar("signer_id").notNull().references(() => users.id),
+  isAnonymous: boolean("is_anonymous").default(false),
+  signedAt: timestamp("signed_at").defaultNow(),
+}, (table) => ({
+  petitionIndex: index("petition_signatures_petition_idx").on(table.petitionId),
+  signerIndex: index("petition_signatures_signer_idx").on(table.signerId),
+  uniqueSignature: sql`UNIQUE(${table.petitionId}, ${table.signerId})`,
+}));
+
+// Unions system - verified organizations with private membership
+export const unions = pgTable("unions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  industry: text("industry"), // e.g., "Healthcare", "Education", "Manufacturing"
+  website: text("website"),
+  isVerified: boolean("is_verified").default(false), // Like news organizations
+  memberCount: integer("member_count").default(0), // Public count only
+  contactEmail: text("contact_email"),
+  logoUrl: text("logo_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  nameIndex: index("unions_name_idx").on(table.name),
+  verifiedIndex: index("unions_verified_idx").on(table.isVerified),
+  industryIndex: index("unions_industry_idx").on(table.industry),
+}));
+
+// Union memberships - private, only count is public
+export const unionMemberships = pgTable("union_memberships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  unionId: varchar("union_id").notNull().references(() => unions.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  status: text("status").notNull().default("active"), // active, inactive
+  isPrivate: boolean("is_private").default(true), // Identity remains private
+  joinedAt: timestamp("joined_at").defaultNow(),
+}, (table) => ({
+  unionIndex: index("union_memberships_union_idx").on(table.unionId),
+  userIndex: index("union_memberships_user_idx").on(table.userId),
+  statusIndex: index("union_memberships_status_idx").on(table.status),
+  uniqueMembership: sql`UNIQUE(${table.unionId}, ${table.userId})`,
+}));
+
+// Union posts/updates - like news organization posts
+export const unionPosts = pgTable("union_posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  unionId: varchar("union_id").notNull().references(() => unions.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  type: text("type").default("update"), // update, news, announcement, action
+  tags: text("tags").array(),
+  isPublic: boolean("is_public").default(true),
+  viewCount: integer("view_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  unionIndex: index("union_posts_union_idx").on(table.unionId),
+  typeIndex: index("union_posts_type_idx").on(table.type),
+  publicIndex: index("union_posts_public_idx").on(table.isPublic),
+  createdIndex: index("union_posts_created_idx").on(table.createdAt),
+}));
+
 export const posts = pgTable("posts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   authorId: varchar("author_id").notNull().references(() => users.id),
@@ -615,6 +701,42 @@ export const insertUserReferralSchema = createInsertSchema(userReferrals).omit({
   creditsAwarded: true,
 });
 
+// Schema definitions for the first petitions table (social petitions)
+export const insertPetitionSchema = createInsertSchema(petitions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  currentSignatures: true,
+});
+
+export const insertPetitionSignatureSchema = createInsertSchema(petitionSignatures).omit({
+  id: true,
+  signedAt: true,
+});
+
+// Schema definitions for unions
+export const insertUnionSchema = createInsertSchema(unions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  memberCount: true,
+  isVerified: true,
+});
+
+export const insertUnionMembershipSchema = createInsertSchema(unionMemberships).omit({
+  id: true,
+  joinedAt: true,
+});
+
+export const insertUnionPostSchema = createInsertSchema(unionPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  viewCount: true,
+});
+
+// Schema definition will be after table definitions
+
 export const insertPostSchema = createInsertSchema(posts).omit({
   id: true,
   createdAt: true,
@@ -982,7 +1104,7 @@ export const initiativeVersions = pgTable("initiative_versions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const petitions = pgTable("petitions", {
+export const initiativePetitions = pgTable("initiative_petitions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   initiativeId: varchar("initiative_id").notNull().references(() => initiatives.id),
   targetSignatureCount: integer("target_signature_count").notNull(),
@@ -997,7 +1119,7 @@ export const petitions = pgTable("petitions", {
 
 export const signatures = pgTable("signatures", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  petitionId: varchar("petition_id").notNull().references(() => petitions.id),
+  petitionId: varchar("petition_id").notNull().references(() => initiativePetitions.id),
   userId: varchar("user_id").references(() => users.id), // nullable for anonymous signatures
   legalNameHash: text("legal_name_hash").notNull(), // salted hash
   addressHash: text("address_hash").notNull(), // salted hash
@@ -1152,10 +1274,11 @@ export const insertInitiativeVersionSchema = createInsertSchema(initiativeVersio
   createdAt: true,
 });
 
-export const insertPetitionSchema = createInsertSchema(petitions).omit({
+export const insertInitiativePetitionSchema = createInsertSchema(initiativePetitions).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  currentSignatureCount: true,
 });
 
 export const insertSignatureSchema = createInsertSchema(signatures).omit({
@@ -1187,8 +1310,7 @@ export type Initiative = typeof initiatives.$inferSelect;
 export type InsertInitiative = z.infer<typeof insertInitiativeSchema>;
 export type InitiativeVersion = typeof initiativeVersions.$inferSelect;
 export type InsertInitiativeVersion = z.infer<typeof insertInitiativeVersionSchema>;
-export type Petition = typeof petitions.$inferSelect;
-export type InsertPetition = z.infer<typeof insertPetitionSchema>;
+// Initiative petitions use InitiativePetition and InsertInitiativePetition types instead
 export type Signature = typeof signatures.$inferSelect;
 export type InsertSignature = z.infer<typeof insertSignatureSchema>;
 export type ValidationEvent = typeof validationEvents.$inferSelect;
@@ -1211,3 +1333,19 @@ export type FriendGroupMember = typeof friendGroupMembers.$inferSelect;
 export type InsertFriendGroupMember = z.infer<typeof insertFriendGroupMemberSchema>;
 export type UserReferral = typeof userReferrals.$inferSelect;
 export type InsertUserReferral = z.infer<typeof insertUserReferralSchema>;
+
+// Petitions & Unions types
+export type Petition = typeof petitions.$inferSelect;
+export type InsertPetition = z.infer<typeof insertPetitionSchema>;
+export type PetitionSignature = typeof petitionSignatures.$inferSelect;
+export type InsertPetitionSignature = z.infer<typeof insertPetitionSignatureSchema>;
+export type Union = typeof unions.$inferSelect;
+export type InsertUnion = z.infer<typeof insertUnionSchema>;
+export type UnionMembership = typeof unionMemberships.$inferSelect;
+export type InsertUnionMembership = z.infer<typeof insertUnionMembershipSchema>;
+export type UnionPost = typeof unionPosts.$inferSelect;
+export type InsertUnionPost = z.infer<typeof insertUnionPostSchema>;
+
+// Initiative petition types (different from social petitions)
+export type InitiativePetition = typeof initiativePetitions.$inferSelect;
+export type InsertInitiativePetition = z.infer<typeof insertInitiativePetitionSchema>;

@@ -15,13 +15,10 @@ export function Navigation() {
 
   const navItems = [
     { href: "/", label: "Feed" },
-    { href: "/groups", label: "Groups" },
-    { href: "/candidates", label: "Candidates" },
-    { href: "/initiatives", label: "Initiatives" },
     { href: "/friends", label: "Friends" },
-    { href: "/boycotts", label: "Boycotts" },
-    { href: "/representatives", label: "Your Reps" },
     { href: "/messages", label: "Messages" },
+    { href: "/representatives", label: "Your Reps" },
+    { href: "/candidates", label: "Candidates" },
   ];
 
   const handleLogout = () => {

@@ -1623,6 +1623,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Social Petitions API endpoints (different from initiative petitions)
+  app.get("/api/petitions", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const petitions = await storage.getSocialPetitions(limit, offset);
+      res.json(petitions);
+    } catch (error: any) {
+      console.error("Error fetching petitions:", error);
+      res.status(500).json({ message: "Failed to fetch petitions" });
+    }
+  });
+
+  app.post("/api/petitions", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const petitionData = {
+        ...req.body,
+        creatorId: req.user.id,
+      };
+      const petition = await storage.createSocialPetition(petitionData);
+      res.status(201).json(petition);
+    } catch (error: any) {
+      console.error("Error creating petition:", error);
+      res.status(500).json({ message: "Failed to create petition" });
+    }
+  });
+
+  app.post("/api/petitions/:id/sign", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { isAnonymous = false } = req.body;
+      
+      // Check if user already signed
+      const existingSignature = await storage.getUserSocialPetitionSignature(req.params.id, req.user.id);
+      if (existingSignature) {
+        return res.status(400).json({ message: "You have already signed this petition" });
+      }
+
+      await storage.signSocialPetition(req.params.id, req.user.id, isAnonymous);
+      res.json({ message: "Petition signed successfully" });
+    } catch (error: any) {
+      console.error("Error signing petition:", error);
+      res.status(500).json({ message: "Failed to sign petition" });
+    }
+  });
+
+  app.get("/api/petitions/:id/signature", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const signature = await storage.getUserSocialPetitionSignature(req.params.id, req.user.id);
+      res.json({ hasSigned: !!signature });
+    } catch (error: any) {
+      console.error("Error checking petition signature:", error);
+      res.status(500).json({ message: "Failed to check signature" });
+    }
+  });
+
+  // Unions API endpoints
+  app.get("/api/unions", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const unions = await storage.getUnions(limit, offset);
+      res.json(unions);
+    } catch (error: any) {
+      console.error("Error fetching unions:", error);
+      res.status(500).json({ message: "Failed to fetch unions" });
+    }
+  });
+
+  app.get("/api/unions/:id", async (req, res) => {
+    try {
+      const union = await storage.getUnionById(req.params.id);
+      if (!union) {
+        return res.status(404).json({ message: "Union not found" });
+      }
+      res.json(union);
+    } catch (error: any) {
+      console.error("Error fetching union:", error);
+      res.status(500).json({ message: "Failed to fetch union" });
+    }
+  });
+
+  app.post("/api/unions", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const union = await storage.createUnion(req.body);
+      res.status(201).json(union);
+    } catch (error: any) {
+      console.error("Error creating union:", error);
+      res.status(500).json({ message: "Failed to create union" });
+    }
+  });
+
+  app.post("/api/unions/:id/join", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const isMember = await storage.isUnionMember(req.params.id, req.user.id);
+      if (isMember) {
+        return res.status(400).json({ message: "You are already a member of this union" });
+      }
+
+      await storage.joinUnion(req.params.id, req.user.id);
+      res.json({ message: "Joined union successfully" });
+    } catch (error: any) {
+      console.error("Error joining union:", error);
+      res.status(500).json({ message: "Failed to join union" });
+    }
+  });
+
+  app.post("/api/unions/:id/leave", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const isMember = await storage.isUnionMember(req.params.id, req.user.id);
+      if (!isMember) {
+        return res.status(400).json({ message: "You are not a member of this union" });
+      }
+
+      await storage.leaveUnion(req.params.id, req.user.id);
+      res.json({ message: "Left union successfully" });
+    } catch (error: any) {
+      console.error("Error leaving union:", error);
+      res.status(500).json({ message: "Failed to leave union" });
+    }
+  });
+
+  app.get("/api/unions/:id/membership", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const isMember = await storage.isUnionMember(req.params.id, req.user.id);
+      res.json({ isMember });
+    } catch (error: any) {
+      console.error("Error checking union membership:", error);
+      res.status(500).json({ message: "Failed to check membership" });
+    }
+  });
+
   // Object Storage API endpoints for profile picture uploads
   const { ObjectStorageService, ObjectNotFoundError, ObjectPermission } = await import("./objectStorage");
 

@@ -295,6 +295,23 @@ export interface IStorage {
   addFriendToGroup(groupId: string, friendshipId: string): Promise<void>;
   createReferral(referrerId: string, referredUserId: string, invitationId?: string): Promise<void>;
   getAdminUserId(): Promise<string | undefined>;
+
+  // Social Petitions (for feeds - different from initiative petitions)
+  getSocialPetitions(limit?: number, offset?: number): Promise<any[]>;
+  createSocialPetition(petition: any): Promise<any>;
+  signSocialPetition(petitionId: string, signerId: string, isAnonymous?: boolean): Promise<void>;
+  getUserSocialPetitionSignature(petitionId: string, signerId: string): Promise<any | undefined>;
+  updateSocialPetitionSignatureCount(petitionId: string): Promise<void>;
+
+  // Unions - verified organizations with private membership
+  getUnions(limit?: number, offset?: number): Promise<any[]>;
+  getUnionById(unionId: string): Promise<any | undefined>;
+  createUnion(union: any): Promise<any>;
+  joinUnion(unionId: string, userId: string): Promise<void>;
+  leaveUnion(unionId: string, userId: string): Promise<void>;
+  isUnionMember(unionId: string, userId: string): Promise<boolean>;
+  getUnionPosts(unionId: string, limit?: number, offset?: number): Promise<any[]>;
+  updateUnionMemberCount(unionId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3260,6 +3277,174 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.role, 'admin'))
       .limit(1);
     return adminUser?.id;
+  }
+
+  // Social Petitions (for feeds - different from initiative petitions)
+  async getSocialPetitions(limit: number = 50, offset: number = 0): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT sp.*, u.username, u.first_name, u.last_name,
+             COUNT(sps.id) as signature_count
+      FROM social_petitions sp
+      LEFT JOIN users u ON sp.creator_id = u.id
+      LEFT JOIN social_petition_signatures sps ON sp.id = sps.petition_id
+      WHERE sp.is_active = true
+      GROUP BY sp.id, u.id, u.username, u.first_name, u.last_name
+      ORDER BY sp.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+    return result.rows.map((row: any) => ({
+      ...row,
+      currentSignatures: parseInt(row.signature_count) || 0,
+      targetSignatures: row.target_signatures || 1000,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async createSocialPetition(petition: any): Promise<any> {
+    const [result] = await db.execute(sql`
+      INSERT INTO social_petitions (title, objective, description, creator_id, target_signatures, tags)
+      VALUES (${petition.title}, ${petition.objective}, ${petition.description}, 
+              ${petition.creatorId}, ${petition.targetSignatures || 1000}, 
+              ${petition.tags || sql`'{}'::text[]`})
+      RETURNING *
+    `);
+    return result;
+  }
+
+  async signSocialPetition(petitionId: string, signerId: string, isAnonymous: boolean = false): Promise<void> {
+    // Insert signature and update count in a transaction
+    await db.execute(sql`
+      INSERT INTO social_petition_signatures (petition_id, signer_id, is_anonymous)
+      VALUES (${petitionId}, ${signerId}, ${isAnonymous})
+      ON CONFLICT (petition_id, signer_id) DO NOTHING
+    `);
+    
+    // Update petition signature count
+    await this.updateSocialPetitionSignatureCount(petitionId);
+  }
+
+  async getUserSocialPetitionSignature(petitionId: string, signerId: string): Promise<any | undefined> {
+    const result = await db.execute(sql`
+      SELECT * FROM social_petition_signatures
+      WHERE petition_id = ${petitionId} AND signer_id = ${signerId}
+    `);
+    return result.rows[0];
+  }
+
+  async updateSocialPetitionSignatureCount(petitionId: string): Promise<void> {
+    await db.execute(sql`
+      UPDATE social_petitions
+      SET current_signatures = (
+        SELECT COUNT(*) FROM social_petition_signatures WHERE petition_id = ${petitionId}
+      ),
+      updated_at = NOW()
+      WHERE id = ${petitionId}
+    `);
+  }
+
+  // Unions - verified organizations with private membership
+  async getUnions(limit: number = 50, offset: number = 0): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT u.*, 
+             COUNT(um.id) as member_count
+      FROM unions u
+      LEFT JOIN union_memberships um ON u.id = um.union_id AND um.status = 'active'
+      GROUP BY u.id
+      ORDER BY u.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+    return result.rows.map((row: any) => ({
+      ...row,
+      memberCount: parseInt(row.member_count) || 0,
+      isVerified: row.is_verified,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async getUnionById(unionId: string): Promise<any | undefined> {
+    const result = await db.execute(sql`
+      SELECT u.*, 
+             COUNT(um.id) as member_count
+      FROM unions u
+      LEFT JOIN union_memberships um ON u.id = um.union_id AND um.status = 'active'
+      WHERE u.id = ${unionId}
+      GROUP BY u.id
+    `);
+    if (result.rows.length === 0) return undefined;
+    
+    const row = result.rows[0] as any;
+    return {
+      ...row,
+      memberCount: parseInt(row.member_count) || 0,
+      isVerified: row.is_verified,
+      createdAt: row.created_at,
+    };
+  }
+
+  async createUnion(union: any): Promise<any> {
+    const [result] = await db.execute(sql`
+      INSERT INTO unions (name, description, industry, website, contact_email)
+      VALUES (${union.name}, ${union.description}, ${union.industry}, 
+              ${union.website}, ${union.contactEmail})
+      RETURNING *
+    `);
+    return result;
+  }
+
+  async joinUnion(unionId: string, userId: string): Promise<void> {
+    await db.execute(sql`
+      INSERT INTO union_memberships (union_id, user_id, status, is_private)
+      VALUES (${unionId}, ${userId}, 'active', true)
+      ON CONFLICT (union_id, user_id) DO UPDATE
+      SET status = 'active', joined_at = NOW()
+    `);
+    
+    await this.updateUnionMemberCount(unionId);
+  }
+
+  async leaveUnion(unionId: string, userId: string): Promise<void> {
+    await db.execute(sql`
+      UPDATE union_memberships
+      SET status = 'inactive'
+      WHERE union_id = ${unionId} AND user_id = ${userId}
+    `);
+    
+    await this.updateUnionMemberCount(unionId);
+  }
+
+  async isUnionMember(unionId: string, userId: string): Promise<boolean> {
+    const result = await db.execute(sql`
+      SELECT 1 FROM union_memberships
+      WHERE union_id = ${unionId} AND user_id = ${userId} AND status = 'active'
+    `);
+    return result.rows.length > 0;
+  }
+
+  async getUnionPosts(unionId: string, limit: number = 50, offset: number = 0): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT up.*, u.name as union_name
+      FROM union_posts up
+      JOIN unions u ON up.union_id = u.id
+      WHERE up.union_id = ${unionId} AND up.is_public = true
+      ORDER BY up.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+    return result.rows.map((row: any) => ({
+      ...row,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  async updateUnionMemberCount(unionId: string): Promise<void> {
+    await db.execute(sql`
+      UPDATE unions
+      SET member_count = (
+        SELECT COUNT(*) FROM union_memberships WHERE union_id = ${unionId} AND status = 'active'
+      ),
+      updated_at = NOW()
+      WHERE id = ${unionId}
+    `);
   }
 }
 
