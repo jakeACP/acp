@@ -5,7 +5,8 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema } from "@shared/schema";
+import { db } from "./db";
 import { findRepresentativesByZipCode } from "./openai";
 import { z } from "zod";
 
@@ -1740,6 +1741,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Subscription Management Routes
+  app.post("/api/subscription/create", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // Check if user already has active subscription
+      const user = await storage.getUser(req.user.id);
+      if (user?.subscriptionStatus === "premium" && user?.subscriptionEndDate && new Date(user.subscriptionEndDate) > new Date()) {
+        return res.status(400).json({ message: "You already have an active subscription" });
+      }
+      
+      // Validate request data using Zod schema
+      const validatedData = createSubscriptionSchema.parse(req.body);
+      const { plan, amount, tipAmount } = validatedData;
+      
+      // Validate plan pricing
+      const validPlans = { monthly: 8.99, annual: 79.99 };
+      const expectedBaseAmount = validPlans[plan];
+      const expectedTotalAmount = expectedBaseAmount + tipAmount;
+      
+      if (Math.abs(amount - expectedTotalAmount) > 0.01) {
+        return res.status(400).json({ message: "Invalid amount for selected plan" });
+      }
+
+      // Calculate subscription duration
+      const startDate = new Date();
+      const endDate = new Date();
+      if (plan === "annual") {
+        endDate.setFullYear(endDate.getFullYear() + 1);
+      } else {
+        endDate.setMonth(endDate.getMonth() + 1);
+      }
+
+      // Update subscription status
+      await storage.updateSubscriptionStatus(req.user.id, "premium", startDate, endDate);
+      
+      // Award base subscription coins based on plan
+      const baseCredits = plan === "annual" ? 108 : 9; // 9 per month, 108 for full year
+      let reward;
+      
+      if (plan === "annual") {
+        // Award full year of credits immediately for annual plan
+        const transaction = await storage.createTransaction({
+          toUserId: req.user.id,
+          amount: "108.00000000",
+          transactionType: "subscription_reward",
+          description: `Annual ACP+ subscription reward for ${startDate.toISOString().split('T')[0]} (108 credits)`,
+        });
+        
+        // Update user balance
+        const currentBalance = await storage.getUserBalance(req.user.id);
+        const newBalance = (parseFloat(currentBalance) + 108).toFixed(8);
+        await storage.updateUserBalance(req.user.id, newBalance);
+        
+        // Record annual subscription reward
+        const [annualReward] = await db.insert(subscriptionRewards).values({
+          userId: req.user.id,
+          subscriptionMonth: startDate,
+          coinsAwarded: "108.00000000",
+          transactionId: transaction.id
+        }).returning();
+        
+        reward = annualReward;
+      } else {
+        // Award monthly credits for monthly plan
+        reward = await storage.awardSubscriptionCoins(req.user.id, startDate);
+      }
+      
+      // Award tip credits if any (dollar-for-dollar)
+      let tipCredits = 0;
+      if (tipAmount > 0) {
+        const tipTransaction = await storage.createTransaction({
+          toUserId: req.user.id,
+          amount: tipAmount.toFixed(8),
+          transactionType: "tip_reward",
+          description: `Voluntary tip credits: $${tipAmount}`,
+        });
+        
+        // Update user balance with tip credits
+        const currentBalance = await storage.getUserBalance(req.user.id);
+        const newBalance = (parseFloat(currentBalance) + tipAmount).toFixed(8);
+        await storage.updateUserBalance(req.user.id, newBalance);
+        tipCredits = tipAmount;
+      }
+      
+      const totalCredits = baseCredits + tipCredits;
+      
+      res.json({ 
+        message: "Subscription created successfully",
+        plan,
+        amount,
+        totalCredits,
+        baseCredits,
+        tipCredits,
+        startDate,
+        subscriptionEndDate: endDate
+      });
+    } catch (error) {
+      console.error("Error creating subscription:", error);
+      res.status(500).json({ message: "Failed to create subscription" });
+    }
+  });
+
   app.post("/api/subscription/activate", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);

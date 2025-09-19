@@ -24,6 +24,7 @@ export function Navigation() {
     { href: "/boycotts", label: "Boycotts" },
     { href: "/representatives", label: "Your Reps" },
     { href: "/messages", label: "Messages" },
+    { href: "/subscription", label: "ACP+" },
     { href: "/crypto", label: "Store" },
   ];
 

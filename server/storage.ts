@@ -1874,21 +1874,21 @@ export class DatabaseStorage implements IStorage {
     // Create transaction for coin reward
     const transaction = await this.createTransaction({
       toUserId: userId,
-      amount: "10.00000000",
+      amount: "9.00000000",
       transactionType: "subscription_reward",
       description: `Monthly ACP+ subscription reward for ${month.toISOString().split('T')[0]}`,
     });
 
     // Update user balance
     const currentBalance = await this.getUserBalance(userId);
-    const newBalance = (parseFloat(currentBalance) + 10).toFixed(8);
+    const newBalance = (parseFloat(currentBalance) + 9).toFixed(8);
     await this.updateUserBalance(userId, newBalance);
 
     // Record subscription reward
     const [reward] = await db.insert(subscriptionRewards).values({
       userId,
       subscriptionMonth: month,
-      coinsAwarded: "10.00000000",
+      coinsAwarded: "9.00000000",
       transactionId: transaction.id
     }).returning();
 

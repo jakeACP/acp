@@ -615,6 +615,12 @@ export const insertSubscriptionRewardSchema = createInsertSchema(subscriptionRew
   createdAt: true,
 });
 
+export const createSubscriptionSchema = z.object({
+  plan: z.enum(["monthly", "annual"]),
+  amount: z.number().min(0).max(200), // Reasonable max limit
+  tipAmount: z.number().min(0).max(100), // Reasonable tip limit
+});
+
 export const insertCharitySchema = createInsertSchema(charities).omit({
   id: true,
   createdAt: true,

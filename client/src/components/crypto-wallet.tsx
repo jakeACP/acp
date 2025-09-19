@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Coins, TrendingUp, History, ExternalLink } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { ErrorMessage } from "@/components/error-message";
 
@@ -20,7 +19,6 @@ interface Transaction {
 }
 
 export function CryptoWallet() {
-  const { toast } = useToast();
   const [showHistory, setShowHistory] = useState(false);
 
   const { data: balance, isLoading: balanceLoading, error: balanceError } = useQuery<{ balance: string }>({
@@ -30,36 +28,6 @@ export function CryptoWallet() {
   const { data: transactions, isLoading: transactionsLoading } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions/history"],
     enabled: showHistory,
-  });
-
-  const activateSubscriptionMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/subscription/activate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to activate subscription: ${response.status}`);
-      }
-      
-      return response.json();
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "ACP+ Activated!",
-        description: `You received ${data.coinsAwarded} ACP coins! Your subscription is active until ${new Date(data.subscriptionEndDate).toLocaleDateString()}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/user/balance"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Subscription Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
   });
 
   if (balanceLoading) {
@@ -102,24 +70,15 @@ export function CryptoWallet() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Button
-              onClick={() => activateSubscriptionMutation.mutate()}
-              disabled={activateSubscriptionMutation.isPending}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
-              data-testid="button-activate-acp"
-            >
-              {activateSubscriptionMutation.isPending ? (
-                <>
-                  <LoadingSpinner className="h-4 w-4 mr-2" />
-                  Activating...
-                </>
-              ) : (
-                <>
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Get ACP+
-                </>
-              )}
-            </Button>
+            <Link href="/subscription">
+              <Button
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white"
+                data-testid="button-get-acp"
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Get ACP+
+              </Button>
+            </Link>
 
             <Button
               variant="outline"
@@ -134,11 +93,13 @@ export function CryptoWallet() {
           <div className="bg-blue-50 p-4 rounded-lg">
             <h4 className="font-medium text-blue-900 mb-2">ACP+ Benefits</h4>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• 10 ACP coins monthly ($10/month)</li>
+              <li>• 9 ACP coins monthly ($8.99/month)</li>
+              <li>• Annual discount: $79.99/year (save $28!)</li>
               <li>• Access to premium profile themes</li>
               <li>• Custom backgrounds & music</li>
               <li>• MySpace-style profile customization</li>
               <li>• Marketplace access for selling creations</li>
+              <li>• Support balanced ACP party growth</li>
             </ul>
           </div>
         </CardContent>

@@ -26,6 +26,7 @@ import BoycottsPage from "@/pages/boycotts-page";
 import InitiativesPage from "@/pages/InitiativesPage";
 import InitiativeFormPage from "@/pages/InitiativeFormPage";
 import InitiativeDetailPage from "@/pages/InitiativeDetailPage";
+import SubscriptionPage from "@/pages/subscription-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -50,6 +51,7 @@ function Router() {
       <ProtectedRoute path="/initiatives/:id" component={InitiativeDetailPage} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
+      <ProtectedRoute path="/subscription" component={SubscriptionPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />  
