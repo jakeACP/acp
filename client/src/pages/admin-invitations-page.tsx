@@ -56,7 +56,7 @@ export default function AdminInvitationsPage() {
 
   const { data: invitations = [], isLoading, refetch } = useQuery<Invitation[]>({
     queryKey: ["/api/invitations"],
-    queryFn: getQueryFn({}),
+    queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
   const createInvitationMutation = useMutation({
