@@ -28,19 +28,53 @@ export const users = pgTable("users", {
   favoriteSong: text("favorite_song"),
   profileLayout: json("profile_layout"), // Modular layout configuration
   createdAt: timestamp("created_at").defaultNow(),
-});
+  // News organization fields
+  isNewsOrganization: boolean("is_news_organization").default(false),
+  organizationName: text("organization_name"),
+  politicalLean: decimal("political_lean", { precision: 3, scale: 2 }), // -1.00 to 1.00
+  trustScore: decimal("trust_score", { precision: 3, scale: 2 }).default("0.00"),
+}, (table) => ({
+  politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
+  trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,
+}));
+
+// User-to-user following relationships
+export const userFollows = pgTable("user_follows", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  followerId: varchar("follower_id").notNull().references(() => users.id),
+  followeeId: varchar("followee_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  uniqueFollow: sql`UNIQUE(${table.followerId}, ${table.followeeId})`,
+  followerIndex: index("user_follows_follower_idx").on(table.followerId),
+  followeeIndex: index("user_follows_followee_idx").on(table.followeeId),
+  noSelfFollow: sql`CHECK (${table.followerId} <> ${table.followeeId})`,
+}));
 
 export const posts = pgTable("posts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   authorId: varchar("author_id").notNull().references(() => users.id),
   content: text("content").notNull(),
-  type: text("type").notNull().default("post"), // post, poll, announcement, charity_donation
+  type: text("type").notNull().default("post"), // post, poll, announcement, charity_donation, news
   tags: text("tags").array().default([]),
   image: text("image"),
+  url: text("url"), // For news articles and external links
+  title: text("title"), // News headlines
+  newsSourceName: text("news_source_name"), // Original news source
   likesCount: integer("likes_count").default(0),
   commentsCount: integer("comments_count").default(0),
+  sharesCount: integer("shares_count").default(0),
+  emojiReactionsCount: integer("emoji_reactions_count").default(0),
+  gifReactionsCount: integer("gif_reactions_count").default(0),
+  bookmarksCount: integer("bookmarks_count").default(0),
+  flagsCount: integer("flags_count").default(0),
+  isDeleted: boolean("is_deleted").default(false),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  createdAtIndex: index("posts_created_at_idx").on(table.createdAt.desc()),
+  authorCreatedAtIndex: index("posts_author_created_at_idx").on(table.authorId, table.createdAt.desc()),
+  typeCreatedAtIndex: index("posts_type_created_at_idx").on(table.type, table.createdAt.desc()),
+}));
 
 export const polls = pgTable("polls", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -105,6 +139,34 @@ export const likes = pgTable("likes", {
   targetType: text("target_type").notNull(), // post, comment
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Enhanced reactions system (emojis, gifs, shares, bookmarks - excludes likes/comments to avoid duplication)
+export const reactions = pgTable("reactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull().references(() => posts.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  type: text("type").notNull(), // 'emoji', 'gif', 'share', 'bookmark' - NO likes/comments to avoid duplication
+  emoji: text("emoji"), // Emoji code for emoji reactions
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  postUserTypeIndex: index("reactions_post_user_type_idx").on(table.postId, table.userId, table.type),
+  postTypeIndex: index("reactions_post_type_idx").on(table.postId, table.type),
+  uniqueReaction: sql`UNIQUE(${table.postId}, ${table.userId}, ${table.type})`, // Prevent duplicate reactions
+  typeCheck: sql`CHECK (${table.type} IN ('emoji', 'gif', 'share', 'bookmark'))`,
+}));
+
+// Bias voting system for news posts
+export const biasVotes = pgTable("bias_votes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull().references(() => posts.id),
+  voterId: varchar("voter_id").notNull().references(() => users.id),
+  vote: text("vote").notNull(), // 'Neutral', 'LeftBias', 'RightBias'
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  uniqueVote: sql`UNIQUE(${table.postId}, ${table.voterId})`,
+  postIndex: index("bias_votes_post_idx").on(table.postId),
+  voteCheck: sql`CHECK (${table.vote} IN ('Neutral', 'LeftBias', 'RightBias'))`,
+}));
 
 export const candidates = pgTable("candidates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -257,6 +319,10 @@ export const usersRelations = relations(users, ({ many }) => ({
   posts: many(posts),
   comments: many(comments),
   likes: many(likes),
+  reactions: many(reactions),
+  biasVotes: many(biasVotes),
+  following: many(userFollows, { relationName: "follower" }),
+  followers: many(userFollows, { relationName: "followee" }),
   pollVotes: many(pollVotes),
   groupMemberships: many(groupMembers),
   sentMessages: many(messages, { relationName: "sender" }),
@@ -271,6 +337,8 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
   }),
   comments: many(comments),
   likes: many(likes),
+  reactions: many(reactions),
+  biasVotes: many(biasVotes),
   poll: one(polls),
 }));
 
@@ -321,6 +389,43 @@ export const commentsRelations = relations(comments, ({ one, many }) => ({
 export const candidatesRelations = relations(candidates, ({ one }) => ({
   user: one(users, {
     fields: [candidates.userId],
+    references: [users.id],
+  }),
+}));
+
+// Add missing userFollows relationships
+export const userFollowsRelations = relations(userFollows, ({ one }) => ({
+  follower: one(users, {
+    fields: [userFollows.followerId],
+    references: [users.id],
+    relationName: "follower",
+  }),
+  followee: one(users, {
+    fields: [userFollows.followeeId],
+    references: [users.id],
+    relationName: "followee",
+  }),
+}));
+
+// Add missing relations for new tables
+export const reactionsRelations = relations(reactions, ({ one }) => ({
+  post: one(posts, {
+    fields: [reactions.postId],
+    references: [posts.id],
+  }),
+  user: one(users, {
+    fields: [reactions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const biasVotesRelations = relations(biasVotes, ({ one }) => ({
+  post: one(posts, {
+    fields: [biasVotes.postId],
+    references: [posts.id],
+  }),
+  voter: one(users, {
+    fields: [biasVotes.voterId],
     references: [users.id],
   }),
 }));
@@ -408,6 +513,12 @@ export const insertPostSchema = createInsertSchema(posts).omit({
   createdAt: true,
   likesCount: true,
   commentsCount: true,
+  sharesCount: true,
+  emojiReactionsCount: true,
+  gifReactionsCount: true,
+  bookmarksCount: true,
+  flagsCount: true,
+  isDeleted: true,
 });
 
 export const insertPollSchema = createInsertSchema(polls).omit({
@@ -474,6 +585,22 @@ export const insertEventSchema = createInsertSchema(events).omit({
   id: true,
   createdAt: true,
   currentAttendees: true,
+});
+
+// Insert schemas for new feed system tables
+export const insertUserFollowSchema = createInsertSchema(userFollows).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertReactionSchema = createInsertSchema(reactions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertBiasVoteSchema = createInsertSchema(biasVotes).omit({
+  id: true,
+  createdAt: true,
 });
 
 // ACP Cryptocurrency and Blockchain Tables
