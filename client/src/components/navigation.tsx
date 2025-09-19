@@ -15,18 +15,13 @@ export function Navigation() {
 
   const navItems = [
     { href: "/", label: "Feed" },
-    { href: "/polls", label: "Polls" },
     { href: "/groups", label: "Groups" },
     { href: "/candidates", label: "Candidates" },
     { href: "/initiatives", label: "Initiatives" },
-    { href: "/events", label: "Events" },
     { href: "/friends", label: "Friends" },
-    { href: "/charities", label: "Charities" },
     { href: "/boycotts", label: "Boycotts" },
     { href: "/representatives", label: "Your Reps" },
     { href: "/messages", label: "Messages" },
-    { href: "/subscription", label: "ACP+" },
-    { href: "/crypto", label: "Store" },
   ];
 
   const handleLogout = () => {
@@ -95,8 +90,11 @@ export function Navigation() {
                   <Link href="/profile">
                     <DropdownMenuItem>Profile</DropdownMenuItem>
                   </Link>
+                  <Link href="/subscription">
+                    <DropdownMenuItem>ACP+ Subscription</DropdownMenuItem>
+                  </Link>
                   <Link href="/crypto">
-                    <DropdownMenuItem>Store</DropdownMenuItem>
+                    <DropdownMenuItem>ACP Store</DropdownMenuItem>
                   </Link>
                   <Link href="/settings">
                     <DropdownMenuItem>Settings</DropdownMenuItem>
@@ -144,6 +142,24 @@ export function Navigation() {
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Profile
+                </Button>
+              </Link>
+              <Link href="/subscription">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  ACP+ Subscription
+                </Button>
+              </Link>
+              <Link href="/crypto">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  ACP Store
                 </Button>
               </Link>
               <Link href="/settings">
