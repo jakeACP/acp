@@ -91,6 +91,30 @@ export function setupAuth(app: Express) {
       // Mark invitation as used
       await storage.useInvitation(invitationToken, user.id);
 
+      // Create automatic friend connections (Tom from MySpace style)
+      try {
+        // 1. Auto-friend with admin user (Tom from MySpace)
+        const adminUserId = await storage.getAdminUserId();
+        if (adminUserId && adminUserId !== user.id) {
+          await storage.createFriendship(adminUserId, user.id);
+        }
+
+        // 2. Auto-friend with inviter
+        if (validation.invitation?.invitedBy && validation.invitation.invitedBy !== user.id) {
+          await storage.createFriendship(validation.invitation.invitedBy, user.id);
+          
+          // 3. Create referral tracking for credits
+          await storage.createReferral(
+            validation.invitation.invitedBy, 
+            user.id, 
+            validation.invitation.id
+          );
+        }
+      } catch (friendshipError) {
+        console.error("Error creating automatic friendships:", friendshipError);
+        // Don't fail registration if friendship creation fails
+      }
+
       req.login(user, (err) => {
         if (err) return next(err);
         res.status(201).json(user);

@@ -1,5 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
+import { friendships, friendGroups, friendGroupMembers, userReferrals, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type UserReferral, type InsertUserReferral } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray, gte } from "drizzle-orm";
 import session from "express-session";
@@ -281,6 +282,19 @@ export interface IStorage {
   updateCharityProgress(charityId: string): Promise<void>;
   getTopDonors(charityId: string, limit?: number): Promise<{ user: User; totalDonated: string; donationCount: number }[]>;
   createDonationPost(userId: string, charityId: string, donationAmount: string, currencyType: string, isAnonymous?: boolean): Promise<Post>;
+
+  // Friendship System
+  createFriendship(requesterId: string, addresseeId: string): Promise<void>;
+  acceptFriendship(friendshipId: string): Promise<void>;
+  rejectFriendship(friendshipId: string): Promise<void>;
+  blockUser(friendshipId: string): Promise<void>;
+  getFriends(userId: string): Promise<any[]>;
+  getFriendRequests(userId: string): Promise<any[]>;
+  getFriendGroups(userId: string): Promise<any[]>;
+  createFriendGroup(userId: string, name: string, color: string, description?: string): Promise<any>;
+  addFriendToGroup(groupId: string, friendshipId: string): Promise<void>;
+  createReferral(referrerId: string, referredUserId: string, invitationId?: string): Promise<void>;
+  getAdminUserId(): Promise<string | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3139,6 +3153,113 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(auditLogs.entityType, entityType), eq(auditLogs.entityId, entityId)))
       .orderBy(desc(auditLogs.createdAt))
       .limit(limit);
+  }
+
+  // Friendship System Implementation
+  async createFriendship(requesterId: string, addresseeId: string): Promise<void> {
+    await db.insert(friendships).values({
+      requesterId,
+      addresseeId,
+      status: 'accepted' // Auto-accept for Tom/inviter connections
+    });
+  }
+
+  async acceptFriendship(friendshipId: string): Promise<void> {
+    await db.update(friendships)
+      .set({ status: 'accepted', updatedAt: new Date() })
+      .where(eq(friendships.id, friendshipId));
+  }
+
+  async rejectFriendship(friendshipId: string): Promise<void> {
+    await db.update(friendships)
+      .set({ status: 'rejected', updatedAt: new Date() })
+      .where(eq(friendships.id, friendshipId));
+  }
+
+  async blockUser(friendshipId: string): Promise<void> {
+    await db.update(friendships)
+      .set({ status: 'blocked', updatedAt: new Date() })
+      .where(eq(friendships.id, friendshipId));
+  }
+
+  async getFriends(userId: string): Promise<any[]> {
+    return await db.select({
+      id: friendships.id,
+      username: users.username,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      avatar: users.avatar,
+      status: friendships.status,
+    })
+    .from(friendships)
+    .innerJoin(users, 
+      or(
+        and(eq(friendships.requesterId, userId), eq(users.id, friendships.addresseeId)),
+        and(eq(friendships.addresseeId, userId), eq(users.id, friendships.requesterId))
+      )
+    )
+    .where(eq(friendships.status, 'accepted'));
+  }
+
+  async getFriendRequests(userId: string): Promise<any[]> {
+    return await db.select({
+      id: friendships.id,
+      username: users.username,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      avatar: users.avatar,
+      status: friendships.status,
+    })
+    .from(friendships)
+    .innerJoin(users, eq(users.id, friendships.requesterId))
+    .where(and(
+      eq(friendships.addresseeId, userId),
+      eq(friendships.status, 'pending')
+    ));
+  }
+
+  async getFriendGroups(userId: string): Promise<any[]> {
+    return await db.select({
+      id: friendGroups.id,
+      name: friendGroups.name,
+      description: friendGroups.description,
+      color: friendGroups.color,
+      memberCount: sql<number>`count(${friendGroupMembers.id})`.as('memberCount')
+    })
+    .from(friendGroups)
+    .leftJoin(friendGroupMembers, eq(friendGroupMembers.groupId, friendGroups.id))
+    .where(eq(friendGroups.userId, userId))
+    .groupBy(friendGroups.id);
+  }
+
+  async createFriendGroup(userId: string, name: string, color: string, description?: string): Promise<any> {
+    const [group] = await db.insert(friendGroups)
+      .values({ userId, name, color, description })
+      .returning();
+    return group;
+  }
+
+  async addFriendToGroup(groupId: string, friendshipId: string): Promise<void> {
+    await db.insert(friendGroupMembers)
+      .values({ groupId, friendshipId });
+  }
+
+  async createReferral(referrerId: string, referredUserId: string, invitationId?: string): Promise<void> {
+    await db.insert(userReferrals).values({
+      referrerId,
+      referredUserId,
+      invitationId,
+      creditsEarned: 20,
+      creditsAwarded: false
+    });
+  }
+
+  async getAdminUserId(): Promise<string | undefined> {
+    const [adminUser] = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, 'admin'))
+      .limit(1);
+    return adminUser?.id;
   }
 }
 
