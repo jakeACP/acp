@@ -70,6 +70,63 @@ export const invitations = pgTable("invitations", {
   usedByIndex: index("invitations_used_by_idx").on(table.usedBy),
 }));
 
+// Friends/Social Network System
+export const friendships = pgTable("friendships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requesterId: varchar("requester_id").notNull().references(() => users.id),
+  addresseeId: varchar("addressee_id").notNull().references(() => users.id),
+  status: text("status").notNull().default("pending"), // pending, accepted, blocked, rejected
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  uniqueFriendship: sql`UNIQUE(${table.requesterId}, ${table.addresseeId})`,
+  requesterIndex: index("friendships_requester_idx").on(table.requesterId),
+  addresseeIndex: index("friendships_addressee_idx").on(table.addresseeId),
+  statusIndex: index("friendships_status_idx").on(table.status),
+  noSelfFriend: sql`CHECK (${table.requesterId} <> ${table.addresseeId})`,
+}));
+
+// Friend Groups for organizing friends
+export const friendGroups = pgTable("friend_groups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  color: text("color").default("#3b82f6"), // Hex color for group
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userGroupIndex: index("friend_groups_user_idx").on(table.userId),
+  uniqueUserGroupName: sql`UNIQUE(${table.userId}, ${table.name})`,
+}));
+
+// Many-to-many relationship between friends and groups
+export const friendGroupMembers = pgTable("friend_group_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull().references(() => friendGroups.id, { onDelete: "cascade" }),
+  friendshipId: varchar("friendship_id").notNull().references(() => friendships.id, { onDelete: "cascade" }),
+  addedAt: timestamp("added_at").defaultNow(),
+}, (table) => ({
+  groupIndex: index("friend_group_members_group_idx").on(table.groupId),
+  friendshipIndex: index("friend_group_members_friendship_idx").on(table.friendshipId),
+  uniqueGroupFriend: sql`UNIQUE(${table.groupId}, ${table.friendshipId})`,
+}));
+
+// Referral tracking and credits system
+export const userReferrals = pgTable("user_referrals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  referrerId: varchar("referrer_id").notNull().references(() => users.id),
+  referredUserId: varchar("referred_user_id").notNull().references(() => users.id),
+  invitationId: varchar("invitation_id").references(() => invitations.id),
+  creditsEarned: integer("credits_earned").default(20), // ACP Credits earned
+  creditsAwarded: boolean("credits_awarded").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  referrerIndex: index("user_referrals_referrer_idx").on(table.referrerId),
+  referredIndex: index("user_referrals_referred_idx").on(table.referredUserId),
+  invitationIndex: index("user_referrals_invitation_idx").on(table.invitationId),
+  uniqueReferral: sql`UNIQUE(${table.referrerId}, ${table.referredUserId})`,
+}));
+
 export const posts = pgTable("posts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   authorId: varchar("author_id").notNull().references(() => users.id),
@@ -534,6 +591,28 @@ export const insertInvitationSchema = createInsertSchema(invitations).omit({
   usageCount: true,
   isUsed: true,
   usedBy: true,
+});
+
+export const insertFriendshipSchema = createInsertSchema(friendships).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFriendGroupSchema = createInsertSchema(friendGroups).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertFriendGroupMemberSchema = createInsertSchema(friendGroupMembers).omit({
+  id: true,
+  addedAt: true,
+});
+
+export const insertUserReferralSchema = createInsertSchema(userReferrals).omit({
+  id: true,
+  createdAt: true,
+  creditsAwarded: true,
 });
 
 export const insertPostSchema = createInsertSchema(posts).omit({
@@ -1122,3 +1201,13 @@ export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 // Invitation types
 export type Invitation = typeof invitations.$inferSelect;
 export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
+
+// Social/Friends types
+export type Friendship = typeof friendships.$inferSelect;
+export type InsertFriendship = z.infer<typeof insertFriendshipSchema>;
+export type FriendGroup = typeof friendGroups.$inferSelect;
+export type InsertFriendGroup = z.infer<typeof insertFriendGroupSchema>;
+export type FriendGroupMember = typeof friendGroupMembers.$inferSelect;
+export type InsertFriendGroupMember = z.infer<typeof insertFriendGroupMemberSchema>;
+export type UserReferral = typeof userReferrals.$inferSelect;
+export type InsertUserReferral = z.infer<typeof insertUserReferralSchema>;
