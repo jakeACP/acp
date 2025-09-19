@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,17 +9,19 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { Vote, Users, Shield, Megaphone } from "lucide-react";
+import { Vote, Users, Shield, Megaphone, AlertCircle } from "lucide-react";
 import logoPath from "@assets/logo1_1753819424851.png";
-import { Redirect, Link } from "wouter";
+import { Redirect, Link, useLocation } from "wouter";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { ErrorMessage } from "@/components/error-message";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const loginSchema = insertUserSchema.pick({ username: true, password: true });
 const registerSchema = insertUserSchema.extend({
   email: z.string().email("Please enter a valid email"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
+  invitationToken: z.string().min(1, "Invitation token is required"),
 });
 
 type LoginData = z.infer<typeof loginSchema>;
@@ -28,6 +30,9 @@ type RegisterData = z.infer<typeof registerSchema>;
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [activeTab, setActiveTab] = useState("login");
+  const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [invitationError, setInvitationError] = useState<string | null>(null);
+  const [location] = useLocation();
 
   const loginForm = useForm<LoginData>({
     resolver: zodResolver(loginSchema),
@@ -35,7 +40,38 @@ export default function AuthPage() {
 
   const registerForm = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
+    defaultValues: {
+      invitationToken: "",
+    },
   });
+
+  // Extract invitation token from URL parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.split('?')[1] || '');
+    const token = urlParams.get('invitation');
+    
+    if (token) {
+      setInvitationToken(token);
+      registerForm.setValue('invitationToken', token);
+      setActiveTab('register'); // Switch to register tab if invitation link is used
+      
+      // Validate invitation token
+      fetch(`/api/invitations/${token}/validate`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.valid) {
+            setInvitationError(data.reason || 'Invalid invitation token');
+          } else {
+            setInvitationError(null);
+          }
+        })
+        .catch(() => {
+          setInvitationError('Failed to validate invitation token');
+        });
+    } else {
+      setInvitationError('Registration requires an invitation. Please contact an administrator for an invitation link.');
+    }
+  }, [location, registerForm]);
 
   // Redirect if already logged in
   if (user) {
@@ -156,6 +192,14 @@ export default function AuthPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {invitationError && (
+                    <Alert className="mb-4" variant="destructive" data-testid="alert-invitation-error">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        {invitationError}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -239,7 +283,8 @@ export default function AuthPage() {
                     <Button
                       type="submit"
                       className="w-full"
-                      disabled={registerMutation.isPending}
+                      disabled={registerMutation.isPending || !!invitationError || !invitationToken}
+                      data-testid="button-register"
                     >
                       {registerMutation.isPending ? "Creating Account..." : "Create Account"}
                     </Button>
