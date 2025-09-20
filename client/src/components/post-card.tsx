@@ -206,8 +206,8 @@ export function PostCard({ post }: PostCardProps) {
               </AvatarFallback>
             </Avatar>
             <div>
-              <h4 className="font-semibold text-slate-900">{getDisplayName()}</h4>
-              <p className="text-sm text-slate-500">
+              <h4 className="font-semibold text-slate-900 dark:text-slate-100">{getDisplayName()}</h4>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 {timeAgo || "Recently"}
               </p>
             </div>
@@ -222,7 +222,7 @@ export function PostCard({ post }: PostCardProps) {
       </CardHeader>
 
       <CardContent>
-        <p className="text-slate-900 mb-4 whitespace-pre-wrap">
+        <p className="text-slate-900 dark:text-slate-100 mb-4 whitespace-pre-wrap">
           {post.content}
         </p>
         
@@ -234,7 +234,7 @@ export function PostCard({ post }: PostCardProps) {
           />
         )}
         
-        <div className="flex items-center justify-between text-slate-500">
+        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
           <div className="flex space-x-6">
             <Button
               variant="ghost"
@@ -268,9 +268,9 @@ export function PostCard({ post }: PostCardProps) {
                 </DialogHeader>
                 
                 <div className="space-y-4">
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-sm text-slate-600 mb-2">Original Post:</p>
-                    <p className="text-slate-900">{post.content}</p>
+                  <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg">
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Original Post:</p>
+                    <p className="text-slate-900 dark:text-slate-100">{post.content}</p>
                   </div>
                   
                   {user && (
@@ -295,7 +295,7 @@ export function PostCard({ post }: PostCardProps) {
                   
                   <div className="space-y-3">
                     {comments.length === 0 ? (
-                      <p className="text-center text-slate-500 py-4">No comments yet</p>
+                      <p className="text-center text-slate-500 dark:text-slate-400 py-4">No comments yet</p>
                     ) : (
                       comments.map((comment) => (
                         <div key={comment.id} className="border rounded-lg p-3">
@@ -305,12 +305,12 @@ export function PostCard({ post }: PostCardProps) {
                                 {comment.authorId.slice(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="text-sm font-medium">{getDisplayName()}</span>
-                            <span className="text-xs text-slate-500">
+                            <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{getDisplayName()}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
                               {comment.createdAt && formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                             </span>
                           </div>
-                          <p className="text-slate-900">{comment.content}</p>
+                          <p className="text-slate-900 dark:text-slate-100">{comment.content}</p>
                         </div>
                       ))
                     )}
