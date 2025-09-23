@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { LiveStreamPlayer } from "@/components/LiveStreamPlayer";
 import { CreateLiveStreamForm } from "@/components/CreateLiveStreamForm";
+import { Navigation } from "@/components/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Radio,
@@ -88,7 +89,9 @@ export function LivePage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6" data-testid="live-page">
+    <div className="bg-slate-50 dark:bg-slate-900 min-h-screen">
+      <Navigation />
+      <div className="container mx-auto px-4 py-8 space-y-6" data-testid="live-page">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -278,6 +281,7 @@ export function LivePage() {
           )}
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }

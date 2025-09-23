@@ -86,10 +86,8 @@ function PetitionFeedCard({ petition }: { petition: any }) {
 
   const signPetitionMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/petitions/${petition.id}/sign`, { 
-        method: "POST", 
-        body: { isAnonymous: false } 
-      });
+      const response = await apiRequest(`/api/petitions/${petition.id}/sign`, "POST", { isAnonymous: false });
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -168,9 +166,8 @@ function UnionFeedCard({ union }: { union: any }) {
 
   const joinUnionMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/unions/${union.id}/join`, { 
-        method: "POST" 
-      });
+      const response = await apiRequest(`/api/unions/${union.id}/join`, "POST");
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -201,7 +198,7 @@ function UnionFeedCard({ union }: { union: any }) {
           <div className="flex-1 min-w-0">
             <h3 className="font-bold text-lg md:text-xl mb-2 text-foreground flex items-center gap-2">
               {union.name}
-              {union.isVerified && <Shield className="h-4 w-4 text-blue-500" title="Verified Union" />}
+              {union.isVerified && <Shield className="h-4 w-4 text-blue-500" />}
             </h3>
             {union.industry && (
               <p className="text-sm text-muted-foreground mb-2">{union.industry}</p>
