@@ -93,6 +93,10 @@ export function CreatePostForm() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/polls"] });
       setContent("");
       setTags([]);
       setEventDate("");
