@@ -21,18 +21,26 @@ import {
   Calendar, 
   Heart, 
   MessageCircleReply,
-  Globe 
+  Globe,
+  Ban,
+  FileText,
+  UserCheck,
+  Handshake
 } from "lucide-react";
 
-type PostType = 'news' | 'post' | 'poll' | 'event' | 'charity' | 'debate';
+type PostType = 'post' | 'news' | 'poll' | 'event' | 'charity' | 'boycott' | 'initiative' | 'petition' | 'union' | 'debate';
 
 const postTypeOptions = [
-  { value: 'news', label: 'News & Announcements', icon: Newspaper, placeholder: 'Share important news or announcements with the community...' },
-  { value: 'post', label: 'General Discussion', icon: Globe, placeholder: 'Share your thoughts about policies, community issues, or democratic processes...' },
-  { value: 'poll', label: 'Create Poll', icon: BarChart3, placeholder: 'Ask the community a question and let them vote...' },
-  { value: 'event', label: 'Create Event', icon: Calendar, placeholder: 'Organize a community event, town hall, or meeting...' },
-  { value: 'charity', label: 'Charity Campaign', icon: Heart, placeholder: 'Start a fundraising campaign for a good cause...' },
-  { value: 'debate', label: 'Start Debate', icon: MessageCircleReply, placeholder: 'Present multiple perspectives on an important issue...' }
+  { value: 'post', label: 'Posts', icon: Globe, placeholder: 'Share your thoughts about policies, community issues, or democratic processes...' },
+  { value: 'news', label: 'News', icon: Newspaper, placeholder: 'Share important news or announcements with the community...' },
+  { value: 'poll', label: 'Polls', icon: BarChart3, placeholder: 'Ask the community a question and let them vote...' },
+  { value: 'event', label: 'Events', icon: Calendar, placeholder: 'Organize a community event, town hall, or meeting...' },
+  { value: 'charity', label: 'Charities', icon: Heart, placeholder: 'Start a fundraising campaign for a good cause...' },
+  { value: 'boycott', label: 'Boycotts', icon: Ban, placeholder: 'Organize a boycott against a company or organization...' },
+  { value: 'initiative', label: 'Initiatives', icon: FileText, placeholder: 'Propose a community initiative or policy change...' },
+  { value: 'petition', label: 'Petitions', icon: UserCheck, placeholder: 'Start a petition for change in your community...' },
+  { value: 'union', label: 'Unions', icon: Handshake, placeholder: 'Share union organizing efforts and labor rights information...' },
+  { value: 'debate', label: 'Debates', icon: MessageCircleReply, placeholder: 'Present multiple perspectives on an important issue...' }
 ];
 
 export function CreatePostForm() {
@@ -42,7 +50,7 @@ export function CreatePostForm() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [postType, setPostType] = useState<PostType>('news');
+  const [postType, setPostType] = useState<PostType>('post');
   
   // Event-specific fields
   const [eventDate, setEventDate] = useState("");
@@ -57,6 +65,26 @@ export function CreatePostForm() {
   
   // Debate-specific fields
   const [debatePositions, setDebatePositions] = useState<string[]>(['', '']);
+
+  // Boycott-specific fields
+  const [boycottTarget, setBoycottTarget] = useState("");
+  const [boycottReason, setBoycottReason] = useState("");
+  const [boycottDuration, setBoycottDuration] = useState("");
+
+  // Initiative-specific fields
+  const [initiativeType, setInitiativeType] = useState("");
+  const [initiativeAudience, setInitiativeAudience] = useState("");
+  const [initiativeGoal, setInitiativeGoal] = useState("");
+
+  // Petition-specific fields
+  const [petitionTarget, setPetitionTarget] = useState("");
+  const [petitionSignatureGoal, setPetitionSignatureGoal] = useState("");
+  const [petitionDeadline, setPetitionDeadline] = useState("");
+
+  // Union-specific fields
+  const [unionName, setUnionName] = useState("");
+  const [unionIndustry, setUnionIndustry] = useState("");
+  const [unionContact, setUnionContact] = useState("");
 
   const createPostMutation = useMutation({
     mutationFn: async (postData: any) => {
@@ -73,6 +101,18 @@ export function CreatePostForm() {
       setPollOptions(['', '']);
       setCharityGoal("");
       setDebatePositions(['', '']);
+      setBoycottTarget("");
+      setBoycottReason("");
+      setBoycottDuration("");
+      setInitiativeType("");
+      setInitiativeAudience("");
+      setInitiativeGoal("");
+      setPetitionTarget("");
+      setPetitionSignatureGoal("");
+      setPetitionDeadline("");
+      setUnionName("");
+      setUnionIndustry("");
+      setUnionContact("");
       setShowForm(false);
       toast({
         title: "Content Created",
@@ -202,6 +242,58 @@ export function CreatePostForm() {
       }
     }
 
+    if (postType === 'boycott') {
+      if (!boycottTarget.trim()) {
+        toast({
+          title: "Boycott Target Required",
+          description: "Please specify what or who is being boycotted",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (postType === 'initiative') {
+      if (!initiativeType.trim() || !initiativeGoal.trim()) {
+        toast({
+          title: "Initiative Details Required",
+          description: "Please provide initiative type and goal",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (postType === 'petition') {
+      if (!petitionTarget.trim()) {
+        toast({
+          title: "Petition Target Required",
+          description: "Please specify who the petition is directed to",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (petitionSignatureGoal && (isNaN(parseInt(petitionSignatureGoal)) || parseInt(petitionSignatureGoal) <= 0)) {
+        toast({
+          title: "Invalid Signature Goal",
+          description: "Please enter a valid signature goal number",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (postType === 'union') {
+      if (!unionName.trim() || !unionIndustry.trim()) {
+        toast({
+          title: "Union Details Required",
+          description: "Please provide union name and industry/sector",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     // Prepare submission data based on post type
     let submissionData: any = {
       content: content.trim(),
@@ -225,6 +317,38 @@ export function CreatePostForm() {
 
     if (postType === 'debate') {
       submissionData.debatePositions = debatePositions.filter(pos => pos.trim());
+    }
+
+    if (postType === 'boycott') {
+      submissionData.boycottTarget = boycottTarget.trim();
+      submissionData.boycottReason = boycottReason.trim();
+      if (boycottDuration.trim()) {
+        submissionData.boycottDuration = boycottDuration.trim();
+      }
+    }
+
+    if (postType === 'initiative') {
+      submissionData.initiativeType = initiativeType.trim();
+      submissionData.initiativeAudience = initiativeAudience.trim();
+      submissionData.initiativeGoal = initiativeGoal.trim();
+    }
+
+    if (postType === 'petition') {
+      submissionData.petitionTarget = petitionTarget.trim();
+      if (petitionSignatureGoal.trim()) {
+        submissionData.petitionSignatureGoal = parseInt(petitionSignatureGoal);
+      }
+      if (petitionDeadline.trim()) {
+        submissionData.petitionDeadline = petitionDeadline.trim();
+      }
+    }
+
+    if (postType === 'union') {
+      submissionData.unionName = unionName.trim();
+      submissionData.unionIndustry = unionIndustry.trim();
+      if (unionContact.trim()) {
+        submissionData.unionContact = unionContact.trim();
+      }
     }
     
     createPostMutation.mutate(submissionData);
@@ -298,6 +422,166 @@ export function CreatePostForm() {
             />
 
             {/* Type-specific fields */}
+            {postType === 'boycott' && (
+              <div className="space-y-4 p-4 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+                <h4 className="font-medium text-red-900 dark:text-red-100 flex items-center gap-2">
+                  <Ban className="h-4 w-4" />
+                  Boycott Details
+                </h4>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Target *</label>
+                  <Input
+                    placeholder="Company, organization, or product to boycott"
+                    value={boycottTarget}
+                    onChange={(e) => setBoycottTarget(e.target.value)}
+                    className="w-full"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Reason</label>
+                  <Input
+                    placeholder="Primary reason for the boycott"
+                    value={boycottReason}
+                    onChange={(e) => setBoycottReason(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Duration (Optional)</label>
+                  <Input
+                    placeholder="e.g., Until policy changes, 6 months, etc."
+                    value={boycottDuration}
+                    onChange={(e) => setBoycottDuration(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            )}
+
+            {postType === 'initiative' && (
+              <div className="space-y-4 p-4 bg-amber-50 dark:bg-amber-950 rounded-lg border border-amber-200 dark:border-amber-800">
+                <h4 className="font-medium text-amber-900 dark:text-amber-100 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Initiative Details
+                </h4>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Initiative Type *</label>
+                  <Select value={initiativeType} onValueChange={setInitiativeType}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select initiative type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="policy">Policy Change</SelectItem>
+                      <SelectItem value="community">Community Project</SelectItem>
+                      <SelectItem value="environmental">Environmental Action</SelectItem>
+                      <SelectItem value="social">Social Justice</SelectItem>
+                      <SelectItem value="economic">Economic Reform</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Target Audience</label>
+                  <Input
+                    placeholder="Who is this initiative aimed at?"
+                    value={initiativeAudience}
+                    onChange={(e) => setInitiativeAudience(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Goal/Outcome *</label>
+                  <Input
+                    placeholder="What do you hope to achieve?"
+                    value={initiativeGoal}
+                    onChange={(e) => setInitiativeGoal(e.target.value)}
+                    className="w-full"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            {postType === 'petition' && (
+              <div className="space-y-4 p-4 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200 dark:border-orange-800">
+                <h4 className="font-medium text-orange-900 dark:text-orange-100 flex items-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  Petition Details
+                </h4>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Petition Target *</label>
+                  <Input
+                    placeholder="Who is this petition directed to? (e.g., Mayor, Congress, Company)"
+                    value={petitionTarget}
+                    onChange={(e) => setPetitionTarget(e.target.value)}
+                    className="w-full"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Signature Goal (Optional)</label>
+                    <Input
+                      type="number"
+                      placeholder="e.g., 1000"
+                      value={petitionSignatureGoal}
+                      onChange={(e) => setPetitionSignatureGoal(e.target.value)}
+                      className="w-full"
+                      min="1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Deadline (Optional)</label>
+                    <Input
+                      type="date"
+                      value={petitionDeadline}
+                      onChange={(e) => setPetitionDeadline(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {postType === 'union' && (
+              <div className="space-y-4 p-4 bg-indigo-50 dark:bg-indigo-950 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                <h4 className="font-medium text-indigo-900 dark:text-indigo-100 flex items-center gap-2">
+                  <Handshake className="h-4 w-4" />
+                  Union Information
+                </h4>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Union Name *</label>
+                  <Input
+                    placeholder="Name of the union or organizing effort"
+                    value={unionName}
+                    onChange={(e) => setUnionName(e.target.value)}
+                    className="w-full"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Industry/Sector *</label>
+                  <Input
+                    placeholder="e.g., Healthcare, Tech, Manufacturing, Education"
+                    value={unionIndustry}
+                    onChange={(e) => setUnionIndustry(e.target.value)}
+                    className="w-full"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Contact Information (Optional)</label>
+                  <Input
+                    placeholder="Email, website, or other contact method"
+                    value={unionContact}
+                    onChange={(e) => setUnionContact(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            )}
+
             {postType === 'event' && (
               <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <h4 className="font-medium text-blue-900 flex items-center gap-2">
@@ -507,7 +791,19 @@ export function CreatePostForm() {
                     setPollOptions(['', '']);
                     setCharityGoal("");
                     setDebatePositions(['', '']);
-                    setPostType('news');
+                    setBoycottTarget("");
+                    setBoycottReason("");
+                    setBoycottDuration("");
+                    setInitiativeType("");
+                    setInitiativeAudience("");
+                    setInitiativeGoal("");
+                    setPetitionTarget("");
+                    setPetitionSignatureGoal("");
+                    setPetitionDeadline("");
+                    setUnionName("");
+                    setUnionIndustry("");
+                    setUnionContact("");
+                    setPostType('post');
                   }}
                   className="hover:bg-muted transition-colors"
                 >
@@ -528,10 +824,15 @@ export function CreatePostForm() {
                   ) : (
                     <>
                       <Send className="h-4 w-4 mr-2" />
-                      {postType === 'news' ? 'Share News' : 
+                      {postType === 'post' ? 'Post' :
+                       postType === 'news' ? 'Share News' : 
                        postType === 'poll' ? 'Create Poll' :
                        postType === 'event' ? 'Create Event' :
                        postType === 'charity' ? 'Start Campaign' :
+                       postType === 'boycott' ? 'Start Boycott' :
+                       postType === 'initiative' ? 'Create Initiative' :
+                       postType === 'petition' ? 'Start Petition' :
+                       postType === 'union' ? 'Share Union Info' :
                        postType === 'debate' ? 'Start Debate' : 'Post'}
                     </>
                   )}
