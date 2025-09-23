@@ -82,9 +82,9 @@ export function ActivitySidebar() {
         <CardContent>
           {candidates.length > 0 ? (
             <div className="space-y-4">
-              {candidates.slice(0, 2).map((candidate) => (
+              {candidates.slice(0, 3).map((candidate) => (
                 <div key={candidate.id} className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
+                  <Avatar className="h-10 w-10">
                     <AvatarFallback>
                       {candidate.userId.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
@@ -100,9 +100,6 @@ export function ActivitySidebar() {
                       {candidate.endorsements} supporters
                     </p>
                   </div>
-                  <Button size="sm" variant="outline">
-                    Support
-                  </Button>
                 </div>
               ))}
               
