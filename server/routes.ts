@@ -5,7 +5,8 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertLiveStreamSchema, insertNotificationSchema } from "@shared/schema";
+import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
 import { findRepresentativesByZipCode } from "./openai";
 import { z } from "zod";
@@ -3160,6 +3161,268 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       res.status(500).json({ error: "Failed to fetch user initiatives" });
+    }
+  });
+
+  // Live Streaming API Routes
+  const streamProvider = createStreamingProvider();
+
+  // Create a new live stream
+  app.post("/api/live/streams", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const streamData = insertLiveStreamSchema.parse({
+        ...req.body,
+        ownerId: req.user.id,
+      });
+
+      // Create stream input with provider
+      const streamInput = await streamProvider.createInput(streamData.title);
+      const streamKey = generateStreamKey();
+
+      // Create stream in database
+      const stream = await storage.createLiveStream({
+        ...streamData,
+        providerInputId: streamInput.inputId,
+        providerPlaybackId: streamInput.playbackId,
+        providerPlaybackUrl: streamInput.playbackUrl,
+        rtmpServerUrl: streamInput.rtmpUrl,
+        streamKeyHash: hashStreamKey(streamKey),
+      });
+
+      // Return stream info with plain text stream key (only on creation)
+      res.status(201).json({
+        ...stream,
+        streamKey: streamKey, // Only returned once
+        rtmpServerUrl: streamInput.rtmpUrl,
+        playbackUrl: streamInput.playbackUrl,
+      });
+    } catch (error: any) {
+      console.error("Create stream error:", error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Get live streams with optional filtering
+  app.get("/api/live/streams", async (req, res) => {
+    try {
+      const status = req.query.status as string;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const streams = await storage.listLiveStreams({ status, limit, offset });
+      res.json(streams);
+    } catch (error: any) {
+      console.error("List streams error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get a specific live stream
+  app.get("/api/live/streams/:id", async (req, res) => {
+    try {
+      const stream = await storage.getLiveStream(req.params.id);
+      if (!stream) {
+        return res.status(404).json({ message: "Stream not found" });
+      }
+      res.json(stream);
+    } catch (error: any) {
+      console.error("Get stream error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Update live stream (title, description, etc.)
+  app.patch("/api/live/streams/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const stream = await storage.getLiveStream(req.params.id);
+      if (!stream) {
+        return res.status(404).json({ message: "Stream not found" });
+      }
+
+      // Check ownership
+      if (stream.ownerId !== req.user.id) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      // Only allow updating certain fields
+      const allowedUpdates = ['title', 'description', 'visibility', 'scheduledStart', 'status'];
+      const updateData: any = {};
+      
+      for (const field of allowedUpdates) {
+        if (req.body[field] !== undefined) {
+          updateData[field] = req.body[field];
+        }
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No valid fields to update" });
+      }
+
+      const updatedStream = await storage.updateLiveStreamStatus(
+        req.params.id,
+        updateData.status || stream.status,
+        updateData.status === 'live' ? new Date() : undefined,
+        updateData.status === 'ended' ? new Date() : undefined
+      );
+
+      res.json(updatedStream);
+    } catch (error: any) {
+      console.error("Update stream error:", error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Regenerate stream key
+  app.post("/api/live/streams/:id/regenerate-key", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const stream = await storage.getLiveStream(req.params.id);
+      if (!stream) {
+        return res.status(404).json({ message: "Stream not found" });
+      }
+
+      // Check ownership
+      if (stream.ownerId !== req.user.id) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      const newStreamKey = generateStreamKey();
+      const updatedStream = await storage.updateLiveStreamStatus(req.params.id, stream.status);
+
+      res.json({
+        streamKey: newStreamKey,
+        rtmpServerUrl: stream.rtmpServerUrl,
+      });
+    } catch (error: any) {
+      console.error("Regenerate key error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get user's live streams
+  app.get("/api/live/streams/user/:userId", async (req, res) => {
+    try {
+      const streams = await storage.listUserStreams(req.params.userId);
+      res.json(streams);
+    } catch (error: any) {
+      console.error("Get user streams error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Provider webhook handler
+  app.post("/api/live/webhooks/provider", async (req, res) => {
+    try {
+      const signature = req.headers['x-signature'] as string;
+      const body = JSON.stringify(req.body);
+
+      // Verify webhook signature
+      if (!streamProvider.verifyWebhook(body, signature || '')) {
+        return res.status(401).json({ message: "Invalid signature" });
+      }
+
+      const event = webhookEventSchema.parse(req.body);
+      
+      // Update stream status based on provider event
+      switch (event.type) {
+        case 'stream.live':
+          await storage.updateLiveStreamStatus(event.streamId, 'live', new Date());
+          
+          // Broadcast live event via WebSocket
+          const liveStream = await storage.getLiveStream(event.streamId);
+          if (liveStream) {
+            // Notify users via WebSocket (implementation would be added to WebSocket handler)
+            console.log(`Stream ${event.streamId} went live`);
+          }
+          break;
+
+        case 'stream.ended':
+          await storage.updateLiveStreamStatus(event.streamId, 'ended', undefined, new Date());
+          break;
+
+        case 'stream.error':
+          console.error(`Stream ${event.streamId} error:`, event);
+          break;
+      }
+
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error("Webhook error:", error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Notification API Routes
+  app.get("/api/notifications", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const notifications = await storage.listUserNotifications(req.user.id, limit, offset);
+      res.json(notifications);
+    } catch (error: any) {
+      console.error("Get notifications error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Mark notification as read
+  app.patch("/api/notifications/:id/read", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.markNotificationRead(req.params.id);
+      res.status(200).json({ success: true });
+    } catch (error: any) {
+      console.error("Mark notification read error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Mark all notifications as read
+  app.patch("/api/notifications/read-all", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.markAllNotificationsRead(req.user.id);
+      res.status(200).json({ success: true });
+    } catch (error: any) {
+      console.error("Mark all notifications read error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get unread notification count
+  app.get("/api/notifications/unread-count", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const count = await storage.getUnreadNotificationCount(req.user.id);
+      res.json({ count });
+    } catch (error: any) {
+      console.error("Get unread count error:", error);
+      res.status(500).json({ message: error.message });
     }
   });
   

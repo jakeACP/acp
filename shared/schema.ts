@@ -1172,6 +1172,62 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Live Streaming Tables
+export const liveStreams = pgTable("live_streams", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerId: varchar("owner_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("scheduled"), // 'scheduled', 'live', 'ended', 'canceled'
+  visibility: text("visibility").notNull().default("public"), // 'public', 'followers', 'group', 'private'
+  scheduledStart: timestamp("scheduled_start"),
+  actualStart: timestamp("actual_start"),
+  endedAt: timestamp("ended_at"),
+  provider: text("provider").default("cloudflare"), // 'cloudflare', 'mux'
+  providerInputId: text("provider_input_id"),
+  providerPlaybackId: text("provider_playback_id"),
+  providerPlaybackUrl: text("provider_playback_url"),
+  rtmpServerUrl: text("rtmp_server_url"),
+  streamKeyHash: text("stream_key_hash"),
+  thumbnailUrl: text("thumbnail_url"),
+  contextType: text("context_type"), // 'post', 'debate', 'event'
+  contextId: varchar("context_id"),
+  notificationScheduled: boolean("notification_scheduled").default(false),
+  viewerCount: integer("viewer_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  ownerIndex: index("live_streams_owner_idx").on(table.ownerId),
+  statusIndex: index("live_streams_status_idx").on(table.status),
+  scheduledStartIndex: index("live_streams_scheduled_start_idx").on(table.scheduledStart),
+  contextIndex: index("live_streams_context_idx").on(table.contextType, table.contextId),
+}));
+
+export const liveStreamViewers = pgTable("live_stream_viewers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  streamId: varchar("stream_id").notNull().references(() => liveStreams.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id),
+  joinedAt: timestamp("joined_at").defaultNow(),
+  leftAt: timestamp("left_at"),
+}, (table) => ({
+  streamIndex: index("live_stream_viewers_stream_idx").on(table.streamId),
+  userIndex: index("live_stream_viewers_user_idx").on(table.userId),
+}));
+
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  type: text("type").notNull(), // 'live_schedule', 'live_start', 'general'
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  payload: json("payload"), // Additional data
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("notifications_user_idx").on(table.userId),
+  readIndex: index("notifications_read_idx").on(table.read),
+  typeIndex: index("notifications_type_idx").on(table.type),
+}));
+
 export const insertRepresentativeSchema = createInsertSchema(representatives).omit({
   id: true,
   createdAt: true,
@@ -1310,6 +1366,28 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
   createdAt: true,
 });
 
+export const insertLiveStreamSchema = createInsertSchema(liveStreams).omit({
+  id: true,
+  createdAt: true,
+  viewerCount: true,
+  actualStart: true,
+  endedAt: true,
+  streamKeyHash: true,
+  notificationScheduled: true,
+});
+
+export const insertLiveStreamViewerSchema = createInsertSchema(liveStreamViewers).omit({
+  id: true,
+  joinedAt: true,
+  leftAt: true,
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+  read: true,
+});
+
 // Citizen Initiative type exports
 export type Jurisdiction = typeof jurisdictions.$inferSelect;
 export type InsertJurisdiction = z.infer<typeof insertJurisdictionSchema>;
@@ -1358,3 +1436,21 @@ export type InsertUnionPost = z.infer<typeof insertUnionPostSchema>;
 // Initiative petition types (different from social petitions)
 export type InitiativePetition = typeof initiativePetitions.$inferSelect;
 export type InsertInitiativePetition = z.infer<typeof insertInitiativePetitionSchema>;
+
+// Live Streaming types
+export type LiveStream = typeof liveStreams.$inferSelect;
+export type InsertLiveStream = z.infer<typeof insertLiveStreamSchema>;
+export type LiveStreamViewer = typeof liveStreamViewers.$inferSelect;
+export type InsertLiveStreamViewer = z.infer<typeof insertLiveStreamViewerSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
+// Live Stream with owner info
+export type LiveStreamWithOwner = LiveStream & {
+  owner: {
+    username: string;
+    firstName: string | null;
+    lastName: string | null;
+    avatar: string | null;
+  } | null;
+};

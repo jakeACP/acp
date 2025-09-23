@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { friendships, friendGroups, friendGroupMembers, userReferrals, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type UserReferral, type InsertUserReferral } from "@shared/schema";
+import { friendships, friendGroups, friendGroupMembers, userReferrals, liveStreams, liveStreamViewers, notifications, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray, gte } from "drizzle-orm";
 import session from "express-session";
@@ -330,6 +330,26 @@ export interface IStorage {
   isUnionMember(unionId: string, userId: string): Promise<boolean>;
   getUnionPosts(unionId: string, limit?: number, offset?: number): Promise<any[]>;
   updateUnionMemberCount(unionId: string): Promise<void>;
+
+  // Live Streaming
+  createLiveStream(stream: InsertLiveStream): Promise<LiveStream>;
+  updateLiveStreamStatus(streamId: string, status: string, actualStart?: Date, endedAt?: Date): Promise<LiveStream>;
+  listLiveStreams(options?: { status?: string; limit?: number; offset?: number }): Promise<LiveStreamWithOwner[]>;
+  getLiveStream(id: string): Promise<LiveStreamWithOwner | undefined>;
+  listUserStreams(userId: string): Promise<LiveStream[]>;
+  scheduleNotification(streamId: string): Promise<void>;
+  markNotified(streamId: string): Promise<void>;
+  listUpcomingToNotify(windowMinutes?: number): Promise<LiveStream[]>;
+  recordViewerJoin(streamId: string, userId?: string): Promise<void>;
+  recordViewerLeave(streamId: string, userId?: string): Promise<void>;
+  updateStreamViewerCount(streamId: string, count: number): Promise<void>;
+  
+  // Notifications
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  listUserNotifications(userId: string, limit?: number, offset?: number): Promise<Notification[]>;
+  markNotificationRead(notificationId: string): Promise<void>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3733,6 +3753,232 @@ export class DatabaseStorage implements IStorage {
       updated_at = NOW()
       WHERE id = ${unionId}
     `);
+  }
+
+  // Live Streaming Implementation
+  async createLiveStream(stream: InsertLiveStream): Promise<LiveStream> {
+    const [createdStream] = await db
+      .insert(liveStreams)
+      .values(stream)
+      .returning();
+    return createdStream;
+  }
+
+  async updateLiveStreamStatus(streamId: string, status: string, actualStart?: Date, endedAt?: Date): Promise<LiveStream> {
+    const updateData: any = { status };
+    if (actualStart) updateData.actualStart = actualStart;
+    if (endedAt) updateData.endedAt = endedAt;
+
+    const [updatedStream] = await db
+      .update(liveStreams)
+      .set(updateData)
+      .where(eq(liveStreams.id, streamId))
+      .returning();
+    return updatedStream;
+  }
+
+  async listLiveStreams(options: { status?: string; limit?: number; offset?: number } = {}): Promise<LiveStreamWithOwner[]> {
+    const { status, limit = 50, offset = 0 } = options;
+    
+    let query = db
+      .select({
+        id: liveStreams.id,
+        ownerId: liveStreams.ownerId,
+        title: liveStreams.title,
+        description: liveStreams.description,
+        status: liveStreams.status,
+        visibility: liveStreams.visibility,
+        scheduledStart: liveStreams.scheduledStart,
+        actualStart: liveStreams.actualStart,
+        endedAt: liveStreams.endedAt,
+        provider: liveStreams.provider,
+        providerInputId: liveStreams.providerInputId,
+        providerPlaybackId: liveStreams.providerPlaybackId,
+        providerPlaybackUrl: liveStreams.providerPlaybackUrl,
+        rtmpServerUrl: liveStreams.rtmpServerUrl,
+        streamKeyHash: liveStreams.streamKeyHash,
+        thumbnailUrl: liveStreams.thumbnailUrl,
+        contextType: liveStreams.contextType,
+        contextId: liveStreams.contextId,
+        notificationScheduled: liveStreams.notificationScheduled,
+        viewerCount: liveStreams.viewerCount,
+        createdAt: liveStreams.createdAt,
+        owner: {
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+        },
+      })
+      .from(liveStreams)
+      .leftJoin(users, eq(liveStreams.ownerId, users.id))
+      .orderBy(desc(liveStreams.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    if (status) {
+      query = query.where(eq(liveStreams.status, status));
+    }
+
+    const results = await query;
+    return results as LiveStreamWithOwner[];
+  }
+
+  async getLiveStream(id: string): Promise<LiveStreamWithOwner | undefined> {
+    const [stream] = await db
+      .select({
+        id: liveStreams.id,
+        ownerId: liveStreams.ownerId,
+        title: liveStreams.title,
+        description: liveStreams.description,
+        status: liveStreams.status,
+        visibility: liveStreams.visibility,
+        scheduledStart: liveStreams.scheduledStart,
+        actualStart: liveStreams.actualStart,
+        endedAt: liveStreams.endedAt,
+        provider: liveStreams.provider,
+        providerInputId: liveStreams.providerInputId,
+        providerPlaybackId: liveStreams.providerPlaybackId,
+        providerPlaybackUrl: liveStreams.providerPlaybackUrl,
+        rtmpServerUrl: liveStreams.rtmpServerUrl,
+        streamKeyHash: liveStreams.streamKeyHash,
+        thumbnailUrl: liveStreams.thumbnailUrl,
+        contextType: liveStreams.contextType,
+        contextId: liveStreams.contextId,
+        notificationScheduled: liveStreams.notificationScheduled,
+        viewerCount: liveStreams.viewerCount,
+        createdAt: liveStreams.createdAt,
+        owner: {
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+        },
+      })
+      .from(liveStreams)
+      .leftJoin(users, eq(liveStreams.ownerId, users.id))
+      .where(eq(liveStreams.id, id));
+
+    return stream as LiveStreamWithOwner;
+  }
+
+  async listUserStreams(userId: string): Promise<LiveStream[]> {
+    return await db
+      .select()
+      .from(liveStreams)
+      .where(eq(liveStreams.ownerId, userId))
+      .orderBy(desc(liveStreams.createdAt));
+  }
+
+  async scheduleNotification(streamId: string): Promise<void> {
+    await db
+      .update(liveStreams)
+      .set({ notificationScheduled: true })
+      .where(eq(liveStreams.id, streamId));
+  }
+
+  async markNotified(streamId: string): Promise<void> {
+    await db
+      .update(liveStreams)
+      .set({ notificationScheduled: true })
+      .where(eq(liveStreams.id, streamId));
+  }
+
+  async listUpcomingToNotify(windowMinutes: number = 60): Promise<LiveStream[]> {
+    const now = new Date();
+    const futureTime = new Date(now.getTime() + windowMinutes * 60 * 1000);
+    
+    return await db
+      .select()
+      .from(liveStreams)
+      .where(
+        and(
+          eq(liveStreams.status, 'scheduled'),
+          eq(liveStreams.notificationScheduled, false),
+          gte(liveStreams.scheduledStart, now),
+          sql`${liveStreams.scheduledStart} <= ${futureTime}`
+        )
+      );
+  }
+
+  async recordViewerJoin(streamId: string, userId?: string): Promise<void> {
+    if (userId) {
+      await db
+        .insert(liveStreamViewers)
+        .values({
+          streamId,
+          userId,
+          joinedAt: new Date(),
+        });
+    }
+  }
+
+  async recordViewerLeave(streamId: string, userId?: string): Promise<void> {
+    if (userId) {
+      await db
+        .update(liveStreamViewers)
+        .set({ leftAt: new Date() })
+        .where(
+          and(
+            eq(liveStreamViewers.streamId, streamId),
+            eq(liveStreamViewers.userId, userId),
+            sql`${liveStreamViewers.leftAt} IS NULL`
+          )
+        );
+    }
+  }
+
+  async updateStreamViewerCount(streamId: string, count: number): Promise<void> {
+    await db
+      .update(liveStreams)
+      .set({ viewerCount: count })
+      .where(eq(liveStreams.id, streamId));
+  }
+
+  // Notifications Implementation
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [createdNotification] = await db
+      .insert(notifications)
+      .values(notification)
+      .returning();
+    return createdNotification;
+  }
+
+  async listUserNotifications(userId: string, limit: number = 50, offset: number = 0): Promise<Notification[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async markNotificationRead(notificationId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ read: true })
+      .where(eq(notifications.id, notificationId));
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ read: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const [result] = await db
+      .select({ count: count() })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.read, false)
+        )
+      );
+    return result?.count || 0;
   }
 }
 

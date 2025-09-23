@@ -31,6 +31,7 @@ export function Navigation() {
 
   const navItems = [
     { href: "/", label: "Feed" },
+    { href: "/live", label: "Live" },
     { href: "/friends", label: "Friends" },
     { href: "/messages", label: "Messages" },
     { href: "/representatives", label: "Your Reps" },
@@ -130,6 +131,9 @@ export function Navigation() {
                 <DropdownMenuContent align="end" className="floating-card border-0">
                   <Link href="/profile">
                     <DropdownMenuItem className="cursor-pointer">Profile</DropdownMenuItem>
+                  </Link>
+                  <Link href="/my-streams">
+                    <DropdownMenuItem className="cursor-pointer">My Streams</DropdownMenuItem>
                   </Link>
                   <Link href="/subscription">
                     <DropdownMenuItem className="cursor-pointer">ACP+ Subscription</DropdownMenuItem>
@@ -232,6 +236,15 @@ export function Navigation() {
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Profile
+                </Button>
+              </Link>
+              <Link href="/my-streams">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  My Streams
                 </Button>
               </Link>
               {isOwnerAdmin && (

@@ -29,6 +29,8 @@ import InitiativesPage from "@/pages/InitiativesPage";
 import InitiativeFormPage from "@/pages/InitiativeFormPage";
 import InitiativeDetailPage from "@/pages/InitiativeDetailPage";
 import SubscriptionPage from "@/pages/subscription-page";
+import { LivePage } from "@/pages/LivePage";
+import MyStreamsPage from "@/pages/MyStreamsPage";
 import AdminInvitationsPage from "@/pages/admin-invitations-page";
 import AdminRepresentativesPage from "@/pages/admin-representatives-page";
 import NotFound from "@/pages/not-found";
@@ -44,6 +46,8 @@ function Router() {
       <ProtectedRoute path="/candidates/:id" component={CandidateProfilePage} />
       <ProtectedRoute path="/representatives" component={RepresentativesPage} />
       <ProtectedRoute path="/events" component={EventsPage} />
+      <ProtectedRoute path="/live" component={LivePage} />
+      <ProtectedRoute path="/my-streams" component={MyStreamsPage} />
       <ProtectedRoute path="/friends" component={FriendsPage} />
       <ProtectedRoute path="/messages" component={MessagesPage} />
       <ProtectedRoute path="/crypto" component={CryptoDashboardPage} />
