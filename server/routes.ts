@@ -5,7 +5,8 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertLiveStreamSchema, insertNotificationSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertLiveStreamSchema, insertNotificationSchema, comments } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
 import { findRepresentativesByZipCode } from "./openai";
@@ -52,6 +53,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(post);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/posts/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // Get the post to check ownership
+      const post = await storage.getPostById(req.params.id);
+      if (!post) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      // Check if the user is the author or has admin/moderator privileges
+      if (post.authorId !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'moderator') {
+        return res.status(403).json({ message: "You can only delete your own posts" });
+      }
+
+      await storage.deletePost(req.params.id);
+      res.status(200).json({ message: "Post deleted successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 
@@ -530,6 +555,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(comment);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/comments/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // Get the comment to check ownership
+      const [comment] = await db.select().from(comments).where(eq(comments.id, req.params.id));
+      if (!comment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      // Check if the user is the author or has admin/moderator privileges
+      if (comment.authorId !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'moderator') {
+        return res.status(403).json({ message: "You can only delete your own comments" });
+      }
+
+      await storage.deleteComment(req.params.id);
+      res.status(200).json({ message: "Comment deleted successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

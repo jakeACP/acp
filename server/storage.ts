@@ -23,6 +23,7 @@ export interface IStorage {
   getPosts(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
   getPostById(id: string): Promise<Post | undefined>;
   createPost(post: InsertPost): Promise<Post>;
+  deletePost(postId: string): Promise<void>;
   getPostsByUser(userId: string): Promise<Post[]>;
   getPostsByTag(tag: string): Promise<Post[]>;
 
@@ -87,6 +88,7 @@ export interface IStorage {
   getCommentsByPost(postId: string): Promise<Comment[]>;
   getCommentsByPoll(pollId: string): Promise<Comment[]>;
   createComment(comment: InsertComment): Promise<Comment>;
+  deleteComment(commentId: string): Promise<void>;
   createPollComment(pollId: string, authorId: string, content: string): Promise<Comment>;
 
   // Likes
@@ -533,6 +535,17 @@ export class DatabaseStorage implements IStorage {
       .values(post)
       .returning();
     return newPost;
+  }
+
+  async deletePost(postId: string): Promise<void> {
+    // Delete associated comments first
+    await db.delete(comments).where(eq(comments.postId, postId));
+    
+    // Delete associated likes
+    await db.delete(likes).where(eq(likes.targetId, postId));
+    
+    // Delete the post
+    await db.delete(posts).where(eq(posts.id, postId));
   }
 
   async getPostsByUser(userId: string): Promise<Post[]> {
@@ -1360,6 +1373,27 @@ export class DatabaseStorage implements IStorage {
     }
 
     return newComment;
+  }
+
+  async deleteComment(commentId: string): Promise<void> {
+    // Get the comment to know which post to update
+    const [comment] = await db.select().from(comments).where(eq(comments.id, commentId));
+    
+    if (comment) {
+      // Delete associated likes for this comment
+      await db.delete(likes).where(eq(likes.targetId, commentId));
+      
+      // Delete the comment
+      await db.delete(comments).where(eq(comments.id, commentId));
+      
+      // Update post comment count if it was a post comment
+      if (comment.postId) {
+        await db
+          .update(posts)
+          .set({ commentsCount: sql`${posts.commentsCount} - 1` })
+          .where(eq(posts.id, comment.postId));
+      }
+    }
   }
 
   async createPollComment(pollId: string, authorId: string, content: string): Promise<Comment> {
