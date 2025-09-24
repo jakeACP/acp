@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Post, PostWithAuthor, Comment } from "@shared/schema";
-import { Heart, MessageCircle, Share, Flag, Send } from "lucide-react";
+import { Heart, MessageCircle, Share, Flag, Send, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 
@@ -103,6 +103,47 @@ export function PostCard({ post }: PostCardProps) {
     },
   });
 
+  const deletePostMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest(`/api/posts/${post.id}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({
+        title: "Post Deleted",
+        description: "Your post has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete post",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (commentId: string) => {
+      return await apiRequest(`/api/comments/${commentId}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/posts/${post.id}/comments`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({
+        title: "Comment Deleted",
+        description: "Your comment has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete comment",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLike = () => {
     if (user) {
       likeMutation.mutate();
@@ -162,6 +203,30 @@ export function PostCard({ post }: PostCardProps) {
       return;
     }
     flagMutation.mutate();
+  };
+
+  const handleDeletePost = () => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to delete posts",
+        variant: "destructive",
+      });
+      return;
+    }
+    deletePostMutation.mutate();
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to delete comments",
+        variant: "destructive",
+      });
+      return;
+    }
+    deleteCommentMutation.mutate(commentId);
   };
 
   const handleSubmitComment = () => {
@@ -299,16 +364,34 @@ export function PostCard({ post }: PostCardProps) {
                     ) : (
                       comments.map((comment) => (
                         <div key={comment.id} className="border rounded-lg p-3">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Avatar className="h-6 w-6">
-                              <AvatarFallback className="text-xs">
-                                {comment.authorId.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{getDisplayName()}</span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400">
-                              {comment.createdAt && formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
-                            </span>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-6 w-6">
+                                <AvatarFallback className="text-xs">
+                                  {comment.authorId.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{getDisplayName()}</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400">
+                                {comment.createdAt && formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                              </span>
+                            </div>
+                            
+                            {user && (user.id === comment.authorId || user.role === 'admin' || user.role === 'moderator') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteComment(comment.id)}
+                                disabled={deleteCommentMutation.isPending}
+                                className="flex items-center gap-1 hover:text-red-500 text-red-600 h-6 px-2"
+                                data-testid={`button-delete-comment-${comment.id}`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                <span className="text-xs">
+                                  {deleteCommentMutation.isPending ? "..." : "Delete"}
+                                </span>
+                              </Button>
+                            )}
                           </div>
                           <p className="text-slate-900 dark:text-slate-100">{comment.content}</p>
                         </div>
@@ -331,17 +414,33 @@ export function PostCard({ post }: PostCardProps) {
             </Button>
           </div>
           
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleFlag}
-            disabled={flagMutation.isPending}
-            className="flex items-center gap-2 hover:text-red-500"
-            data-testid="button-flag"
-          >
-            <Flag className="h-4 w-4" />
-            {flagMutation.isPending ? "Flagging..." : "Flag"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {user && (user.id === post.authorId || user.role === 'admin' || user.role === 'moderator') && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDeletePost}
+                disabled={deletePostMutation.isPending}
+                className="flex items-center gap-2 hover:text-red-500 text-red-600"
+                data-testid="button-delete-post"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deletePostMutation.isPending ? "Deleting..." : "Delete"}
+              </Button>
+            )}
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleFlag}
+              disabled={flagMutation.isPending}
+              className="flex items-center gap-2 hover:text-red-500"
+              data-testid="button-flag"
+            >
+              <Flag className="h-4 w-4" />
+              {flagMutation.isPending ? "Flagging..." : "Flag"}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
