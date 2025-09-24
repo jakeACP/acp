@@ -564,8 +564,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      // Get the comment to check ownership
-      const [comment] = await db.select().from(comments).where(eq(comments.id, req.params.id));
+      // Get the comment to check ownership - using storage method for consistency
+      const comment = await storage.getCommentById(req.params.id);
       if (!comment) {
         return res.status(404).json({ message: "Comment not found" });
       }

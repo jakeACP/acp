@@ -87,6 +87,7 @@ export interface IStorage {
   // Comments
   getCommentsByPost(postId: string): Promise<Comment[]>;
   getCommentsByPoll(pollId: string): Promise<Comment[]>;
+  getCommentById(commentId: string): Promise<Comment | undefined>;
   createComment(comment: InsertComment): Promise<Comment>;
   deleteComment(commentId: string): Promise<void>;
   createPollComment(pollId: string, authorId: string, content: string): Promise<Comment>;
@@ -538,14 +539,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deletePost(postId: string): Promise<void> {
-    // Delete associated comments first
-    await db.delete(comments).where(eq(comments.postId, postId));
-    
-    // Delete associated likes
-    await db.delete(likes).where(eq(likes.targetId, postId));
-    
-    // Delete the post
-    await db.delete(posts).where(eq(posts.id, postId));
+    // Use a transaction to ensure data integrity
+    await db.transaction(async (tx) => {
+      // Delete associated comments first
+      await tx.delete(comments).where(eq(comments.postId, postId));
+      
+      // Delete associated likes for the post
+      await tx.delete(likes).where(eq(likes.targetId, postId));
+      
+      // Delete associated reactions for the post
+      await tx.delete(reactions).where(eq(reactions.targetId, postId));
+      
+      // Delete associated flags for the post
+      await tx.delete(flags).where(eq(flags.targetId, postId));
+      
+      // Delete any bias votes related to this post
+      await tx.delete(biasVotes).where(eq(biasVotes.postId, postId));
+      
+      // Finally delete the post itself
+      await tx.delete(posts).where(eq(posts.id, postId));
+    });
   }
 
   async getPostsByUser(userId: string): Promise<Post[]> {
@@ -1335,6 +1348,14 @@ export class DatabaseStorage implements IStorage {
       .from(comments)
       .where(eq(comments.postId, postId))
       .orderBy(desc(comments.createdAt));
+  }
+
+  async getCommentById(commentId: string): Promise<Comment | undefined> {
+    const [comment] = await db
+      .select()
+      .from(comments)
+      .where(eq(comments.id, commentId));
+    return comment || undefined;
   }
 
   async getCommentsByPoll(pollId: string): Promise<any[]> {
