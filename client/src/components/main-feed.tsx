@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PostCard } from "@/components/post-card";
 import { PollCard } from "@/components/poll-card";
 import { EnhancedPollCard } from "@/components/enhanced-poll-card";
@@ -312,6 +313,7 @@ export function MainFeed() {
   const { user } = useAuth();
   const [showBlockchain, setShowBlockchain] = useState(false);
   const [activeFeed, setActiveFeed] = useState<FeedType>('all');
+  const [showMobileCreatePost, setShowMobileCreatePost] = useState(false);
 
   // Three-tier feed system queries
   const { data: allFeedPosts = [], isLoading: isLoadingAll } = useQuery<PostWithAuthor[]>({
@@ -568,7 +570,8 @@ export function MainFeed() {
       <div className="md:hidden px-4 py-3">
         <Button 
           className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white shadow-lg rounded-full py-3 text-base font-semibold floating-card transition-all duration-200"
-          onClick={() => {/* TODO: Add mobile create post modal */}}
+          onClick={() => setShowMobileCreatePost(true)}
+          data-testid="mobile-create-post-button"
         >
           <MessageSquare className="h-5 w-5 mr-2" />
           What's on your mind?
@@ -661,6 +664,18 @@ export function MainFeed() {
           </CardContent>
         </Card>
       )}
+
+      {/* Mobile Create Post Modal */}
+      <Dialog open={showMobileCreatePost} onOpenChange={setShowMobileCreatePost}>
+        <DialogContent className="max-w-lg mx-auto max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Post</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <CreatePostForm onSuccess={() => setShowMobileCreatePost(false)} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

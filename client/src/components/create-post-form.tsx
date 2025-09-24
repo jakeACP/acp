@@ -43,7 +43,7 @@ const postTypeOptions = [
   { value: 'debate', label: 'Debates', icon: MessageCircleReply, placeholder: 'Present multiple perspectives on an important issue...' }
 ];
 
-export function CreatePostForm() {
+export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [content, setContent] = useState("");
@@ -122,6 +122,7 @@ export function CreatePostForm() {
         title: "Content Created",
         description: `Your ${postType} has been shared with the community.`,
       });
+      onSuccess?.(); // Call the optional onSuccess callback
     },
     onError: (error: any) => {
       toast({
