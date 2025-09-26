@@ -211,7 +211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: req.body.type,
         emoji: req.body.emoji || undefined,
       });
-      await storage.addReaction(reactionData.userId, reactionData.postId, reactionData.type, reactionData.emoji);
+      await storage.addReaction(reactionData.userId, reactionData.postId, reactionData.type, reactionData.emoji || undefined);
       res.status(201).json({ message: "Reaction added successfully" });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1440,10 +1440,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             type: 'candidate_found', 
             representative: savedRep,
             name: savedRep.name, 
-            office: savedRep.office,
-            level: savedRep.level,
+            office: savedRep.officeTitle,
+            level: savedRep.officeLevel,
             party: savedRep.party,
-            message: `Found: ${savedRep.name} - ${savedRep.office}`,
+            message: `Found: ${savedRep.name} - ${savedRep.officeTitle}`,
             progress: 85 + ((i + 1) * progressStep)
           });
           
@@ -2742,7 +2742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate each item
       const validatedItems = items.map(item => insertRepresentativeSchema.parse(item));
       
-      const result = await storage.importRepresentatives(validatedItems, req.user.id);
+      const result = await storage.importRepresentatives(validatedItems, req.user!.id);
       res.json(result);
     } catch (error: any) {
       console.error("Admin import representatives error:", error);
@@ -2778,7 +2778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate each item
       const validatedItems = items.map(item => insertZipCodeLookupSchema.parse(item));
       
-      const result = await storage.importZipMappings(validatedItems, req.user.id);
+      const result = await storage.importZipMappings(validatedItems, req.user!.id);
       res.json(result);
     } catch (error: any) {
       console.error("Admin import zip mappings error:", error);
@@ -3232,15 +3232,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const streamInput = await streamProvider.createInput(streamData.title);
       const streamKey = generateStreamKey();
 
-      // Create stream in database
-      const stream = await storage.createLiveStream({
+      // Create stream in database with stream key hash
+      const streamWithKeyHash = {
         ...streamData,
         providerInputId: streamInput.inputId,
         providerPlaybackId: streamInput.playbackId,
         providerPlaybackUrl: streamInput.playbackUrl,
         rtmpServerUrl: streamInput.rtmpUrl,
         streamKeyHash: hashStreamKey(streamKey),
-      });
+      };
+      
+      const stream = await storage.createLiveStream(streamWithKeyHash);
 
       // Return stream info with plain text stream key (only on creation)
       res.status(201).json({
