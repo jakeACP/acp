@@ -62,15 +62,13 @@ export function setupAuth(app: Express) {
     try {
       const { invitationToken, ...userData } = req.body;
       
-      // Validate invitation token is required
-      if (!invitationToken) {
-        return res.status(400).json({ message: "Invitation token is required" });
-      }
-
-      // Validate the invitation
-      const validation = await storage.validateInvitation(invitationToken, userData.email);
-      if (!validation.valid) {
-        return res.status(400).json({ message: validation.reason || "Invalid invitation" });
+      // Validate the invitation if one is provided
+      let validation: any = null;
+      if (invitationToken) {
+        validation = await storage.validateInvitation(invitationToken, userData.email);
+        if (!validation.valid) {
+          return res.status(400).json({ message: validation.reason || "Invalid invitation" });
+        }
       }
 
       const existingUser = await storage.getUserByUsername(userData.username);
@@ -83,13 +81,20 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email already exists" });
       }
 
+      // Check if this is the first user - if so, make them admin
+      const userCount = await storage.getUserCount();
+      const isFirstUser = userCount === 0;
+
       const user = await storage.createUser({
         ...userData,
         password: await hashPassword(userData.password),
+        role: isFirstUser ? "admin" : "citizen",
       });
 
-      // Mark invitation as used
-      await storage.useInvitation(invitationToken, user.id);
+      // Mark invitation as used if one was provided
+      if (invitationToken && validation) {
+        await storage.useInvitation(invitationToken, user.id);
+      }
 
       // Create automatic friend connections (Tom from MySpace style)
       try {
@@ -99,8 +104,8 @@ export function setupAuth(app: Express) {
           await storage.createFriendship(adminUserId, user.id);
         }
 
-        // 2. Auto-friend with inviter
-        if (validation.invitation?.invitedBy && validation.invitation.invitedBy !== user.id) {
+        // 2. Auto-friend with inviter (if invitation was used)
+        if (validation?.invitation?.invitedBy && validation.invitation.invitedBy !== user.id) {
           await storage.createFriendship(validation.invitation.invitedBy, user.id);
           
           // 3. Create referral tracking for credits

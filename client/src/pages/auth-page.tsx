@@ -21,7 +21,7 @@ const registerSchema = insertUserSchema.extend({
   email: z.string().email("Please enter a valid email"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  invitationToken: z.string().min(1, "Invitation token is required"),
+  invitationToken: z.string().optional(),
 });
 
 type LoginData = z.infer<typeof loginSchema>;
@@ -69,7 +69,8 @@ export default function AuthPage() {
           setInvitationError('Failed to validate invitation token');
         });
     } else {
-      setInvitationError('Registration requires an invitation. Please contact an administrator for an invitation link.');
+      // No invitation token - allow open registration
+      setInvitationError(null);
     }
   }, [location, registerForm]);
 
@@ -83,7 +84,10 @@ export default function AuthPage() {
   };
 
   const onRegister = (data: RegisterData) => {
-    registerMutation.mutate(data);
+    // Remove invitationToken if it's empty/undefined
+    const { invitationToken, ...rest } = data;
+    const payload = invitationToken ? data : rest;
+    registerMutation.mutate(payload as any);
   };
 
   return (
@@ -283,7 +287,7 @@ export default function AuthPage() {
                     <Button
                       type="submit"
                       className="w-full"
-                      disabled={registerMutation.isPending || !!invitationError || !invitationToken}
+                      disabled={registerMutation.isPending || !!invitationError}
                       data-testid="button-register"
                     >
                       {registerMutation.isPending ? "Creating Account..." : "Create Account"}
