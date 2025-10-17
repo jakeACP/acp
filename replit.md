@@ -147,6 +147,15 @@ Preferred communication style: Simple, everyday language.
 
 The application is designed as a modern, scalable platform that can grow from a small community tool to a large-scale democratic participation system while maintaining security, performance, and user experience standards.
 
+## Recent Updates (October 2025)
+
+### Open Registration System (October 2025)
+- **Invitation System Made Optional**: Registration no longer requires an invitation code
+- **Bootstrap Admin Feature**: First user to register automatically receives admin privileges
+- **Flexible Authentication**: Users can still use invitation links if provided, but can also register directly
+- **Production Access**: Resolves lockout issues where published apps couldn't be accessed without invite codes
+- **Security Enhancement**: Ensures at least one admin user exists for system management
+
 ## Recent Updates (January 2025)
 
 ### Events System Implementation (January 2025)
