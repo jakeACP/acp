@@ -34,6 +34,7 @@ import MyStreamsPage from "@/pages/MyStreamsPage";
 import AdminInvitationsPage from "@/pages/admin-invitations-page";
 import AdminRepresentativesPage from "@/pages/admin-representatives-page";
 import NotFound from "@/pages/not-found";
+import { AlertTriangle } from "lucide-react";
 
 function Router() {
   return (
@@ -72,12 +73,26 @@ function Router() {
   );
 }
 
+function BetaBanner() {
+  return (
+    <div className="bg-amber-500 dark:bg-amber-600 text-white py-2 px-4 text-center text-sm font-medium sticky top-0 z-[100] shadow-md">
+      <div className="flex items-center justify-center gap-2 max-w-7xl mx-auto">
+        <AlertTriangle className="h-4 w-4" />
+        <span>
+          <strong>Beta Testing Mode:</strong> This app is currently in testing. All data and users will be wiped when the final version is published.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="acp-ui-theme">
         <AuthProvider>
           <TooltipProvider>
+            <BetaBanner />
             <Toaster />
             <Router />
           </TooltipProvider>
