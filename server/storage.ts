@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { friendships, friendGroups, friendGroupMembers, userReferrals, liveStreams, liveStreamViewers, notifications, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification } from "@shared/schema";
+import { friendships, friendGroups, friendGroupMembers, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray, gte } from "drizzle-orm";
 import session from "express-session";
@@ -354,6 +354,30 @@ export interface IStorage {
   markNotificationRead(notificationId: string): Promise<void>;
   markAllNotificationsRead(userId: string): Promise<void>;
   getUnreadNotificationCount(userId: string): Promise<number>;
+
+  // Analytics
+  getPostCount(): Promise<number>;
+  getPollCount(): Promise<number>;
+  getGroupCount(): Promise<number>;
+  getEventCount(): Promise<number>;
+  getCharityCount(): Promise<number>;
+
+  // Content Moderation
+  getFlaggedContent(status?: string): Promise<any[]>;
+  createFlaggedContent(data: any): Promise<any>;
+  reviewFlaggedContent(id: string, reviewedBy: string, status: string, actionTaken?: string, reviewNote?: string): Promise<void>;
+
+  // User Bans
+  getBannedUsers(activeOnly?: boolean): Promise<any[]>;
+  banUser(userId: string, bannedBy: string, reason: string, duration?: string, expiresAt?: Date): Promise<void>;
+  unbanUser(banId: string, unbannedBy: string): Promise<void>;
+  getUserBanStatus(userId: string): Promise<any | undefined>;
+
+  // IP Blocking
+  getBlockedIps(activeOnly?: boolean): Promise<any[]>;
+  blockIp(ipAddress: string, blockedBy: string, reason: string): Promise<void>;
+  unblockIp(id: string, unblockedBy: string): Promise<void>;
+  isIpBlocked(ipAddress: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4040,6 +4064,160 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return result?.count || 0;
+  }
+
+  // Analytics Implementation
+  async getPostCount(): Promise<number> {
+    const [result] = await db.select({ count: count() }).from(posts);
+    return result?.count || 0;
+  }
+
+  async getPollCount(): Promise<number> {
+    const [result] = await db.select({ count: count() }).from(polls);
+    return result?.count || 0;
+  }
+
+  async getGroupCount(): Promise<number> {
+    const [result] = await db.select({ count: count() }).from(groups);
+    return result?.count || 0;
+  }
+
+  async getEventCount(): Promise<number> {
+    const [result] = await db.select({ count: count() }).from(events);
+    return result?.count || 0;
+  }
+
+  async getCharityCount(): Promise<number> {
+    const [result] = await db.select({ count: count() }).from(charities);
+    return result?.count || 0;
+  }
+
+  // Content Moderation Implementation
+  async getFlaggedContent(status?: string): Promise<any[]> {
+    let query = db.select().from(flaggedContent);
+    if (status) {
+      query = query.where(eq(flaggedContent.status, status)) as any;
+    }
+    return await query.orderBy(desc(flaggedContent.createdAt));
+  }
+
+  async createFlaggedContent(data: any): Promise<any> {
+    const [flagged] = await db.insert(flaggedContent).values(data).returning();
+    return flagged;
+  }
+
+  async reviewFlaggedContent(
+    id: string,
+    reviewedBy: string,
+    status: string,
+    actionTaken?: string,
+    reviewNote?: string
+  ): Promise<void> {
+    await db
+      .update(flaggedContent)
+      .set({
+        status,
+        reviewedBy,
+        actionTaken,
+        reviewNote,
+        reviewedAt: new Date(),
+      })
+      .where(eq(flaggedContent.id, id));
+  }
+
+  // User Bans Implementation
+  async getBannedUsers(activeOnly: boolean = true): Promise<any[]> {
+    let query = db.select().from(bannedUsers);
+    if (activeOnly) {
+      query = query.where(eq(bannedUsers.isActive, true)) as any;
+    }
+    return await query.orderBy(desc(bannedUsers.createdAt));
+  }
+
+  async banUser(
+    userId: string,
+    bannedBy: string,
+    reason: string,
+    duration?: string,
+    expiresAt?: Date
+  ): Promise<void> {
+    await db.insert(bannedUsers).values({
+      userId,
+      bannedBy,
+      reason,
+      duration: duration || 'permanent',
+      expiresAt: expiresAt || null,
+      isActive: true,
+    });
+  }
+
+  async unbanUser(banId: string, unbannedBy: string): Promise<void> {
+    await db
+      .update(bannedUsers)
+      .set({
+        isActive: false,
+        unbannedAt: new Date(),
+        unbannedBy,
+      })
+      .where(eq(bannedUsers.id, banId));
+  }
+
+  async getUserBanStatus(userId: string): Promise<any | undefined> {
+    const [ban] = await db
+      .select()
+      .from(bannedUsers)
+      .where(
+        and(
+          eq(bannedUsers.userId, userId),
+          eq(bannedUsers.isActive, true)
+        )
+      )
+      .orderBy(desc(bannedUsers.createdAt))
+      .limit(1);
+    return ban || undefined;
+  }
+
+  // IP Blocking Implementation
+  async getBlockedIps(activeOnly: boolean = true): Promise<any[]> {
+    let query = db.select().from(blockedIps);
+    if (activeOnly) {
+      query = query.where(eq(blockedIps.isActive, true)) as any;
+    }
+    return await query.orderBy(desc(blockedIps.createdAt));
+  }
+
+  async blockIp(ipAddress: string, blockedBy: string, reason: string): Promise<void> {
+    await db.insert(blockedIps).values({
+      ipAddress,
+      blockedBy,
+      reason,
+      isActive: true,
+    });
+  }
+
+  async unblockIp(id: string, unblockedBy: string): Promise<void> {
+    await db
+      .update(blockedIps)
+      .set({
+        isActive: false,
+        unblockedAt: new Date(),
+        unblockedBy,
+      })
+      .where(eq(blockedIps.id, id));
+  }
+
+  async isIpBlocked(ipAddress: string): Promise<boolean> {
+    const [blocked] = await db
+      .select()
+      .from(blockedIps)
+      .where(
+        and(
+          eq(blockedIps.ipAddress, ipAddress),
+          eq(blockedIps.isActive, true)
+        )
+      )
+      .limit(1);
+    return !!blocked;
   }
 }
 
