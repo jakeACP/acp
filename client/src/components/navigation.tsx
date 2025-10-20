@@ -28,6 +28,7 @@ export function Navigation() {
   });
 
   const isOwnerAdmin = user?.role === "admin" && adminUserId && user.id === adminUserId;
+  const canAccessAdmin = user?.role === "admin" || user?.role === "moderator";
 
   const navItems = [
     { href: "/", label: "Feed" },
@@ -145,16 +146,24 @@ export function Navigation() {
                   <Link href="/settings">
                     <DropdownMenuItem className="cursor-pointer">Settings</DropdownMenuItem>
                   </Link>
-                  {isOwnerAdmin && (
+                  {canAccessAdmin && (
                     <>
                       <DropdownMenuSeparator />
-                      <Link href="/admin/representatives">
-                        <DropdownMenuItem className="cursor-pointer" data-testid="link-admin-representatives">
+                      <Link href="/admin/dashboard">
+                        <DropdownMenuItem className="cursor-pointer" data-testid="link-admin-panel">
                           <Shield className="mr-2 h-4 w-4" />
-                          Admin Portal
+                          Admin Panel
                         </DropdownMenuItem>
                       </Link>
                     </>
+                  )}
+                  {isOwnerAdmin && (
+                    <Link href="/admin/representatives">
+                      <DropdownMenuItem className="cursor-pointer" data-testid="link-admin-representatives">
+                        <Shield className="mr-2 h-4 w-4" />
+                        Representatives Admin
+                      </DropdownMenuItem>
+                    </Link>
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 dark:text-red-400">
@@ -247,6 +256,19 @@ export function Navigation() {
                   My Streams
                 </Button>
               </Link>
+              {canAccessAdmin && (
+                <Link href="/admin/dashboard">
+                  <Button 
+                    variant="ghost" 
+                    className="w-full justify-start"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    data-testid="mobile-link-admin-panel"
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    Admin Panel
+                  </Button>
+                </Link>
+              )}
               {isOwnerAdmin && (
                 <Link href="/admin/representatives">
                   <Button 
@@ -256,7 +278,7 @@ export function Navigation() {
                     data-testid="mobile-link-admin-representatives"
                   >
                     <Shield className="mr-2 h-4 w-4" />
-                    Admin Portal
+                    Representatives Admin
                   </Button>
                 </Link>
               )}

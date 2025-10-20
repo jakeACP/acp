@@ -2863,11 +2863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/flagged-content", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
-    
+  app.post("/api/admin/flagged-content", ensureAdmin, async (req, res) => {
     try {
       const flagged = await storage.createFlaggedContent({
         ...req.body,
