@@ -12,6 +12,7 @@ import { Post, PostWithAuthor, Comment } from "@shared/schema";
 import { Heart, MessageCircle, Share, Flag, Send, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
+import { Link } from "wouter";
 
 interface PostCardProps {
   post: PostWithAuthor;
@@ -265,13 +266,19 @@ export function PostCard({ post }: PostCardProps) {
       <CardHeader>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <Avatar>
-              <AvatarFallback>
-                {post.authorId.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <Link href={`/profile/${post.authorId}`}>
+              <Avatar className="cursor-pointer hover:opacity-80 transition-opacity">
+                <AvatarFallback>
+                  {post.authorId.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
             <div>
-              <h4 className="font-semibold text-slate-900 dark:text-slate-100">{getDisplayName()}</h4>
+              <Link href={`/profile/${post.authorId}`}>
+                <h4 className="font-semibold text-slate-900 dark:text-slate-100 hover:text-primary cursor-pointer transition-colors" data-testid={`link-author-${post.authorId}`}>
+                  {getDisplayName()}
+                </h4>
+              </Link>
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 {timeAgo || "Recently"}
               </p>
@@ -366,12 +373,18 @@ export function PostCard({ post }: PostCardProps) {
                         <div key={comment.id} className="border rounded-lg p-3">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              <Avatar className="h-6 w-6">
-                                <AvatarFallback className="text-xs">
-                                  {comment.authorId.slice(0, 2).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{getDisplayName()}</span>
+                              <Link href={`/profile/${comment.authorId}`}>
+                                <Avatar className="h-6 w-6 cursor-pointer hover:opacity-80 transition-opacity">
+                                  <AvatarFallback className="text-xs">
+                                    {comment.authorId.slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                              </Link>
+                              <Link href={`/profile/${comment.authorId}`}>
+                                <span className="text-sm font-medium text-slate-900 dark:text-slate-100 hover:text-primary cursor-pointer transition-colors" data-testid={`link-comment-author-${comment.authorId}`}>
+                                  {comment.authorId}
+                                </span>
+                              </Link>
                               <span className="text-xs text-slate-500 dark:text-slate-400">
                                 {comment.createdAt && formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                               </span>
