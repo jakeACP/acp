@@ -2811,6 +2811,171 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin Analytics APIs
+  app.get("/api/admin/analytics", ensureAdmin, async (req, res) => {
+    try {
+      const [userCount, postCount, pollCount, groupCount, eventCount, charityCount] = await Promise.all([
+        storage.getUserCount(),
+        storage.getPostCount(),
+        storage.getPollCount(),
+        storage.getGroupCount(),
+        storage.getEventCount(),
+        storage.getCharityCount(),
+      ]);
+
+      res.json({
+        userCount,
+        postCount,
+        pollCount,
+        groupCount,
+        eventCount,
+        charityCount,
+      });
+    } catch (error: any) {
+      console.error("Admin analytics error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Content Moderation APIs
+  app.get("/api/admin/flagged-content", ensureAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const flaggedContent = await storage.getFlaggedContent(status);
+      res.json(flaggedContent);
+    } catch (error: any) {
+      console.error("Admin get flagged content error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/flagged-content", ensureAuthenticated, async (req, res) => {
+    try {
+      const flagged = await storage.createFlaggedContent({
+        ...req.body,
+        flaggedBy: req.user!.id,
+      });
+      res.json(flagged);
+    } catch (error: any) {
+      console.error("Admin create flagged content error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/flagged-content/:id/review", ensureAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, actionTaken, reviewNote } = req.body;
+      
+      await storage.reviewFlaggedContent(
+        id,
+        req.user!.id,
+        status,
+        actionTaken,
+        reviewNote
+      );
+      res.json({ message: "Flagged content reviewed successfully" });
+    } catch (error: any) {
+      console.error("Admin review flagged content error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // User Ban Management APIs
+  app.get("/api/admin/banned-users", ensureAdmin, async (req, res) => {
+    try {
+      const activeOnly = req.query.activeOnly !== 'false';
+      const bannedUsers = await storage.getBannedUsers(activeOnly);
+      res.json(bannedUsers);
+    } catch (error: any) {
+      console.error("Admin get banned users error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/ban-user", ensureAdmin, async (req, res) => {
+    try {
+      const { userId, reason, duration, expiresAt } = req.body;
+      
+      if (!userId || !reason) {
+        return res.status(400).json({ message: "userId and reason are required" });
+      }
+
+      await storage.banUser(
+        userId,
+        req.user!.id,
+        reason,
+        duration,
+        expiresAt ? new Date(expiresAt) : undefined
+      );
+      res.json({ message: "User banned successfully" });
+    } catch (error: any) {
+      console.error("Admin ban user error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/unban-user/:banId", ensureAdmin, async (req, res) => {
+    try {
+      const { banId } = req.params;
+      await storage.unbanUser(banId, req.user!.id);
+      res.json({ message: "User unbanned successfully" });
+    } catch (error: any) {
+      console.error("Admin unban user error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/user-ban-status/:userId", ensureAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const banStatus = await storage.getUserBanStatus(userId);
+      res.json(banStatus || { banned: false });
+    } catch (error: any) {
+      console.error("Admin get user ban status error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // IP Blocking APIs
+  app.get("/api/admin/blocked-ips", ensureAdmin, async (req, res) => {
+    try {
+      const activeOnly = req.query.activeOnly !== 'false';
+      const blockedIps = await storage.getBlockedIps(activeOnly);
+      res.json(blockedIps);
+    } catch (error: any) {
+      console.error("Admin get blocked IPs error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/block-ip", ensureAdmin, async (req, res) => {
+    try {
+      const { ipAddress, reason } = req.body;
+      
+      if (!ipAddress || !reason) {
+        return res.status(400).json({ message: "ipAddress and reason are required" });
+      }
+
+      await storage.blockIp(ipAddress, req.user!.id, reason);
+      res.json({ message: "IP address blocked successfully" });
+    } catch (error: any) {
+      console.error("Admin block IP error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/unblock-ip/:id", ensureAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.unblockIp(id, req.user!.id);
+      res.json({ message: "IP address unblocked successfully" });
+    } catch (error: any) {
+      console.error("Admin unblock IP error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   
   // WebSocket setup for real-time messaging
