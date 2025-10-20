@@ -2570,7 +2570,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Owner Admin Security Middleware
+  // Admin Security Middleware - for admin and moderator access
+  function ensureAdmin(req: any, res: any, next: any) {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    // Check if user is admin or moderator
+    if (req.user.role !== "admin" && req.user.role !== "moderator") {
+      return res.status(403).json({ message: "Admin or moderator access required" });
+    }
+
+    next();
+  }
+
+  // Owner Admin Security Middleware - only for the original admin user
   function ensureOwnerAdmin(req: any, res: any, next: any) {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
@@ -2849,7 +2863,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/flagged-content", ensureAuthenticated, async (req, res) => {
+  app.post("/api/admin/flagged-content", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    
     try {
       const flagged = await storage.createFlaggedContent({
         ...req.body,

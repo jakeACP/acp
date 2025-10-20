@@ -33,6 +33,10 @@ import { LivePage } from "@/pages/LivePage";
 import MyStreamsPage from "@/pages/MyStreamsPage";
 import AdminInvitationsPage from "@/pages/admin-invitations-page";
 import AdminRepresentativesPage from "@/pages/admin-representatives-page";
+import AdminDashboardPage from "@/pages/admin-dashboard-page";
+import AdminModerationPage from "@/pages/admin-moderation-page";
+import AdminUserBansPage from "@/pages/admin-user-bans-page";
+import AdminIpBlocksPage from "@/pages/admin-ip-blocks-page";
 import NotFound from "@/pages/not-found";
 import { AlertTriangle } from "lucide-react";
 
@@ -63,6 +67,10 @@ function Router() {
       <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
       <ProtectedRoute path="/subscription" component={SubscriptionPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
+      <ProtectedRoute path="/admin/dashboard" component={AdminDashboardPage} />
+      <ProtectedRoute path="/admin/moderation" component={AdminModerationPage} />
+      <ProtectedRoute path="/admin/bans" component={AdminUserBansPage} />
+      <ProtectedRoute path="/admin/ip-blocks" component={AdminIpBlocksPage} />
       <ProtectedRoute path="/admin/invitations" component={AdminInvitationsPage} />
       <ProtectedRoute path="/admin/representatives" component={AdminRepresentativesPage} />
       <Route path="/auth" component={AuthPage} />
