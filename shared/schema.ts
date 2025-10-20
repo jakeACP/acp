@@ -1228,6 +1228,60 @@ export const notifications = pgTable("notifications", {
   typeIndex: index("notifications_type_idx").on(table.type),
 }));
 
+// Content Moderation: Flagged Content
+export const flaggedContent = pgTable("flagged_content", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  contentType: text("content_type").notNull(), // 'post', 'comment', 'message', 'poll'
+  contentId: varchar("content_id").notNull(),
+  flagType: text("flag_type").notNull(), // 'spam', 'hate_speech', 'nudity', 'crime', 'misinformation', 'other'
+  flaggedBy: varchar("flagged_by").notNull().references(() => users.id),
+  reason: text("reason"),
+  status: text("status").notNull().default("pending"), // 'pending', 'reviewed', 'action_taken', 'dismissed'
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewNote: text("review_note"),
+  actionTaken: text("action_taken"), // 'removed', 'warning_sent', 'user_banned', 'no_action'
+  createdAt: timestamp("created_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+}, (table) => ({
+  contentIndex: index("flagged_content_content_idx").on(table.contentType, table.contentId),
+  statusIndex: index("flagged_content_status_idx").on(table.status),
+  flagTypeIndex: index("flagged_content_flag_type_idx").on(table.flagType),
+  flaggedByIndex: index("flagged_content_flagged_by_idx").on(table.flaggedBy),
+}));
+
+// User Bans
+export const bannedUsers = pgTable("banned_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  bannedBy: varchar("banned_by").notNull().references(() => users.id),
+  reason: text("reason").notNull(),
+  duration: text("duration"), // 'permanent', '1day', '7days', '30days', or null
+  expiresAt: timestamp("expires_at"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  unbannedAt: timestamp("unbanned_at"),
+  unbannedBy: varchar("unbanned_by").references(() => users.id),
+}, (table) => ({
+  userIndex: index("banned_users_user_idx").on(table.userId),
+  activeIndex: index("banned_users_active_idx").on(table.isActive),
+  expiresIndex: index("banned_users_expires_idx").on(table.expiresAt),
+}));
+
+// IP Address Blocking
+export const blockedIps = pgTable("blocked_ips", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ipAddress: text("ip_address").notNull().unique(),
+  blockedBy: varchar("blocked_by").notNull().references(() => users.id),
+  reason: text("reason").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  unblockedAt: timestamp("unblocked_at"),
+  unblockedBy: varchar("unblocked_by").references(() => users.id),
+}, (table) => ({
+  ipIndex: index("blocked_ips_ip_idx").on(table.ipAddress),
+  activeIndex: index("blocked_ips_active_idx").on(table.isActive),
+}));
+
 export const insertRepresentativeSchema = createInsertSchema(representatives).omit({
   id: true,
   createdAt: true,
@@ -1388,6 +1442,27 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   read: true,
 });
 
+export const insertFlaggedContentSchema = createInsertSchema(flaggedContent).omit({
+  id: true,
+  createdAt: true,
+  reviewedAt: true,
+  status: true,
+});
+
+export const insertBannedUserSchema = createInsertSchema(bannedUsers).omit({
+  id: true,
+  createdAt: true,
+  unbannedAt: true,
+  isActive: true,
+});
+
+export const insertBlockedIpSchema = createInsertSchema(blockedIps).omit({
+  id: true,
+  createdAt: true,
+  unblockedAt: true,
+  isActive: true,
+});
+
 // Citizen Initiative type exports
 export type Jurisdiction = typeof jurisdictions.$inferSelect;
 export type InsertJurisdiction = z.infer<typeof insertJurisdictionSchema>;
@@ -1444,6 +1519,14 @@ export type LiveStreamViewer = typeof liveStreamViewers.$inferSelect;
 export type InsertLiveStreamViewer = z.infer<typeof insertLiveStreamViewerSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
+// Content Moderation types
+export type FlaggedContent = typeof flaggedContent.$inferSelect;
+export type InsertFlaggedContent = z.infer<typeof insertFlaggedContentSchema>;
+export type BannedUser = typeof bannedUsers.$inferSelect;
+export type InsertBannedUser = z.infer<typeof insertBannedUserSchema>;
+export type BlockedIp = typeof blockedIps.$inferSelect;
+export type InsertBlockedIp = z.infer<typeof insertBlockedIpSchema>;
 
 // Live Stream with owner info
 export type LiveStreamWithOwner = LiveStream & {
