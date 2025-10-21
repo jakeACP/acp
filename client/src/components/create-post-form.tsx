@@ -25,7 +25,8 @@ import {
   Ban,
   FileText,
   UserCheck,
-  Handshake
+  Handshake,
+  Lock
 } from "lucide-react";
 
 type PostType = 'post' | 'news' | 'poll' | 'event' | 'charity' | 'boycott' | 'initiative' | 'petition' | 'union' | 'debate';
@@ -51,6 +52,7 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [tagInput, setTagInput] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [postType, setPostType] = useState<PostType>('post');
+  const [privacy, setPrivacy] = useState<'public' | 'friends'>('public');
   
   // Event-specific fields
   const [eventDate, setEventDate] = useState("");
@@ -117,6 +119,7 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
       setUnionName("");
       setUnionIndustry("");
       setUnionContact("");
+      setPrivacy('public');
       setShowForm(false);
       toast({
         title: "Content Created",
@@ -303,7 +306,8 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
     let submissionData: any = {
       content: content.trim(),
       tags,
-      type: postType
+      type: postType,
+      privacy
     };
 
     if (postType === 'event') {
@@ -769,6 +773,33 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
               </div>
             </div>
 
+            {/* Privacy selector */}
+            <div className="flex items-center gap-2 pt-4">
+              <label className="text-sm font-medium text-foreground">Privacy:</label>
+              <Select value={privacy} onValueChange={(value) => setPrivacy(value as 'public' | 'friends')}>
+                <SelectTrigger className="w-[140px] border-border hover:border-primary/50 transition-colors" data-testid="select-privacy">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="public" data-testid="option-privacy-public">
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-4 w-4" />
+                      <span>Public</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="friends" data-testid="option-privacy-friends">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4" />
+                      <span>Friends</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground">
+                {privacy === 'public' ? 'Anyone can see this post' : 'Only your friends can see this post'}
+              </span>
+            </div>
+
             {/* Action Buttons */}
             <div className="flex justify-between items-center pt-4 border-t border-border">
               <div className="flex items-center space-x-4">
@@ -808,6 +839,7 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
                     setUnionName("");
                     setUnionIndustry("");
                     setUnionContact("");
+                    setPrivacy('public');
                     setPostType('post');
                   }}
                   className="hover:bg-muted transition-colors"
