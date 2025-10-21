@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { Group } from "@shared/schema";
-import { Leaf, GraduationCap, Scale, Users, Coins, Wallet, Copy, Check, Share2 } from "lucide-react";
+import { Group, User } from "@shared/schema";
+import { Leaf, GraduationCap, Scale, Users, Coins, Wallet, Copy, Check, Share2, Circle } from "lucide-react";
 import { Link } from "wouter";
 import logoPath from "@assets/logo1_1753819424851.png";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +29,12 @@ export function UserSidebar() {
   const { data: balanceData } = useQuery<{ balance: string }>({
     queryKey: ["/api/user/balance"],
     enabled: !!user?.id,
+  });
+
+  const { data: onlineFriends = [] } = useQuery<User[]>({
+    queryKey: ["/api/user/friends/online"],
+    enabled: !!user?.id,
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   const getGroupIcon = (category: string | null) => {
@@ -150,6 +156,59 @@ export function UserSidebar() {
               <Button size="sm" className="w-full">
                 Explore Groups
               </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Friends Online */}
+      <Card className="floating-card bg-card border border-border dark:border-border">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Circle className="h-3 w-3 text-green-500 fill-green-500" />
+            Friends Online
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {onlineFriends.length > 0 ? (
+            <div className="space-y-3">
+              {onlineFriends.slice(0, 5).map((friend) => (
+                <Link key={friend.id} href={`/profile/${friend.id}`}>
+                  <div 
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer"
+                    data-testid={`friend-online-${friend.id}`}
+                  >
+                    <div className="relative">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={friend.avatar || ""} />
+                        <AvatarFallback className="text-sm">
+                          {friend.firstName?.[0]}{friend.lastName?.[0] || friend.username?.[0]?.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {friend.firstName ? `${friend.firstName} ${friend.lastName}` : friend.username}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Online now</p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+              
+              {onlineFriends.length > 5 && (
+                <p className="text-xs text-center text-muted-foreground pt-2">
+                  +{onlineFriends.length - 5} more online
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <Circle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">
+                No friends online right now
+              </p>
             </div>
           )}
         </CardContent>
