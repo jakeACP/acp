@@ -28,6 +28,7 @@ export interface IStorage {
   getPostsByUser(userId: string): Promise<Post[]>;
   getPostsByTag(tag: string): Promise<Post[]>;
   incrementPostShares(postId: string): Promise<void>;
+  sharePost(originalPostId: string, userId: string): Promise<Post>;
 
   // Feed System
   getAllFeed(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
@@ -613,6 +614,44 @@ export class DatabaseStorage implements IStorage {
       .update(posts)
       .set({ sharesCount: sql`${posts.sharesCount} + 1` })
       .where(eq(posts.id, postId));
+  }
+
+  async sharePost(originalPostId: string, userId: string): Promise<Post> {
+    return await db.transaction(async (tx) => {
+      // Get the original post
+      const [originalPost] = await tx
+        .select()
+        .from(posts)
+        .where(eq(posts.id, originalPostId));
+
+      if (!originalPost) {
+        throw new Error("Post not found");
+      }
+
+      // Create the shared post
+      const [sharedPost] = await tx
+        .insert(posts)
+        .values({
+          authorId: userId,
+          content: originalPost.content,
+          type: originalPost.type,
+          tags: originalPost.tags || [],
+          image: originalPost.image,
+          url: originalPost.url,
+          title: originalPost.title,
+          newsSourceName: originalPost.newsSourceName,
+          sharedPostId: originalPost.id,
+        })
+        .returning();
+
+      // Increment the shares count atomically
+      await tx
+        .update(posts)
+        .set({ sharesCount: sql`${posts.sharesCount} + 1` })
+        .where(eq(posts.id, originalPostId));
+
+      return sharedPost;
+    });
   }
 
   // Feed System Implementation

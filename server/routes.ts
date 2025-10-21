@@ -86,30 +86,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      // Get the original post
-      const originalPost = await storage.getPostById(req.params.id);
-      if (!originalPost) {
-        return res.status(404).json({ message: "Post not found" });
-      }
-
-      // Create a shared post
-      const sharedPost = await storage.createPost({
-        authorId: req.user.id,
-        content: originalPost.content,
-        type: originalPost.type,
-        tags: originalPost.tags || [],
-        image: originalPost.image,
-        url: originalPost.url,
-        title: originalPost.title,
-        newsSourceName: originalPost.newsSourceName,
-        sharedPostId: originalPost.id,
-      });
-
-      // Increment the shares count on the original post
-      await storage.incrementPostShares(req.params.id);
-
+      const sharedPost = await storage.sharePost(req.params.id, req.user.id);
       res.status(201).json(sharedPost);
     } catch (error: any) {
+      if (error.message === "Post not found") {
+        return res.status(404).json({ message: error.message });
+      }
       res.status(500).json({ message: error.message });
     }
   });
