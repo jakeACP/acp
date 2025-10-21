@@ -13,7 +13,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { ObjectUploader } from "@/components/ObjectUploader";
-import { ArrowLeft, Lock, User, Mail, Camera } from "lucide-react";
+import { ArrowLeft, Lock, User, Mail, Camera, Shield, Settings as SettingsIcon } from "lucide-react";
+import { Link } from "wouter";
 import type { UploadResult } from "@uppy/core";
 
 const changePasswordSchema = z.object({
@@ -283,6 +284,70 @@ export default function SettingsPage() {
               </Form>
             </CardContent>
           </Card>
+
+          {/* Admin Panel - Only visible to admins */}
+          {user?.role === "admin" && (
+            <Card className="lg:col-span-3 border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-blue-900 dark:text-blue-100">
+                  <Shield className="h-5 w-5" />
+                  Admin Panel
+                </CardTitle>
+                <CardDescription className="text-blue-700 dark:text-blue-300">
+                  Access administrative tools and dashboard
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Link href="/admin/dashboard">
+                    <Button 
+                      variant="outline" 
+                      className="w-full h-auto py-6 flex flex-col items-center gap-3 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-950 border-blue-200 dark:border-blue-800"
+                      data-testid="link-admin-dashboard"
+                    >
+                      <SettingsIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                      <div className="text-center">
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">Dashboard</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400">System overview</div>
+                      </div>
+                    </Button>
+                  </Link>
+
+                  <Link href="/admin/moderation">
+                    <Button 
+                      variant="outline" 
+                      className="w-full h-auto py-6 flex flex-col items-center gap-3 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-950 border-blue-200 dark:border-blue-800"
+                      data-testid="link-admin-moderation"
+                    >
+                      <Shield className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                      <div className="text-center">
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">Moderation</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400">Content review</div>
+                      </div>
+                    </Button>
+                  </Link>
+
+                  <Link href="/admin/invitations">
+                    <Button 
+                      variant="outline" 
+                      className="w-full h-auto py-6 flex flex-col items-center gap-3 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-950 border-blue-200 dark:border-blue-800"
+                      data-testid="link-admin-invitations"
+                    >
+                      <Mail className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                      <div className="text-center">
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">Invitations</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400">Manage invites</div>
+                      </div>
+                    </Button>
+                  </Link>
+                </div>
+                
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-4 text-center">
+                  You have administrative access to manage the platform
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
