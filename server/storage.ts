@@ -481,6 +481,7 @@ export class DatabaseStorage implements IStorage {
         stripeCustomerId: users.stripeCustomerId,
         stripeSubscriptionId: users.stripeSubscriptionId,
         acpCoinBalance: users.acpCoinBalance,
+        profileTheme: users.profileTheme,
         profileBackground: users.profileBackground,
         favoriteSong: users.favoriteSong,
         profileLayout: users.profileLayout,

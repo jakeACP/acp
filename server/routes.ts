@@ -226,6 +226,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Online status and friends
+  app.post("/api/user/lastseen", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.updateLastSeen(req.user.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/user/friends/online", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const onlineFriends = await storage.getOnlineFriends(req.user.id);
+      res.json(onlineFriends);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Enhanced Reactions API
   app.post("/api/reactions", async (req, res) => {
     if (!req.isAuthenticated()) {
