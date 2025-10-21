@@ -27,6 +27,7 @@ export interface IStorage {
   deletePost(postId: string): Promise<void>;
   getPostsByUser(userId: string): Promise<Post[]>;
   getPostsByTag(tag: string): Promise<Post[]>;
+  incrementPostShares(postId: string): Promise<void>;
 
   // Feed System
   getAllFeed(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
@@ -605,6 +606,13 @@ export class DatabaseStorage implements IStorage {
       .from(posts)
       .where(sql`${tag} = ANY(${posts.tags})`)
       .orderBy(desc(posts.createdAt));
+  }
+
+  async incrementPostShares(postId: string): Promise<void> {
+    await db
+      .update(posts)
+      .set({ sharesCount: sql`${posts.sharesCount} + 1` })
+      .where(eq(posts.id, postId));
   }
 
   // Feed System Implementation

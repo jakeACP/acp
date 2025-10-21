@@ -223,6 +223,7 @@ export const posts = pgTable("posts", {
   url: text("url"), // For news articles and external links
   title: text("title"), // News headlines
   newsSourceName: text("news_source_name"), // Original news source
+  sharedPostId: varchar("shared_post_id").references(() => posts.id), // ID of the original post if this is a share
   likesCount: integer("likes_count").default(0),
   commentsCount: integer("comments_count").default(0),
   sharesCount: integer("shares_count").default(0),
