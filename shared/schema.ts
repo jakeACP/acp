@@ -28,6 +28,7 @@ export const users = pgTable("users", {
   favoriteSong: text("favorite_song"),
   profileLayout: json("profile_layout"), // Modular layout configuration
   createdAt: timestamp("created_at").defaultNow(),
+  lastSeen: timestamp("last_seen"),
   // News organization fields
   isNewsOrganization: boolean("is_news_organization").default(false),
   organizationName: text("organization_name"),
