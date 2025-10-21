@@ -149,6 +149,20 @@ The application is designed as a modern, scalable platform that can grow from a 
 
 ## Recent Updates (October 2025)
 
+### Profile Bio/About Me Module (October 2025)
+- **Bio Module Added**: New "About Me" section appears as the first module on all user profiles
+- **Editable Interface**: Profile owners can write and update their bio with an easy-to-use text area
+- **Public Display**: Visitors can read user bios to learn about community members
+- **API Integration**: New `/api/profile/bio` endpoint for saving bio updates
+- **Persistent Storage**: Bio text is saved to database and displayed across sessions
+- **User-Friendly**: Includes helpful placeholder text to guide users in writing their bio
+
+### Clickable Author Names (October 2025)
+- **Profile Links**: Post and comment author names are now clickable links to user profiles
+- **Better Navigation**: Users can easily discover and visit profiles of people they interact with
+- **Improved UX**: Hovering over author names shows visual feedback with color transition
+- **Debug Logging**: Added logging to track auto-friending feature when users register with invite links
+
 ### Open Registration System (October 2025)
 - **Invitation System Made Optional**: Registration no longer requires an invitation code
 - **Bootstrap Admin Feature**: First user to register automatically receives admin privileges
