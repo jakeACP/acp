@@ -21,19 +21,19 @@ export interface IStorage {
   updateUserPassword(userId: string, hashedPassword: string): Promise<User>;
 
   // Posts
-  getPosts(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
-  getPostById(id: string): Promise<Post | undefined>;
+  getPosts(limit?: number, offset?: number, userId?: string): Promise<PostWithAuthor[]>;
+  getPostById(id: string, userId?: string): Promise<Post | undefined>;
   createPost(post: InsertPost): Promise<Post>;
   deletePost(postId: string): Promise<void>;
-  getPostsByUser(userId: string): Promise<Post[]>;
-  getPostsByTag(tag: string): Promise<Post[]>;
+  getPostsByUser(userId: string, viewerId?: string): Promise<Post[]>;
+  getPostsByTag(tag: string, userId?: string): Promise<Post[]>;
   incrementPostShares(postId: string): Promise<void>;
   sharePost(originalPostId: string, userId: string): Promise<Post>;
 
   // Feed System
   getAllFeed(limit?: number, offset?: number, userId?: string): Promise<PostWithAuthor[]>;
   getFollowingFeed(userId: string, limit?: number, offset?: number): Promise<PostWithAuthor[]>;
-  getNewsFeed(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
+  getNewsFeed(limit?: number, offset?: number, userId?: string): Promise<PostWithAuthor[]>;
   
   // User Following
   followUser(followerId: string, followeeId: string): Promise<void>;
@@ -521,7 +521,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(invitations.id, id));
   }
 
-  async getPosts(limit = 20, offset = 0): Promise<PostWithAuthor[]> {
+  async getPosts(limit = 20, offset = 0, userId?: string): Promise<PostWithAuthor[]> {
+    // Build privacy filter
+    let privacyFilter;
+    if (userId) {
+      privacyFilter = or(
+        eq(posts.privacy, 'public'),
+        eq(posts.authorId, userId), // Author can always see their own posts
+        and(
+          eq(posts.privacy, 'friends'),
+          sql`EXISTS (
+            SELECT 1 FROM ${friendships} 
+            WHERE ((${friendships.requesterId} = ${userId} AND ${friendships.addresseeId} = ${posts.authorId})
+               OR  (${friendships.addresseeId} = ${userId} AND ${friendships.requesterId} = ${posts.authorId}))
+            AND ${friendships.status} = 'accepted'
+          )`
+        )
+      );
+    } else {
+      privacyFilter = eq(posts.privacy, 'public');
+    }
+    
     return await db
       .select({
         id: posts.id,
@@ -555,6 +575,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(posts)
       .leftJoin(users, eq(posts.authorId, users.id))
+      .where(privacyFilter)
       .orderBy(desc(posts.createdAt))
       .limit(limit)
       .offset(offset);
@@ -693,17 +714,42 @@ export class DatabaseStorage implements IStorage {
 
   async sharePost(originalPostId: string, userId: string): Promise<Post> {
     return await db.transaction(async (tx) => {
-      // Get the original post
+      // First verify the user has permission to view the original post
+      // Build privacy filter to check if user can see this post
+      const privacyFilter = or(
+        eq(posts.privacy, 'public'),
+        eq(posts.authorId, userId), // Author can always share their own posts
+        and(
+          eq(posts.privacy, 'friends'),
+          sql`EXISTS (
+            SELECT 1 FROM ${friendships} 
+            WHERE ((${friendships.requesterId} = ${userId} AND ${friendships.addresseeId} = ${posts.authorId})
+               OR  (${friendships.addresseeId} = ${userId} AND ${friendships.requesterId} = ${posts.authorId}))
+            AND ${friendships.status} = 'accepted'
+          )`
+        )
+      );
+      
+      // Get the original post with privacy check
       const [originalPost] = await tx
         .select()
         .from(posts)
-        .where(eq(posts.id, originalPostId));
+        .where(and(
+          eq(posts.id, originalPostId),
+          privacyFilter
+        ));
 
       if (!originalPost) {
-        throw new Error("Post not found");
+        throw new Error("NOT_AUTHORIZED");
       }
 
-      // Create the shared post - inherit original post's privacy setting
+      // Security: Block sharing friends-only posts unless user is the original author
+      // This prevents privacy leaks where friends-only content becomes visible to the sharer's friends
+      if (originalPost.privacy === 'friends' && originalPost.authorId !== userId) {
+        throw new Error("CANNOT_SHARE_FRIENDS_ONLY");
+      }
+
+      // Create the shared post - use public privacy for shares to avoid confusion
       const [sharedPost] = await tx
         .insert(posts)
         .values({
@@ -716,7 +762,7 @@ export class DatabaseStorage implements IStorage {
           title: originalPost.title,
           newsSourceName: originalPost.newsSourceName,
           sharedPostId: originalPost.id,
-          privacy: originalPost.privacy || 'public', // Inherit original privacy or default to public
+          privacy: originalPost.privacy === 'friends' ? 'friends' : 'public', // Keep friends-only if author is sharing their own post
         })
         .returning();
 
@@ -738,9 +784,10 @@ export class DatabaseStorage implements IStorage {
     // Build privacy filter
     let privacyFilter;
     if (userId) {
-      // Show public posts OR friends-only posts from friends
+      // Show public posts OR author's own posts OR friends-only posts from friends
       privacyFilter = or(
         eq(posts.privacy, 'public'),
+        eq(posts.authorId, userId), // Author can always see their own posts
         and(
           eq(posts.privacy, 'friends'),
           sql`EXISTS (
@@ -811,6 +858,7 @@ export class DatabaseStorage implements IStorage {
     // Build privacy filter for followed users
     const privacyFilter = or(
       eq(posts.privacy, 'public'),
+      eq(posts.authorId, userId), // Author can always see their own posts
       and(
         eq(posts.privacy, 'friends'),
         sql`EXISTS (
@@ -875,6 +923,7 @@ export class DatabaseStorage implements IStorage {
     if (userId) {
       privacyFilter = or(
         eq(posts.privacy, 'public'),
+        eq(posts.authorId, userId), // Author can always see their own posts
         and(
           eq(posts.privacy, 'friends'),
           sql`EXISTS (

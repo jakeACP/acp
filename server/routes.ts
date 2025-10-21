@@ -20,7 +20,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
-      const posts = await storage.getPosts(limit, offset);
+      const userId = req.isAuthenticated() ? req.user.id : undefined;
+      const posts = await storage.getPosts(limit, offset, userId);
       res.json(posts);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -63,8 +64,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      // Get the post to check ownership
-      const post = await storage.getPostById(req.params.id);
+      // Get the post to check ownership (pass userId to apply privacy filter)
+      const post = await storage.getPostById(req.params.id, req.user.id);
       if (!post) {
         return res.status(404).json({ message: "Post not found" });
       }
@@ -90,6 +91,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sharedPost = await storage.sharePost(req.params.id, req.user.id);
       res.status(201).json(sharedPost);
     } catch (error: any) {
+      if (error.message === "NOT_AUTHORIZED") {
+        return res.status(403).json({ message: "Not authorized to share this post" });
+      }
+      if (error.message === "CANNOT_SHARE_FRIENDS_ONLY") {
+        return res.status(403).json({ message: "Cannot share friends-only posts from other users" });
+      }
       if (error.message === "Post not found") {
         return res.status(404).json({ message: error.message });
       }
