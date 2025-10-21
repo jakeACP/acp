@@ -31,7 +31,7 @@ export interface IStorage {
   sharePost(originalPostId: string, userId: string): Promise<Post>;
 
   // Feed System
-  getAllFeed(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
+  getAllFeed(limit?: number, offset?: number, userId?: string): Promise<PostWithAuthor[]>;
   getFollowingFeed(userId: string, limit?: number, offset?: number): Promise<PostWithAuthor[]>;
   getNewsFeed(limit?: number, offset?: number): Promise<PostWithAuthor[]>;
   
@@ -536,6 +536,9 @@ export class DatabaseStorage implements IStorage {
         url: posts.url,
         title: posts.title,
         newsSourceName: posts.newsSourceName,
+        // Share and privacy fields
+        sharedPostId: posts.sharedPostId,
+        privacy: posts.privacy,
         // Enhanced engagement fields
         sharesCount: posts.sharesCount,
         emojiReactionsCount: posts.emojiReactionsCount,
@@ -655,9 +658,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Feed System Implementation
-  async getAllFeed(limit = 20, offset = 0): Promise<PostWithAuthor[]> {
+  async getAllFeed(limit = 20, offset = 0, userId?: string): Promise<PostWithAuthor[]> {
     const decayHours = FEED_CONFIG.all.decayHours;
     const weights = FEED_CONFIG.all.weights;
+    
+    // Build privacy filter
+    let privacyFilter;
+    if (userId) {
+      // Show public posts OR friends-only posts from friends
+      privacyFilter = or(
+        eq(posts.privacy, 'public'),
+        and(
+          eq(posts.privacy, 'friends'),
+          sql`EXISTS (
+            SELECT 1 FROM ${friendships} 
+            WHERE ((${friendships.requesterId} = ${userId} AND ${friendships.addresseeId} = ${posts.authorId})
+               OR  (${friendships.addresseeId} = ${userId} AND ${friendships.requesterId} = ${posts.authorId}))
+            AND ${friendships.status} = 'accepted'
+          )`
+        )
+      );
+    } else {
+      // Show only public posts
+      privacyFilter = eq(posts.privacy, 'public');
+    }
     
     // Engagement-based ranking with time decay
     return await db
@@ -674,6 +698,8 @@ export class DatabaseStorage implements IStorage {
         title: posts.title,
         newsSourceName: posts.newsSourceName,
         sharesCount: posts.sharesCount,
+        sharedPostId: posts.sharedPostId,
+        privacy: posts.privacy,
         emojiReactionsCount: posts.emojiReactionsCount,
         gifReactionsCount: posts.gifReactionsCount,
         bookmarksCount: posts.bookmarksCount,
@@ -690,7 +716,8 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(posts.authorId, users.id))
       .where(and(
         eq(posts.isDeleted, false),
-        sql`${posts.createdAt} > NOW() - INTERVAL '72 hours'`
+        sql`${posts.createdAt} > NOW() - INTERVAL '72 hours'`,
+        privacyFilter
       ))
       .orderBy(sql`
         (
@@ -708,6 +735,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getFollowingFeed(userId: string, limit = 20, offset = 0): Promise<PostWithAuthor[]> {
+    // Build privacy filter for followed users
+    const privacyFilter = or(
+      eq(posts.privacy, 'public'),
+      and(
+        eq(posts.privacy, 'friends'),
+        sql`EXISTS (
+          SELECT 1 FROM ${friendships} 
+          WHERE ((${friendships.requesterId} = ${userId} AND ${friendships.addresseeId} = ${posts.authorId})
+             OR  (${friendships.addresseeId} = ${userId} AND ${friendships.requesterId} = ${posts.authorId}))
+          AND ${friendships.status} = 'accepted'
+        )`
+      )
+    );
+
     // Chronological posts from followed users
     return await db
       .select({
@@ -723,6 +764,8 @@ export class DatabaseStorage implements IStorage {
         title: posts.title,
         newsSourceName: posts.newsSourceName,
         sharesCount: posts.sharesCount,
+        sharedPostId: posts.sharedPostId,
+        privacy: posts.privacy,
         emojiReactionsCount: posts.emojiReactionsCount,
         gifReactionsCount: posts.gifReactionsCount,
         bookmarksCount: posts.bookmarksCount,
@@ -740,7 +783,8 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(userFollows, eq(userFollows.followeeId, posts.authorId))
       .where(and(
         eq(userFollows.followerId, userId),
-        eq(posts.isDeleted, false)
+        eq(posts.isDeleted, false),
+        privacyFilter
       ))
       .orderBy(desc(posts.createdAt))
       .limit(limit)

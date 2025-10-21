@@ -119,7 +119,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
-      const posts = await storage.getAllFeed(limit, offset);
+      const userId = req.isAuthenticated() ? req.user.id : undefined;
+      const posts = await storage.getAllFeed(limit, offset, userId);
       res.json(posts);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
