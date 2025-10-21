@@ -29,7 +29,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/posts/:id", async (req, res) => {
     try {
-      const post = await storage.getPostById(req.params.id);
+      const userId = req.isAuthenticated() ? req.user.id : undefined;
+      const post = await storage.getPostById(req.params.id, userId);
       if (!post) {
         return res.status(404).json({ message: "Post not found" });
       }
@@ -98,7 +99,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/posts/user/:userId", async (req, res) => {
     try {
-      const posts = await storage.getPostsByUser(req.params.userId);
+      const viewerId = req.isAuthenticated() ? req.user.id : undefined;
+      const posts = await storage.getPostsByUser(req.params.userId, viewerId);
       res.json(posts);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -107,7 +109,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/posts/tag/:tag", async (req, res) => {
     try {
-      const posts = await storage.getPostsByTag(req.params.tag);
+      const userId = req.isAuthenticated() ? req.user.id : undefined;
+      const posts = await storage.getPostsByTag(req.params.tag, userId);
       res.json(posts);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -146,7 +149,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
-      const posts = await storage.getNewsFeed(limit, offset);
+      const userId = req.isAuthenticated() ? req.user.id : undefined;
+      const posts = await storage.getNewsFeed(limit, offset, userId);
       res.json(posts);
     } catch (error: any) {
       res.status(500).json({ message: error.message });

@@ -560,8 +560,34 @@ export class DatabaseStorage implements IStorage {
       .offset(offset);
   }
 
-  async getPostById(id: string): Promise<Post | undefined> {
-    const [post] = await db.select().from(posts).where(eq(posts.id, id));
+  async getPostById(id: string, userId?: string): Promise<Post | undefined> {
+    // Build privacy filter
+    let privacyFilter;
+    if (userId) {
+      privacyFilter = or(
+        eq(posts.privacy, 'public'),
+        eq(posts.authorId, userId), // Author can always see their own posts
+        and(
+          eq(posts.privacy, 'friends'),
+          sql`EXISTS (
+            SELECT 1 FROM ${friendships} 
+            WHERE ((${friendships.requesterId} = ${userId} AND ${friendships.addresseeId} = ${posts.authorId})
+               OR  (${friendships.addresseeId} = ${userId} AND ${friendships.requesterId} = ${posts.authorId}))
+            AND ${friendships.status} = 'accepted'
+          )`
+        )
+      );
+    } else {
+      privacyFilter = eq(posts.privacy, 'public');
+    }
+    
+    const [post] = await db
+      .select()
+      .from(posts)
+      .where(and(
+        eq(posts.id, id),
+        privacyFilter
+      ));
     return post || undefined;
   }
 
@@ -596,19 +622,65 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getPostsByUser(userId: string): Promise<Post[]> {
+  async getPostsByUser(userId: string, viewerId?: string): Promise<Post[]> {
+    // Build privacy filter
+    let privacyFilter;
+    if (viewerId) {
+      privacyFilter = or(
+        eq(posts.privacy, 'public'),
+        eq(posts.authorId, viewerId), // Author can always see their own posts
+        and(
+          eq(posts.privacy, 'friends'),
+          sql`EXISTS (
+            SELECT 1 FROM ${friendships} 
+            WHERE ((${friendships.requesterId} = ${viewerId} AND ${friendships.addresseeId} = ${posts.authorId})
+               OR  (${friendships.addresseeId} = ${viewerId} AND ${friendships.requesterId} = ${posts.authorId}))
+            AND ${friendships.status} = 'accepted'
+          )`
+        )
+      );
+    } else {
+      privacyFilter = eq(posts.privacy, 'public');
+    }
+    
     return await db
       .select()
       .from(posts)
-      .where(eq(posts.authorId, userId))
+      .where(and(
+        eq(posts.authorId, userId),
+        privacyFilter
+      ))
       .orderBy(desc(posts.createdAt));
   }
 
-  async getPostsByTag(tag: string): Promise<Post[]> {
+  async getPostsByTag(tag: string, userId?: string): Promise<Post[]> {
+    // Build privacy filter
+    let privacyFilter;
+    if (userId) {
+      privacyFilter = or(
+        eq(posts.privacy, 'public'),
+        eq(posts.authorId, userId), // Author can always see their own posts
+        and(
+          eq(posts.privacy, 'friends'),
+          sql`EXISTS (
+            SELECT 1 FROM ${friendships} 
+            WHERE ((${friendships.requesterId} = ${userId} AND ${friendships.addresseeId} = ${posts.authorId})
+               OR  (${friendships.addresseeId} = ${userId} AND ${friendships.requesterId} = ${posts.authorId}))
+            AND ${friendships.status} = 'accepted'
+          )`
+        )
+      );
+    } else {
+      privacyFilter = eq(posts.privacy, 'public');
+    }
+    
     return await db
       .select()
       .from(posts)
-      .where(sql`${tag} = ANY(${posts.tags})`)
+      .where(and(
+        sql`${tag} = ANY(${posts.tags})`,
+        privacyFilter
+      ))
       .orderBy(desc(posts.createdAt));
   }
 
@@ -631,7 +703,7 @@ export class DatabaseStorage implements IStorage {
         throw new Error("Post not found");
       }
 
-      // Create the shared post
+      // Create the shared post - inherit original post's privacy setting
       const [sharedPost] = await tx
         .insert(posts)
         .values({
@@ -644,6 +716,7 @@ export class DatabaseStorage implements IStorage {
           title: originalPost.title,
           newsSourceName: originalPost.newsSourceName,
           sharedPostId: originalPost.id,
+          privacy: originalPost.privacy || 'public', // Inherit original privacy or default to public
         })
         .returning();
 
@@ -791,11 +864,30 @@ export class DatabaseStorage implements IStorage {
       .offset(offset);
   }
 
-  async getNewsFeed(limit = 20, offset = 0): Promise<PostWithAuthor[]> {
+  async getNewsFeed(limit = 20, offset = 0, userId?: string): Promise<PostWithAuthor[]> {
     const { minVotesForConfidence, decayHours } = FEED_CONFIG.news;
     
     // Calculate cutoff timestamp in TypeScript to avoid parameter binding issues
     const cutoffTimestamp = new Date(Date.now() - decayHours * 3600 * 1000);
+    
+    // Build privacy filter
+    let privacyFilter;
+    if (userId) {
+      privacyFilter = or(
+        eq(posts.privacy, 'public'),
+        and(
+          eq(posts.privacy, 'friends'),
+          sql`EXISTS (
+            SELECT 1 FROM ${friendships} 
+            WHERE ((${friendships.requesterId} = ${userId} AND ${friendships.addresseeId} = ${posts.authorId})
+               OR  (${friendships.addresseeId} = ${userId} AND ${friendships.requesterId} = ${posts.authorId}))
+            AND ${friendships.status} = 'accepted'
+          )`
+        )
+      );
+    } else {
+      privacyFilter = eq(posts.privacy, 'public');
+    }
     
     // News posts ranked by bias score and neutrality with aggregated scoring
     return await db
@@ -812,6 +904,8 @@ export class DatabaseStorage implements IStorage {
         title: posts.title,
         newsSourceName: posts.newsSourceName,
         sharesCount: posts.sharesCount,
+        sharedPostId: posts.sharedPostId,
+        privacy: posts.privacy,
         emojiReactionsCount: posts.emojiReactionsCount,
         gifReactionsCount: posts.gifReactionsCount,
         bookmarksCount: posts.bookmarksCount,
@@ -830,7 +924,8 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(posts.type, 'news'),
         eq(posts.isDeleted, false),
-        gte(posts.createdAt, cutoffTimestamp)
+        gte(posts.createdAt, cutoffTimestamp),
+        privacyFilter
       ))
       .groupBy(posts.id, users.id)
       .orderBy(sql`
