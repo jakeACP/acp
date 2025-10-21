@@ -19,6 +19,8 @@ export interface IStorage {
   updateUser(userId: string, updateData: Partial<User>): Promise<User>;
   updateUserStripeInfo(userId: string, customerId: string, subscriptionId: string): Promise<User>;
   updateUserPassword(userId: string, hashedPassword: string): Promise<User>;
+  updateLastSeen(userId: string): Promise<void>;
+  getOnlineFriends(userId: string): Promise<User[]>;
 
   // Posts
   getPosts(limit?: number, offset?: number, userId?: string): Promise<PostWithAuthor[]>;
@@ -448,6 +450,63 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return user;
+  }
+
+  async updateLastSeen(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ lastSeen: new Date() })
+      .where(eq(users.id, userId));
+  }
+
+  async getOnlineFriends(userId: string): Promise<User[]> {
+    // Consider users online if they've been seen in the last 5 minutes
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    return await db
+      .select({
+        id: users.id,
+        username: users.username,
+        email: users.email,
+        password: users.password,
+        role: users.role,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        location: users.location,
+        bio: users.bio,
+        avatar: users.avatar,
+        subscriptionStatus: users.subscriptionStatus,
+        subscriptionStartDate: users.subscriptionStartDate,
+        subscriptionEndDate: users.subscriptionEndDate,
+        stripeCustomerId: users.stripeCustomerId,
+        stripeSubscriptionId: users.stripeSubscriptionId,
+        acpCoinBalance: users.acpCoinBalance,
+        profileBackground: users.profileBackground,
+        favoriteSong: users.favoriteSong,
+        profileLayout: users.profileLayout,
+        createdAt: users.createdAt,
+        lastSeen: users.lastSeen,
+        isNewsOrganization: users.isNewsOrganization,
+        organizationName: users.organizationName,
+        politicalLean: users.politicalLean,
+        trustScore: users.trustScore,
+      })
+      .from(users)
+      .innerJoin(friendships, or(
+        and(
+          eq(friendships.requesterId, userId),
+          eq(friendships.addresseeId, users.id)
+        ),
+        and(
+          eq(friendships.addresseeId, userId),
+          eq(friendships.requesterId, users.id)
+        )
+      ))
+      .where(and(
+        eq(friendships.status, 'accepted'),
+        gte(users.lastSeen, fiveMinutesAgo)
+      ))
+      .orderBy(desc(users.lastSeen));
   }
 
   // Invitation System
