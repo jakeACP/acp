@@ -20,7 +20,7 @@ import { z } from "zod";
 import { insertRepresentativeSchema, insertZipCodeLookupSchema, type Representative, type ZipCodeLookup } from "@shared/schema";
 import { Plus, Search, Download, Upload, Edit, Trash2, MapPin, User, Calendar, FileText, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { Redirect } from "wouter";
-import { Navigation } from "@/components/navigation";
+import { AdminNavigation } from "@/components/admin-navigation";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -359,8 +359,8 @@ export default function AdminRepresentativesPage() {
   }
 
   return (
-    <div className="bg-slate-50 min-h-screen">
-      <Navigation />
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <AdminNavigation />
       
       <div className="container max-w-7xl mx-auto py-6">
         <Card>
