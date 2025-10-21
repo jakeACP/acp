@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext } from "react";
+import { createContext, ReactNode, useContext, useEffect } from "react";
 import {
   useQuery,
   useMutation,
@@ -80,6 +80,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     },
   });
+
+  // Update lastSeen timestamp periodically when user is active
+  useEffect(() => {
+    if (!user) return;
+
+    const updateLastSeen = async () => {
+      try {
+        await apiRequest("/api/user/lastseen", "POST");
+      } catch (error) {
+        console.error("Failed to update last seen:", error);
+      }
+    };
+
+    // Update immediately on mount
+    updateLastSeen();
+
+    // Update every 2 minutes
+    const interval = setInterval(updateLastSeen, 2 * 60 * 1000);
+
+    // Throttle activity updates to avoid too many requests
+    let lastActivityUpdate = 0;
+    const throttledActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityUpdate < 30000) return; // Throttle to once every 30 seconds
+      lastActivityUpdate = now;
+      updateLastSeen();
+    };
+
+    window.addEventListener("click", throttledActivity);
+    window.addEventListener("keydown", throttledActivity);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("click", throttledActivity);
+      window.removeEventListener("keydown", throttledActivity);
+    };
+  }, [user]);
 
   return (
     <AuthContext.Provider
