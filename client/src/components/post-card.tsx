@@ -4,12 +4,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Post, PostWithAuthor, Comment } from "@shared/schema";
-import { Heart, MessageCircle, Share, Flag, Send, Trash2 } from "lucide-react";
+import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -145,6 +146,26 @@ export function PostCard({ post }: PostCardProps) {
     },
   });
 
+  const shareToFeedMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest(`/api/posts/${post.id}/share`, "POST");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({
+        title: "Shared!",
+        description: "This post has been shared to your feed.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to share post",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLike = () => {
     if (user) {
       likeMutation.mutate();
@@ -163,35 +184,34 @@ export function PostCard({ post }: PostCardProps) {
     setShowComments(true);
   };
 
-  const handleShare = async () => {
+  const handleCopyLink = async () => {
     const shareUrl = `${window.location.origin}/posts/${post.id}`;
     
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "Check out this post",
-          text: post.content.slice(0, 100) + (post.content.length > 100 ? "..." : ""),
-          url: shareUrl,
-        });
-      } catch (error) {
-        // User cancelled or error occurred
-      }
-    } else {
-      // Fallback: copy to clipboard
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        toast({
-          title: "Link Copied",
-          description: "Post link has been copied to your clipboard!",
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Unable to copy link to clipboard",
-          variant: "destructive",
-        });
-      }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast({
+        title: "Link Copied",
+        description: "Post link has been copied to your clipboard!",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Unable to copy link to clipboard",
+        variant: "destructive",
+      });
     }
+  };
+
+  const handleShareToFeed = () => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to share posts",
+        variant: "destructive",
+      });
+      return;
+    }
+    shareToFeedMutation.mutate();
   };
 
   const handleFlag = () => {
@@ -415,16 +435,36 @@ export function PostCard({ post }: PostCardProps) {
               </DialogContent>
             </Dialog>
             
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleShare}
-              className="flex items-center gap-2 hover:text-primary"
-              data-testid="button-share"
-            >
-              <Share className="h-4 w-4" />
-              Share
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-2 hover:text-primary"
+                  data-testid="button-share"
+                >
+                  <Share className="h-4 w-4" />
+                  Share
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem 
+                  onClick={handleShareToFeed}
+                  disabled={shareToFeedMutation.isPending}
+                  data-testid="button-share-to-feed"
+                >
+                  <Repeat2 className="h-4 w-4 mr-2" />
+                  Share to My Feed
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={handleCopyLink}
+                  data-testid="button-copy-link"
+                >
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Copy Link
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           
           <div className="flex items-center gap-2">
