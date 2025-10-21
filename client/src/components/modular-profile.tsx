@@ -48,7 +48,7 @@ import { apiRequest } from "@/lib/queryClient";
 interface ProfileModule {
   id: string;
   name: string;
-  type: "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "political-compass" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "custom";
+  type: "bio" | "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "political-compass" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "custom";
   isPremium: boolean;
   isEnabled: boolean;
   position: number;
@@ -79,6 +79,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
   const [currentQuizStep, setCurrentQuizStep] = useState(0);
   const [editingModule, setEditingModule] = useState<string | null>(null);
+  const [bioText, setBioText] = useState("");
 
   // Political Compass Quiz Questions
   const politicalQuizQuestions = [
@@ -172,6 +173,16 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
     if (user) {
       const defaultModules = [
         {
+          id: "bio",
+          name: "About Me",
+          type: "bio" as const,
+          isPremium: false,
+          isEnabled: true,
+          position: 0,
+          itemCount: 1,
+          customData: {}
+        },
+        {
           id: "photos",
           name: "Photo Gallery",
           type: "photos" as const,
@@ -262,8 +273,36 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
         background: user.profileBackground || "",
         favoriteSong: user.favoriteSong || ""
       }));
+      setBioText(user.bio || "");
     }
   }, [user]);
+
+  const saveBioMutation = useMutation({
+    mutationFn: async (bio: string) => {
+      const response = await apiRequest("/api/profile/bio", {
+        method: "PUT",
+        body: JSON.stringify({ bio }),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Bio Updated!",
+        description: "Your bio has been saved.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      if (userId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/user/${userId}`] });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Save Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const saveCustomizationMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -521,6 +560,36 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
 
     const moduleContent = () => {
       switch (module.type) {
+        case "bio":
+          return (
+            <div className="space-y-3">
+              {isOwner ? (
+                <>
+                  <Textarea
+                    placeholder="Tell us about yourself... (Who are you? What are your interests? What issues do you care about?)"
+                    value={bioText}
+                    onChange={(e) => setBioText(e.target.value)}
+                    className="min-h-[120px] resize-y"
+                    data-testid="input-bio"
+                  />
+                  <Button
+                    onClick={() => saveBioMutation.mutate(bioText)}
+                    disabled={saveBioMutation.isPending}
+                    size="sm"
+                    data-testid="button-save-bio"
+                  >
+                    {saveBioMutation.isPending ? "Saving..." : "Save Bio"}
+                  </Button>
+                </>
+              ) : (
+                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap" data-testid="text-bio">
+                    {bioText || "No bio yet."}
+                  </p>
+                </div>
+              )}
+            </div>
+          );
         case "photos":
           return (
             <div className="grid grid-cols-3 gap-2">
