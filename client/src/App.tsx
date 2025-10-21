@@ -37,6 +37,12 @@ import AdminDashboardPage from "@/pages/admin-dashboard-page";
 import AdminModerationPage from "@/pages/admin-moderation-page";
 import AdminUserBansPage from "@/pages/admin-user-bans-page";
 import AdminIpBlocksPage from "@/pages/admin-ip-blocks-page";
+import AdminPoliticiansPage from "@/pages/admin-politicians-page";
+import AdminSecurityPage from "@/pages/admin-security-page";
+import AdminDatabasePage from "@/pages/admin-database-page";
+import AdminAlgorithmPage from "@/pages/admin-algorithm-page";
+import AdminAcpPlusPage from "@/pages/admin-acp-plus-page";
+import AdminSettingsPage from "@/pages/admin-settings-page";
 import NotFound from "@/pages/not-found";
 import { AlertTriangle } from "lucide-react";
 
@@ -73,6 +79,12 @@ function Router() {
       <ProtectedRoute path="/admin/ip-blocks" component={AdminIpBlocksPage} />
       <ProtectedRoute path="/admin/invitations" component={AdminInvitationsPage} />
       <ProtectedRoute path="/admin/representatives" component={AdminRepresentativesPage} />
+      <ProtectedRoute path="/admin/politicians" component={AdminPoliticiansPage} />
+      <ProtectedRoute path="/admin/security" component={AdminSecurityPage} />
+      <ProtectedRoute path="/admin/database" component={AdminDatabasePage} />
+      <ProtectedRoute path="/admin/algorithm" component={AdminAlgorithmPage} />
+      <ProtectedRoute path="/admin/acp-plus" component={AdminAcpPlusPage} />
+      <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />  
       <Route path="/reset-password" component={ResetPasswordPage} />
