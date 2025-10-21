@@ -279,11 +279,18 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
 
   const saveBioMutation = useMutation({
     mutationFn: async (bio: string) => {
-      const response = await apiRequest("/api/profile/bio", {
+      const response = await fetch("/api/profile/bio", {
         method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ bio }),
       });
-      return response;
+      
+      if (!response.ok) {
+        throw new Error("Failed to save bio");
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       toast({

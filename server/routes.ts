@@ -1914,6 +1914,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Endpoint for updating user bio
+  app.put("/api/profile/bio", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    const { bio } = req.body;
+    
+    if (typeof bio !== "string") {
+      return res.status(400).json({ error: "Bio must be a string" });
+    }
+
+    const userId = req.user.id;
+
+    try {
+      await storage.updateUser(userId, { bio });
+      res.status(200).json({ success: true, bio });
+    } catch (error) {
+      console.error("Error updating bio:", error);
+      res.status(500).json({ error: "Failed to update bio" });
+    }
+  });
+
   // Get user profile by ID
   app.get("/api/user/:id", async (req, res) => {
     try {
