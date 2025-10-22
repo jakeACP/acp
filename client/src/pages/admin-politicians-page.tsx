@@ -17,13 +17,17 @@ import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin } from "lucide-r
 
 type PoliticalPosition = {
   id: string;
-  officeName: string;
+  title: string;
+  officeType: string;
   level: string;
   jurisdiction: string;
   district?: string;
+  termLength?: number;
+  isElected?: boolean;
+  description?: string;
+  displayOrder?: number;
   isActive: boolean;
   currentHolderId?: string;
-  notes?: string;
 };
 
 type PoliticianProfile = {
@@ -166,12 +170,15 @@ export default function AdminPoliticiansPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
-      officeName: formData.get("officeName") as string,
+      title: formData.get("title") as string,
+      officeType: formData.get("officeType") as string,
       level: formData.get("level") as string,
       jurisdiction: formData.get("jurisdiction") as string,
       district: formData.get("district") as string || undefined,
+      termLength: formData.get("termLength") ? parseInt(formData.get("termLength") as string) : undefined,
+      isElected: formData.get("isElected") === "true",
+      description: formData.get("description") as string || undefined,
       isActive: formData.get("isActive") === "true",
-      notes: formData.get("notes") as string || undefined,
     };
 
     if (editingPosition) {
@@ -335,10 +342,10 @@ export default function AdminPoliticiansPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Office Name</TableHead>
+                          <TableHead>Position Title</TableHead>
+                          <TableHead>Type</TableHead>
                           <TableHead>Level</TableHead>
                           <TableHead>Jurisdiction</TableHead>
-                          <TableHead>District</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Current Holder</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
@@ -349,12 +356,14 @@ export default function AdminPoliticiansPage() {
                           const currentHolder = profiles.find(p => p.id === position.currentHolderId);
                           return (
                             <TableRow key={position.id} data-testid={`row-position-${position.id}`}>
-                              <TableCell className="font-medium">{position.officeName}</TableCell>
+                              <TableCell className="font-medium">{position.title}</TableCell>
                               <TableCell>
-                                <Badge variant="outline">{position.level}</Badge>
+                                <Badge variant="outline">{position.officeType}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">{position.level}</Badge>
                               </TableCell>
                               <TableCell>{position.jurisdiction}</TableCell>
-                              <TableCell>{position.district || "-"}</TableCell>
                               <TableCell>
                                 <Badge variant={position.isActive ? "default" : "secondary"}>
                                   {position.isActive ? "Active" : "Inactive"}
@@ -444,7 +453,7 @@ export default function AdminPoliticiansPage() {
                               <TableCell className="font-medium">{profile.fullName}</TableCell>
                               <TableCell>{profile.party || "-"}</TableCell>
                               <TableCell>
-                                {position ? position.officeName : <span className="text-slate-400">Not assigned</span>}
+                                {position ? position.title : <span className="text-slate-400">Not assigned</span>}
                               </TableCell>
                               <TableCell>
                                 {profile.termStart && profile.termEnd
@@ -518,18 +527,33 @@ export default function AdminPoliticiansPage() {
           <form onSubmit={handlePositionSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="officeName">Office Name *</Label>
+                <Label htmlFor="title">Position Title *</Label>
                 <Input
-                  id="officeName"
-                  name="officeName"
-                  defaultValue={editingPosition?.officeName}
+                  id="title"
+                  name="title"
+                  defaultValue={editingPosition?.title}
                   placeholder="e.g., President of the United States"
                   required
-                  data-testid="input-office-name"
+                  data-testid="input-title"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="officeType">Office Type *</Label>
+                  <Select name="officeType" defaultValue={editingPosition?.officeType || "Executive"} required>
+                    <SelectTrigger data-testid="select-office-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Executive">Executive</SelectItem>
+                      <SelectItem value="Legislative">Legislative</SelectItem>
+                      <SelectItem value="Judicial">Judicial</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="grid gap-2">
                   <Label htmlFor="level">Level *</Label>
                   <Select name="level" defaultValue={editingPosition?.level || "federal"} required>
@@ -541,11 +565,12 @@ export default function AdminPoliticiansPage() {
                       <SelectItem value="state">State</SelectItem>
                       <SelectItem value="county">County</SelectItem>
                       <SelectItem value="city">City</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="jurisdiction">Jurisdiction *</Label>
                   <Input
@@ -557,17 +582,44 @@ export default function AdminPoliticiansPage() {
                     data-testid="input-jurisdiction"
                   />
                 </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="district">District (optional)</Label>
+                  <Input
+                    id="district"
+                    name="district"
+                    defaultValue={editingPosition?.district}
+                    placeholder="e.g., 12th Congressional District"
+                    data-testid="input-district"
+                  />
+                </div>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="district">District (optional)</Label>
-                <Input
-                  id="district"
-                  name="district"
-                  defaultValue={editingPosition?.district}
-                  placeholder="e.g., 12th Congressional District"
-                  data-testid="input-district"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="termLength">Term Length (years, optional)</Label>
+                  <Input
+                    id="termLength"
+                    name="termLength"
+                    type="number"
+                    defaultValue={editingPosition?.termLength}
+                    placeholder="e.g., 4"
+                    data-testid="input-term-length"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="isElected">Type *</Label>
+                  <Select name="isElected" defaultValue={editingPosition?.isElected !== false ? "true" : "false"} required>
+                    <SelectTrigger data-testid="select-is-elected">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">Elected</SelectItem>
+                      <SelectItem value="false">Appointed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="grid gap-2">
@@ -584,14 +636,14 @@ export default function AdminPoliticiansPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="notes">Notes (optional)</Label>
+                <Label htmlFor="description">Description (optional)</Label>
                 <Textarea
-                  id="notes"
-                  name="notes"
-                  defaultValue={editingPosition?.notes}
-                  placeholder="Additional information about this position"
+                  id="description"
+                  name="description"
+                  defaultValue={editingPosition?.description}
+                  placeholder="Description of the position's duties and responsibilities"
                   rows={3}
-                  data-testid="textarea-notes"
+                  data-testid="textarea-description"
                 />
               </div>
             </div>
@@ -752,7 +804,7 @@ export default function AdminPoliticiansPage() {
                     <SelectItem value="">No position</SelectItem>
                     {positions.map(position => (
                       <SelectItem key={position.id} value={position.id}>
-                        {position.officeName} - {position.jurisdiction}
+                        {position.title} - {position.jurisdiction}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -803,7 +855,7 @@ export default function AdminPoliticiansPage() {
                   <SelectContent>
                     {positions.map(position => (
                       <SelectItem key={position.id} value={position.id}>
-                        {position.officeName} - {position.jurisdiction}
+                        {position.title} - {position.jurisdiction}
                       </SelectItem>
                     ))}
                   </SelectContent>
