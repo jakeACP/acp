@@ -1,9 +1,227 @@
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserPlus, UserCheck, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin } from "lucide-react";
+
+type PoliticalPosition = {
+  id: string;
+  officeName: string;
+  level: string;
+  jurisdiction: string;
+  district?: string;
+  isActive: boolean;
+  currentHolderId?: string;
+  notes?: string;
+};
+
+type PoliticianProfile = {
+  id: string;
+  fullName: string;
+  party?: string;
+  email?: string;
+  phone?: string;
+  officeAddress?: string;
+  website?: string;
+  photoUrl?: string;
+  bio?: string;
+  termStart?: string;
+  termEnd?: string;
+  isCurrent: boolean;
+  positionId?: string;
+};
 
 export default function AdminPoliticiansPage() {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("positions");
+  const [positionDialogOpen, setPositionDialogOpen] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<PoliticalPosition | null>(null);
+  const [editingProfile, setEditingProfile] = useState<PoliticianProfile | null>(null);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assigningProfile, setAssigningProfile] = useState<PoliticianProfile | null>(null);
+
+  const { data: positions = [], isLoading: positionsLoading } = useQuery<PoliticalPosition[]>({
+    queryKey: ["/api/admin/political-positions"],
+  });
+
+  const { data: profiles = [], isLoading: profilesLoading } = useQuery<PoliticianProfile[]>({
+    queryKey: ["/api/admin/politician-profiles"],
+  });
+
+  const createPositionMutation = useMutation({
+    mutationFn: async (data: Partial<PoliticalPosition>) => {
+      return await apiRequest("/api/admin/political-positions", "POST", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/political-positions"] });
+      toast({ title: "Position created successfully" });
+      setPositionDialogOpen(false);
+      setEditingPosition(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Error creating position", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updatePositionMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<PoliticalPosition> }) => {
+      return await apiRequest(`/api/admin/political-positions/${id}`, "PATCH", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/political-positions"] });
+      toast({ title: "Position updated successfully" });
+      setPositionDialogOpen(false);
+      setEditingPosition(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Error updating position", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deletePositionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/admin/political-positions/${id}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/political-positions"] });
+      toast({ title: "Position deleted successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error deleting position", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const createProfileMutation = useMutation({
+    mutationFn: async (data: Partial<PoliticianProfile>) => {
+      return await apiRequest("/api/admin/politician-profiles", "POST", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "Profile created successfully" });
+      setProfileDialogOpen(false);
+      setEditingProfile(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Error creating profile", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<PoliticianProfile> }) => {
+      return await apiRequest(`/api/admin/politician-profiles/${id}`, "PATCH", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "Profile updated successfully" });
+      setProfileDialogOpen(false);
+      setEditingProfile(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Error updating profile", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteProfileMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/admin/politician-profiles/${id}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "Profile deleted successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error deleting profile", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: async ({ profileId, positionId }: { profileId: string; positionId: string }) => {
+      return await apiRequest(`/api/admin/politician-profiles/${profileId}/assign`, "POST", { positionId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/political-positions"] });
+      toast({ title: "Politician assigned successfully" });
+      setAssignDialogOpen(false);
+      setAssigningProfile(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Error assigning politician", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handlePositionSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      officeName: formData.get("officeName") as string,
+      level: formData.get("level") as string,
+      jurisdiction: formData.get("jurisdiction") as string,
+      district: formData.get("district") as string || undefined,
+      isActive: formData.get("isActive") === "true",
+      notes: formData.get("notes") as string || undefined,
+    };
+
+    if (editingPosition) {
+      updatePositionMutation.mutate({ id: editingPosition.id, data });
+    } else {
+      createPositionMutation.mutate(data);
+    }
+  };
+
+  const handleProfileSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      fullName: formData.get("fullName") as string,
+      party: formData.get("party") as string || undefined,
+      email: formData.get("email") as string || undefined,
+      phone: formData.get("phone") as string || undefined,
+      officeAddress: formData.get("officeAddress") as string || undefined,
+      website: formData.get("website") as string || undefined,
+      photoUrl: formData.get("photoUrl") as string || undefined,
+      bio: formData.get("bio") as string || undefined,
+      termStart: formData.get("termStart") as string || undefined,
+      termEnd: formData.get("termEnd") as string || undefined,
+      isCurrent: formData.get("isCurrent") === "true",
+      positionId: formData.get("positionId") as string || undefined,
+    };
+
+    if (editingProfile) {
+      updateProfileMutation.mutate({ id: editingProfile.id, data });
+    } else {
+      createProfileMutation.mutate(data);
+    }
+  };
+
+  const handleAssignSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!assigningProfile) return;
+    
+    const formData = new FormData(e.currentTarget);
+    const positionId = formData.get("positionId") as string;
+    
+    if (positionId) {
+      assignMutation.mutate({ profileId: assigningProfile.id, positionId });
+    }
+  };
+
+  const activePositions = positions.filter(p => p.isActive);
+  const filledPositions = positions.filter(p => p.currentHolderId);
+  const currentProfiles = profiles.filter(p => p.isCurrent);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <AdminNavigation />
@@ -12,7 +230,7 @@ export default function AdminPoliticiansPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Politicians Management</h1>
           <p className="text-slate-600 dark:text-slate-400 mt-2">
-            Manage politicians, candidates, and representatives
+            Manage political positions and politician profiles
           </p>
         </div>
 
@@ -20,13 +238,13 @@ export default function AdminPoliticiansPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Total Politicians
+                Total Positions
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">0</div>
-                <Users className="h-8 w-8 text-blue-500" />
+                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{positions.length}</div>
+                <Building2 className="h-8 w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
@@ -34,13 +252,13 @@ export default function AdminPoliticiansPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Active Candidates
+                Active Positions
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">0</div>
-                <UserCheck className="h-8 w-8 text-green-500" />
+                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{activePositions.length}</div>
+                <MapPin className="h-8 w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
@@ -48,13 +266,13 @@ export default function AdminPoliticiansPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Representatives
+                Total Profiles
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">0</div>
-                <UserPlus className="h-8 w-8 text-purple-500" />
+                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{profiles.length}</div>
+                <Users className="h-8 w-8 text-purple-500" />
               </div>
             </CardContent>
           </Card>
@@ -62,13 +280,13 @@ export default function AdminPoliticiansPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Inactive
+                Filled Positions
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">0</div>
-                <UserX className="h-8 w-8 text-slate-400" />
+                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{filledPositions.length}</div>
+                <UserPlus className="h-8 w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
@@ -76,19 +294,534 @@ export default function AdminPoliticiansPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Politicians List</CardTitle>
+            <CardTitle>Politicians Management</CardTitle>
             <CardDescription>
-              View and manage all politicians in the system
+              Manage political positions and politician profiles
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Politicians management interface coming soon</p>
-            </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="positions" data-testid="tab-positions">Political Positions</TabsTrigger>
+                <TabsTrigger value="profiles" data-testid="tab-profiles">Politician Profiles</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="positions" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Political positions are permanent entities (e.g., "President of the United States", "Senator from California")
+                  </p>
+                  <Button
+                    onClick={() => {
+                      setEditingPosition(null);
+                      setPositionDialogOpen(true);
+                    }}
+                    data-testid="button-create-position"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Position
+                  </Button>
+                </div>
+
+                {positionsLoading ? (
+                  <div className="text-center py-8">Loading positions...</div>
+                ) : positions.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                    <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No political positions created yet</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Office Name</TableHead>
+                          <TableHead>Level</TableHead>
+                          <TableHead>Jurisdiction</TableHead>
+                          <TableHead>District</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Current Holder</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {positions.map((position) => {
+                          const currentHolder = profiles.find(p => p.id === position.currentHolderId);
+                          return (
+                            <TableRow key={position.id} data-testid={`row-position-${position.id}`}>
+                              <TableCell className="font-medium">{position.officeName}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{position.level}</Badge>
+                              </TableCell>
+                              <TableCell>{position.jurisdiction}</TableCell>
+                              <TableCell>{position.district || "-"}</TableCell>
+                              <TableCell>
+                                <Badge variant={position.isActive ? "default" : "secondary"}>
+                                  {position.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {currentHolder ? currentHolder.fullName : <span className="text-slate-400">Vacant</span>}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingPosition(position);
+                                      setPositionDialogOpen(true);
+                                    }}
+                                    data-testid={`button-edit-position-${position.id}`}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm("Are you sure you want to delete this position?")) {
+                                        deletePositionMutation.mutate(position.id);
+                                      }
+                                    }}
+                                    data-testid={`button-delete-position-${position.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="profiles" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Politician profiles represent the actual people who hold or have held political positions
+                  </p>
+                  <Button
+                    onClick={() => {
+                      setEditingProfile(null);
+                      setProfileDialogOpen(true);
+                    }}
+                    data-testid="button-create-profile"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Profile
+                  </Button>
+                </div>
+
+                {profilesLoading ? (
+                  <div className="text-center py-8">Loading profiles...</div>
+                ) : profiles.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No politician profiles created yet</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Party</TableHead>
+                          <TableHead>Position</TableHead>
+                          <TableHead>Term</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {profiles.map((profile) => {
+                          const position = positions.find(p => p.id === profile.positionId);
+                          return (
+                            <TableRow key={profile.id} data-testid={`row-profile-${profile.id}`}>
+                              <TableCell className="font-medium">{profile.fullName}</TableCell>
+                              <TableCell>{profile.party || "-"}</TableCell>
+                              <TableCell>
+                                {position ? position.officeName : <span className="text-slate-400">Not assigned</span>}
+                              </TableCell>
+                              <TableCell>
+                                {profile.termStart && profile.termEnd
+                                  ? `${profile.termStart} - ${profile.termEnd}`
+                                  : profile.termStart || "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={profile.isCurrent ? "default" : "secondary"}>
+                                  {profile.isCurrent ? "Current" : "Former"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setAssigningProfile(profile);
+                                      setAssignDialogOpen(true);
+                                    }}
+                                    data-testid={`button-assign-${profile.id}`}
+                                  >
+                                    <UserPlus className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingProfile(profile);
+                                      setProfileDialogOpen(true);
+                                    }}
+                                    data-testid={`button-edit-profile-${profile.id}`}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm("Are you sure you want to delete this profile?")) {
+                                        deleteProfileMutation.mutate(profile.id);
+                                      }
+                                    }}
+                                    data-testid={`button-delete-profile-${profile.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={positionDialogOpen} onOpenChange={setPositionDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingPosition ? "Edit Position" : "Create Position"}</DialogTitle>
+            <DialogDescription>
+              {editingPosition ? "Update the political position details" : "Create a new political position"}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handlePositionSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="officeName">Office Name *</Label>
+                <Input
+                  id="officeName"
+                  name="officeName"
+                  defaultValue={editingPosition?.officeName}
+                  placeholder="e.g., President of the United States"
+                  required
+                  data-testid="input-office-name"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="level">Level *</Label>
+                  <Select name="level" defaultValue={editingPosition?.level || "federal"} required>
+                    <SelectTrigger data-testid="select-level">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="federal">Federal</SelectItem>
+                      <SelectItem value="state">State</SelectItem>
+                      <SelectItem value="county">County</SelectItem>
+                      <SelectItem value="city">City</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="jurisdiction">Jurisdiction *</Label>
+                  <Input
+                    id="jurisdiction"
+                    name="jurisdiction"
+                    defaultValue={editingPosition?.jurisdiction}
+                    placeholder="e.g., United States, California"
+                    required
+                    data-testid="input-jurisdiction"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="district">District (optional)</Label>
+                <Input
+                  id="district"
+                  name="district"
+                  defaultValue={editingPosition?.district}
+                  placeholder="e.g., 12th Congressional District"
+                  data-testid="input-district"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="isActive">Status *</Label>
+                <Select name="isActive" defaultValue={editingPosition?.isActive !== false ? "true" : "false"} required>
+                  <SelectTrigger data-testid="select-is-active">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Active</SelectItem>
+                    <SelectItem value="false">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="notes">Notes (optional)</Label>
+                <Textarea
+                  id="notes"
+                  name="notes"
+                  defaultValue={editingPosition?.notes}
+                  placeholder="Additional information about this position"
+                  rows={3}
+                  data-testid="textarea-notes"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setPositionDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" data-testid="button-submit-position">
+                {editingPosition ? "Update" : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingProfile ? "Edit Profile" : "Create Profile"}</DialogTitle>
+            <DialogDescription>
+              {editingProfile ? "Update the politician profile details" : "Create a new politician profile"}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleProfileSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="fullName">Full Name *</Label>
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  defaultValue={editingProfile?.fullName}
+                  placeholder="e.g., John Doe"
+                  required
+                  data-testid="input-full-name"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="party">Party (optional)</Label>
+                  <Input
+                    id="party"
+                    name="party"
+                    defaultValue={editingProfile?.party}
+                    placeholder="e.g., Democratic, Republican"
+                    data-testid="input-party"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="isCurrent">Status *</Label>
+                  <Select name="isCurrent" defaultValue={editingProfile?.isCurrent !== false ? "true" : "false"} required>
+                    <SelectTrigger data-testid="select-is-current">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">Current</SelectItem>
+                      <SelectItem value="false">Former</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email (optional)</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    defaultValue={editingProfile?.email}
+                    placeholder="contact@example.com"
+                    data-testid="input-email"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="phone">Phone (optional)</Label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    defaultValue={editingProfile?.phone}
+                    placeholder="(555) 123-4567"
+                    data-testid="input-phone"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="officeAddress">Office Address (optional)</Label>
+                <Input
+                  id="officeAddress"
+                  name="officeAddress"
+                  defaultValue={editingProfile?.officeAddress}
+                  placeholder="123 Main St, Washington DC"
+                  data-testid="input-office-address"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="website">Website (optional)</Label>
+                  <Input
+                    id="website"
+                    name="website"
+                    type="url"
+                    defaultValue={editingProfile?.website}
+                    placeholder="https://example.com"
+                    data-testid="input-website"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="photoUrl">Photo URL (optional)</Label>
+                  <Input
+                    id="photoUrl"
+                    name="photoUrl"
+                    type="url"
+                    defaultValue={editingProfile?.photoUrl}
+                    placeholder="https://example.com/photo.jpg"
+                    data-testid="input-photo-url"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="termStart">Term Start (optional)</Label>
+                  <Input
+                    id="termStart"
+                    name="termStart"
+                    defaultValue={editingProfile?.termStart}
+                    placeholder="2020"
+                    data-testid="input-term-start"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="termEnd">Term End (optional)</Label>
+                  <Input
+                    id="termEnd"
+                    name="termEnd"
+                    defaultValue={editingProfile?.termEnd}
+                    placeholder="2024"
+                    data-testid="input-term-end"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="positionId">Assign to Position (optional)</Label>
+                <Select name="positionId" defaultValue={editingProfile?.positionId}>
+                  <SelectTrigger data-testid="select-position-id">
+                    <SelectValue placeholder="Select a position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No position</SelectItem>
+                    {positions.map(position => (
+                      <SelectItem key={position.id} value={position.id}>
+                        {position.officeName} - {position.jurisdiction}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="bio">Biography (optional)</Label>
+                <Textarea
+                  id="bio"
+                  name="bio"
+                  defaultValue={editingProfile?.bio}
+                  placeholder="Brief biography or background information"
+                  rows={4}
+                  data-testid="textarea-bio"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setProfileDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" data-testid="button-submit-profile">
+                {editingProfile ? "Update" : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Politician to Position</DialogTitle>
+            <DialogDescription>
+              Select a political position for {assigningProfile?.fullName}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAssignSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="positionId">Political Position *</Label>
+                <Select name="positionId" required>
+                  <SelectTrigger data-testid="select-assign-position">
+                    <SelectValue placeholder="Select a position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {positions.map(position => (
+                      <SelectItem key={position.id} value={position.id}>
+                        {position.officeName} - {position.jurisdiction}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAssignDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" data-testid="button-submit-assign">
+                Assign
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
