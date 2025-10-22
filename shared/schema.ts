@@ -1035,6 +1035,53 @@ export const zipCodeLookups = pgTable("zip_code_lookups", {
   uniqueZipRepOffice: sql`UNIQUE(${table.zipCode}, ${table.officeLevel}, ${table.representativeId})`,
 }));
 
+// Political Positions - Defines the political offices/seats that exist
+export const politicalPositions = pgTable("political_positions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(), // e.g., "President of the United States"
+  officeType: text("office_type").notNull(), // e.g., "Executive", "Legislative", "Judicial"
+  level: text("level").notNull(), // federal, state, county, city
+  jurisdiction: text("jurisdiction").notNull(), // e.g., "United States", "California", "Los Angeles County"
+  district: text("district"), // e.g., "District 1", "At-Large"
+  termLength: integer("term_length"), // term length in years
+  isElected: boolean("is_elected").default(true), // elected vs appointed
+  description: text("description"), // description of the position's duties
+  displayOrder: integer("display_order").default(0), // for sorting positions
+  isActive: boolean("is_active").default(true), // whether this position currently exists
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  levelIndex: index("political_positions_level_idx").on(table.level),
+  jurisdictionIndex: index("political_positions_jurisdiction_idx").on(table.jurisdiction),
+  activeIndex: index("political_positions_active_idx").on(table.isActive),
+}));
+
+// Politician Profiles - Information about individual politicians
+export const politicianProfiles = pgTable("politician_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  positionId: varchar("position_id").references(() => politicalPositions.id, { onDelete: "set null" }), // current position
+  fullName: text("full_name").notNull(),
+  party: text("party"), // political party affiliation
+  email: text("email"),
+  phone: text("phone"),
+  officeAddress: text("office_address"), // physical office location
+  website: text("website"),
+  socialMedia: json("social_media"), // {twitter, facebook, instagram, etc.}
+  photoUrl: text("photo_url"),
+  biography: text("biography"), // brief bio
+  termStart: timestamp("term_start"), // when current term started
+  termEnd: timestamp("term_end"), // when current term ends
+  previousPositions: json("previous_positions"), // array of previous positions held
+  notes: text("notes"), // admin notes
+  isCurrent: boolean("is_current").default(true), // currently holding office
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  positionIndex: index("politician_profiles_position_idx").on(table.positionId),
+  nameIndex: index("politician_profiles_name_idx").on(table.fullName),
+  currentIndex: index("politician_profiles_current_idx").on(table.isCurrent),
+}));
+
 // Boycotts - Feature for organizing consumer boycotts
 export const boycotts = pgTable("boycotts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1297,6 +1344,18 @@ export const insertZipCodeLookupSchema = createInsertSchema(zipCodeLookups).omit
   updatedAt: true,
 });
 
+export const insertPoliticalPositionSchema = createInsertSchema(politicalPositions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPoliticianProfileSchema = createInsertSchema(politicianProfiles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertBoycottSchema = createInsertSchema(boycotts).omit({
   id: true,
   subscriberCount: true,
@@ -1367,6 +1426,10 @@ export type Representative = typeof representatives.$inferSelect;
 export type InsertRepresentative = z.infer<typeof insertRepresentativeSchema>;
 export type ZipCodeLookup = typeof zipCodeLookups.$inferSelect;
 export type InsertZipCodeLookup = z.infer<typeof insertZipCodeLookupSchema>;
+export type PoliticalPosition = typeof politicalPositions.$inferSelect;
+export type InsertPoliticalPosition = z.infer<typeof insertPoliticalPositionSchema>;
+export type PoliticianProfile = typeof politicianProfiles.$inferSelect;
+export type InsertPoliticianProfile = z.infer<typeof insertPoliticianProfileSchema>;
 export type Boycott = typeof boycotts.$inferSelect;
 export type InsertBoycott = z.infer<typeof insertBoycottSchema>;
 export type BoycottSubscription = typeof boycottSubscriptions.$inferSelect;
