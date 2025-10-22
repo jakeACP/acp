@@ -5,7 +5,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertLiveStreamSchema, insertNotificationSchema, comments } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertLiveStreamSchema, insertNotificationSchema, comments } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
@@ -2880,6 +2880,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errors: error.errors 
         });
       }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin Political Positions Management API
+  app.get("/api/admin/political-positions", ensureAdmin, async (req, res) => {
+    try {
+      const filters = {
+        level: req.query.level as string,
+        jurisdiction: req.query.jurisdiction as string,
+        isActive: req.query.isActive === "true" ? true : req.query.isActive === "false" ? false : undefined,
+      };
+
+      const positions = await storage.listPoliticalPositions(filters);
+      res.json(positions);
+    } catch (error: any) {
+      console.error("Admin list political positions error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/political-positions/:id", ensureAdmin, async (req, res) => {
+    try {
+      const position = await storage.getPoliticalPosition(req.params.id);
+      if (!position) {
+        return res.status(404).json({ message: "Position not found" });
+      }
+      res.json(position);
+    } catch (error: any) {
+      console.error("Admin get political position error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/political-positions", ensureAdmin, async (req, res) => {
+    try {
+      const positionData = insertPoliticalPositionSchema.parse(req.body);
+      const position = await storage.createPoliticalPosition(positionData);
+      res.status(201).json(position);
+    } catch (error: any) {
+      console.error("Admin create political position error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/political-positions/:id", ensureAdmin, async (req, res) => {
+    try {
+      const updateData = insertPoliticalPositionSchema.partial().parse(req.body);
+      const position = await storage.updatePoliticalPosition(req.params.id, updateData);
+      res.json(position);
+    } catch (error: any) {
+      console.error("Admin update political position error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/political-positions/:id", ensureAdmin, async (req, res) => {
+    try {
+      await storage.deletePoliticalPosition(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Admin delete political position error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin Politician Profiles Management API
+  app.get("/api/admin/politician-profiles", ensureAdmin, async (req, res) => {
+    try {
+      const filters = {
+        positionId: req.query.positionId as string,
+        isCurrent: req.query.isCurrent === "true" ? true : req.query.isCurrent === "false" ? false : undefined,
+      };
+
+      const profiles = await storage.listPoliticianProfiles(filters);
+      res.json(profiles);
+    } catch (error: any) {
+      console.error("Admin list politician profiles error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/politician-profiles/:id", ensureAdmin, async (req, res) => {
+    try {
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) {
+        return res.status(404).json({ message: "Politician profile not found" });
+      }
+      res.json(profile);
+    } catch (error: any) {
+      console.error("Admin get politician profile error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/politician-profiles", ensureAdmin, async (req, res) => {
+    try {
+      const profileData = insertPoliticianProfileSchema.parse(req.body);
+      const profile = await storage.createPoliticianProfile(profileData);
+      res.status(201).json(profile);
+    } catch (error: any) {
+      console.error("Admin create politician profile error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/politician-profiles/:id", ensureAdmin, async (req, res) => {
+    try {
+      const updateData = insertPoliticianProfileSchema.partial().parse(req.body);
+      const profile = await storage.updatePoliticianProfile(req.params.id, updateData);
+      res.json(profile);
+    } catch (error: any) {
+      console.error("Admin update politician profile error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/politician-profiles/:id", ensureAdmin, async (req, res) => {
+    try {
+      await storage.deletePoliticianProfile(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Admin delete politician profile error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/politician-profiles/:id/assign", ensureAdmin, async (req, res) => {
+    try {
+      const { positionId } = req.body;
+      await storage.assignPoliticianToPosition(req.params.id, positionId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Admin assign politician error:", error);
       res.status(500).json({ message: error.message });
     }
   });
