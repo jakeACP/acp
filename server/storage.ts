@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
 import { friendships, friendGroups, friendGroupMembers, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp } from "@shared/schema";
 import { db } from "./db";
@@ -179,6 +179,21 @@ export interface IStorage {
   importRepresentatives(items: InsertRepresentative[], adminUserId: string): Promise<{ imported: number; errors: string[] }>;
   exportZipMappings(): Promise<ZipCodeLookup[]>;
   importZipMappings(items: InsertZipCodeLookup[], adminUserId: string): Promise<{ imported: number; errors: string[] }>;
+
+  // Political Positions Management
+  listPoliticalPositions(filters?: { level?: string; jurisdiction?: string; isActive?: boolean }): Promise<PoliticalPosition[]>;
+  getPoliticalPosition(id: string): Promise<PoliticalPosition | undefined>;
+  createPoliticalPosition(data: InsertPoliticalPosition): Promise<PoliticalPosition>;
+  updatePoliticalPosition(id: string, patch: Partial<PoliticalPosition>): Promise<PoliticalPosition>;
+  deletePoliticalPosition(id: string): Promise<void>;
+  
+  // Politician Profiles Management
+  listPoliticianProfiles(filters?: { positionId?: string; isCurrent?: boolean }): Promise<any[]>;
+  getPoliticianProfile(id: string): Promise<any>;
+  createPoliticianProfile(data: InsertPoliticianProfile): Promise<PoliticianProfile>;
+  updatePoliticianProfile(id: string, patch: Partial<PoliticianProfile>): Promise<PoliticianProfile>;
+  deletePoliticianProfile(id: string): Promise<void>;
+  assignPoliticianToPosition(politicianId: string, positionId: string): Promise<void>;
 
   // Boycotts
   getBoycotts(limit?: number, offset?: number): Promise<Boycott[]>;
@@ -2765,6 +2780,129 @@ export class DatabaseStorage implements IStorage {
     });
 
     return { imported, errors };
+  }
+
+  // Political Positions Management
+  async listPoliticalPositions(filters?: { level?: string; jurisdiction?: string; isActive?: boolean }): Promise<PoliticalPosition[]> {
+    let query = db.select().from(politicalPositions);
+    
+    const conditions = [];
+    if (filters?.level) {
+      conditions.push(eq(politicalPositions.level, filters.level));
+    }
+    if (filters?.jurisdiction) {
+      conditions.push(eq(politicalPositions.jurisdiction, filters.jurisdiction));
+    }
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(politicalPositions.isActive, filters.isActive));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    return await query.orderBy(politicalPositions.displayOrder, politicalPositions.title);
+  }
+
+  async getPoliticalPosition(id: string): Promise<PoliticalPosition | undefined> {
+    const [position] = await db
+      .select()
+      .from(politicalPositions)
+      .where(eq(politicalPositions.id, id));
+    return position || undefined;
+  }
+
+  async createPoliticalPosition(data: InsertPoliticalPosition): Promise<PoliticalPosition> {
+    const [position] = await db
+      .insert(politicalPositions)
+      .values(data)
+      .returning();
+    return position;
+  }
+
+  async updatePoliticalPosition(id: string, patch: Partial<PoliticalPosition>): Promise<PoliticalPosition> {
+    const [updated] = await db
+      .update(politicalPositions)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(politicalPositions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePoliticalPosition(id: string): Promise<void> {
+    await db
+      .delete(politicalPositions)
+      .where(eq(politicalPositions.id, id));
+  }
+
+  // Politician Profiles Management
+  async listPoliticianProfiles(filters?: { positionId?: string; isCurrent?: boolean }): Promise<any[]> {
+    let query = db
+      .select({
+        politician: politicianProfiles,
+        position: politicalPositions,
+      })
+      .from(politicianProfiles)
+      .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id));
+    
+    const conditions = [];
+    if (filters?.positionId) {
+      conditions.push(eq(politicianProfiles.positionId, filters.positionId));
+    }
+    if (filters?.isCurrent !== undefined) {
+      conditions.push(eq(politicianProfiles.isCurrent, filters.isCurrent));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    const results = await query.orderBy(politicianProfiles.fullName);
+    return results.map(r => ({ ...r.politician, position: r.position }));
+  }
+
+  async getPoliticianProfile(id: string): Promise<any> {
+    const [result] = await db
+      .select({
+        politician: politicianProfiles,
+        position: politicalPositions,
+      })
+      .from(politicianProfiles)
+      .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .where(eq(politicianProfiles.id, id));
+    
+    if (!result) return undefined;
+    return { ...result.politician, position: result.position };
+  }
+
+  async createPoliticianProfile(data: InsertPoliticianProfile): Promise<PoliticianProfile> {
+    const [profile] = await db
+      .insert(politicianProfiles)
+      .values(data)
+      .returning();
+    return profile;
+  }
+
+  async updatePoliticianProfile(id: string, patch: Partial<PoliticianProfile>): Promise<PoliticianProfile> {
+    const [updated] = await db
+      .update(politicianProfiles)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(politicianProfiles.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePoliticianProfile(id: string): Promise<void> {
+    await db
+      .delete(politicianProfiles)
+      .where(eq(politicianProfiles.id, id));
+  }
+
+  async assignPoliticianToPosition(politicianId: string, positionId: string): Promise<void> {
+    await db
+      .update(politicianProfiles)
+      .set({ positionId, updatedAt: new Date() })
+      .where(eq(politicianProfiles.id, politicianId));
   }
 
   async createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken> {
