@@ -191,6 +191,7 @@ export default function AdminPoliticiansPage() {
   const handleProfileSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const positionIdValue = formData.get("positionId") as string;
     const data = {
       fullName: formData.get("fullName") as string,
       party: formData.get("party") as string || undefined,
@@ -203,7 +204,7 @@ export default function AdminPoliticiansPage() {
       termStart: formData.get("termStart") as string || undefined,
       termEnd: formData.get("termEnd") as string || undefined,
       isCurrent: formData.get("isCurrent") === "true",
-      positionId: formData.get("positionId") as string || undefined,
+      positionId: positionIdValue === "none" ? undefined : positionIdValue || undefined,
     };
 
     if (editingProfile) {
@@ -796,12 +797,12 @@ export default function AdminPoliticiansPage() {
 
               <div className="grid gap-2">
                 <Label htmlFor="positionId">Assign to Position (optional)</Label>
-                <Select name="positionId" defaultValue={editingProfile?.positionId}>
+                <Select name="positionId" defaultValue={editingProfile?.positionId || "none"}>
                   <SelectTrigger data-testid="select-position-id">
                     <SelectValue placeholder="Select a position" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No position</SelectItem>
+                    <SelectItem value="none">No position</SelectItem>
                     {positions.map(position => (
                       <SelectItem key={position.id} value={position.id}>
                         {position.title} - {position.jurisdiction}
