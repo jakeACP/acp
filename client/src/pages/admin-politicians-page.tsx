@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload } from "lucide-react";
+import { ObjectUploader } from "@/components/ObjectUploader";
 
 type PoliticalPosition = {
   id: string;
@@ -53,6 +54,7 @@ export default function AdminPoliticiansPage() {
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<PoliticalPosition | null>(null);
   const [editingProfile, setEditingProfile] = useState<PoliticianProfile | null>(null);
+  const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | undefined>(undefined);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assigningProfile, setAssigningProfile] = useState<PoliticianProfile | null>(null);
 
@@ -199,7 +201,7 @@ export default function AdminPoliticiansPage() {
       phone: formData.get("phone") as string || undefined,
       officeAddress: formData.get("officeAddress") as string || undefined,
       website: formData.get("website") as string || undefined,
-      photoUrl: formData.get("photoUrl") as string || undefined,
+      photoUrl: uploadedPhotoUrl || editingProfile?.photoUrl || undefined,
       biography: formData.get("biography") as string || undefined,
       termStart: formData.get("termStart") as string || undefined,
       termEnd: formData.get("termEnd") as string || undefined,
@@ -417,6 +419,7 @@ export default function AdminPoliticiansPage() {
                   <Button
                     onClick={() => {
                       setEditingProfile(null);
+                      setUploadedPhotoUrl(undefined);
                       setProfileDialogOpen(true);
                     }}
                     data-testid="button-create-profile"
@@ -438,6 +441,7 @@ export default function AdminPoliticiansPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-[80px]">Photo</TableHead>
                           <TableHead>Name</TableHead>
                           <TableHead>Party</TableHead>
                           <TableHead>Position</TableHead>
@@ -451,6 +455,19 @@ export default function AdminPoliticiansPage() {
                           const position = positions.find(p => p.id === profile.positionId);
                           return (
                             <TableRow key={profile.id} data-testid={`row-profile-${profile.id}`}>
+                              <TableCell>
+                                {profile.photoUrl ? (
+                                  <img
+                                    src={profile.photoUrl}
+                                    alt={profile.fullName}
+                                    className="w-12 h-12 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                                    <Users className="h-6 w-6 text-slate-400" />
+                                  </div>
+                                )}
+                              </TableCell>
                               <TableCell className="font-medium">{profile.fullName}</TableCell>
                               <TableCell>{profile.party || "-"}</TableCell>
                               <TableCell>
@@ -484,6 +501,7 @@ export default function AdminPoliticiansPage() {
                                     size="sm"
                                     onClick={() => {
                                       setEditingProfile(profile);
+                                      setUploadedPhotoUrl(profile.photoUrl);
                                       setProfileDialogOpen(true);
                                     }}
                                     data-testid={`button-edit-profile-${profile.id}`}
@@ -745,29 +763,54 @@ export default function AdminPoliticiansPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="website">Website (optional)</Label>
-                  <Input
-                    id="website"
-                    name="website"
-                    type="url"
-                    defaultValue={editingProfile?.website}
-                    placeholder="https://example.com"
-                    data-testid="input-website"
-                  />
-                </div>
+              <div className="grid gap-2">
+                <Label htmlFor="website">Website (optional)</Label>
+                <Input
+                  id="website"
+                  name="website"
+                  type="url"
+                  defaultValue={editingProfile?.website}
+                  placeholder="https://example.com"
+                  data-testid="input-website"
+                />
+              </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="photoUrl">Photo URL (optional)</Label>
-                  <Input
-                    id="photoUrl"
-                    name="photoUrl"
-                    type="url"
-                    defaultValue={editingProfile?.photoUrl}
-                    placeholder="https://example.com/photo.jpg"
-                    data-testid="input-photo-url"
-                  />
+              <div className="grid gap-2">
+                <Label>Profile Photo (optional, max 10MB)</Label>
+                <div className="space-y-3">
+                  {uploadedPhotoUrl && (
+                    <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
+                      <img
+                        src={uploadedPhotoUrl}
+                        alt="Profile preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <ObjectUploader
+                    maxNumberOfFiles={1}
+                    maxFileSize={10485760}
+                    onGetUploadParameters={async () => {
+                      const response = await fetch("/api/upload", {
+                        method: "POST",
+                        credentials: "include",
+                      });
+                      const data = await response.json();
+                      return { method: "PUT", url: data.uploadURL };
+                    }}
+                    onComplete={(result) => {
+                      if (result.successful && result.successful[0]?.uploadURL) {
+                        const uploadedUrl = result.successful[0].uploadURL.split("?")[0];
+                        const objectPath = uploadedUrl.split("/").slice(-2).join("/");
+                        setUploadedPhotoUrl(`/objects/${objectPath}`);
+                        toast({ title: "Photo uploaded successfully" });
+                      }
+                    }}
+                    buttonClassName="w-full"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {uploadedPhotoUrl ? "Change Photo" : "Upload Photo"}
+                  </ObjectUploader>
                 </div>
               </div>
 
