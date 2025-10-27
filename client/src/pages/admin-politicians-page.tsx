@@ -39,7 +39,7 @@ type PoliticianProfile = {
   officeAddress?: string;
   website?: string;
   photoUrl?: string;
-  bio?: string;
+  biography?: string;
   termStart?: string;
   termEnd?: string;
   isCurrent: boolean;
@@ -199,7 +199,7 @@ export default function AdminPoliticiansPage() {
       officeAddress: formData.get("officeAddress") as string || undefined,
       website: formData.get("website") as string || undefined,
       photoUrl: formData.get("photoUrl") as string || undefined,
-      bio: formData.get("bio") as string || undefined,
+      biography: formData.get("biography") as string || undefined,
       termStart: formData.get("termStart") as string || undefined,
       termEnd: formData.get("termEnd") as string || undefined,
       isCurrent: formData.get("isCurrent") === "true",
@@ -812,14 +812,14 @@ export default function AdminPoliticiansPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="bio">Biography (optional)</Label>
+                <Label htmlFor="biography">Biography (optional)</Label>
                 <Textarea
-                  id="bio"
-                  name="bio"
-                  defaultValue={editingProfile?.bio}
+                  id="biography"
+                  name="biography"
+                  defaultValue={editingProfile?.biography}
                   placeholder="Brief biography or background information"
                   rows={4}
-                  data-testid="textarea-bio"
+                  data-testid="textarea-biography"
                 />
               </div>
             </div>
