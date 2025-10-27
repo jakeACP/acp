@@ -1069,8 +1069,8 @@ export const politicianProfiles = pgTable("politician_profiles", {
   socialMedia: json("social_media"), // {twitter, facebook, instagram, etc.}
   photoUrl: text("photo_url"),
   biography: text("biography"), // brief bio
-  termStart: timestamp("term_start"), // when current term started
-  termEnd: timestamp("term_end"), // when current term ends
+  termStart: text("term_start"), // when current term started (MM/DD/YYYY format)
+  termEnd: text("term_end"), // when current term ends (MM/DD/YYYY format)
   previousPositions: json("previous_positions"), // array of previous positions held
   notes: text("notes"), // admin notes
   isCurrent: boolean("is_current").default(true), // currently holding office

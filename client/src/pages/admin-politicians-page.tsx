@@ -777,7 +777,7 @@ export default function AdminPoliticiansPage() {
                     id="termStart"
                     name="termStart"
                     defaultValue={editingProfile?.termStart}
-                    placeholder="2020"
+                    placeholder="MM/DD/YYYY (e.g., 01/20/2021)"
                     data-testid="input-term-start"
                   />
                 </div>
@@ -788,7 +788,7 @@ export default function AdminPoliticiansPage() {
                     id="termEnd"
                     name="termEnd"
                     defaultValue={editingProfile?.termEnd}
-                    placeholder="2024"
+                    placeholder="MM/DD/YYYY (e.g., 01/20/2025)"
                     data-testid="input-term-end"
                   />
                 </div>
