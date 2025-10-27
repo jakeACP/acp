@@ -118,6 +118,7 @@ export default function AdminPoliticiansPage() {
       toast({ title: "Profile created successfully" });
       setProfileDialogOpen(false);
       setEditingProfile(null);
+      setUploadedPhotoUrl(undefined);
     },
     onError: (error: any) => {
       toast({ title: "Error creating profile", description: error.message, variant: "destructive" });
@@ -133,6 +134,7 @@ export default function AdminPoliticiansPage() {
       toast({ title: "Profile updated successfully" });
       setProfileDialogOpen(false);
       setEditingProfile(null);
+      setUploadedPhotoUrl(undefined);
     },
     onError: (error: any) => {
       toast({ title: "Error updating profile", description: error.message, variant: "destructive" });
