@@ -853,9 +853,6 @@ export class DatabaseStorage implements IStorage {
 
   // Feed System Implementation
   async getAllFeed(limit = 20, offset = 0, userId?: string): Promise<PostWithAuthor[]> {
-    const decayHours = FEED_CONFIG.all.decayHours;
-    const weights = FEED_CONFIG.all.weights;
-    
     // Build privacy filter
     let privacyFilter;
     if (userId) {
@@ -878,7 +875,7 @@ export class DatabaseStorage implements IStorage {
       privacyFilter = eq(posts.privacy, 'public');
     }
     
-    // Engagement-based ranking with time decay
+    // Chronological feed - newest first
     return await db
       .select({
         id: posts.id,
@@ -911,20 +908,9 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(posts.authorId, users.id))
       .where(and(
         eq(posts.isDeleted, false),
-        sql`${posts.createdAt} > NOW() - INTERVAL '72 hours'`,
         privacyFilter
       ))
-      .orderBy(sql`
-        (
-          COALESCE(${posts.likesCount}, 0) * ${weights.like.toString()} +
-          COALESCE(${posts.commentsCount}, 0) * ${weights.comment.toString()} +
-          COALESCE(${posts.sharesCount}, 0) * ${weights.share.toString()} +
-          COALESCE(${posts.emojiReactionsCount}, 0) * ${weights.emoji.toString()} +
-          COALESCE(${posts.gifReactionsCount}, 0) * ${weights.gif.toString()} +
-          COALESCE(${posts.bookmarksCount}, 0) * ${weights.bookmark.toString()} -
-          COALESCE(${posts.flagsCount}, 0) * ${weights.flagPenalty.unreviewed.toString()}
-        ) * EXP(-EXTRACT(EPOCH FROM (NOW() - ${posts.createdAt})) / 3600.0 / ${decayHours.toString()}) DESC
-      `)
+      .orderBy(desc(posts.createdAt))
       .limit(limit)
       .offset(offset);
   }
