@@ -14,6 +14,7 @@ import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2 } from 
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import { Link } from "wouter";
+import { VideoEmbedDisplay } from "@/components/video-embed";
 
 interface PostCardProps {
   post: PostWithAuthor;
@@ -317,6 +318,8 @@ export function PostCard({ post }: PostCardProps) {
         <p className="text-slate-900 dark:text-slate-100 mb-4 whitespace-pre-wrap">
           {post.content}
         </p>
+        
+        <VideoEmbedDisplay content={post.content} />
         
         {post.image && (
           <img
