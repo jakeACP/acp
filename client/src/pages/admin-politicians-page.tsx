@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star } from "lucide-react";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
 type PoliticalPosition = {
@@ -45,6 +45,8 @@ type PoliticianProfile = {
   termEnd?: string;
   isCurrent: boolean;
   positionId?: string;
+  featured?: boolean;
+  corruptionGrade?: string;
 };
 
 export default function AdminPoliticiansPage() {
@@ -167,6 +169,34 @@ export default function AdminPoliticiansPage() {
     },
     onError: (error: any) => {
       toast({ title: "Error assigning politician", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const toggleFeaturedMutation = useMutation({
+    mutationFn: async ({ id, featured }: { id: string; featured: boolean }) => {
+      return await apiRequest(`/api/admin/politician-profiles/${id}/featured`, "PATCH", { featured });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/politician-profiles/featured"] });
+      toast({ title: "Featured status updated" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error updating featured status", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateCorruptionGradeMutation = useMutation({
+    mutationFn: async ({ id, corruptionGrade }: { id: string; corruptionGrade: string | null }) => {
+      return await apiRequest(`/api/admin/politician-profiles/${id}/corruption-grade`, "PATCH", { corruptionGrade });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/politician-profiles/featured"] });
+      toast({ title: "Corruption grade updated" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error updating corruption grade", description: error.message, variant: "destructive" });
     },
   });
 
@@ -443,11 +473,13 @@ export default function AdminPoliticiansPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-[50px]">Featured</TableHead>
                           <TableHead className="w-[80px]">Photo</TableHead>
                           <TableHead>Name</TableHead>
                           <TableHead>Party</TableHead>
                           <TableHead>Position</TableHead>
                           <TableHead>Term</TableHead>
+                          <TableHead>Grade</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
@@ -457,6 +489,24 @@ export default function AdminPoliticiansPage() {
                           const position = positions.find(p => p.id === profile.positionId);
                           return (
                             <TableRow key={profile.id} data-testid={`row-profile-${profile.id}`}>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    toggleFeaturedMutation.mutate({ 
+                                      id: profile.id, 
+                                      featured: !profile.featured 
+                                    });
+                                  }}
+                                  data-testid={`button-star-${profile.id}`}
+                                  className="p-1"
+                                >
+                                  <Star 
+                                    className={`h-5 w-5 ${profile.featured ? 'fill-yellow-400 text-yellow-400' : 'text-slate-400'}`} 
+                                  />
+                                </Button>
+                              </TableCell>
                               <TableCell>
                                 {profile.photoUrl ? (
                                   <img
@@ -479,6 +529,29 @@ export default function AdminPoliticiansPage() {
                                 {profile.termStart && profile.termEnd
                                   ? `${profile.termStart} - ${profile.termEnd}`
                                   : profile.termStart || "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Select
+                                  value={profile.corruptionGrade || "none"}
+                                  onValueChange={(value) => {
+                                    updateCorruptionGradeMutation.mutate({
+                                      id: profile.id,
+                                      corruptionGrade: value === "none" ? null : value
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-[70px]" data-testid={`select-grade-${profile.id}`}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">-</SelectItem>
+                                    <SelectItem value="A">A</SelectItem>
+                                    <SelectItem value="B">B</SelectItem>
+                                    <SelectItem value="C">C</SelectItem>
+                                    <SelectItem value="D">D</SelectItem>
+                                    <SelectItem value="F">F</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </TableCell>
                               <TableCell>
                                 <Badge variant={profile.isCurrent ? "default" : "secondary"}>
