@@ -1074,12 +1074,16 @@ export const politicianProfiles = pgTable("politician_profiles", {
   previousPositions: json("previous_positions"), // array of previous positions held
   notes: text("notes"), // admin notes
   isCurrent: boolean("is_current").default(true), // currently holding office
+  featured: boolean("featured").default(false), // featured in the Featured Candidate module
+  corruptionGrade: text("corruption_grade"), // A, B, C, D, or F corruption grade
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   positionIndex: index("politician_profiles_position_idx").on(table.positionId),
   nameIndex: index("politician_profiles_name_idx").on(table.fullName),
   currentIndex: index("politician_profiles_current_idx").on(table.isCurrent),
+  featuredIndex: index("politician_profiles_featured_idx").on(table.featured),
+  corruptionGradeCheck: sql`CHECK (${table.corruptionGrade} IN ('A', 'B', 'C', 'D', 'F') OR ${table.corruptionGrade} IS NULL)`,
 }));
 
 // Boycotts - Feature for organizing consumer boycotts
