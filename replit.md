@@ -92,3 +92,12 @@ Preferred communication style: Simple, everyday language.
 - **Featured Candidates**: Star-based system to feature politicians in the sidebar module
 - **Corruption Grading**: A-F grading system for politician corruption with color-coded badges (A=green, B=blue, C=yellow, D=orange, F=red)
 - **Admin Panel**: Comprehensive admin interface for managing both positions and profiles, featuring, and corruption grades
+
+### Featured Polls System (October 2025)
+- **Featured Poll Management**: Star-based system to feature polls in the sidebar module (renamed from "Active Polls")
+- **Admin Polls Panel**: New admin interface for managing all polls with star toggle functionality
+- **Poll Creation**: Create new polls directly from admin panel with custom options and descriptions
+- **Dynamic Sidebar**: Featured Polls module in sidebar shows up to 3 starred polls with vote counts and progress indicators
+- **Backend Support**: New API endpoints for featuring polls (`GET /api/polls/featured`, `PATCH /api/admin/polls/:id/featured`)
+- **Security**: Zod validation on featured toggle endpoint to ensure proper data types
+- **Test Data**: Includes 5 sample polls covering climate action, housing reform, ranked choice voting, UBI, and education
