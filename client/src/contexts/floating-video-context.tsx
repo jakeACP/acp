@@ -4,6 +4,7 @@ interface FloatingVideoContext {
   videoId: string | null;
   postId: string | null;
   playerRef: any | null;
+  startTime: number;
   activate: (videoId: string, postId: string, playerRef: any) => void;
   deactivate: () => void;
   returnToPost: () => void;
@@ -15,6 +16,7 @@ export function FloatingVideoProvider({ children }: { children: ReactNode }) {
   const [videoId, setVideoId] = useState<string | null>(null);
   const [postId, setPostId] = useState<string | null>(null);
   const [playerRef, setPlayerRef] = useState<any | null>(null);
+  const [startTime, setStartTime] = useState<number>(0);
 
   const activate = useCallback((newVideoId: string, newPostId: string, newPlayerRef: any) => {
     // If there's already an active video, pause it first
@@ -22,9 +24,13 @@ export function FloatingVideoProvider({ children }: { children: ReactNode }) {
       playerRef.pauseVideo();
     }
     
+    // Get current playback time from the original player
+    const currentTime = newPlayerRef && newPlayerRef.getCurrentTime ? newPlayerRef.getCurrentTime() : 0;
+    
     setVideoId(newVideoId);
     setPostId(newPostId);
     setPlayerRef(newPlayerRef);
+    setStartTime(currentTime);
   }, [playerRef]);
 
   const deactivate = useCallback(() => {
@@ -34,6 +40,7 @@ export function FloatingVideoProvider({ children }: { children: ReactNode }) {
     setVideoId(null);
     setPostId(null);
     setPlayerRef(null);
+    setStartTime(0);
   }, [playerRef]);
 
   const returnToPost = useCallback(() => {
@@ -50,7 +57,7 @@ export function FloatingVideoProvider({ children }: { children: ReactNode }) {
   }, [postId, deactivate]);
 
   return (
-    <FloatingVideoContext.Provider value={{ videoId, postId, playerRef, activate, deactivate, returnToPost }}>
+    <FloatingVideoContext.Provider value={{ videoId, postId, playerRef, startTime, activate, deactivate, returnToPost }}>
       {children}
     </FloatingVideoContext.Provider>
   );

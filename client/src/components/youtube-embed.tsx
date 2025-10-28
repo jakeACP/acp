@@ -13,6 +13,7 @@ interface YouTubeEmbedProps {
   videoId: string;
   postId: string;
   isFloating?: boolean;
+  startTime?: number;
 }
 
 // Load YouTube IFrame API script
@@ -49,7 +50,7 @@ function loadYouTubeAPI(): Promise<void> {
   return apiLoadPromise;
 }
 
-export function YouTubeEmbed({ videoId, postId, isFloating = false }: YouTubeEmbedProps) {
+export function YouTubeEmbed({ videoId, postId, isFloating = false, startTime = 0 }: YouTubeEmbedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -64,15 +65,25 @@ export function YouTubeEmbed({ videoId, postId, isFloating = false }: YouTubeEmb
 
       if (!mounted || !containerRef.current) return;
 
-      const playerId = `youtube-player-${postId}-${videoId}`;
+      const playerId = `youtube-player-${postId}-${videoId}${isFloating ? '-floating' : ''}`;
 
       playerRef.current = new (window as any).YT.Player(playerId, {
         videoId,
         playerVars: {
           enablejsapi: 1,
           origin: window.location.origin,
+          autoplay: isFloating ? 1 : 0,
+          start: Math.floor(startTime),
         },
         events: {
+          onReady: (event: any) => {
+            // If this is a floating player and we have a start time, seek to it and play
+            if (isFloating && startTime > 0) {
+              event.target.seekTo(startTime, true);
+              event.target.playVideo();
+              setIsPlaying(true);
+            }
+          },
           onStateChange: (event: any) => {
             const playing = event.data === (window as any).YT.PlayerState.PLAYING;
             setIsPlaying(playing);
@@ -94,7 +105,7 @@ export function YouTubeEmbed({ videoId, postId, isFloating = false }: YouTubeEmb
         playerRef.current.destroy();
       }
     };
-  }, [videoId, postId, isFloating]);
+  }, [videoId, postId, isFloating, startTime]);
 
   // Intersection Observer for non-floating players
   useEffect(() => {

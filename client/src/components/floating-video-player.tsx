@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { X, Maximize2 } from 'lucide-react';
 
 export function FloatingVideoPlayer() {
-  const { videoId, postId, deactivate, returnToPost } = useFloatingVideo();
+  const { videoId, postId, startTime, deactivate, returnToPost } = useFloatingVideo();
 
   if (!videoId || !postId) {
     return null;
@@ -18,7 +18,7 @@ export function FloatingVideoPlayer() {
       data-testid="floating-video-player"
     >
       <div className="relative">
-        <YouTubeEmbed videoId={videoId} postId={postId} isFloating={true} />
+        <YouTubeEmbed videoId={videoId} postId={postId} isFloating={true} startTime={startTime} />
         
         <div className="absolute top-2 right-2 flex gap-2">
           <Button
