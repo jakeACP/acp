@@ -74,8 +74,10 @@ Preferred communication style: Simple, everyday language.
 - **Intelligent Detection**: Uses IntersectionObserver to detect when a playing video scrolls out of the viewport (triggers when <20% visible)
 - **Seamless Controls**: Floating player includes close button and "return to post" button to scroll back to the original location
 - **YouTube IFrame API Integration**: Enhanced video player with proper play/pause state tracking for accurate floating behavior
+- **CSS-Based Positioning**: Uses CSS fixed positioning instead of DOM manipulation to prevent iframe crashes
 - **Global Context Management**: FloatingVideoProvider ensures only one video floats at a time
 - **User Experience**: Continue watching videos while browsing the feed without interruption
+- **Layout Preservation**: Placeholder text shows in original position when video is floating
 
 ### Keyboard Shortcuts (October 2025)
 - **Ctrl+Enter Post Submission**: Users can now press Ctrl+Enter while typing in the post creation form to instantly submit their post
