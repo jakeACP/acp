@@ -1,11 +1,8 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
 interface FloatingVideoContext {
-  videoId: string | null;
-  postId: string | null;
-  playerRef: any | null;
-  startTime: number;
-  activate: (videoId: string, postId: string, playerRef: any) => void;
+  floatingPostId: string | null;
+  activate: (postId: string) => void;
   deactivate: () => void;
   returnToPost: () => void;
 }
@@ -13,39 +10,19 @@ interface FloatingVideoContext {
 const FloatingVideoContext = createContext<FloatingVideoContext | undefined>(undefined);
 
 export function FloatingVideoProvider({ children }: { children: ReactNode }) {
-  const [videoId, setVideoId] = useState<string | null>(null);
-  const [postId, setPostId] = useState<string | null>(null);
-  const [playerRef, setPlayerRef] = useState<any | null>(null);
-  const [startTime, setStartTime] = useState<number>(0);
+  const [floatingPostId, setFloatingPostId] = useState<string | null>(null);
 
-  const activate = useCallback((newVideoId: string, newPostId: string, newPlayerRef: any) => {
-    // If there's already an active video, pause it first
-    if (playerRef && playerRef.pauseVideo) {
-      playerRef.pauseVideo();
-    }
-    
-    // Get current playback time from the original player
-    const currentTime = newPlayerRef && newPlayerRef.getCurrentTime ? newPlayerRef.getCurrentTime() : 0;
-    
-    setVideoId(newVideoId);
-    setPostId(newPostId);
-    setPlayerRef(newPlayerRef);
-    setStartTime(currentTime);
-  }, [playerRef]);
+  const activate = useCallback((postId: string) => {
+    setFloatingPostId(postId);
+  }, []);
 
   const deactivate = useCallback(() => {
-    if (playerRef && playerRef.pauseVideo) {
-      playerRef.pauseVideo();
-    }
-    setVideoId(null);
-    setPostId(null);
-    setPlayerRef(null);
-    setStartTime(0);
-  }, [playerRef]);
+    setFloatingPostId(null);
+  }, []);
 
   const returnToPost = useCallback(() => {
-    if (postId) {
-      const postElement = document.querySelector(`[data-post-id="${postId}"]`);
+    if (floatingPostId) {
+      const postElement = document.querySelector(`[data-post-id="${floatingPostId}"]`);
       if (postElement) {
         postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         // Deactivate after scrolling
@@ -54,10 +31,10 @@ export function FloatingVideoProvider({ children }: { children: ReactNode }) {
         }, 500);
       }
     }
-  }, [postId, deactivate]);
+  }, [floatingPostId, deactivate]);
 
   return (
-    <FloatingVideoContext.Provider value={{ videoId, postId, playerRef, startTime, activate, deactivate, returnToPost }}>
+    <FloatingVideoContext.Provider value={{ floatingPostId, activate, deactivate, returnToPost }}>
       {children}
     </FloatingVideoContext.Provider>
   );

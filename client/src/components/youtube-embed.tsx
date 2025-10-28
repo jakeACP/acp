@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useFloatingVideo } from '@/contexts/floating-video-context';
+import { Button } from './ui/button';
+import { X, Maximize2 } from 'lucide-react';
 
 // TypeScript declarations for YouTube IFrame API
 declare global {
@@ -12,8 +15,6 @@ declare global {
 interface YouTubeEmbedProps {
   videoId: string;
   postId: string;
-  isFloating?: boolean;
-  startTime?: number;
 }
 
 // Load YouTube IFrame API script
@@ -50,12 +51,14 @@ function loadYouTubeAPI(): Promise<void> {
   return apiLoadPromise;
 }
 
-export function YouTubeEmbed({ videoId, postId, isFloating = false, startTime = 0 }: YouTubeEmbedProps) {
+export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const { activate, deactivate } = useFloatingVideo();
+  const { floatingPostId, activate, deactivate, returnToPost } = useFloatingVideo();
   const observerRef = useRef<IntersectionObserver | null>(null);
+
+  const isFloating = floatingPostId === postId;
 
   useEffect(() => {
     let mounted = true;
@@ -65,33 +68,18 @@ export function YouTubeEmbed({ videoId, postId, isFloating = false, startTime = 
 
       if (!mounted || !containerRef.current) return;
 
-      const playerId = `youtube-player-${postId}-${videoId}${isFloating ? '-floating' : ''}`;
+      const playerId = `youtube-player-${postId}-${videoId}`;
 
       playerRef.current = new (window as any).YT.Player(playerId, {
         videoId,
         playerVars: {
           enablejsapi: 1,
           origin: window.location.origin,
-          autoplay: isFloating ? 1 : 0,
-          start: Math.floor(startTime),
         },
         events: {
-          onReady: (event: any) => {
-            // If this is a floating player and we have a start time, seek to it and play
-            if (isFloating && startTime > 0) {
-              event.target.seekTo(startTime, true);
-              event.target.playVideo();
-              setIsPlaying(true);
-            }
-          },
           onStateChange: (event: any) => {
             const playing = event.data === (window as any).YT.PlayerState.PLAYING;
             setIsPlaying(playing);
-            
-            // If video starts playing and we're not floating, we might want to activate
-            if (playing && !isFloating) {
-              // Don't activate immediately - wait for scroll out of view
-            }
           },
         },
       });
@@ -105,11 +93,11 @@ export function YouTubeEmbed({ videoId, postId, isFloating = false, startTime = 
         playerRef.current.destroy();
       }
     };
-  }, [videoId, postId, isFloating, startTime]);
+  }, [videoId, postId]);
 
-  // Intersection Observer for non-floating players
+  // Intersection Observer for detecting when video scrolls out of view
   useEffect(() => {
-    if (isFloating || !containerRef.current) return;
+    if (!containerRef.current || isFloating) return;
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -118,12 +106,7 @@ export function YouTubeEmbed({ videoId, postId, isFloating = false, startTime = 
           
           // If video is playing and scrolled mostly out of view (less than 20% visible)
           if (isPlaying && ratio < 0.2 && ratio >= 0) {
-            activate(videoId, postId, playerRef.current);
-          }
-          
-          // If video comes back into view while floating, deactivate floating mode
-          if (isPlaying && ratio > 0.5) {
-            deactivate();
+            activate(postId);
           }
         });
       },
@@ -139,22 +122,109 @@ export function YouTubeEmbed({ videoId, postId, isFloating = false, startTime = 
         observerRef.current.disconnect();
       }
     };
-  }, [isPlaying, videoId, postId, isFloating, activate, deactivate]);
+  }, [isPlaying, postId, isFloating, activate]);
+
+  // When scrolling back to the video while floating, deactivate
+  useEffect(() => {
+    if (!containerRef.current || !isFloating) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          // If video comes back into view while floating, deactivate floating mode
+          if (entry.intersectionRatio > 0.5) {
+            deactivate();
+          }
+        });
+      },
+      {
+        threshold: [0.5],
+      }
+    );
+
+    observer.observe(containerRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isFloating, deactivate]);
 
   const playerId = `youtube-player-${postId}-${videoId}`;
+
+  const playerContent = (
+    <div
+      className={isFloating ? 'w-full h-full' : 'absolute top-0 left-0 w-full h-full rounded-lg'}
+    >
+      <div
+        id={playerId}
+        className="w-full h-full"
+      />
+    </div>
+  );
+
+  const floatingOverlay = isFloating && (
+    <div className="absolute top-2 right-2 flex gap-2 z-10">
+      <Button
+        size="sm"
+        variant="secondary"
+        className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white"
+        onClick={returnToPost}
+        title="Return to post"
+        data-testid="button-return-to-post"
+      >
+        <Maximize2 className="h-4 w-4" />
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white"
+        onClick={deactivate}
+        title="Close"
+        data-testid="button-close-floating-video"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
+  if (isFloating) {
+    return (
+      <>
+        {/* Placeholder in original position */}
+        <div
+          ref={containerRef}
+          className="relative w-full mb-4 bg-black/10 rounded-lg"
+          style={{ paddingBottom: '56.25%' }}
+          data-video-id={videoId}
+          data-post-id={postId}
+        />
+        {/* Floating player */}
+        {createPortal(
+          <div
+            className="fixed bottom-4 right-4 z-50 shadow-2xl rounded-lg overflow-hidden bg-black"
+            style={{ width: '400px', height: '225px' }}
+            data-testid="floating-video-player"
+          >
+            <div className="relative w-full h-full">
+              {playerContent}
+              {floatingOverlay}
+            </div>
+          </div>,
+          document.body
+        )}
+      </>
+    );
+  }
 
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${isFloating ? '' : 'mb-4'}`}
-      style={isFloating ? { width: '400px', height: '225px' } : { paddingBottom: '56.25%' }}
+      className="relative w-full mb-4"
+      style={{ paddingBottom: '56.25%' }}
       data-video-id={videoId}
       data-post-id={postId}
     >
-      <div
-        id={playerId}
-        className={isFloating ? 'w-full h-full' : 'absolute top-0 left-0 w-full h-full rounded-lg'}
-      />
+      {playerContent}
     </div>
   );
 }
