@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useFloatingVideo } from '@/contexts/floating-video-context';
 import { Button } from './ui/button';
 import { X, Maximize2 } from 'lucide-react';
@@ -126,71 +125,6 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
 
   const playerId = `youtube-player-${postId}-${videoId}`;
 
-  const playerContent = (
-    <div
-      className={isFloating ? 'w-full h-full' : 'absolute top-0 left-0 w-full h-full rounded-lg'}
-    >
-      <div
-        id={playerId}
-        className="w-full h-full"
-      />
-    </div>
-  );
-
-  const floatingOverlay = isFloating && (
-    <div className="absolute top-2 right-2 flex gap-2 z-10">
-      <Button
-        size="sm"
-        variant="secondary"
-        className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white"
-        onClick={returnToPost}
-        title="Return to post"
-        data-testid="button-return-to-post"
-      >
-        <Maximize2 className="h-4 w-4" />
-      </Button>
-      <Button
-        size="sm"
-        variant="secondary"
-        className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white"
-        onClick={deactivate}
-        title="Close"
-        data-testid="button-close-floating-video"
-      >
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-
-  if (isFloating) {
-    return (
-      <>
-        {/* Placeholder in original position */}
-        <div
-          ref={containerRef}
-          className="relative w-full mb-4 bg-black/10 rounded-lg"
-          style={{ paddingBottom: '56.25%' }}
-          data-video-id={videoId}
-          data-post-id={postId}
-        />
-        {/* Floating player */}
-        {createPortal(
-          <div
-            className="fixed bottom-4 right-4 z-50 shadow-2xl rounded-lg overflow-hidden bg-black"
-            style={{ width: '400px', height: '225px' }}
-            data-testid="floating-video-player"
-          >
-            <div className="relative w-full h-full">
-              {playerContent}
-              {floatingOverlay}
-            </div>
-          </div>,
-          document.body
-        )}
-      </>
-    );
-  }
-
   return (
     <div
       ref={containerRef}
@@ -199,7 +133,54 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
       data-video-id={videoId}
       data-post-id={postId}
     >
-      {playerContent}
+      {/* The actual player container - uses CSS positioning to float */}
+      <div
+        className={
+          isFloating
+            ? 'fixed bottom-4 right-4 z-50 shadow-2xl rounded-lg overflow-hidden bg-black transition-all duration-300'
+            : 'absolute top-0 left-0 w-full h-full rounded-lg'
+        }
+        style={isFloating ? { width: '400px', height: '225px' } : undefined}
+        data-testid={isFloating ? 'floating-video-player' : undefined}
+      >
+        <div
+          id={playerId}
+          className="w-full h-full"
+        />
+        
+        {/* Floating controls overlay */}
+        {isFloating && (
+          <div className="absolute top-2 right-2 flex gap-2 z-10">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white"
+              onClick={returnToPost}
+              title="Return to post"
+              data-testid="button-return-to-post"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white"
+              onClick={deactivate}
+              title="Close"
+              data-testid="button-close-floating-video"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+      
+      {/* Placeholder when floating to preserve layout */}
+      {isFloating && (
+        <div className="absolute top-0 left-0 w-full h-full bg-black/10 rounded-lg flex items-center justify-center">
+          <p className="text-sm text-muted-foreground">Video playing in corner →</p>
+        </div>
+      )}
     </div>
   );
 }
