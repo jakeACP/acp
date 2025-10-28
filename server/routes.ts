@@ -2958,6 +2958,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public endpoint to get featured politicians
+  app.get("/api/politician-profiles/featured", async (req, res) => {
+    try {
+      const profiles = await storage.listPoliticianProfiles({ isCurrent: true });
+      const featured = profiles.filter(p => p.featured);
+      res.json(featured);
+    } catch (error: any) {
+      console.error("Get featured politician profiles error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin Politician Profiles Management API
   app.get("/api/admin/politician-profiles", ensureAdmin, async (req, res) => {
     try {
@@ -3038,6 +3050,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error: any) {
       console.error("Admin assign politician error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/politician-profiles/:id/featured", ensureAdmin, async (req, res) => {
+    try {
+      const { featured } = req.body;
+      const profile = await storage.updatePoliticianProfile(req.params.id, { featured });
+      res.json(profile);
+    } catch (error: any) {
+      console.error("Admin toggle featured politician error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/politician-profiles/:id/corruption-grade", ensureAdmin, async (req, res) => {
+    try {
+      const { corruptionGrade } = req.body;
+      if (corruptionGrade && !['A', 'B', 'C', 'D', 'F'].includes(corruptionGrade)) {
+        return res.status(400).json({ message: "Corruption grade must be A, B, C, D, or F" });
+      }
+      const profile = await storage.updatePoliticianProfile(req.params.id, { corruptionGrade });
+      res.json(profile);
+    } catch (error: any) {
+      console.error("Admin update corruption grade error:", error);
       res.status(500).json({ message: error.message });
     }
   });
