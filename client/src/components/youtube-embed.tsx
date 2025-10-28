@@ -97,15 +97,15 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
 
   // Intersection Observer for detecting when video scrolls out of view
   useEffect(() => {
-    if (!containerRef.current || isFloating) return;
+    if (!containerRef.current) return;
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           const ratio = entry.intersectionRatio;
           
-          // If video is playing and scrolled mostly out of view (less than 20% visible)
-          if (isPlaying && ratio < 0.2 && ratio >= 0) {
+          // Only activate floating if not already floating and video is playing
+          if (!isFloating && isPlaying && ratio < 0.2 && ratio >= 0) {
             activate(postId);
           }
         });
@@ -123,31 +123,6 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
       }
     };
   }, [isPlaying, postId, isFloating, activate]);
-
-  // When scrolling back to the video while floating, deactivate
-  useEffect(() => {
-    if (!containerRef.current || !isFloating) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          // If video comes back into view while floating, deactivate floating mode
-          if (entry.intersectionRatio > 0.5) {
-            deactivate();
-          }
-        });
-      },
-      {
-        threshold: [0.5],
-      }
-    );
-
-    observer.observe(containerRef.current);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [isFloating, deactivate]);
 
   const playerId = `youtube-player-${postId}-${videoId}`;
 
