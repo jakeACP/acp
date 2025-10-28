@@ -472,6 +472,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get featured polls (public endpoint)
+  app.get("/api/polls/featured", async (req, res) => {
+    try {
+      const featuredPolls = await storage.getFeaturedPolls();
+      res.json(featuredPolls);
+    } catch (error: any) {
+      console.error("Get featured polls error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Toggle featured status for a poll (admin only)
+  app.patch("/api/admin/polls/:id/featured", ensureAdmin, async (req, res) => {
+    try {
+      const { featured } = z.object({ featured: z.boolean() }).parse(req.body);
+      const poll = await storage.updatePoll(req.params.id, { featured });
+      res.json(poll);
+    } catch (error: any) {
+      console.error("Admin toggle featured poll error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error: featured must be a boolean" });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Groups API
   app.get("/api/groups", async (req, res) => {
     try {

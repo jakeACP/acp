@@ -253,8 +253,11 @@ export const polls = pgTable("polls", {
   totalVotes: integer("total_votes").default(0),
   endDate: timestamp("end_date"),
   isActive: boolean("is_active").default(true),
+  featured: boolean("featured").default(false), // Featured in the Featured Polls sidebar module
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  featuredIndex: index("polls_featured_idx").on(table.featured),
+}));
 
 export const pollVotes = pgTable("poll_votes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

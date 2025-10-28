@@ -8,7 +8,8 @@ import {
   Database, 
   Cpu, 
   Coins, 
-  Settings 
+  Settings,
+  BarChart3
 } from "lucide-react";
 
 const adminMenuItems = [
@@ -26,6 +27,11 @@ const adminMenuItems = [
     name: "Politicians",
     href: "/admin/politicians",
     icon: Users,
+  },
+  {
+    name: "Polls",
+    href: "/admin/polls",
+    icon: BarChart3,
   },
   {
     name: "Security",

@@ -22,8 +22,8 @@ type FeaturedPolitician = {
 export function ActivitySidebar() {
   const { user } = useAuth();
   
-  const { data: activePolls = [] } = useQuery<Poll[]>({
-    queryKey: ["/api/polls"],
+  const { data: featuredPolls = [] } = useQuery<Poll[]>({
+    queryKey: ["/api/polls/featured"],
   });
 
   const { data: candidates = [] } = useQuery<Candidate[]>({
@@ -65,16 +65,19 @@ export function ActivitySidebar() {
 
   return (
     <div className="space-y-6">
-      {/* Active Polls */}
+      {/* Featured Polls */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Active Polls</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+            Featured Polls
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {activePolls.length > 0 ? (
+          {featuredPolls.length > 0 ? (
             <div className="space-y-4">
-              {activePolls.slice(0, 3).map((poll, index) => (
-                <div key={poll.id} className={`border-l-4 pl-3 ${getPollColor(index)}`}>
+              {featuredPolls.slice(0, 3).map((poll, index) => (
+                <div key={poll.id} className={`border-l-4 pl-3 ${getPollColor(index)}`} data-testid={`featured-poll-${poll.id}`}>
                   <h5 className="text-sm font-medium text-foreground line-clamp-2">
                     {poll.title}
                   </h5>
@@ -96,7 +99,7 @@ export function ActivitySidebar() {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
-              No active polls at the moment
+              No featured polls at the moment
             </p>
           )}
         </CardContent>

@@ -69,6 +69,8 @@ export interface IStorage {
   getPoll(id: string): Promise<Poll | undefined>;
   getPollByPostId(postId: string): Promise<Poll | undefined>;
   getActivePolls(): Promise<Poll[]>;
+  getFeaturedPolls(): Promise<Poll[]>;
+  updatePoll(pollId: string, updates: Partial<Poll>): Promise<Poll>;
   recordVote(pollId: string, userId: string, optionId: string, blockchainHash?: string): Promise<void>;
   recordRankedVote(pollId: string, userId: string, rankedChoices: string[], blockchainHash?: string): Promise<void>;
   getRankedVotes(pollId: string): Promise<any[]>;
@@ -1267,6 +1269,29 @@ export class DatabaseStorage implements IStorage {
       .from(polls)
       .where(eq(polls.isActive, true))
       .orderBy(desc(polls.createdAt));
+  }
+
+  async getFeaturedPolls(): Promise<Poll[]> {
+    return await db
+      .select()
+      .from(polls)
+      .where(and(eq(polls.featured, true), eq(polls.isActive, true)))
+      .orderBy(desc(polls.createdAt))
+      .limit(3);
+  }
+
+  async updatePoll(pollId: string, updates: Partial<Poll>): Promise<Poll> {
+    const [updatedPoll] = await db
+      .update(polls)
+      .set(updates)
+      .where(eq(polls.id, pollId))
+      .returning();
+    
+    if (!updatedPoll) {
+      throw new Error("Poll not found");
+    }
+    
+    return updatedPoll;
   }
 
   async votePoll(pollId: string, userId: string, optionId: string): Promise<void> {
