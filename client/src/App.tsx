@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "./hooks/use-auth";
 import { ThemeProvider } from "./hooks/use-theme";
+import { FloatingVideoProvider } from "./contexts/floating-video-context";
+import { FloatingVideoPlayer } from "./components/floating-video-player";
 import { ProtectedRoute } from "./lib/protected-route";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
@@ -111,11 +113,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="acp-ui-theme">
         <AuthProvider>
-          <TooltipProvider>
-            <BetaBanner />
-            <Toaster />
-            <Router />
-          </TooltipProvider>
+          <FloatingVideoProvider>
+            <TooltipProvider>
+              <BetaBanner />
+              <Toaster />
+              <Router />
+              <FloatingVideoPlayer />
+            </TooltipProvider>
+          </FloatingVideoProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
