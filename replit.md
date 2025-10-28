@@ -101,3 +101,16 @@ Preferred communication style: Simple, everyday language.
 - **Backend Support**: New API endpoints for featuring polls (`GET /api/polls/featured`, `PATCH /api/admin/polls/:id/featured`)
 - **Security**: Zod validation on featured toggle endpoint to ensure proper data types
 - **Test Data**: Includes 5 sample polls covering climate action, housing reform, ranked choice voting, UBI, and education
+
+### Individual Politician Profile Pages (October 2025)
+- **Public Profile Pages**: Dedicated profile pages for each politician at `/politicians/:id` route
+- **Page Claim System**: Politicians can claim their profile page by submitting office email and phone verification
+- **Admin Claim Approval**: New admin tab for reviewing claim requests with approve/reject functionality and email/phone contact info
+- **Verification System**: Green checkmark badge displays on verified politician profiles after admin approval
+- **Corruption Scorecard**: Detailed transparency section showing corruption details in expandable format
+- **News Feed Integration**: Tagged news feed on profile pages filtered by politician name
+- **Database Fields**: Added `claimRequestEmail`, `claimRequestPhone`, `claimRequestStatus`, `claimRequestDate`, `isVerified`, `verifiedDate`, and `corruptionScorecard` fields
+- **Clickable Links**: Politician names throughout the site (Featured Candidates sidebar) now link to their profile pages
+- **API Endpoints**: `GET /api/politician-profiles/:id`, `POST /api/politician-profiles/:id/claim`, `GET /api/admin/politician-profiles/claim-requests`, `PATCH /api/admin/politician-profiles/:id/claim-approve`
+- **Security**: Claim submission requires office email and phone, with admin verification before activation
+- **User Experience**: Seamless profile claiming workflow with toast notifications and cache invalidation
