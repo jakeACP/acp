@@ -12,6 +12,8 @@ import { CharityCard } from "@/components/charity-card";
 
 import { CreatePostForm } from "@/components/create-post-form";
 import { BlockchainTransparency } from "@/components/blockchain-transparency";
+import { FloatingVideoProvider } from "@/contexts/floating-video-context";
+import { FloatingVideoPlayer } from "@/components/floating-video-player";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -457,7 +459,8 @@ export function MainFeed() {
   const feedItems = getFeedItems();
 
   return (
-    <div className="page-background md:space-y-6">
+    <FloatingVideoProvider>
+      <div className="page-background md:space-y-6">
       {/* Feed Type Switcher - Desktop */}
       <div className="hidden md:block">
         <Card className="floating-card-lg shadow-lg border-0 bg-card/95 backdrop-blur-sm">
@@ -676,6 +679,9 @@ export function MainFeed() {
           </div>
         </DialogContent>
       </Dialog>
+      
+      <FloatingVideoPlayer />
     </div>
+    </FloatingVideoProvider>
   );
 }

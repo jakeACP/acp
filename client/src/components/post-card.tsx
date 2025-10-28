@@ -283,7 +283,7 @@ export function PostCard({ post }: PostCardProps) {
     : "";
 
   return (
-    <Card>
+    <Card data-post-id={post.id}>
       <CardHeader>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -319,7 +319,7 @@ export function PostCard({ post }: PostCardProps) {
           {post.content}
         </p>
         
-        <VideoEmbedDisplay content={post.content} />
+        <VideoEmbedDisplay content={post.content} postId={post.id} />
         
         {post.image && (
           <img

@@ -1,10 +1,12 @@
-import { extractVideoEmbeds, getYouTubeEmbedUrl, getTikTokEmbedUrl, type VideoEmbed } from "@/lib/video-embed";
+import { extractVideoEmbeds, getTikTokEmbedUrl, type VideoEmbed } from "@/lib/video-embed";
+import { YouTubeEmbed } from "./youtube-embed";
 
 interface VideoEmbedDisplayProps {
   content: string;
+  postId: string;
 }
 
-export function VideoEmbedDisplay({ content }: VideoEmbedDisplayProps) {
+export function VideoEmbedDisplay({ content, postId }: VideoEmbedDisplayProps) {
   const embeds = extractVideoEmbeds(content);
 
   if (embeds.length === 0) {
@@ -12,25 +14,15 @@ export function VideoEmbedDisplay({ content }: VideoEmbedDisplayProps) {
   }
 
   return (
-    <div className="space-y-4 mb-4">
+    <div className="space-y-4">
       {embeds.map((embed, index) => (
         <div key={`${embed.type}-${embed.id}-${index}`} className="w-full">
           {embed.type === 'youtube' && (
-            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-              <iframe
-                className="absolute top-0 left-0 w-full h-full rounded-lg"
-                src={getYouTubeEmbedUrl(embed.id)}
-                title="YouTube video player"
-                frameBorder="0"
-                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                data-testid={`youtube-embed-${embed.id}`}
-              />
-            </div>
+            <YouTubeEmbed videoId={embed.id} postId={postId} />
           )}
           
           {embed.type === 'tiktok' && (
-            <div className="relative w-full mx-auto max-w-[325px]" style={{ paddingBottom: '177.78%' }}>
+            <div className="relative w-full mx-auto max-w-[325px] mb-4" style={{ paddingBottom: '177.78%' }}>
               <iframe
                 className="absolute top-0 left-0 w-full h-full rounded-lg"
                 src={getTikTokEmbedUrl(embed.id)}
