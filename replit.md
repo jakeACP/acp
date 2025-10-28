@@ -149,6 +149,11 @@ The application is designed as a modern, scalable platform that can grow from a 
 
 ## Recent Updates (October 2025)
 
+### Keyboard Shortcuts (October 2025)
+- **Ctrl+Enter Post Submission**: Users can now press Ctrl+Enter while typing in the post creation form to instantly submit their post
+- **Improved Workflow**: Faster content creation without needing to click the "Post" button
+- **User Experience Enhancement**: Keyboard-first workflow for power users and accessibility
+
 ### Profile Bio/About Me Module (October 2025)
 - **Bio Module Added**: New "About Me" section appears as the first module on all user profiles
 - **Editable Interface**: Profile owners can write and update their bio with an easy-to-use text area

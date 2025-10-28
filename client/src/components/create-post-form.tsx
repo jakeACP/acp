@@ -426,6 +426,12 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
               placeholder={currentPostType.placeholder}
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
               className="min-h-[120px] border-0 p-0 resize-none focus:ring-0 text-lg placeholder:text-muted-foreground"
               autoFocus
             />
