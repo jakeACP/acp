@@ -5,7 +5,19 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery } from "@tanstack/react-query";
 import { Poll, Candidate } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
-import { Star, TrendingUp } from "lucide-react";
+import { Star, TrendingUp, Users } from "lucide-react";
+
+type FeaturedPolitician = {
+  id: string;
+  fullName: string;
+  party?: string;
+  photoUrl?: string;
+  corruptionGrade?: string;
+  position?: {
+    title: string;
+    level: string;
+  };
+};
 
 export function ActivitySidebar() {
   const { user } = useAuth();
@@ -16,6 +28,10 @@ export function ActivitySidebar() {
 
   const { data: candidates = [] } = useQuery<Candidate[]>({
     queryKey: ["/api/candidates"],
+  });
+
+  const { data: featuredPoliticians = [] } = useQuery<FeaturedPolitician[]>({
+    queryKey: ["/api/politician-profiles/featured"],
   });
 
   const getPollProgress = (poll: Poll) => {
@@ -34,6 +50,18 @@ export function ActivitySidebar() {
     { tag: "#AffordableHousing", posts: 156 },
     { tag: "#TransportEquity", posts: 98 },
   ];
+
+  const getGradeColor = (grade?: string) => {
+    if (!grade) return "bg-slate-500";
+    const colors: Record<string, string> = {
+      'A': 'bg-green-600',
+      'B': 'bg-blue-600',
+      'C': 'bg-yellow-600',
+      'D': 'bg-orange-600',
+      'F': 'bg-red-600',
+    };
+    return colors[grade] || "bg-slate-500";
+  };
 
   return (
     <div className="space-y-6">
@@ -77,28 +105,47 @@ export function ActivitySidebar() {
       {/* Featured Candidates */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Featured Candidates</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+            Featured Candidates
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {candidates.length > 0 ? (
+          {featuredPoliticians.length > 0 ? (
             <div className="space-y-4">
-              {candidates.slice(0, 3).map((candidate) => (
-                <div key={candidate.id} className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback>
-                      {candidate.userId.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+              {featuredPoliticians.slice(0, 3).map((politician) => (
+                <div key={politician.id} className="flex items-center gap-3" data-testid={`featured-politician-${politician.id}`}>
+                  <div className="relative">
+                    <Avatar className="h-12 w-12">
+                      {politician.photoUrl ? (
+                        <AvatarImage src={politician.photoUrl} alt={politician.fullName} />
+                      ) : (
+                        <AvatarFallback>
+                          <Users className="h-6 w-6" />
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    {politician.corruptionGrade && (
+                      <div 
+                        className={`absolute -bottom-1 -right-1 ${getGradeColor(politician.corruptionGrade)} text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-background`}
+                        data-testid={`corruption-grade-${politician.id}`}
+                      >
+                        {politician.corruptionGrade}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <h5 className="text-sm font-semibold text-foreground">
-                      Candidate Name
+                      {politician.fullName}
                     </h5>
                     <p className="text-xs text-muted-foreground">
-                      Running for {candidate.position}
+                      {politician.position?.title || "No position assigned"}
                     </p>
-                    <p className="text-xs text-primary">
-                      {candidate.endorsements} supporters
-                    </p>
+                    {politician.party && (
+                      <p className="text-xs text-primary">
+                        {politician.party}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
