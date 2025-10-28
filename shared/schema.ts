@@ -1079,6 +1079,13 @@ export const politicianProfiles = pgTable("politician_profiles", {
   isCurrent: boolean("is_current").default(true), // currently holding office
   featured: boolean("featured").default(false), // featured in the Featured Candidate module
   corruptionGrade: text("corruption_grade"), // A, B, C, D, or F corruption grade
+  corruptionScorecard: text("corruption_scorecard"), // Detailed corruption history and information
+  isVerified: boolean("is_verified").default(false), // Whether politician claimed and verified their page
+  claimRequestEmail: text("claim_request_email"), // Email used to request page claim
+  claimRequestPhone: text("claim_request_phone"), // Phone for verification
+  claimRequestStatus: text("claim_request_status"), // pending, approved, rejected
+  claimRequestDate: timestamp("claim_request_date"), // When claim was requested
+  verifiedDate: timestamp("verified_date"), // When admin approved the claim
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -1086,7 +1093,10 @@ export const politicianProfiles = pgTable("politician_profiles", {
   nameIndex: index("politician_profiles_name_idx").on(table.fullName),
   currentIndex: index("politician_profiles_current_idx").on(table.isCurrent),
   featuredIndex: index("politician_profiles_featured_idx").on(table.featured),
+  verifiedIndex: index("politician_profiles_verified_idx").on(table.isVerified),
+  claimStatusIndex: index("politician_profiles_claim_status_idx").on(table.claimRequestStatus),
   corruptionGradeCheck: sql`CHECK (${table.corruptionGrade} IN ('A', 'B', 'C', 'D', 'F') OR ${table.corruptionGrade} IS NULL)`,
+  claimStatusCheck: sql`CHECK (${table.claimRequestStatus} IN ('pending', 'approved', 'rejected') OR ${table.claimRequestStatus} IS NULL)`,
 }));
 
 // Boycotts - Feature for organizing consumer boycotts

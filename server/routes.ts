@@ -3105,6 +3105,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public politician profile page route
+  app.get("/api/politician-profiles/:id", async (req, res) => {
+    try {
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) {
+        return res.status(404).json({ message: "Politician profile not found" });
+      }
+      res.json(profile);
+    } catch (error: any) {
+      console.error("Get politician profile error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Submit page claim request
+  app.post("/api/politician-profiles/:id/claim", async (req, res) => {
+    try {
+      const { email, phone } = z.object({ 
+        email: z.string().email(), 
+        phone: z.string().min(10) 
+      }).parse(req.body);
+      
+      const profile = await storage.submitPageClaimRequest(req.params.id, email, phone);
+      res.json(profile);
+    } catch (error: any) {
+      console.error("Submit claim request error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error: Email and phone are required" });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Get pending claim requests
+  app.get("/api/admin/politician-profiles/claim-requests", ensureAdmin, async (req, res) => {
+    try {
+      const requests = await storage.getPendingClaimRequests();
+      res.json(requests);
+    } catch (error: any) {
+      console.error("Get pending claim requests error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Approve claim request
+  app.patch("/api/admin/politician-profiles/:id/claim-approve", ensureAdmin, async (req, res) => {
+    try {
+      const profile = await storage.approveClaimRequest(req.params.id);
+      res.json(profile);
+    } catch (error: any) {
+      console.error("Approve claim request error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Reject claim request
+  app.patch("/api/admin/politician-profiles/:id/claim-reject", ensureAdmin, async (req, res) => {
+    try {
+      const profile = await storage.rejectClaimRequest(req.params.id);
+      res.json(profile);
+    } catch (error: any) {
+      console.error("Reject claim request error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin Audit Logs API
   app.get("/api/admin/audit-logs", ensureOwnerAdmin, async (req, res) => {
     try {

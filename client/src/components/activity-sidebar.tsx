@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery } from "@tanstack/react-query";
 import { Poll, Candidate } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import { Link } from "wouter";
 import { Star, TrendingUp, Users } from "lucide-react";
 
 type FeaturedPolitician = {
@@ -138,9 +139,11 @@ export function ActivitySidebar() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h5 className="text-sm font-semibold text-foreground">
-                      {politician.fullName}
-                    </h5>
+                    <Link href={`/politicians/${politician.id}`}>
+                      <h5 className="text-sm font-semibold text-foreground hover:underline cursor-pointer">
+                        {politician.fullName}
+                      </h5>
+                    </Link>
                     <p className="text-xs text-muted-foreground">
                       {politician.position?.title || "No position assigned"}
                     </p>

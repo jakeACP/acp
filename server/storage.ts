@@ -196,6 +196,11 @@ export interface IStorage {
   updatePoliticianProfile(id: string, patch: Partial<PoliticianProfile>): Promise<PoliticianProfile>;
   deletePoliticianProfile(id: string): Promise<void>;
   assignPoliticianToPosition(politicianId: string, positionId: string): Promise<void>;
+  submitPageClaimRequest(profileId: string, email: string, phone: string): Promise<PoliticianProfile>;
+  getPendingClaimRequests(): Promise<any[]>;
+  approveClaimRequest(profileId: string): Promise<PoliticianProfile>;
+  rejectClaimRequest(profileId: string): Promise<PoliticianProfile>;
+  getFeaturedPoliticians(): Promise<any[]>;
 
   // Boycotts
   getBoycotts(limit?: number, offset?: number): Promise<Boycott[]>;
@@ -2914,6 +2919,77 @@ export class DatabaseStorage implements IStorage {
       .update(politicianProfiles)
       .set({ positionId, updatedAt: new Date() })
       .where(eq(politicianProfiles.id, politicianId));
+  }
+
+  async submitPageClaimRequest(profileId: string, email: string, phone: string): Promise<PoliticianProfile> {
+    const [updated] = await db
+      .update(politicianProfiles)
+      .set({ 
+        claimRequestEmail: email,
+        claimRequestPhone: phone,
+        claimRequestStatus: 'pending',
+        claimRequestDate: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(politicianProfiles.id, profileId))
+      .returning();
+    return updated;
+  }
+
+  async getPendingClaimRequests(): Promise<any[]> {
+    const results = await db
+      .select({
+        politician: politicianProfiles,
+        position: politicalPositions,
+      })
+      .from(politicianProfiles)
+      .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .where(eq(politicianProfiles.claimRequestStatus, 'pending'))
+      .orderBy(politicianProfiles.claimRequestDate);
+    return results.map(r => ({ ...r.politician, position: r.position }));
+  }
+
+  async approveClaimRequest(profileId: string): Promise<PoliticianProfile> {
+    const [updated] = await db
+      .update(politicianProfiles)
+      .set({ 
+        claimRequestStatus: 'approved',
+        isVerified: true,
+        verifiedDate: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(politicianProfiles.id, profileId))
+      .returning();
+    return updated;
+  }
+
+  async rejectClaimRequest(profileId: string): Promise<PoliticianProfile> {
+    const [updated] = await db
+      .update(politicianProfiles)
+      .set({ 
+        claimRequestStatus: 'rejected',
+        updatedAt: new Date()
+      })
+      .where(eq(politicianProfiles.id, profileId))
+      .returning();
+    return updated;
+  }
+
+  async getFeaturedPoliticians(): Promise<any[]> {
+    const results = await db
+      .select({
+        politician: politicianProfiles,
+        position: politicalPositions,
+      })
+      .from(politicianProfiles)
+      .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .where(and(
+        eq(politicianProfiles.featured, true),
+        eq(politicianProfiles.isCurrent, true)
+      ))
+      .orderBy(politicianProfiles.fullName)
+      .limit(5);
+    return results.map(r => ({ ...r.politician, position: r.position }));
   }
 
   async createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken> {

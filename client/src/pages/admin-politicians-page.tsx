@@ -47,6 +47,17 @@ type PoliticianProfile = {
   positionId?: string;
   featured?: boolean;
   corruptionGrade?: string;
+  corruptionScorecard?: string;
+  isVerified?: boolean;
+  claimRequestEmail?: string;
+  claimRequestPhone?: string;
+  claimRequestStatus?: string;
+  claimRequestDate?: string;
+  verifiedDate?: string;
+};
+
+type ClaimRequest = PoliticianProfile & {
+  position?: PoliticalPosition | null;
 };
 
 export default function AdminPoliticiansPage() {
@@ -66,6 +77,10 @@ export default function AdminPoliticiansPage() {
 
   const { data: profiles = [], isLoading: profilesLoading } = useQuery<PoliticianProfile[]>({
     queryKey: ["/api/admin/politician-profiles"],
+  });
+
+  const { data: claimRequests = [], isLoading: claimsLoading } = useQuery<ClaimRequest[]>({
+    queryKey: ["/api/admin/politician-profiles/claim-requests"],
   });
 
   const createPositionMutation = useMutation({
@@ -197,6 +212,34 @@ export default function AdminPoliticiansPage() {
     },
     onError: (error: any) => {
       toast({ title: "Error updating corruption grade", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const approveClaimMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/admin/politician-profiles/${id}/claim-approve`, "PATCH");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles/claim-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "Claim request approved successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error approving claim", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const rejectClaimMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/admin/politician-profiles/${id}/claim-reject`, "PATCH");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles/claim-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "Claim request rejected" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error rejecting claim", description: error.message, variant: "destructive" });
     },
   });
 
@@ -343,9 +386,10 @@ export default function AdminPoliticiansPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="positions" data-testid="tab-positions">Political Positions</TabsTrigger>
                 <TabsTrigger value="profiles" data-testid="tab-profiles">Politician Profiles</TabsTrigger>
+                <TabsTrigger value="claims" data-testid="tab-claim-requests">Claim Requests</TabsTrigger>
               </TabsList>
 
               <TabsContent value="positions" className="space-y-4">
@@ -594,6 +638,90 @@ export default function AdminPoliticiansPage() {
                                     data-testid={`button-delete-profile-${profile.id}`}
                                   >
                                     <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="claims" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Review and approve page claim requests from politicians
+                  </p>
+                </div>
+
+                {claimsLoading ? (
+                  <div>Loading claim requests...</div>
+                ) : claimRequests.length === 0 ? (
+                  <div className="text-center py-8 text-slate-600 dark:text-slate-400">
+                    No pending claim requests
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Politician Name</TableHead>
+                          <TableHead>Position</TableHead>
+                          <TableHead>Request Email</TableHead>
+                          <TableHead>Request Phone</TableHead>
+                          <TableHead>Request Date</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {claimRequests.map((claim: any) => {
+                          return (
+                            <TableRow key={claim.id}>
+                              <TableCell className="font-medium" data-testid={`text-claim-name-${claim.id}`}>
+                                {claim.fullName}
+                              </TableCell>
+                              <TableCell data-testid={`text-claim-position-${claim.id}`}>
+                                {claim.position?.title || "No position"}
+                              </TableCell>
+                              <TableCell data-testid={`text-claim-email-${claim.id}`}>
+                                {claim.claimRequestEmail}
+                              </TableCell>
+                              <TableCell data-testid={`text-claim-phone-${claim.id}`}>
+                                {claim.claimRequestPhone}
+                              </TableCell>
+                              <TableCell data-testid={`text-claim-date-${claim.id}`}>
+                                {claim.claimRequestDate 
+                                  ? new Date(claim.claimRequestDate).toLocaleDateString()
+                                  : "-"}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm(`Approve claim request for ${claim.fullName}? This will verify their profile and they will receive a green checkmark.`)) {
+                                        approveClaimMutation.mutate(claim.id);
+                                      }
+                                    }}
+                                    data-testid={`button-approve-claim-${claim.id}`}
+                                  >
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm(`Reject claim request for ${claim.fullName}?`)) {
+                                        rejectClaimMutation.mutate(claim.id);
+                                      }
+                                    }}
+                                    data-testid={`button-reject-claim-${claim.id}`}
+                                  >
+                                    Reject
                                   </Button>
                                 </div>
                               </TableCell>
