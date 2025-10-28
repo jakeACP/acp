@@ -89,4 +89,6 @@ Preferred communication style: Simple, everyday language.
 - **Politician Profile Management**: Manage individual politician profiles that can be assigned to positions
 - **Photo Upload**: Profile images stored in object storage with 10MB upload limit
 - **Term Tracking**: Track term start/end dates, office type, and current/former status
-- **Admin Panel**: Comprehensive admin interface for managing both positions and profiles
+- **Featured Candidates**: Star-based system to feature politicians in the sidebar module
+- **Corruption Grading**: A-F grading system for politician corruption with color-coded badges (A=green, B=blue, C=yellow, D=orange, F=red)
+- **Admin Panel**: Comprehensive admin interface for managing both positions and profiles, featuring, and corruption grades
