@@ -114,3 +114,15 @@ Preferred communication style: Simple, everyday language.
 - **API Endpoints**: `GET /api/politician-profiles/:id`, `POST /api/politician-profiles/:id/claim`, `GET /api/admin/politician-profiles/claim-requests`, `PATCH /api/admin/politician-profiles/:id/claim-approve`
 - **Security**: Claim submission requires office email and phone, with admin verification before activation
 - **User Experience**: Seamless profile claiming workflow with toast notifications and cache invalidation
+
+### Community Corruption Rating System (October 2025)
+- **User-Submitted Ratings**: Community members can grade politicians on a corruption scale (A-F) with optional reasoning
+- **Database Schema**: New `politicianCorruptionRatings` table with unique constraint per user-politician pair for one rating per user
+- **Aggregate Statistics**: Real-time calculation of community average grade and distribution across all letter grades
+- **Visual Feedback**: Grade distribution bars showing percentage breakdown of A, B, C, D, F ratings with color-coded badges
+- **Form Controls**: React Hook Form with controlled Select component and useEffect sync for updating existing ratings
+- **API Endpoints**: `POST /api/politician-profiles/:id/rate`, `GET /api/politician-profiles/:id/rating/me`, `GET /api/politician-profiles/:id/rating/stats`
+- **Authentication**: Inline authentication checks (`req.isAuthenticated()`) following codebase patterns
+- **Rating Updates**: Users can modify their existing rating; form pre-populates with current grade and reasoning using `reset()`
+- **Community Transparency**: Displays total rating count and visual distribution to help users see community consensus
+- **User Experience**: Logged-in users see their current rating badge, non-logged users prompted to sign in
