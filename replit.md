@@ -118,11 +118,12 @@ Preferred communication style: Simple, everyday language.
 ### Community Corruption Rating System (October 2025)
 - **User-Submitted Ratings**: Community members can grade politicians on a corruption scale (A-F) with optional reasoning
 - **Database Schema**: New `politicianCorruptionRatings` table with unique constraint per user-politician pair for one rating per user
+- **Compact UI**: 5-letter-grade buttons (A, B, C, D, F) integrated into top profile card, styled like star ratings
+- **Auto-Submit**: Clicking a grade button instantly submits the rating - no form submission button needed
 - **Aggregate Statistics**: Real-time calculation of community average grade and distribution across all letter grades
-- **Visual Feedback**: Grade distribution bars showing percentage breakdown of A, B, C, D, F ratings with color-coded badges
-- **Form Controls**: React Hook Form with controlled Select component and useEffect sync for updating existing ratings
+- **Visual Feedback**: Selected grade is highlighted with color-coding and scale animation
+- **Community Average**: Displays inline next to rating buttons showing average grade and total rating count
 - **API Endpoints**: `POST /api/politician-profiles/:id/rate`, `GET /api/politician-profiles/:id/rating/me`, `GET /api/politician-profiles/:id/rating/stats`
-- **Authentication**: Inline authentication checks (`req.isAuthenticated()`) following codebase patterns
-- **Rating Updates**: Users can modify their existing rating; form pre-populates with current grade and reasoning using `reset()`
-- **Community Transparency**: Displays total rating count and visual distribution to help users see community consensus
-- **User Experience**: Logged-in users see their current rating badge, non-logged users prompted to sign in
+- **Authentication**: Inline authentication checks (`req.isAuthenticated()`) with toast notifications for non-logged users
+- **Rating Updates**: Users can modify their rating by clicking a different grade; system auto-submits the change
+- **User Experience**: Clean, compact interface with instant feedback and community transparency
