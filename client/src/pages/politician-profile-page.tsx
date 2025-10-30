@@ -212,11 +212,53 @@ export default function PoliticianProfilePage() {
                 </Badge>
               )}
 
-              {/* Compact Letter-Grade Rating */}
-              <div className="mt-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Rate Corruption:</span>
-                  <div className="flex gap-1">
+              {/* Corruption Grades Display */}
+              <div className="mt-6 border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  {/* Admin Grade */}
+                  <div className="text-center">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">ACP Admin Grade</p>
+                    {profile.corruptionGrade ? (
+                      <div 
+                        className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl font-bold ${getCorruptionGradeColor(profile.corruptionGrade)}`}
+                        data-testid="badge-admin-grade"
+                      >
+                        {profile.corruptionGrade}
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center text-lg font-medium bg-gray-200 dark:bg-gray-700 text-gray-400">
+                        N/A
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Community Grade */}
+                  <div className="text-center">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Community Grade</p>
+                    {ratingStats && ratingStats.totalRatings > 0 ? (
+                      <>
+                        <div 
+                          className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl font-bold ${getCorruptionGradeColor(ratingStats.averageGrade)}`}
+                          data-testid="badge-community-grade"
+                        >
+                          {ratingStats.averageGrade}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {ratingStats.totalRatings} {ratingStats.totalRatings === 1 ? 'vote' : 'votes'}
+                        </p>
+                      </>
+                    ) : (
+                      <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center text-lg font-medium bg-gray-200 dark:bg-gray-700 text-gray-400">
+                        N/A
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Rating Buttons */}
+                <div className="text-center pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Rate this politician:</p>
+                  <div className="flex gap-1 justify-center">
                     {['A', 'B', 'C', 'D', 'F'].map((grade) => (
                       <button
                         key={grade}
@@ -243,11 +285,6 @@ export default function PoliticianProfilePage() {
                       </button>
                     ))}
                   </div>
-                  {ratingStats && ratingStats.totalRatings > 0 && (
-                    <span className="text-xs text-gray-500">
-                      (Avg: <span className={`font-bold ${getCorruptionGradeColor(ratingStats.averageGrade)}`}>{ratingStats.averageGrade}</span> from {ratingStats.totalRatings})
-                    </span>
-                  )}
                 </div>
               </div>
               
@@ -334,19 +371,6 @@ export default function PoliticianProfilePage() {
                 </div>
               )}
             </div>
-
-            {/* Corruption Grade Badge */}
-            {profile.corruptionGrade && (
-              <div className="flex flex-col items-center gap-2">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Corruption Grade</span>
-                <div 
-                  className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold ${getCorruptionGradeColor(profile.corruptionGrade)}`}
-                  data-testid="badge-corruption-grade"
-                >
-                  {profile.corruptionGrade}
-                </div>
-              </div>
-            )}
           </div>
         </CardHeader>
 
