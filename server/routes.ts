@@ -3173,7 +3173,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Politician Corruption Rating APIs
   // Submit or update a corruption rating for a politician
-  app.post("/api/politician-profiles/:id/rate", ensureLoggedIn, async (req, res) => {
+  app.post("/api/politician-profiles/:id/rate", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
     try {
       const { grade, reasoning } = z.object({
         grade: z.enum(['A', 'B', 'C', 'D', 'F']),
@@ -3197,7 +3201,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get current user's rating for a politician
-  app.get("/api/politician-profiles/:id/rating/me", ensureLoggedIn, async (req, res) => {
+  app.get("/api/politician-profiles/:id/rating/me", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
     try {
       const rating = await storage.getUserCorruptionRating(req.params.id, req.user!.id);
       res.json(rating || null);

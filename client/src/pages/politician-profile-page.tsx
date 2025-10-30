@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star } from "lucide-react";
 import { format } from "date-fns";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating } from "@shared/schema";
@@ -83,10 +83,20 @@ export default function PoliticianProfilePage() {
   const ratingForm = useForm<RatingFormData>({
     resolver: zodResolver(ratingFormSchema),
     defaultValues: {
-      grade: userRating?.grade || undefined,
-      reasoning: userRating?.reasoning || "",
+      grade: undefined,
+      reasoning: "",
     },
   });
+
+  // Sync form with userRating once it loads
+  useEffect(() => {
+    if (userRating) {
+      ratingForm.reset({
+        grade: userRating.grade,
+        reasoning: userRating.reasoning || '',
+      });
+    }
+  }, [userRating, ratingForm]);
 
   const claimMutation = useMutation({
     mutationFn: async (data: ClaimFormData) => {
@@ -468,7 +478,7 @@ export default function PoliticianProfilePage() {
                         <FormLabel>Grade *</FormLabel>
                         <Select
                           onValueChange={field.onChange}
-                          defaultValue={field.value}
+                          value={field.value}
                         >
                           <FormControl>
                             <SelectTrigger data-testid="select-rating-grade">
