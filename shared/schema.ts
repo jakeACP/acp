@@ -1099,6 +1099,22 @@ export const politicianProfiles = pgTable("politician_profiles", {
   claimStatusCheck: sql`CHECK (${table.claimRequestStatus} IN ('pending', 'approved', 'rejected') OR ${table.claimRequestStatus} IS NULL)`,
 }));
 
+// User Corruption Ratings - Community ratings for politician corruption
+export const politicianCorruptionRatings = pgTable("politician_corruption_ratings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  politicianId: varchar("politician_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  grade: text("grade").notNull(), // A, B, C, D, or F
+  reasoning: text("reasoning"), // Optional explanation for the rating
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  politicianIndex: index("corruption_ratings_politician_idx").on(table.politicianId),
+  userIndex: index("corruption_ratings_user_idx").on(table.userId),
+  uniqueUserPolitician: sql`UNIQUE(${table.politicianId}, ${table.userId})`,
+  gradeCheck: sql`CHECK (${table.grade} IN ('A', 'B', 'C', 'D', 'F'))`,
+}));
+
 // Boycotts - Feature for organizing consumer boycotts
 export const boycotts = pgTable("boycotts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1373,6 +1389,12 @@ export const insertPoliticianProfileSchema = createInsertSchema(politicianProfil
   updatedAt: true,
 });
 
+export const insertPoliticianCorruptionRatingSchema = createInsertSchema(politicianCorruptionRatings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertBoycottSchema = createInsertSchema(boycotts).omit({
   id: true,
   subscriberCount: true,
@@ -1447,6 +1469,8 @@ export type PoliticalPosition = typeof politicalPositions.$inferSelect;
 export type InsertPoliticalPosition = z.infer<typeof insertPoliticalPositionSchema>;
 export type PoliticianProfile = typeof politicianProfiles.$inferSelect;
 export type InsertPoliticianProfile = z.infer<typeof insertPoliticianProfileSchema>;
+export type PoliticianCorruptionRating = typeof politicianCorruptionRatings.$inferSelect;
+export type InsertPoliticianCorruptionRating = z.infer<typeof insertPoliticianCorruptionRatingSchema>;
 export type Boycott = typeof boycotts.$inferSelect;
 export type InsertBoycott = z.infer<typeof insertBoycottSchema>;
 export type BoycottSubscription = typeof boycottSubscriptions.$inferSelect;
