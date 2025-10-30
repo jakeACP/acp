@@ -116,14 +116,17 @@ Preferred communication style: Simple, everyday language.
 - **User Experience**: Seamless profile claiming workflow with toast notifications and cache invalidation
 
 ### Community Corruption Rating System (October 2025)
+- **Two-Grade Display**: Shows both ACP Admin Grade and Community Grade side by side in dedicated corruption section
+- **ACP Admin Grade**: Admin-assigned corruption grade visible to all users (from `corruptionGrade` field)
+- **Community Grade**: Average grade calculated from all user votes with vote count displayed below
 - **User-Submitted Ratings**: Community members can grade politicians on a corruption scale (A-F) with optional reasoning
 - **Database Schema**: New `politicianCorruptionRatings` table with unique constraint per user-politician pair for one rating per user
-- **Compact UI**: 5-letter-grade buttons (A, B, C, D, F) integrated into top profile card, styled like star ratings
+- **Compact UI**: 5-letter-grade buttons (A, B, C, D, F) integrated into corruption section for easy voting
 - **Auto-Submit**: Clicking a grade button instantly submits the rating - no form submission button needed
 - **Aggregate Statistics**: Real-time calculation of community average grade and distribution across all letter grades
 - **Visual Feedback**: Selected grade is highlighted with color-coding and scale animation
-- **Community Average**: Displays inline next to rating buttons showing average grade and total rating count
+- **Vote Count Display**: Shows number of votes below Community Grade badge
 - **API Endpoints**: `POST /api/politician-profiles/:id/rate`, `GET /api/politician-profiles/:id/rating/me`, `GET /api/politician-profiles/:id/rating/stats`
 - **Authentication**: Inline authentication checks (`req.isAuthenticated()`) with toast notifications for non-logged users
 - **Rating Updates**: Users can modify their rating by clicking a different grade; system auto-submits the change
-- **User Experience**: Clean, compact interface with instant feedback and community transparency
+- **User Experience**: Clear separation of admin vs community perspectives with transparent vote counts
