@@ -3171,6 +3171,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Politician Corruption Rating APIs
+  // Submit or update a corruption rating for a politician
+  app.post("/api/politician-profiles/:id/rate", ensureLoggedIn, async (req, res) => {
+    try {
+      const { grade, reasoning } = z.object({
+        grade: z.enum(['A', 'B', 'C', 'D', 'F']),
+        reasoning: z.string().optional(),
+      }).parse(req.body);
+      
+      const rating = await storage.submitCorruptionRating(
+        req.params.id,
+        req.user!.id,
+        grade,
+        reasoning
+      );
+      res.json(rating);
+    } catch (error: any) {
+      console.error("Submit corruption rating error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid rating data" });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get current user's rating for a politician
+  app.get("/api/politician-profiles/:id/rating/me", ensureLoggedIn, async (req, res) => {
+    try {
+      const rating = await storage.getUserCorruptionRating(req.params.id, req.user!.id);
+      res.json(rating || null);
+    } catch (error: any) {
+      console.error("Get user corruption rating error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get aggregated corruption rating statistics for a politician
+  app.get("/api/politician-profiles/:id/rating/stats", async (req, res) => {
+    try {
+      const stats = await storage.getCorruptionRatingStats(req.params.id);
+      res.json(stats);
+    } catch (error: any) {
+      console.error("Get corruption rating stats error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin Audit Logs API
   app.get("/api/admin/audit-logs", ensureOwnerAdmin, async (req, res) => {
     try {
