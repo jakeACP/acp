@@ -172,123 +172,48 @@ export default function PoliticianProfilePage() {
       {/* Header Section */}
       <Card className="mb-6">
         <CardHeader>
-          <div className="flex items-start gap-6">
-            {/* Profile Photo with Verified Badge */}
-            <div className="relative">
-              {profile.photoUrl ? (
-                <img
-                  src={profile.photoUrl}
-                  alt={profile.fullName}
-                  className="w-32 h-32 rounded-lg object-cover"
-                  data-testid="img-politician-photo"
-                />
-              ) : (
-                <div className="w-32 h-32 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                  <span className="text-4xl font-bold text-gray-400">
-                    {profile.fullName?.charAt(0)}
-                  </span>
-                </div>
-              )}
-              {profile.isVerified && (
-                <div className="absolute -top-2 -left-2" data-testid="badge-verified">
-                  <CheckCircle2 className="w-8 h-8 text-green-500 bg-white dark:bg-gray-900 rounded-full" />
-                </div>
-              )}
-            </div>
-
-            {/* Name and Position */}
-            <div className="flex-1">
-              <CardTitle className="text-3xl mb-2" data-testid="text-politician-name">
-                {profile.fullName}
-              </CardTitle>
-              {profile.position && (
-                <CardDescription className="text-lg" data-testid="text-politician-position">
-                  {profile.position.title}
-                </CardDescription>
-              )}
-              {profile.party && (
-                <Badge variant="outline" className="mt-2" data-testid="badge-party">
-                  {profile.party}
-                </Badge>
-              )}
-
-              {/* Corruption Grades Display */}
-              <div className="mt-6 border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  {/* Admin Grade */}
-                  <div className="text-center">
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">ACP Admin Grade</p>
-                    {profile.corruptionGrade ? (
-                      <div 
-                        className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl font-bold ${getCorruptionGradeColor(profile.corruptionGrade)}`}
-                        data-testid="badge-admin-grade"
-                      >
-                        {profile.corruptionGrade}
-                      </div>
-                    ) : (
-                      <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center text-lg font-medium bg-gray-200 dark:bg-gray-700 text-gray-400">
-                        N/A
-                      </div>
-                    )}
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex items-start gap-6 flex-1">
+              {/* Profile Photo with Verified Badge */}
+              <div className="relative">
+                {profile.photoUrl ? (
+                  <img
+                    src={profile.photoUrl}
+                    alt={profile.fullName}
+                    className="w-32 h-32 rounded-lg object-cover"
+                    data-testid="img-politician-photo"
+                  />
+                ) : (
+                  <div className="w-32 h-32 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                    <span className="text-4xl font-bold text-gray-400">
+                      {profile.fullName?.charAt(0)}
+                    </span>
                   </div>
-
-                  {/* Community Grade */}
-                  <div className="text-center">
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Community Grade</p>
-                    {ratingStats && ratingStats.totalRatings > 0 ? (
-                      <>
-                        <div 
-                          className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl font-bold ${getCorruptionGradeColor(ratingStats.averageGrade)}`}
-                          data-testid="badge-community-grade"
-                        >
-                          {ratingStats.averageGrade}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {ratingStats.totalRatings} {ratingStats.totalRatings === 1 ? 'vote' : 'votes'}
-                        </p>
-                      </>
-                    ) : (
-                      <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center text-lg font-medium bg-gray-200 dark:bg-gray-700 text-gray-400">
-                        N/A
-                      </div>
-                    )}
+                )}
+                {profile.isVerified && (
+                  <div className="absolute -top-2 -left-2" data-testid="badge-verified">
+                    <CheckCircle2 className="w-8 h-8 text-green-500 bg-white dark:bg-gray-900 rounded-full" />
                   </div>
-                </div>
-
-                {/* Rating Buttons */}
-                <div className="text-center pt-3 border-t border-gray-200 dark:border-gray-700">
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Rate this politician:</p>
-                  <div className="flex gap-1 justify-center">
-                    {['A', 'B', 'C', 'D', 'F'].map((grade) => (
-                      <button
-                        key={grade}
-                        onClick={() => {
-                          if (user) {
-                            ratingMutation.mutate({ grade: grade as 'A' | 'B' | 'C' | 'D' | 'F', reasoning: userRating?.reasoning });
-                          } else {
-                            toast({
-                              title: "Login Required",
-                              description: "Please log in to rate this politician",
-                              variant: "destructive",
-                            });
-                          }
-                        }}
-                        className={`w-8 h-8 rounded text-sm font-bold transition-all ${
-                          userRating?.grade === grade
-                            ? `${getCorruptionGradeColor(grade)} scale-110`
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:scale-105'
-                        }`}
-                        data-testid={`button-rate-${grade}`}
-                        disabled={ratingMutation.isPending}
-                      >
-                        {grade}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                )}
               </div>
-              
-              {/* Claim Page Button */}
+
+              {/* Name and Position */}
+              <div className="flex-1">
+                <CardTitle className="text-3xl mb-2" data-testid="text-politician-name">
+                  {profile.fullName}
+                </CardTitle>
+                {profile.position && (
+                  <CardDescription className="text-lg" data-testid="text-politician-position">
+                    {profile.position.title}
+                  </CardDescription>
+                )}
+                {profile.party && (
+                  <Badge variant="outline" className="mt-2" data-testid="badge-party">
+                    {profile.party}
+                  </Badge>
+                )}
+                
+                {/* Claim Page Button */}
               {canClaim && (
                 <Dialog open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
                   <DialogTrigger asChild>
@@ -370,6 +295,83 @@ export default function PoliticianProfilePage() {
                   <span className="text-sm">Previous claim request was rejected</span>
                 </div>
               )}
+              </div>
+            </div>
+
+            {/* Corruption Grades Display - Compact Top Right */}
+            <div className="border rounded-lg p-3 bg-gray-50 dark:bg-gray-800 w-48 flex-shrink-0">
+              <div className="space-y-3">
+                {/* Admin Grade */}
+                <div className="text-center">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Admin</p>
+                  {profile.corruptionGrade ? (
+                    <div 
+                      className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl font-bold ${getCorruptionGradeColor(profile.corruptionGrade)}`}
+                      data-testid="badge-admin-grade"
+                    >
+                      {profile.corruptionGrade}
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-400">
+                      N/A
+                    </div>
+                  )}
+                </div>
+
+                {/* Community Grade */}
+                <div className="text-center">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Community</p>
+                  {ratingStats && ratingStats.totalRatings > 0 ? (
+                    <>
+                      <div 
+                        className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl font-bold ${getCorruptionGradeColor(ratingStats.averageGrade)}`}
+                        data-testid="badge-community-grade"
+                      >
+                        {ratingStats.averageGrade}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {ratingStats.totalRatings} {ratingStats.totalRatings === 1 ? 'vote' : 'votes'}
+                      </p>
+                    </>
+                  ) : (
+                    <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-400">
+                      N/A
+                    </div>
+                  )}
+                </div>
+
+                {/* Rating Buttons */}
+                <div className="text-center pt-2 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Rate:</p>
+                  <div className="flex gap-1 justify-center">
+                    {['A', 'B', 'C', 'D', 'F'].map((grade) => (
+                      <button
+                        key={grade}
+                        onClick={() => {
+                          if (user) {
+                            ratingMutation.mutate({ grade: grade as 'A' | 'B' | 'C' | 'D' | 'F', reasoning: userRating?.reasoning || undefined });
+                          } else {
+                            toast({
+                              title: "Login Required",
+                              description: "Please log in to rate this politician",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        className={`w-7 h-7 rounded text-xs font-bold transition-all ${
+                          userRating?.grade === grade
+                            ? `${getCorruptionGradeColor(grade)} scale-110`
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:scale-105'
+                        }`}
+                        data-testid={`button-rate-${grade}`}
+                        disabled={ratingMutation.isPending}
+                      >
+                        {grade}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </CardHeader>
