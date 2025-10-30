@@ -12,10 +12,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
-import type { Post, PoliticianProfile, PoliticalPosition } from "@shared/schema";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
 
 type PoliticianProfileWithPosition = PoliticianProfile & {
   position?: PoliticalPosition | null;
@@ -28,8 +31,22 @@ const claimFormSchema = z.object({
 
 type ClaimFormData = z.infer<typeof claimFormSchema>;
 
+const ratingFormSchema = z.object({
+  grade: z.enum(['A', 'B', 'C', 'D', 'F']),
+  reasoning: z.string().optional(),
+});
+
+type RatingFormData = z.infer<typeof ratingFormSchema>;
+
+type RatingStats = {
+  averageGrade: string;
+  gradeDistribution: Record<string, number>;
+  totalRatings: number;
+};
+
 export default function PoliticianProfilePage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
 
@@ -43,11 +60,31 @@ export default function PoliticianProfilePage() {
     queryKey: ['/api/feeds/all'],
   });
 
+  // Fetch corruption rating stats
+  const { data: ratingStats } = useQuery<RatingStats>({
+    queryKey: [`/api/politician-profiles/${id}/rating/stats`],
+    enabled: !!id,
+  });
+
+  // Fetch user's current rating (only if logged in)
+  const { data: userRating } = useQuery<PoliticianCorruptionRating | null>({
+    queryKey: [`/api/politician-profiles/${id}/rating/me`],
+    enabled: !!id && !!user,
+  });
+
   const form = useForm<ClaimFormData>({
     resolver: zodResolver(claimFormSchema),
     defaultValues: {
       email: "",
       phone: "",
+    },
+  });
+
+  const ratingForm = useForm<RatingFormData>({
+    resolver: zodResolver(ratingFormSchema),
+    defaultValues: {
+      grade: userRating?.grade || undefined,
+      reasoning: userRating?.reasoning || "",
     },
   });
 
@@ -75,6 +112,31 @@ export default function PoliticianProfilePage() {
 
   const onSubmitClaim = (data: ClaimFormData) => {
     claimMutation.mutate(data);
+  };
+
+  const ratingMutation = useMutation({
+    mutationFn: async (data: RatingFormData) => {
+      return await apiRequest(`/api/politician-profiles/${id}/rate`, "POST", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Rating Submitted",
+        description: "Your corruption rating has been recorded. Thank you for your input!",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/politician-profiles/${id}/rating/stats`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/politician-profiles/${id}/rating/me`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Rating Failed",
+        description: error.message || "Failed to submit rating",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmitRating = (data: RatingFormData) => {
+    ratingMutation.mutate(data);
   };
 
   if (profileLoading) {
@@ -331,6 +393,134 @@ export default function PoliticianProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Community Corruption Rating Module */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Star className="w-5 h-5" />
+            Community Corruption Rating
+          </CardTitle>
+          <CardDescription>
+            Help the community by rating this politician's corruption level
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Rating Stats */}
+          {ratingStats && (
+            <div className="mb-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="text-center">
+                  <div className={`text-4xl font-bold ${getCorruptionGradeColor(ratingStats.averageGrade)} inline-block px-4 py-2 rounded-lg`}>
+                    {ratingStats.averageGrade}
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2">Community Average</p>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                    Based on {ratingStats.totalRatings} {ratingStats.totalRatings === 1 ? 'rating' : 'ratings'}
+                  </p>
+                  {/* Grade Distribution Bars */}
+                  <div className="space-y-2">
+                    {['A', 'B', 'C', 'D', 'F'].map((grade) => {
+                      const count = ratingStats.gradeDistribution[grade] || 0;
+                      const percentage = ratingStats.totalRatings > 0 ? (count / ratingStats.totalRatings) * 100 : 0;
+                      return (
+                        <div key={grade} className="flex items-center gap-2" data-testid={`grade-bar-${grade}`}>
+                          <span className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded ${getCorruptionGradeColor(grade)}`}>
+                            {grade}
+                          </span>
+                          <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+                            <div 
+                              className={`h-full ${getCorruptionGradeColor(grade)}`}
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-500 w-12 text-right">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* User Rating Form */}
+          {user ? (
+            <div>
+              <Separator className="my-4" />
+              <h4 className="font-semibold mb-3">
+                {userRating ? 'Update Your Rating' : 'Submit Your Rating'}
+              </h4>
+              {userRating && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Your current rating: <Badge className={getCorruptionGradeColor(userRating.grade)}>{userRating.grade}</Badge>
+                </p>
+              )}
+              <Form {...ratingForm}>
+                <form onSubmit={ratingForm.handleSubmit(onSubmitRating)} className="space-y-4">
+                  <FormField
+                    control={ratingForm.control}
+                    name="grade"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Grade *</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-rating-grade">
+                              <SelectValue placeholder="Select a grade" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="A">A - Highly Transparent</SelectItem>
+                            <SelectItem value="B">B - Mostly Transparent</SelectItem>
+                            <SelectItem value="C">C - Average</SelectItem>
+                            <SelectItem value="D">D - Questionable</SelectItem>
+                            <SelectItem value="F">F - Highly Corrupt</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={ratingForm.control}
+                    name="reasoning"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Reasoning (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            placeholder="Explain your rating..."
+                            data-testid="input-rating-reasoning"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button 
+                    type="submit" 
+                    disabled={ratingMutation.isPending}
+                    data-testid="button-submit-rating"
+                  >
+                    {ratingMutation.isPending ? 'Submitting...' : 'Submit Rating'}
+                  </Button>
+                </form>
+              </Form>
+            </div>
+          ) : (
+            <div className="text-center py-4 text-gray-500">
+              <p>Please log in to rate this politician</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Separator className="my-6" />
 
