@@ -231,6 +231,45 @@ export default function PoliticianProfilePage() {
                   {profile.party}
                 </Badge>
               )}
+
+              {/* Compact Letter-Grade Rating */}
+              <div className="mt-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Rate Corruption:</span>
+                  <div className="flex gap-1">
+                    {['A', 'B', 'C', 'D', 'F'].map((grade) => (
+                      <button
+                        key={grade}
+                        onClick={() => {
+                          if (user) {
+                            ratingMutation.mutate({ grade: grade as 'A' | 'B' | 'C' | 'D' | 'F', reasoning: userRating?.reasoning });
+                          } else {
+                            toast({
+                              title: "Login Required",
+                              description: "Please log in to rate this politician",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        className={`w-8 h-8 rounded text-sm font-bold transition-all ${
+                          userRating?.grade === grade
+                            ? `${getCorruptionGradeColor(grade)} scale-110`
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:scale-105'
+                        }`}
+                        data-testid={`button-rate-${grade}`}
+                        disabled={ratingMutation.isPending}
+                      >
+                        {grade}
+                      </button>
+                    ))}
+                  </div>
+                  {ratingStats && ratingStats.totalRatings > 0 && (
+                    <span className="text-xs text-gray-500">
+                      (Avg: <span className={`font-bold ${getCorruptionGradeColor(ratingStats.averageGrade)}`}>{ratingStats.averageGrade}</span> from {ratingStats.totalRatings})
+                    </span>
+                  )}
+                </div>
+              </div>
               
               {/* Claim Page Button */}
               {canClaim && (
