@@ -3245,6 +3245,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Voter Verification APIs
+  // Get current user's verification request
+  app.get("/api/voter-verification/me", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const request = await storage.getMyVerificationRequest(req.user!.id);
+      res.json(request || null);
+    } catch (error: any) {
+      console.error("Get verification request error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Submit voter verification request
+  app.post("/api/voter-verification/submit", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const data = z.object({
+        fullLegalName: z.string().min(1),
+        address: z.string().min(1),
+        dateOfBirth: z.string().min(1),
+        ssnLast4: z.string().length(4).regex(/^\d{4}$/),
+        stateIdPhotoUrl: z.string().url(),
+        selfiePhotoUrl: z.string().url(),
+        phoneNumber: z.string().min(1),
+        emailAddress: z.string().email(),
+        hasFelonyOrIneligibility: z.boolean(),
+        ineligibilityExplanation: z.string().optional(),
+      }).parse(req.body);
+
+      const request = await storage.submitVerificationRequest({
+        ...data,
+        userId: req.user!.id,
+        dateOfBirth: new Date(data.dateOfBirth),
+      });
+
+      res.json(request);
+    } catch (error: any) {
+      console.error("Submit verification error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid verification data" });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: List all verification requests
+  app.get("/api/admin/voter-verification/requests", ensureAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const requests = await storage.listVerificationRequests(status);
+      res.json(requests);
+    } catch (error: any) {
+      console.error("List verification requests error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Review verification request
+  app.patch("/api/admin/voter-verification/:id/review", ensureAdmin, async (req, res) => {
+    try {
+      const { decision, rejectionReason } = z.object({
+        decision: z.enum(['verified', 'rejected']),
+        rejectionReason: z.string().optional(),
+      }).parse(req.body);
+
+      await storage.reviewVerificationRequest(
+        req.params.id,
+        req.user!.id,
+        decision,
+        rejectionReason
+      );
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Review verification error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid review data" });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin Analytics APIs
   app.get("/api/admin/analytics", ensureAdmin, async (req, res) => {
     try {
