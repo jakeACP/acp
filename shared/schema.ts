@@ -34,6 +34,9 @@ export const users = pgTable("users", {
   organizationName: text("organization_name"),
   politicalLean: decimal("political_lean", { precision: 3, scale: 2 }), // -1.00 to 1.00
   trustScore: decimal("trust_score", { precision: 3, scale: 2 }).default("0.00"),
+  // Voter verification fields
+  voterVerificationStatus: text("voter_verification_status").default("unverified"), // unverified, pending, verified, rejected
+  voterVerifiedDate: timestamp("voter_verified_date"),
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,
@@ -1115,6 +1118,31 @@ export const politicianCorruptionRatings = pgTable("politician_corruption_rating
   gradeCheck: sql`CHECK (${table.grade} IN ('A', 'B', 'C', 'D', 'F'))`,
 }));
 
+// Voter Verification Requests - Secure storage of voter verification data
+export const voterVerificationRequests = pgTable("voter_verification_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  fullLegalName: text("full_legal_name").notNull(),
+  address: text("address").notNull(),
+  dateOfBirth: timestamp("date_of_birth").notNull(),
+  ssnLast4: text("ssn_last_4").notNull(), // Only last 4 digits for security
+  stateIdPhotoUrl: text("state_id_photo_url").notNull(), // Stored in object storage
+  selfiePhotoUrl: text("selfie_photo_url").notNull(), // Stored in object storage
+  phoneNumber: text("phone_number").notNull(),
+  emailAddress: text("email_address").notNull(),
+  hasFelonyOrIneligibility: boolean("has_felony_or_ineligibility").notNull().default(false),
+  ineligibilityExplanation: text("ineligibility_explanation"),
+  status: text("status").notNull().default("pending"), // pending, approved, rejected
+  submittedAt: timestamp("submitted_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  rejectionReason: text("rejection_reason"),
+}, (table) => ({
+  userIndex: index("voter_verification_user_idx").on(table.userId),
+  statusIndex: index("voter_verification_status_idx").on(table.status),
+  ssnLast4Check: sql`CHECK (LENGTH(${table.ssnLast4}) = 4)`,
+}));
+
 // Boycotts - Feature for organizing consumer boycotts
 export const boycotts = pgTable("boycotts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1395,6 +1423,15 @@ export const insertPoliticianCorruptionRatingSchema = createInsertSchema(politic
   updatedAt: true,
 });
 
+export const insertVoterVerificationRequestSchema = createInsertSchema(voterVerificationRequests).omit({
+  id: true,
+  submittedAt: true,
+  reviewedAt: true,
+  reviewedBy: true,
+  rejectionReason: true,
+  status: true,
+});
+
 export const insertBoycottSchema = createInsertSchema(boycotts).omit({
   id: true,
   subscriberCount: true,
@@ -1471,6 +1508,8 @@ export type PoliticianProfile = typeof politicianProfiles.$inferSelect;
 export type InsertPoliticianProfile = z.infer<typeof insertPoliticianProfileSchema>;
 export type PoliticianCorruptionRating = typeof politicianCorruptionRatings.$inferSelect;
 export type InsertPoliticianCorruptionRating = z.infer<typeof insertPoliticianCorruptionRatingSchema>;
+export type VoterVerificationRequest = typeof voterVerificationRequests.$inferSelect;
+export type InsertVoterVerificationRequest = z.infer<typeof insertVoterVerificationRequestSchema>;
 export type Boycott = typeof boycotts.$inferSelect;
 export type InsertBoycott = z.infer<typeof insertBoycottSchema>;
 export type BoycottSubscription = typeof boycottSubscriptions.$inferSelect;
