@@ -33,7 +33,6 @@ const voterVerificationSchema = z.object({
   fullLegalName: z.string().min(1, "Full legal name is required"),
   address: z.string().min(1, "Address is required"),
   dateOfBirth: z.string().min(1, "Date of birth is required"),
-  ssnLast4: z.string().length(4, "Must be exactly 4 digits").regex(/^\d{4}$/, "Must be 4 digits"),
   stateIdPhotoUrl: z.string().min(1, "State ID photo is required"),
   selfiePhotoUrl: z.string().min(1, "Selfie photo is required"),
   phoneNumber: z.string().min(1, "Phone number is required"),
@@ -128,7 +127,6 @@ export default function SettingsPage() {
       fullLegalName: "",
       address: "",
       dateOfBirth: "",
-      ssnLast4: "",
       stateIdPhotoUrl: "",
       selfiePhotoUrl: "",
       phoneNumber: "",
@@ -547,23 +545,6 @@ export default function SettingsPage() {
                             <FormControl>
                               <Input type="date" data-testid="input-dob" {...field} />
                             </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={voterForm.control}
-                        name="ssnLast4"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Last 4 Digits of SSN *</FormLabel>
-                            <FormControl>
-                              <Input placeholder="1234" maxLength={4} data-testid="input-ssn" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              For identity verification purposes only
-                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}

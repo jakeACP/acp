@@ -3272,7 +3272,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fullLegalName: z.string().min(1),
         address: z.string().min(1),
         dateOfBirth: z.string().min(1),
-        ssnLast4: z.string().length(4).regex(/^\d{4}$/),
         stateIdPhotoUrl: z.string().url(),
         selfiePhotoUrl: z.string().url(),
         phoneNumber: z.string().min(1),

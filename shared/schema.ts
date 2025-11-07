@@ -1125,7 +1125,6 @@ export const voterVerificationRequests = pgTable("voter_verification_requests", 
   fullLegalName: text("full_legal_name").notNull(),
   address: text("address").notNull(),
   dateOfBirth: timestamp("date_of_birth").notNull(),
-  ssnLast4: text("ssn_last_4").notNull(), // Only last 4 digits for security
   stateIdPhotoUrl: text("state_id_photo_url").notNull(), // Stored in object storage
   selfiePhotoUrl: text("selfie_photo_url").notNull(), // Stored in object storage
   phoneNumber: text("phone_number").notNull(),
@@ -1140,7 +1139,6 @@ export const voterVerificationRequests = pgTable("voter_verification_requests", 
 }, (table) => ({
   userIndex: index("voter_verification_user_idx").on(table.userId),
   statusIndex: index("voter_verification_status_idx").on(table.status),
-  ssnLast4Check: sql`CHECK (LENGTH(${table.ssnLast4}) = 4)`,
 }));
 
 // Boycotts - Feature for organizing consumer boycotts
