@@ -7,13 +7,16 @@ import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { ObjectUploader } from "@/components/ObjectUploader";
-import { ArrowLeft, Lock, User, Mail, Camera, Shield, Settings as SettingsIcon } from "lucide-react";
+import { ArrowLeft, Lock, User, Mail, Camera, Shield, Settings as SettingsIcon, CheckCircle2, AlertCircle, BadgeCheck } from "lucide-react";
 import { Link } from "wouter";
 import type { UploadResult } from "@uppy/core";
 
@@ -26,7 +29,29 @@ const changePasswordSchema = z.object({
   path: ["confirmPassword"],
 });
 
+const voterVerificationSchema = z.object({
+  fullLegalName: z.string().min(1, "Full legal name is required"),
+  address: z.string().min(1, "Address is required"),
+  dateOfBirth: z.string().min(1, "Date of birth is required"),
+  ssnLast4: z.string().length(4, "Must be exactly 4 digits").regex(/^\d{4}$/, "Must be 4 digits"),
+  stateIdPhotoUrl: z.string().min(1, "State ID photo is required"),
+  selfiePhotoUrl: z.string().min(1, "Selfie photo is required"),
+  phoneNumber: z.string().min(1, "Phone number is required"),
+  emailAddress: z.string().email("Must be a valid email address"),
+  hasFelonyOrIneligibility: z.boolean(),
+  ineligibilityExplanation: z.string().optional(),
+}).refine((data) => {
+  if (data.hasFelonyOrIneligibility && (!data.ineligibilityExplanation || data.ineligibilityExplanation.trim() === '')) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Explanation is required when you check the felony/ineligibility box",
+  path: ["ineligibilityExplanation"],
+});
+
 type ChangePasswordData = z.infer<typeof changePasswordSchema>;
+type VoterVerificationData = z.infer<typeof voterVerificationSchema>;
 
 export default function SettingsPage() {
   const [, setLocation] = useLocation();
@@ -92,8 +117,61 @@ export default function SettingsPage() {
     },
   });
 
+  // Voter Verification Form and State
+  const [stateIdUrl, setStateIdUrl] = useState("");
+  const [selfieUrl, setSelfieUrl] = useState("");
+  const [showIneligibilityExplanation, setShowIneligibilityExplanation] = useState(false);
+
+  const voterForm = useForm<VoterVerificationData>({
+    resolver: zodResolver(voterVerificationSchema),
+    defaultValues: {
+      fullLegalName: "",
+      address: "",
+      dateOfBirth: "",
+      ssnLast4: "",
+      stateIdPhotoUrl: "",
+      selfiePhotoUrl: "",
+      phoneNumber: "",
+      emailAddress: user?.email || "",
+      hasFelonyOrIneligibility: false,
+      ineligibilityExplanation: "",
+    },
+  });
+
+  // Fetch existing verification request status
+  const { data: verificationRequest } = useQuery({
+    queryKey: ["/api/voter-verification/me"],
+    enabled: !!user,
+  });
+
+  const voterVerificationMutation = useMutation({
+    mutationFn: async (data: VoterVerificationData) => {
+      return apiRequest("/api/voter-verification/submit", "POST", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Verification Submitted",
+        description: "Your voter verification request has been submitted for review.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/voter-verification/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      voterForm.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit verification. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: ChangePasswordData) => {
     changePasswordMutation.mutate(data);
+  };
+
+  const onVoterVerificationSubmit = (data: VoterVerificationData) => {
+    voterVerificationMutation.mutate(data);
   };
 
   const handleGetUploadParameters = async () => {
@@ -114,20 +192,43 @@ export default function SettingsPage() {
     }
   };
 
+  const handleStateIdUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadURL = result.successful[0].uploadURL;
+      if (uploadURL) {
+        setStateIdUrl(uploadURL);
+        voterForm.setValue("stateIdPhotoUrl", uploadURL);
+      }
+    }
+  };
+
+  const handleSelfieUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadURL = result.successful[0].uploadURL;
+      if (uploadURL) {
+        setSelfieUrl(uploadURL);
+        voterForm.setValue("selfiePhotoUrl", uploadURL);
+      }
+    }
+  };
+
   const handleBack = () => {
     setLocation("/");
   };
+
+  const isFormReady = stateIdUrl && selfieUrl && voterForm.formState.isValid;
 
   return (
     <div className="bg-slate-50 min-h-screen">
       <Navigation />
       
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
           <Button 
             variant="ghost" 
             onClick={handleBack}
             className="mb-4"
+            data-testid="button-back"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Home
@@ -136,7 +237,24 @@ export default function SettingsPage() {
           <p className="text-slate-600 mt-2">Manage your account preferences and security settings</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Tabs defaultValue="profile" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-8">
+            <TabsTrigger value="profile" data-testid="tab-profile">
+              <User className="h-4 w-4 mr-2" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="security" data-testid="tab-security">
+              <Lock className="h-4 w-4 mr-2" />
+              Security
+            </TabsTrigger>
+            <TabsTrigger value="voter-verification" data-testid="tab-voter-verification">
+              <BadgeCheck className="h-4 w-4 mr-2" />
+              Voter Verification
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Profile Information */}
           <Card>
             <CardHeader>
