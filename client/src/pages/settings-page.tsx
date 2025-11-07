@@ -255,8 +255,8 @@ export default function SettingsPage() {
 
           <TabsContent value="profile">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Profile Information */}
-          <Card>
+              {/* Profile Information */}
+              <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
@@ -323,85 +323,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Change Password */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lock className="h-5 w-5" />
-                Change Password
-              </CardTitle>
-              <CardDescription>
-                Update your password to keep your account secure
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <FormField
-                    control={form.control}
-                    name="currentPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Current Password</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="password"
-                            placeholder="Enter your current password"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="newPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>New Password</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="password"
-                            placeholder="Enter your new password"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="confirmPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Confirm New Password</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="password"
-                            placeholder="Confirm your new password"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <Button 
-                    type="submit" 
-                    disabled={changePasswordMutation.isPending}
-                    className="w-full"
-                  >
-                    {changePasswordMutation.isPending ? "Updating..." : "Update Password"}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
 
           {/* Admin Panel - Only visible to admins */}
           {user?.role === "admin" && (
@@ -466,7 +387,317 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           )}
-        </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="security">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Lock className="h-5 w-5" />
+                  Change Password
+                </CardTitle>
+                <CardDescription>
+                  Update your password to keep your account secure
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <FormField
+                      control={form.control}
+                      name="currentPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Current Password</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="Enter your current password"
+                              data-testid="input-current-password"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="newPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>New Password</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="Enter your new password"
+                              data-testid="input-new-password"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Confirm New Password</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="Confirm your new password"
+                              data-testid="input-confirm-password"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <Button 
+                      type="submit" 
+                      disabled={changePasswordMutation.isPending}
+                      className="w-full"
+                      data-testid="button-update-password"
+                    >
+                      {changePasswordMutation.isPending ? "Updating..." : "Update Password"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="voter-verification">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BadgeCheck className="h-5 w-5" />
+                  Voter Verification
+                </CardTitle>
+                <CardDescription>
+                  Submit your identity verification to receive a verified voter badge on your profile
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {verificationRequest?.status === "pending" && (
+                  <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-yellow-900">Verification Pending</p>
+                      <p className="text-sm text-yellow-700 mt-1">Your verification request is being reviewed by our team.</p>
+                    </div>
+                  </div>
+                )}
+
+                {user?.voterVerificationStatus === "verified" && (
+                  <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-green-900">Voter Verified</p>
+                      <p className="text-sm text-green-700 mt-1">Your account has been verified. You now have a verified voter badge on your profile.</p>
+                    </div>
+                  </div>
+                )}
+
+                {!verificationRequest && user?.voterVerificationStatus !== "verified" && (
+                  <Form {...voterForm}>
+                    <form onSubmit={voterForm.handleSubmit(onVoterVerificationSubmit)} className="space-y-6">
+                      <FormField
+                        control={voterForm.control}
+                        name="fullLegalName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Full Legal Name *</FormLabel>
+                            <FormControl>
+                              <Input placeholder="John Doe" data-testid="input-full-name" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={voterForm.control}
+                        name="address"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Residential Address *</FormLabel>
+                            <FormControl>
+                              <Input placeholder="123 Main St, City, State, ZIP" data-testid="input-address" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={voterForm.control}
+                        name="dateOfBirth"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Date of Birth *</FormLabel>
+                            <FormControl>
+                              <Input type="date" data-testid="input-dob" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={voterForm.control}
+                        name="ssnLast4"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Last 4 Digits of SSN *</FormLabel>
+                            <FormControl>
+                              <Input placeholder="1234" maxLength={4} data-testid="input-ssn" {...field} />
+                            </FormControl>
+                            <FormDescription>
+                              For identity verification purposes only
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={voterForm.control}
+                        name="phoneNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Phone Number *</FormLabel>
+                            <FormControl>
+                              <Input placeholder="(555) 123-4567" data-testid="input-phone" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={voterForm.control}
+                        name="emailAddress"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email Address *</FormLabel>
+                            <FormControl>
+                              <Input type="email" placeholder="john@example.com" data-testid="input-email-verify" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="space-y-4">
+                        <FormLabel>State ID Photo *</FormLabel>
+                        <ObjectUploader
+                          maxNumberOfFiles={1}
+                          maxFileSize={10 * 1024 * 1024}
+                          onGetUploadParameters={handleGetUploadParameters}
+                          onComplete={handleStateIdUploadComplete}
+                          buttonClassName="flex items-center gap-2"
+                        >
+                          Upload State ID
+                        </ObjectUploader>
+                        {stateIdUrl && (
+                          <div className="flex items-center gap-2 text-sm text-green-600">
+                            <CheckCircle2 className="h-4 w-4" />
+                            State ID uploaded successfully
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-4">
+                        <FormLabel>Selfie Photo *</FormLabel>
+                        <FormDescription>
+                          Take a clear selfie holding your state ID next to your face
+                        </FormDescription>
+                        <ObjectUploader
+                          maxNumberOfFiles={1}
+                          maxFileSize={10 * 1024 * 1024}
+                          onGetUploadParameters={handleGetUploadParameters}
+                          onComplete={handleSelfieUploadComplete}
+                          buttonClassName="flex items-center gap-2"
+                        >
+                          Upload Selfie
+                        </ObjectUploader>
+                        {selfieUrl && (
+                          <div className="flex items-center gap-2 text-sm text-green-600">
+                            <CheckCircle2 className="h-4 w-4" />
+                            Selfie uploaded successfully
+                          </div>
+                        )}
+                      </div>
+
+                      <FormField
+                        control={voterForm.control}
+                        name="hasFelonyOrIneligibility"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={(checked) => {
+                                  field.onChange(checked);
+                                  setShowIneligibilityExplanation(!!checked);
+                                }}
+                                data-testid="checkbox-felony"
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>
+                                I have a felony conviction or other voting ineligibility
+                              </FormLabel>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+
+                      {showIneligibilityExplanation && (
+                        <FormField
+                          control={voterForm.control}
+                          name="ineligibilityExplanation"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Explanation *</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Please explain your voting ineligibility status..."
+                                  className="min-h-[100px]"
+                                  data-testid="textarea-explanation"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      <Button
+                        type="submit"
+                        disabled={voterVerificationMutation.isPending || !stateIdUrl || !selfieUrl}
+                        className="w-full"
+                        data-testid="button-submit-verification"
+                      >
+                        {voterVerificationMutation.isPending ? "Submitting..." : "Submit Verification"}
+                      </Button>
+                    </form>
+                  </Form>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
