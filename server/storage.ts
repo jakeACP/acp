@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { friendships, friendGroups, friendGroupMembers, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest } from "@shared/schema";
+import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray, gte } from "drizzle-orm";
 import session from "express-session";
@@ -416,6 +416,12 @@ export interface IStorage {
   listVerificationRequests(status?: string): Promise<VoterVerificationRequest[]>;
   reviewVerificationRequest(requestId: string, reviewerId: string, decision: "verified" | "rejected", rejectionReason?: string): Promise<void>;
   updateUserVerificationStatus(userId: string, status: "verified" | "rejected", verifiedDate?: Date): Promise<void>;
+
+  // Friend Suggestions
+  updateUserDiscoverability(userId: string, phoneNumber: string, discoverableByPhone: boolean, discoverableByEmail: boolean): Promise<User>;
+  getFriendSuggestions(userId: string, limit?: number): Promise<FriendSuggestion[]>;
+  dismissFriendSuggestion(userId: string, suggestedUserId: string): Promise<void>;
+  generateFriendSuggestions(userId: string): Promise<FriendSuggestion[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4953,6 +4959,275 @@ export class DatabaseStorage implements IStorage {
         voterVerifiedDate: status === "verified" ? verifiedDate : null,
       })
       .where(eq(users.id, userId));
+  }
+
+  // Friend Suggestions - TODO: Consider extracting to separate service module if this grows
+  async updateUserDiscoverability(
+    userId: string,
+    phoneNumber: string,
+    discoverableByPhone: boolean,
+    discoverableByEmail: boolean
+  ): Promise<User> {
+    const { hashContact, normalizeEmail, normalizePhone } = await import("./lib/crypto-utils");
+    
+    const normalizedPhone = normalizePhone(phoneNumber);
+    const phoneHash = normalizedPhone ? hashContact(normalizedPhone) : null;
+    
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    const normalizedEmailValue = normalizeEmail(user.email);
+    
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        phoneNumber: normalizedPhone || null,
+        phoneHash,
+        normalizedEmail: normalizedEmailValue,
+        discoverableByPhone,
+        discoverableByEmail,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    return updatedUser;
+  }
+
+  async getFriendSuggestions(userId: string, limit: number = 10): Promise<FriendSuggestion[]> {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const cachedSuggestions = await db
+      .select()
+      .from(friendSuggestions)
+      .where(
+        and(
+          eq(friendSuggestions.userId, userId),
+          gte(friendSuggestions.expiresAt, now),
+          gte(friendSuggestions.createdAt, sevenDaysAgo)
+        )
+      )
+      .orderBy(desc(friendSuggestions.score))
+      .limit(limit);
+    
+    if (cachedSuggestions.length === 0) {
+      await this.generateFriendSuggestions(userId);
+      return this.getFriendSuggestions(userId, limit);
+    }
+    
+    return cachedSuggestions;
+  }
+
+  async dismissFriendSuggestion(userId: string, suggestedUserId: string): Promise<void> {
+    await db.insert(friendSuggestionDismissals).values({
+      userId,
+      dismissedUserId: suggestedUserId,
+    }).onConflictDoNothing();
+    
+    await db
+      .delete(friendSuggestions)
+      .where(
+        and(
+          eq(friendSuggestions.userId, userId),
+          eq(friendSuggestions.suggestedUserId, suggestedUserId)
+        )
+      );
+  }
+
+  async generateFriendSuggestions(userId: string): Promise<FriendSuggestion[]> {
+    const dismissedIds = await db
+      .select({ dismissedUserId: friendSuggestionDismissals.dismissedUserId })
+      .from(friendSuggestionDismissals)
+      .where(eq(friendSuggestionDismissals.userId, userId));
+    
+    const dismissedSet = new Set(dismissedIds.map(d => d.dismissedUserId));
+    
+    const mutualFriends = await this.collectMutualFriends(userId);
+    const contactMatches = await this.collectContactMatches(userId);
+    const sharedGroups = await this.collectSharedGroups(userId);
+    
+    const allSuggestions = new Map<string, { userId: string; reasons: string[]; score: number }>();
+    
+    mutualFriends.forEach(({ userId: suggestedId, count }) => {
+      if (!dismissedSet.has(suggestedId) && suggestedId !== userId) {
+        allSuggestions.set(suggestedId, {
+          userId: suggestedId,
+          reasons: ['mutual_friends'],
+          score: count * 10,
+        });
+      }
+    });
+    
+    contactMatches.forEach(({ userId: suggestedId, matchType }) => {
+      if (!dismissedSet.has(suggestedId) && suggestedId !== userId) {
+        const existing = allSuggestions.get(suggestedId);
+        if (existing) {
+          existing.reasons.push(matchType);
+          existing.score += 5;
+        } else {
+          allSuggestions.set(suggestedId, {
+            userId: suggestedId,
+            reasons: [matchType],
+            score: 5,
+          });
+        }
+      }
+    });
+    
+    sharedGroups.forEach(({ userId: suggestedId, count }) => {
+      if (!dismissedSet.has(suggestedId) && suggestedId !== userId) {
+        const existing = allSuggestions.get(suggestedId);
+        if (existing) {
+          existing.reasons.push('shared_groups');
+          existing.score += count * 2;
+        } else {
+          allSuggestions.set(suggestedId, {
+            userId: suggestedId,
+            reasons: ['shared_groups'],
+            score: count * 2,
+          });
+        }
+      }
+    });
+    
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const suggestions: FriendSuggestion[] = [];
+    
+    for (const [suggestedUserId, data] of allSuggestions.entries()) {
+      const [inserted] = await db
+        .insert(friendSuggestions)
+        .values({
+          userId,
+          suggestedUserId,
+          reason: data.reasons[0],
+          score: data.score,
+          expiresAt,
+        })
+        .onConflictDoUpdate({
+          target: [friendSuggestions.userId, friendSuggestions.suggestedUserId],
+          set: {
+            score: data.score,
+            reason: data.reasons[0],
+            expiresAt,
+          },
+        })
+        .returning();
+      
+      suggestions.push(inserted);
+    }
+    
+    return suggestions;
+  }
+
+  private async collectMutualFriends(userId: string): Promise<Array<{ userId: string; count: number }>> {
+    const myFriends = await db
+      .select({ friendId: friendships.addresseeId })
+      .from(friendships)
+      .where(
+        and(
+          eq(friendships.requesterId, userId),
+          eq(friendships.status, 'accepted')
+        )
+      );
+    
+    const myFriendIds = myFriends.map(f => f.friendId);
+    
+    if (myFriendIds.length === 0) {
+      return [];
+    }
+    
+    const mutualFriends = await db
+      .select({
+        suggestedUserId: friendships.addresseeId,
+        count: count(),
+      })
+      .from(friendships)
+      .where(
+        and(
+          inArray(friendships.requesterId, myFriendIds),
+          eq(friendships.status, 'accepted')
+        )
+      )
+      .groupBy(friendships.addresseeId)
+      .having(sql`count(*) > 0`);
+    
+    return mutualFriends.map(m => ({ userId: m.suggestedUserId, count: Number(m.count) }));
+  }
+
+  private async collectContactMatches(userId: string): Promise<Array<{ userId: string; matchType: string }>> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      return [];
+    }
+    
+    const matches: Array<{ userId: string; matchType: string }> = [];
+    
+    if (user.phoneHash && user.discoverableByPhone) {
+      const phoneMatches = await db
+        .select()
+        .from(users)
+        .where(
+          and(
+            eq(users.phoneHash, user.phoneHash),
+            eq(users.discoverableByPhone, true)
+          )
+        );
+      
+      phoneMatches.forEach(match => {
+        if (match.id !== userId) {
+          matches.push({ userId: match.id, matchType: 'phone_match' });
+        }
+      });
+    }
+    
+    if (user.normalizedEmail && user.discoverableByEmail) {
+      const emailMatches = await db
+        .select()
+        .from(users)
+        .where(
+          and(
+            eq(users.normalizedEmail, user.normalizedEmail),
+            eq(users.discoverableByEmail, true)
+          )
+        );
+      
+      emailMatches.forEach(match => {
+        if (match.id !== userId) {
+          matches.push({ userId: match.id, matchType: 'email_match' });
+        }
+      });
+    }
+    
+    return matches;
+  }
+
+  private async collectSharedGroups(userId: string): Promise<Array<{ userId: string; count: number }>> {
+    const myGroups = await db
+      .select({ groupId: groupMembers.groupId })
+      .from(groupMembers)
+      .where(eq(groupMembers.userId, userId));
+    
+    const myGroupIds = myGroups.map(g => g.groupId);
+    
+    if (myGroupIds.length === 0) {
+      return [];
+    }
+    
+    const sharedGroupMembers = await db
+      .select({
+        userId: groupMembers.userId,
+        count: count(),
+      })
+      .from(groupMembers)
+      .where(inArray(groupMembers.groupId, myGroupIds))
+      .groupBy(groupMembers.userId)
+      .having(sql`count(*) > 0`);
+    
+    return sharedGroupMembers
+      .filter(m => m.userId !== userId)
+      .map(m => ({ userId: m.userId, count: Number(m.count) }));
   }
 }
 

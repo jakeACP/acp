@@ -172,6 +172,37 @@ export default function SettingsPage() {
     voterVerificationMutation.mutate(data);
   };
 
+  // Privacy Settings State
+  const [privacySettings, setPrivacySettings] = useState({
+    phoneNumber: user?.phoneNumber || "",
+    discoverableByPhone: user?.discoverableByPhone || false,
+    discoverableByEmail: user?.discoverableByEmail || false,
+  });
+
+  const updatePrivacyMutation = useMutation({
+    mutationFn: async (data: typeof privacySettings) => {
+      return apiRequest("/api/user/discoverability", "PATCH", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Privacy Settings Updated",
+        description: "Your friend discovery preferences have been saved.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update privacy settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handlePrivacyUpdate = () => {
+    updatePrivacyMutation.mutate(privacySettings);
+  };
+
   const handleGetUploadParameters = async () => {
     const response = await apiRequest("/api/objects/upload", "POST") as any;
     console.log("Upload parameters response:", response);
@@ -236,7 +267,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs defaultValue="profile" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-8">
+          <TabsList className="grid w-full grid-cols-4 mb-8">
             <TabsTrigger value="profile" data-testid="tab-profile">
               <User className="h-4 w-4 mr-2" />
               Profile
@@ -244,6 +275,10 @@ export default function SettingsPage() {
             <TabsTrigger value="security" data-testid="tab-security">
               <Lock className="h-4 w-4 mr-2" />
               Security
+            </TabsTrigger>
+            <TabsTrigger value="privacy" data-testid="tab-privacy">
+              <Shield className="h-4 w-4 mr-2" />
+              Privacy
             </TabsTrigger>
             <TabsTrigger value="voter-verification" data-testid="tab-voter-verification">
               <BadgeCheck className="h-4 w-4 mr-2" />
@@ -469,6 +504,92 @@ export default function SettingsPage() {
                     </Button>
                   </form>
                 </Form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="privacy">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Friend Discovery & Privacy
+                </CardTitle>
+                <CardDescription>
+                  Control how others can find and connect with you
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">Phone Number</label>
+                    <Input
+                      type="tel"
+                      placeholder="+1 (555) 123-4567"
+                      value={privacySettings.phoneNumber}
+                      onChange={(e) => setPrivacySettings({ ...privacySettings, phoneNumber: e.target.value })}
+                      className="mt-1"
+                      data-testid="input-phone-number"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Your phone number will be hashed for secure contact matching
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between py-4 border-t">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-slate-900">Discoverable by Phone</label>
+                      <p className="text-xs text-slate-500">
+                        Allow people who have your phone number to find you
+                      </p>
+                    </div>
+                    <Checkbox
+                      checked={privacySettings.discoverableByPhone}
+                      onCheckedChange={(checked) => 
+                        setPrivacySettings({ ...privacySettings, discoverableByPhone: checked as boolean })
+                      }
+                      data-testid="checkbox-discoverable-phone"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between py-4 border-t">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-slate-900">Discoverable by Email</label>
+                      <p className="text-xs text-slate-500">
+                        Allow people who have your email to find you
+                      </p>
+                    </div>
+                    <Checkbox
+                      checked={privacySettings.discoverableByEmail}
+                      onCheckedChange={(checked) => 
+                        setPrivacySettings({ ...privacySettings, discoverableByEmail: checked as boolean })
+                      }
+                      data-testid="checkbox-discoverable-email"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-blue-900 text-sm">Privacy Protection</p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        Your contact information is hashed and encrypted. We use this only to suggest connections 
+                        with people who already have your details. You can disable discovery at any time.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handlePrivacyUpdate}
+                  disabled={updatePrivacyMutation.isPending}
+                  className="w-full"
+                  data-testid="button-update-privacy"
+                >
+                  {updatePrivacyMutation.isPending ? "Saving..." : "Save Privacy Settings"}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>

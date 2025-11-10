@@ -37,9 +37,17 @@ export const users = pgTable("users", {
   // Voter verification fields
   voterVerificationStatus: text("voter_verification_status").default("unverified"), // unverified, pending, verified, rejected
   voterVerifiedDate: timestamp("voter_verified_date"),
+  // Friend discovery fields
+  phoneNumber: text("phone_number"),
+  phoneHash: text("phone_hash"), // Hashed phone for matching
+  normalizedEmail: text("normalized_email"), // Lowercase email for matching
+  discoverableByPhone: boolean("discoverable_by_phone").default(false),
+  discoverableByEmail: boolean("discoverable_by_email").default(false),
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,
+  phoneNumberIndex: index("users_phone_hash_idx").on(table.phoneHash),
+  normalizedEmailIndex: index("users_normalized_email_idx").on(table.normalizedEmail),
 }));
 
 // User-to-user following relationships
@@ -113,6 +121,35 @@ export const friendGroupMembers = pgTable("friend_group_members", {
   groupIndex: index("friend_group_members_group_idx").on(table.groupId),
   friendshipIndex: index("friend_group_members_friendship_idx").on(table.friendshipId),
   uniqueGroupFriend: sql`UNIQUE(${table.groupId}, ${table.friendshipId})`,
+}));
+
+// Friend suggestions - People you may know
+export const friendSuggestions = pgTable("friend_suggestions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  suggestedUserId: varchar("suggested_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  reason: text("reason").notNull(), // mutual_friends, phone_match, email_match, shared_groups, location
+  score: integer("score").notNull().default(0), // Higher score = better suggestion
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("friend_suggestions_user_idx").on(table.userId),
+  suggestedUserIndex: index("friend_suggestions_suggested_user_idx").on(table.suggestedUserId),
+  scoreIndex: index("friend_suggestions_score_idx").on(table.score),
+  uniqueSuggestion: sql`UNIQUE(${table.userId}, ${table.suggestedUserId})`,
+  noSelfSuggestion: sql`CHECK (${table.userId} <> ${table.suggestedUserId})`,
+}));
+
+// Dismissed friend suggestions - Users can dismiss suggestions
+export const friendSuggestionDismissals = pgTable("friend_suggestion_dismissals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  dismissedUserId: varchar("dismissed_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("friend_suggestion_dismissals_user_idx").on(table.userId),
+  dismissedUserIndex: index("friend_suggestion_dismissals_dismissed_user_idx").on(table.dismissedUserId),
+  uniqueDismissal: sql`UNIQUE(${table.userId}, ${table.dismissedUserId})`,
 }));
 
 // Referral tracking and credits system
@@ -702,6 +739,16 @@ export const insertFriendGroupSchema = createInsertSchema(friendGroups).omit({
 export const insertFriendGroupMemberSchema = createInsertSchema(friendGroupMembers).omit({
   id: true,
   addedAt: true,
+});
+
+export const insertFriendSuggestionSchema = createInsertSchema(friendSuggestions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertFriendSuggestionDismissalSchema = createInsertSchema(friendSuggestionDismissals).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const insertUserReferralSchema = createInsertSchema(userReferrals).omit({
@@ -1637,6 +1684,10 @@ export type FriendGroup = typeof friendGroups.$inferSelect;
 export type InsertFriendGroup = z.infer<typeof insertFriendGroupSchema>;
 export type FriendGroupMember = typeof friendGroupMembers.$inferSelect;
 export type InsertFriendGroupMember = z.infer<typeof insertFriendGroupMemberSchema>;
+export type FriendSuggestion = typeof friendSuggestions.$inferSelect;
+export type InsertFriendSuggestion = z.infer<typeof insertFriendSuggestionSchema>;
+export type FriendSuggestionDismissal = typeof friendSuggestionDismissals.$inferSelect;
+export type InsertFriendSuggestionDismissal = z.infer<typeof insertFriendSuggestionDismissalSchema>;
 export type UserReferral = typeof userReferrals.$inferSelect;
 export type InsertUserReferral = z.infer<typeof insertUserReferralSchema>;
 

@@ -3333,6 +3333,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Friend Suggestions APIs
+  app.get("/api/friend-suggestions", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const suggestions = await storage.getFriendSuggestions(req.user.id, limit);
+      res.json(suggestions);
+    } catch (error: any) {
+      console.error("Get friend suggestions error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/friend-suggestions/:id/dismiss", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.dismissFriendSuggestion(req.user.id, req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Dismiss friend suggestion error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/user/discoverability", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { phoneNumber, discoverableByPhone, discoverableByEmail } = z.object({
+        phoneNumber: z.string(),
+        discoverableByPhone: z.boolean(),
+        discoverableByEmail: z.boolean(),
+      }).parse(req.body);
+
+      const updatedUser = await storage.updateUserDiscoverability(
+        req.user.id,
+        phoneNumber,
+        discoverableByPhone,
+        discoverableByEmail
+      );
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Update discoverability error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid discoverability data" });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin Analytics APIs
   app.get("/api/admin/analytics", ensureAdmin, async (req, res) => {
     try {

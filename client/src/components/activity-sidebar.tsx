@@ -2,11 +2,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useQuery } from "@tanstack/react-query";
-import { Poll, Candidate } from "@shared/schema";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Poll, Candidate, FriendSuggestion } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
-import { Star, TrendingUp, Users } from "lucide-react";
+import { Star, TrendingUp, Users, UserPlus, X } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 type FeaturedPolitician = {
   id: string;
@@ -19,6 +21,142 @@ type FeaturedPolitician = {
     level: string;
   };
 };
+
+type FriendSuggestionWithUser = FriendSuggestion & {
+  suggestedUser?: {
+    id: string;
+    username: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  };
+};
+
+function PeopleYouMayKnow() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: suggestions = [] } = useQuery<FriendSuggestionWithUser[]>({
+    queryKey: ["/api/friend-suggestions"],
+    enabled: !!user,
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: async (suggestedUserId: string) => {
+      return apiRequest(`/api/friend-suggestions/${suggestedUserId}/dismiss`, "POST");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/friend-suggestions"] });
+      toast({
+        title: "Suggestion dismissed",
+        description: "We won't show you this suggestion again.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to dismiss suggestion",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const connectMutation = useMutation({
+    mutationFn: async (suggestedUserId: string) => {
+      return apiRequest("/api/friendships", "POST", { addresseeId: suggestedUserId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/friend-suggestions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/friendships"] });
+      toast({
+        title: "Friend request sent",
+        description: "Your connection request has been sent successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send friend request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const getReasonLabel = (reason: string) => {
+    const labels: Record<string, string> = {
+      mutual_friends: "Mutual friends",
+      phone_match: "In your contacts",
+      email_match: "In your contacts",
+      shared_groups: "Shared groups",
+    };
+    return labels[reason] || reason;
+  };
+
+  if (!user || suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Users className="h-4 w-4" />
+          People You May Know
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {suggestions.slice(0, 3).map((suggestion) => (
+            <div key={suggestion.id} className="flex items-center gap-3" data-testid={`friend-suggestion-${suggestion.suggestedUserId}`}>
+              <Avatar className="h-10 w-10">
+                {suggestion.suggestedUser?.avatar && (
+                  <AvatarImage src={suggestion.suggestedUser.avatar} alt={suggestion.suggestedUser.username} />
+                )}
+                <AvatarFallback>
+                  {suggestion.suggestedUser?.username[0].toUpperCase() || "?"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <h5 className="text-sm font-medium text-foreground truncate">
+                  {suggestion.suggestedUser?.firstName && suggestion.suggestedUser?.lastName
+                    ? `${suggestion.suggestedUser.firstName} ${suggestion.suggestedUser.lastName}`
+                    : suggestion.suggestedUser?.username}
+                </h5>
+                <p className="text-xs text-muted-foreground">
+                  {getReasonLabel(suggestion.reason)}
+                </p>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => dismissMutation.mutate(suggestion.suggestedUserId)}
+                  disabled={dismissMutation.isPending}
+                  data-testid={`button-dismiss-${suggestion.suggestedUserId}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3"
+                  onClick={() => connectMutation.mutate(suggestion.suggestedUserId)}
+                  disabled={connectMutation.isPending || dismissMutation.isPending}
+                  data-testid={`button-connect-${suggestion.suggestedUserId}`}
+                >
+                  <UserPlus className="h-3 w-3 mr-1" />
+                  {connectMutation.isPending ? "Sending..." : "Connect"}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function ActivitySidebar() {
   const { user } = useAuth();
@@ -167,6 +305,9 @@ export function ActivitySidebar() {
           )}
         </CardContent>
       </Card>
+
+      {/* People You May Know */}
+      <PeopleYouMayKnow />
 
       {/* Trending Topics */}
       <Card>
