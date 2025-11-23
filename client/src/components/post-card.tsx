@@ -63,15 +63,19 @@ export function PostCard({ post }: PostCardProps) {
       const currentLiked = likeStatus?.liked ?? false;
       queryClient.setQueryData(["/api/likes", post.id, "post"], { liked: !currentLiked });
       
-      // Optimistically update the likes count in the feed
-      queryClient.setQueriesData({ queryKey: ["/api/feeds"] }, (old: any) => {
+      // Optimistically update the likes count in all feed variants
+      const updateFeed = (old: any) => {
         if (!old) return old;
         return old.map((p: PostWithAuthor) => 
           p.id === post.id 
             ? { ...p, likesCount: (p.likesCount || 0) + (currentLiked ? -1 : 1) }
             : p
         );
-      });
+      };
+      
+      queryClient.setQueryData(["/api/feeds/all"], updateFeed);
+      queryClient.setQueryData(["/api/feeds/following"], updateFeed);
+      queryClient.setQueryData(["/api/feeds/news"], updateFeed);
       
       // Return context for rollback
       return { previousLikeStatus, currentLiked };
@@ -81,20 +85,26 @@ export function PostCard({ post }: PostCardProps) {
       if (context?.previousLikeStatus !== undefined) {
         queryClient.setQueryData(["/api/likes", post.id, "post"], context.previousLikeStatus);
       }
-      // Revert the count
-      queryClient.setQueriesData({ queryKey: ["/api/feeds"] }, (old: any) => {
+      // Revert the count in all feed variants
+      const revertFeed = (old: any) => {
         if (!old) return old;
         return old.map((p: PostWithAuthor) => 
           p.id === post.id 
             ? { ...p, likesCount: (p.likesCount || 0) + (context?.currentLiked ? 1 : -1) }
             : p
         );
-      });
+      };
+      
+      queryClient.setQueryData(["/api/feeds/all"], revertFeed);
+      queryClient.setQueryData(["/api/feeds/following"], revertFeed);
+      queryClient.setQueryData(["/api/feeds/news"], revertFeed);
     },
     onSettled: () => {
       // Refetch after mutation completes (success or error)
       queryClient.invalidateQueries({ queryKey: ["/api/likes", post.id, "post"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/feeds"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
     },
   });
 
