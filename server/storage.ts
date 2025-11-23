@@ -738,7 +738,7 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(likes).where(eq(likes.targetId, postId));
       
       // Delete associated reactions for the post
-      await tx.delete(reactions).where(eq(reactions.targetId, postId));
+      await tx.delete(reactions).where(eq(reactions.postId, postId));
       
       // Delete associated flags for the post
       await tx.delete(flags).where(eq(flags.targetId, postId));
