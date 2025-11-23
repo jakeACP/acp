@@ -43,10 +43,7 @@ export default function AdminAlgorithmSettingsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: Partial<AlgorithmSettings>) => {
-      return await apiRequest("/api/admin/algorithm-settings", {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      });
+      return await apiRequest("/api/admin/algorithm-settings", "PATCH", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/algorithm-settings"] });
