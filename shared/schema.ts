@@ -329,6 +329,42 @@ export const groupMembers = pgTable("group_members", {
   joinedAt: timestamp("joined_at").defaultNow(),
 });
 
+// Whistleblowing system - Reports with credibility voting
+export const whistleblowingPosts = pgTable("whistleblowing_posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  authorId: varchar("author_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  link: text("link"), // External evidence link
+  documents: json("documents").$type<{ name: string; url: string; size: number }[]>().default([]), // Uploaded documents
+  credibleVotes: integer("credible_votes").default(0),
+  notCredibleVotes: integer("not_credible_votes").default(0),
+  credibilityScore: integer("credibility_score").default(0), // Calculated: credibleVotes - notCredibleVotes
+  tags: text("tags").array().default([]),
+  viewsCount: integer("views_count").default(0),
+  commentsCount: integer("comments_count").default(0),
+  isDeleted: boolean("is_deleted").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  authorIndex: index("whistleblowing_posts_author_idx").on(table.authorId),
+  credibilityIndex: index("whistleblowing_posts_credibility_idx").on(table.credibilityScore.desc()),
+  createdAtIndex: index("whistleblowing_posts_created_at_idx").on(table.createdAt.desc()),
+}));
+
+// Whistleblowing votes - Track credibility voting
+export const whistleblowingVotes = pgTable("whistleblowing_votes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull().references(() => whistleblowingPosts.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  vote: text("vote").notNull(), // "credible" or "not_credible"
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  postIndex: index("whistleblowing_votes_post_idx").on(table.postId),
+  userIndex: index("whistleblowing_votes_user_idx").on(table.userId),
+  uniqueVote: sql`UNIQUE(${table.postId}, ${table.userId})`,
+}));
+
 export const comments = pgTable("comments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   postId: varchar("post_id").references(() => posts.id),
@@ -822,6 +858,23 @@ export const insertCommentSchema = createInsertSchema(comments).omit({
   id: true,
   createdAt: true,
   likesCount: true,
+});
+
+export const insertWhistleblowingPostSchema = createInsertSchema(whistleblowingPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  credibleVotes: true,
+  notCredibleVotes: true,
+  credibilityScore: true,
+  viewsCount: true,
+  commentsCount: true,
+  isDeleted: true,
+});
+
+export const insertWhistleblowingVoteSchema = createInsertSchema(whistleblowingVotes).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const insertCandidateSchema = createInsertSchema(candidates).omit({
@@ -1507,6 +1560,10 @@ export type Group = typeof groups.$inferSelect;
 export type InsertGroup = z.infer<typeof insertGroupSchema>;
 export type Comment = typeof comments.$inferSelect;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
+export type WhistleblowingPost = typeof whistleblowingPosts.$inferSelect;
+export type InsertWhistleblowingPost = z.infer<typeof insertWhistleblowingPostSchema>;
+export type WhistleblowingVote = typeof whistleblowingVotes.$inferSelect;
+export type InsertWhistleblowingVote = z.infer<typeof insertWhistleblowingVoteSchema>;
 export type Candidate = typeof candidates.$inferSelect;
 export type InsertCandidate = z.infer<typeof insertCandidateSchema>;
 export type CandidateSupport = typeof candidateSupports.$inferSelect;
