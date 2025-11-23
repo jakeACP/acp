@@ -124,6 +124,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Whistleblowing API
+  app.get("/api/whistleblowing", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const sortBy = (req.query.sortBy as "recent" | "credibility") || "recent";
+      const posts = await storage.getWhistleblowingPosts(limit, offset, sortBy);
+      res.json(posts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/whistleblowing/:id", async (req, res) => {
+    try {
+      const post = await storage.getWhistleblowingPostById(req.params.id);
+      if (!post) {
+        return res.status(404).json({ message: "Whistleblowing post not found" });
+      }
+      res.json(post);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/whistleblowing", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { insertWhistleblowingPostSchema } = await import("@shared/schema");
+      const postData = insertWhistleblowingPostSchema.parse({
+        ...req.body,
+        authorId: req.user.id,
+      });
+      const post = await storage.createWhistleblowingPost(postData);
+      res.status(201).json(post);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/whistleblowing/:id/vote", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { insertWhistleblowingVoteSchema } = await import("@shared/schema");
+      const voteData = insertWhistleblowingVoteSchema.parse({
+        postId: req.params.id,
+        userId: req.user.id,
+        vote: req.body.vote,
+      });
+
+      if (voteData.vote !== "credible" && voteData.vote !== "not_credible") {
+        return res.status(400).json({ message: "Vote must be 'credible' or 'not_credible'" });
+      }
+
+      await storage.voteOnWhistleblowing(req.params.id, req.user.id, voteData.vote);
+      res.status(200).json({ message: "Vote recorded successfully" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/whistleblowing/:id/my-vote", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const vote = await storage.getUserWhistleblowingVote(req.params.id, req.user.id);
+      res.json(vote || null);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/whistleblowing/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const post = await storage.getWhistleblowingPostById(req.params.id);
+      if (!post) {
+        return res.status(404).json({ message: "Whistleblowing post not found" });
+      }
+
+      // Check if the user is the author or has admin/moderator privileges
+      if (post.authorId !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'moderator') {
+        return res.status(403).json({ message: "You can only delete your own posts" });
+      }
+
+      await storage.deleteWhistleblowingPost(req.params.id);
+      res.status(200).json({ message: "Whistleblowing post deleted successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Feed System API
   app.get("/api/feeds/all", async (req, res) => {
     try {
