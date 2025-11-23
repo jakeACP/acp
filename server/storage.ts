@@ -410,6 +410,10 @@ export interface IStorage {
   unblockIp(id: string, unblockedBy: string): Promise<void>;
   isIpBlocked(ipAddress: string): Promise<boolean>;
 
+  // Algorithm Settings
+  getAlgorithmSettings(): Promise<AlgorithmSettings>;
+  updateAlgorithmSettings(settings: Partial<AlgorithmSettings>, updatedBy: string): Promise<AlgorithmSettings>;
+
   // Voter Verification
   getMyVerificationRequest(userId: string): Promise<VoterVerificationRequest | undefined>;
   submitVerificationRequest(data: InsertVoterVerificationRequest): Promise<VoterVerificationRequest>;
@@ -4885,6 +4889,44 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(1);
     return !!blocked;
+  }
+
+  // Algorithm Settings Implementation
+  async getAlgorithmSettings(): Promise<AlgorithmSettings> {
+    // Get the default settings row (there should only be one)
+    const [settings] = await db
+      .select()
+      .from(algorithmSettings)
+      .limit(1);
+    
+    // If no settings exist, create default settings
+    if (!settings) {
+      const [newSettings] = await db
+        .insert(algorithmSettings)
+        .values({ id: 'default-settings-001' })
+        .returning();
+      return newSettings;
+    }
+    
+    return settings;
+  }
+
+  async updateAlgorithmSettings(settings: Partial<AlgorithmSettings>, updatedBy: string): Promise<AlgorithmSettings> {
+    // Get current settings
+    const current = await this.getAlgorithmSettings();
+    
+    // Update the settings
+    const [updated] = await db
+      .update(algorithmSettings)
+      .set({
+        ...settings,
+        updatedBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(algorithmSettings.id, current.id))
+      .returning();
+    
+    return updated;
   }
 
   // Voter Verification
