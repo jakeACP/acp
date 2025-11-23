@@ -138,10 +138,10 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
       <div
         className={
           isFloating
-            ? 'fixed bottom-4 right-4 z-50 shadow-2xl rounded-lg overflow-hidden bg-black transition-all duration-300'
+            ? 'fixed bottom-4 right-4 z-50 shadow-2xl rounded-lg overflow-hidden bg-black transition-all duration-300 w-[90vw] max-w-[400px] md:w-[400px]'
             : 'absolute top-0 left-0 w-full h-full rounded-lg'
         }
-        style={isFloating ? { width: '400px', height: '225px' } : undefined}
+        style={isFloating ? { height: 'auto', aspectRatio: '16/9' } : undefined}
         data-testid={isFloating ? 'floating-video-player' : undefined}
       >
         <div
