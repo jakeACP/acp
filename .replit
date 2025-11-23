@@ -15,6 +15,10 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
+localPort = 34579
+externalPort = 3002
+
+[[ports]]
 localPort = 38237
 externalPort = 3001
 
@@ -48,3 +52,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_log_in_with_replit:1.0.0", "javascript_database:1.0.0", "javascript_stripe:1.0.0", "javascript_object_storage:1.0.0", "javascript_websocket:1.0.0", "javascript_openai:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+CONTACT_HASH_SECRET = "bb89e9d37c9a9db84b5ea1cd5e879f2a0990f336a2e8d6ece3e3d75baba92465"
