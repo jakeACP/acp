@@ -20,9 +20,7 @@ export default function AdminModerationPage() {
 
   const deletePostMutation = useMutation({
     mutationFn: async (postId: string) => {
-      return await apiRequest(`/api/posts/${postId}`, {
-        method: 'DELETE',
-      });
+      return await apiRequest(`/api/posts/${postId}`, 'DELETE');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/flagged-content'] });
