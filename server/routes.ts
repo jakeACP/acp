@@ -3660,6 +3660,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Algorithm Settings APIs
+  app.get("/api/admin/algorithm-settings", ensureAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getAlgorithmSettings();
+      res.json(settings);
+    } catch (error: any) {
+      console.error("Admin get algorithm settings error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/algorithm-settings", ensureAdmin, async (req, res) => {
+    try {
+      const settings = await storage.updateAlgorithmSettings(req.body, req.user!.id);
+      res.json(settings);
+    } catch (error: any) {
+      console.error("Admin update algorithm settings error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   
   // WebSocket setup for real-time messaging
