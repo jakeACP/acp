@@ -44,6 +44,7 @@ import AdminPollsPage from "@/pages/admin-polls-page";
 import AdminSecurityPage from "@/pages/admin-security-page";
 import AdminDatabasePage from "@/pages/admin-database-page";
 import AdminAlgorithmPage from "@/pages/admin-algorithm-page";
+import AdminAlgorithmSettingsPage from "@/pages/admin-algorithm-settings-page";
 import AdminAcpPlusPage from "@/pages/admin-acp-plus-page";
 import AdminSettingsPage from "@/pages/admin-settings-page";
 import AdminVoterVerificationPage from "@/pages/admin-voter-verification-page";
@@ -91,6 +92,7 @@ function Router() {
       <ProtectedRoute path="/admin/security" component={AdminSecurityPage} />
       <ProtectedRoute path="/admin/database" component={AdminDatabasePage} />
       <ProtectedRoute path="/admin/algorithm" component={AdminAlgorithmPage} />
+      <ProtectedRoute path="/admin/algorithm-settings" component={AdminAlgorithmSettingsPage} />
       <ProtectedRoute path="/admin/acp-plus" component={AdminAcpPlusPage} />
       <ProtectedRoute path="/admin/voter-verification" component={AdminVoterVerificationPage} />
       <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />

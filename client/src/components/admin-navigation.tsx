@@ -9,7 +9,8 @@ import {
   Cpu, 
   Coins, 
   Settings,
-  BarChart3
+  BarChart3,
+  Sliders
 } from "lucide-react";
 
 const adminMenuItems = [
@@ -47,6 +48,11 @@ const adminMenuItems = [
     name: "Algorithm",
     href: "/admin/algorithm",
     icon: Cpu,
+  },
+  {
+    name: "Algorithm Settings",
+    href: "/admin/algorithm-settings",
+    icon: Sliders,
   },
   {
     name: "ACP+",
