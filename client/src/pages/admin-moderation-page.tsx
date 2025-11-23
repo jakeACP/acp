@@ -7,59 +7,52 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AdminNavigation } from "@/components/admin-navigation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { AlertTriangle, Flag, ThumbsDown, Trash2, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function AdminModerationPage() {
   const { toast } = useToast();
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
-  const [reviewNote, setReviewNote] = useState("");
-  const [actionTaken, setActionTaken] = useState("");
 
   const { data: flaggedContent, isLoading } = useQuery({
-    queryKey: ['/api/admin/flagged-content', statusFilter],
-    queryFn: () => fetch(`/api/admin/flagged-content?status=${statusFilter}`).then(res => res.json()),
+    queryKey: ['/api/admin/flagged-content'],
+    queryFn: () => fetch(`/api/admin/flagged-content`).then(res => res.json()),
   });
 
-  const reviewMutation = useMutation({
-    mutationFn: async ({ id, status, actionTaken, reviewNote }: any) => {
-      return await apiRequest(`/api/admin/flagged-content/${id}/review`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, actionTaken, reviewNote }),
+  const deletePostMutation = useMutation({
+    mutationFn: async (postId: string) => {
+      return await apiRequest(`/api/posts/${postId}`, {
+        method: 'DELETE',
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/flagged-content'] });
-      toast({ title: "Content reviewed successfully" });
-      setReviewingId(null);
-      setReviewNote("");
-      setActionTaken("");
+      queryClient.invalidateQueries({ queryKey: ['/api/feed'] });
+      toast({ title: "Post removed successfully" });
     },
     onError: (error: Error) => {
       toast({ 
-        title: "Error reviewing content", 
+        title: "Error removing post", 
         description: error.message,
         variant: "destructive" 
       });
     },
   });
 
-  const handleReview = (id: string, status: string) => {
-    reviewMutation.mutate({ id, status, actionTaken, reviewNote });
+  const handleDeletePost = (postId: string) => {
+    if (confirm("Are you sure you want to permanently delete this post?")) {
+      deletePostMutation.mutate(postId);
+    }
   };
 
-  const getFlagTypeBadge = (flagType: string) => {
+  const getReasonBadge = (reason: string) => {
     const colors: Record<string, string> = {
-      spam: "bg-yellow-500",
-      hate_speech: "bg-red-500",
-      nudity: "bg-purple-500",
-      crime: "bg-orange-500",
-      misinformation: "bg-blue-500",
-      other: "bg-gray-500",
+      spam: "bg-yellow-600 text-white",
+      harassment: "bg-red-600 text-white",
+      inappropriate_content: "bg-orange-600 text-white",
+      misinformation: "bg-blue-600 text-white",
+      not_interested: "bg-gray-500 text-white",
     };
-    return colors[flagType] || "bg-gray-500";
+    return colors[reason] || "bg-gray-500 text-white";
   };
 
   return (
@@ -68,21 +61,7 @@ export default function AdminModerationPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground">Content Moderation</h1>
-          <p className="text-muted-foreground mt-2">Review flagged content</p>
-        </div>
-
-        <div className="mb-6">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[200px]" data-testid="select-status-filter">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="reviewed">Reviewed</SelectItem>
-              <SelectItem value="action_taken">Action Taken</SelectItem>
-              <SelectItem value="dismissed">Dismissed</SelectItem>
-            </SelectContent>
-          </Select>
+          <p className="text-muted-foreground mt-2">Review flagged posts (sorted by urgency)</p>
         </div>
 
         {isLoading ? (
@@ -92,122 +71,77 @@ export default function AdminModerationPage() {
         ) : flaggedContent && flaggedContent.length > 0 ? (
           <div className="space-y-4">
             {flaggedContent.map((item: any) => (
-              <Card key={item.id} data-testid={`card-flagged-${item.id}`}>
+              <Card key={item.postId} data-testid={`card-flagged-${item.postId}`} className="border-l-4 border-l-destructive">
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div>
+                    <div className="flex-1">
                       <CardTitle className="flex items-center gap-2">
                         <AlertTriangle className="h-5 w-5 text-destructive" />
-                        Flagged {item.contentType}
+                        Flagged Post
                       </CardTitle>
-                      <div className="flex gap-2 mt-2">
-                        <Badge className={getFlagTypeBadge(item.flagType)}>
-                          {item.flagType.replace('_', ' ')}
+                      <div className="flex gap-2 mt-3 flex-wrap">
+                        <Badge className="bg-red-600 text-white">
+                          <Flag className="h-3 w-3 mr-1" />
+                          {item.reportCount} Reports
                         </Badge>
-                        <Badge variant="outline">{item.status}</Badge>
+                        <Badge className="bg-gray-600 text-white">
+                          <ThumbsDown className="h-3 w-3 mr-1" />
+                          {item.dislikeCount} Dislikes
+                        </Badge>
+                        <Badge variant="outline" className="font-bold">
+                          Total Urgency: {item.totalUrgency}
+                        </Badge>
+                      </div>
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {item.reasons.map((reason: string) => (
+                          <Badge key={reason} className={getReasonBadge(reason)}>
+                            {reason.replace('_', ' ')}
+                          </Badge>
+                        ))}
                       </div>
                     </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeletePost(item.postId)}
+                      disabled={deletePostMutation.isPending}
+                      data-testid={`button-delete-${item.postId}`}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Remove Post
+                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium">Reason:</p>
-                      <p className="text-sm text-muted-foreground">{item.reason || "No reason provided"}</p>
+                    <div className="bg-slate-100 dark:bg-slate-900 p-4 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <p className="text-sm font-medium">
+                          {item.post.authorFirstName} {item.post.authorLastName} (@{item.post.authorUsername})
+                        </p>
+                        <span className="text-xs text-muted-foreground">
+                          · {new Date(item.post.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{item.post.content}</p>
+                      <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
+                        <span>{item.post.likesCount} likes</span>
+                        <span>{item.post.commentsCount} comments</span>
+                      </div>
                     </div>
 
                     <div>
-                      <p className="text-sm font-medium">Content ID:</p>
-                      <p className="text-sm font-mono text-muted-foreground">{item.contentId}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-medium">Flagged at:</p>
+                      <p className="text-sm font-medium">First Flagged:</p>
                       <p className="text-sm text-muted-foreground">
-                        {new Date(item.createdAt).toLocaleString()}
+                        {new Date(item.firstFlaggedAt).toLocaleString()}
                       </p>
                     </div>
 
-                    {reviewingId === item.id ? (
-                      <div className="space-y-4 border-t pt-4">
-                        <div>
-                          <label className="text-sm font-medium">Action Taken:</label>
-                          <Select value={actionTaken} onValueChange={setActionTaken}>
-                            <SelectTrigger data-testid="select-action">
-                              <SelectValue placeholder="Select action" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="removed">Content Removed</SelectItem>
-                              <SelectItem value="warning_sent">Warning Sent</SelectItem>
-                              <SelectItem value="user_banned">User Banned</SelectItem>
-                              <SelectItem value="no_action">No Action</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <label className="text-sm font-medium">Review Note:</label>
-                          <Textarea
-                            value={reviewNote}
-                            onChange={(e) => setReviewNote(e.target.value)}
-                            placeholder="Add your review notes..."
-                            data-testid="input-review-note"
-                          />
-                        </div>
-
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => handleReview(item.id, "action_taken")}
-                            disabled={reviewMutation.isPending}
-                            data-testid="button-approve"
-                          >
-                            <CheckCircle className="mr-2 h-4 w-4" />
-                            Approve Action
-                          </Button>
-                          <Button
-                            onClick={() => handleReview(item.id, "dismissed")}
-                            variant="outline"
-                            disabled={reviewMutation.isPending}
-                            data-testid="button-dismiss"
-                          >
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Dismiss
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              setReviewingId(null);
-                              setReviewNote("");
-                              setActionTaken("");
-                            }}
-                            variant="ghost"
-                            disabled={reviewMutation.isPending}
-                            data-testid="button-cancel"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : item.status === "pending" ? (
-                      <Button
-                        onClick={() => setReviewingId(item.id)}
-                        data-testid="button-review"
-                      >
-                        Review
-                      </Button>
-                    ) : (
-                      item.reviewNote && (
-                        <div className="border-t pt-4">
-                          <p className="text-sm font-medium">Review Note:</p>
-                          <p className="text-sm text-muted-foreground">{item.reviewNote}</p>
-                          {item.actionTaken && (
-                            <>
-                              <p className="text-sm font-medium mt-2">Action:</p>
-                              <p className="text-sm text-muted-foreground">{item.actionTaken}</p>
-                            </>
-                          )}
-                        </div>
-                      )
-                    )}
+                    <div>
+                      <p className="text-sm font-medium">Post ID:</p>
+                      <p className="text-sm font-mono text-muted-foreground">{item.postId}</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
