@@ -52,9 +52,49 @@ export function PostCard({ post }: PostCardProps) {
         targetType: "post",
       });
     },
-    onSuccess: () => {
+    onMutate: async () => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/likes", post.id, "post"] });
+      
+      // Snapshot the previous value
+      const previousLikeStatus = queryClient.getQueryData(["/api/likes", post.id, "post"]);
+      
+      // Optimistically update the like status
+      const currentLiked = likeStatus?.liked ?? false;
+      queryClient.setQueryData(["/api/likes", post.id, "post"], { liked: !currentLiked });
+      
+      // Optimistically update the likes count in the feed
+      queryClient.setQueriesData({ queryKey: ["/api/feeds"] }, (old: any) => {
+        if (!old) return old;
+        return old.map((p: PostWithAuthor) => 
+          p.id === post.id 
+            ? { ...p, likesCount: (p.likesCount || 0) + (currentLiked ? -1 : 1) }
+            : p
+        );
+      });
+      
+      // Return context for rollback
+      return { previousLikeStatus, currentLiked };
+    },
+    onError: (err, variables, context: any) => {
+      // Rollback on error
+      if (context?.previousLikeStatus !== undefined) {
+        queryClient.setQueryData(["/api/likes", post.id, "post"], context.previousLikeStatus);
+      }
+      // Revert the count
+      queryClient.setQueriesData({ queryKey: ["/api/feeds"] }, (old: any) => {
+        if (!old) return old;
+        return old.map((p: PostWithAuthor) => 
+          p.id === post.id 
+            ? { ...p, likesCount: (p.likesCount || 0) + (context?.currentLiked ? 1 : -1) }
+            : p
+        );
+      });
+    },
+    onSettled: () => {
+      // Refetch after mutation completes (success or error)
       queryClient.invalidateQueries({ queryKey: ["/api/likes", post.id, "post"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds"] });
     },
   });
 
@@ -335,10 +375,10 @@ export function PostCard({ post }: PostCardProps) {
               variant="ghost"
               size="sm"
               onClick={handleLike}
-              disabled={likeMutation.isPending}
               className={`flex items-center gap-2 ${
                 likeStatus?.liked ? "text-red-500" : "hover:text-red-500"
               }`}
+              data-testid={`button-like-${post.id}`}
             >
               <Heart className={`h-4 w-4 ${likeStatus?.liked ? "fill-current" : ""}`} />
               <span>{post.likesCount || 0}</span>
