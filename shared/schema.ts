@@ -1491,6 +1491,43 @@ export const blockedIps = pgTable("blocked_ips", {
   activeIndex: index("blocked_ips_active_idx").on(table.isActive),
 }));
 
+// Algorithm Configuration
+export const algorithmSettings = pgTable("algorithm_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // Temporal Signals
+  freshnessWeight: integer("freshness_weight").default(70).notNull(), // 0-100%
+  timeDecayCurve: text("time_decay_curve").default("exponential").notNull(), // 'linear', 'exponential', 'logarithmic'
+  
+  // Engagement Signals
+  likeWeight: integer("like_weight").default(10).notNull(), // 0-100 (multiplier x0.1)
+  commentWeight: integer("comment_weight").default(30).notNull(), // 0-100 (multiplier x0.1)
+  shareWeight: integer("share_weight").default(50).notNull(), // 0-100 (multiplier x0.1)
+  reactionDiversityBonus: integer("reaction_diversity_bonus").default(20).notNull(), // 0-50%
+  
+  // Social Graph Signals
+  friendContentBoost: integer("friend_content_boost").default(150).notNull(), // 0-200%
+  followingBoost: integer("following_boost").default(120).notNull(), // 0-200%
+  groupMembershipBoost: integer("group_membership_boost").default(100).notNull(), // 0-150%
+  
+  // Quality & Trust Signals
+  verifiedUserBoost: integer("verified_user_boost").default(50).notNull(), // 0-100%
+  flagPenalty: integer("flag_penalty").default(-50).notNull(), // -100% to 0%
+  localContentBoost: integer("local_content_boost").default(80).notNull(), // 0-150%
+  
+  // Advanced Settings
+  diversityScore: integer("diversity_score").default(40).notNull(), // 0-100% - ensure varied viewpoints
+  viralDetectionThreshold: integer("viral_detection_threshold").default(100).notNull(), // engagement count
+  pollUrgencyBoost: integer("poll_urgency_boost").default(75).notNull(), // 0-150% - boost polls nearing end
+  eventProximityBoost: integer("event_proximity_boost").default(90).notNull(), // 0-150% - boost nearby/soon events
+  
+  // Metadata
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  updatedAtIndex: index("algorithm_settings_updated_at_idx").on(table.updatedAt),
+}));
+
 export const insertRepresentativeSchema = createInsertSchema(representatives).omit({
   id: true,
   createdAt: true,
@@ -1711,6 +1748,12 @@ export const insertBlockedIpSchema = createInsertSchema(blockedIps).omit({
   isActive: true,
 });
 
+export const insertAlgorithmSettingsSchema = createInsertSchema(algorithmSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Citizen Initiative type exports
 export type Jurisdiction = typeof jurisdictions.$inferSelect;
 export type InsertJurisdiction = z.infer<typeof insertJurisdictionSchema>;
@@ -1779,6 +1822,8 @@ export type BannedUser = typeof bannedUsers.$inferSelect;
 export type InsertBannedUser = z.infer<typeof insertBannedUserSchema>;
 export type BlockedIp = typeof blockedIps.$inferSelect;
 export type InsertBlockedIp = z.infer<typeof insertBlockedIpSchema>;
+export type AlgorithmSettings = typeof algorithmSettings.$inferSelect;
+export type InsertAlgorithmSettings = z.infer<typeof insertAlgorithmSettingsSchema>;
 
 // Live Stream with owner info
 export type LiveStreamWithOwner = LiveStream & {
