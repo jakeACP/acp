@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Post, PostWithAuthor, Comment } from "@shared/schema";
-import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2 } from "lucide-react";
+import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -141,18 +141,71 @@ export function PostCard({ post }: PostCardProps) {
         reason: "inappropriate_content",
       });
     },
+    onMutate: async () => {
+      // Optimistically remove post from all feeds
+      const removeFromFeed = (old: any) => {
+        if (!old) return old;
+        return old.filter((p: PostWithAuthor) => p.id !== post.id);
+      };
+      
+      queryClient.setQueryData(["/api/feeds/all"], removeFromFeed);
+      queryClient.setQueryData(["/api/feeds/following"], removeFromFeed);
+      queryClient.setQueryData(["/api/feeds/news"], removeFromFeed);
+    },
     onSuccess: () => {
       toast({
-        title: "Content Flagged",
-        description: "Thank you for reporting this content. We'll review it shortly.",
+        title: "Content Hidden",
+        description: "This post has been removed from your feed.",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error", 
-        description: error.message || "Failed to flag content",
+        description: error.message || "Failed to hide content",
         variant: "destructive",
       });
+      // Refetch to restore the post if there was an error
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
+    },
+  });
+
+  const hidePostMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("/api/flags", "POST", {
+        targetId: post.id,
+        targetType: "post",
+        reason: "not_interested",
+      });
+    },
+    onMutate: async () => {
+      // Optimistically remove post from all feeds
+      const removeFromFeed = (old: any) => {
+        if (!old) return old;
+        return old.filter((p: PostWithAuthor) => p.id !== post.id);
+      };
+      
+      queryClient.setQueryData(["/api/feeds/all"], removeFromFeed);
+      queryClient.setQueryData(["/api/feeds/following"], removeFromFeed);
+      queryClient.setQueryData(["/api/feeds/news"], removeFromFeed);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Post Hidden",
+        description: "This post has been removed from your feed.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error", 
+        description: error.message || "Failed to hide post",
+        variant: "destructive",
+      });
+      // Refetch to restore the post if there was an error
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
     },
   });
 
@@ -251,6 +304,18 @@ export function PostCard({ post }: PostCardProps) {
         variant: "destructive",
       });
     }
+  };
+
+  const handleHidePost = () => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to hide posts",
+        variant: "destructive",
+      });
+      return;
+    }
+    hidePostMutation.mutate();
   };
 
   const handleShareToFeed = () => {
@@ -521,6 +586,19 @@ export function PostCard({ post }: PostCardProps) {
           </div>
           
           <div className="flex items-center gap-2">
+            {user && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleHidePost}
+                className="flex items-center gap-2 hover:text-orange-500"
+                data-testid="button-hide"
+                title="Not interested - Hide this post"
+              >
+                <ThumbsDown className="h-4 w-4" />
+              </Button>
+            )}
+            
             {user && (user.id === post.authorId || user.role === 'admin' || user.role === 'moderator') && (
               <Button
                 variant="ghost"
@@ -539,12 +617,11 @@ export function PostCard({ post }: PostCardProps) {
               variant="ghost"
               size="sm"
               onClick={handleFlag}
-              disabled={flagMutation.isPending}
               className="flex items-center gap-2 hover:text-red-500"
               data-testid="button-flag"
+              title="Report inappropriate content"
             >
               <Flag className="h-4 w-4" />
-              {flagMutation.isPending ? "Flagging..." : "Flag"}
             </Button>
           </div>
         </div>
