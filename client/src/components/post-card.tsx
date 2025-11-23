@@ -141,8 +141,8 @@ export function PostCard({ post }: PostCardProps) {
         reason: "inappropriate_content",
       });
     },
-    onMutate: async () => {
-      // Optimistically remove post from all feeds
+    onSuccess: () => {
+      // Immediately remove from feeds
       const removeFromFeed = (old: any) => {
         if (!old) return old;
         return old.filter((p: PostWithAuthor) => p.id !== post.id);
@@ -151,23 +151,6 @@ export function PostCard({ post }: PostCardProps) {
       queryClient.setQueryData(["/api/feeds/all"], removeFromFeed);
       queryClient.setQueryData(["/api/feeds/following"], removeFromFeed);
       queryClient.setQueryData(["/api/feeds/news"], removeFromFeed);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Content Hidden",
-        description: "This post has been removed from your feed.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error", 
-        description: error.message || "Failed to hide content",
-        variant: "destructive",
-      });
-      // Refetch to restore the post if there was an error
-      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
     },
   });
 
@@ -179,8 +162,8 @@ export function PostCard({ post }: PostCardProps) {
         reason: "not_interested",
       });
     },
-    onMutate: async () => {
-      // Optimistically remove post from all feeds
+    onSuccess: () => {
+      // Immediately remove from feeds
       const removeFromFeed = (old: any) => {
         if (!old) return old;
         return old.filter((p: PostWithAuthor) => p.id !== post.id);
@@ -189,23 +172,6 @@ export function PostCard({ post }: PostCardProps) {
       queryClient.setQueryData(["/api/feeds/all"], removeFromFeed);
       queryClient.setQueryData(["/api/feeds/following"], removeFromFeed);
       queryClient.setQueryData(["/api/feeds/news"], removeFromFeed);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Post Hidden",
-        description: "This post has been removed from your feed.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error", 
-        description: error.message || "Failed to hide post",
-        variant: "destructive",
-      });
-      // Refetch to restore the post if there was an error
-      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
     },
   });
 
@@ -558,11 +524,11 @@ export function PostCard({ post }: PostCardProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="flex items-center gap-2 hover:text-primary"
+                  className="hover:text-primary p-2"
                   data-testid="button-share"
+                  title="Share"
                 >
                   <Share className="h-4 w-4" />
-                  Share
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
@@ -585,15 +551,15 @@ export function PostCard({ post }: PostCardProps) {
             </DropdownMenu>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {user && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleHidePost}
-                className="flex items-center gap-2 hover:text-orange-500"
+                className="hover:text-orange-500 p-2"
                 data-testid="button-hide"
-                title="Not interested - Hide this post"
+                title="Not interested"
               >
                 <ThumbsDown className="h-4 w-4" />
               </Button>
@@ -605,11 +571,11 @@ export function PostCard({ post }: PostCardProps) {
                 size="sm"
                 onClick={handleDeletePost}
                 disabled={deletePostMutation.isPending}
-                className="flex items-center gap-2 hover:text-red-500 text-red-600"
+                className="hover:text-red-500 text-red-600 p-2"
                 data-testid="button-delete-post"
+                title="Delete"
               >
                 <Trash2 className="h-4 w-4" />
-                {deletePostMutation.isPending ? "Deleting..." : "Delete"}
               </Button>
             )}
             
@@ -617,9 +583,9 @@ export function PostCard({ post }: PostCardProps) {
               variant="ghost"
               size="sm"
               onClick={handleFlag}
-              className="flex items-center gap-2 hover:text-red-500"
+              className="hover:text-red-500 p-2"
               data-testid="button-flag"
-              title="Report inappropriate content"
+              title="Report"
             >
               <Flag className="h-4 w-4" />
             </Button>
