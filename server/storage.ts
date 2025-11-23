@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest } from "@shared/schema";
 import { db } from "./db";
@@ -422,6 +422,14 @@ export interface IStorage {
   getFriendSuggestions(userId: string, limit?: number): Promise<FriendSuggestion[]>;
   dismissFriendSuggestion(userId: string, suggestedUserId: string): Promise<void>;
   generateFriendSuggestions(userId: string): Promise<FriendSuggestion[]>;
+
+  // Whistleblowing
+  createWhistleblowingPost(post: InsertWhistleblowingPost): Promise<WhistleblowingPost>;
+  getWhistleblowingPosts(limit?: number, offset?: number, sortBy?: "recent" | "credibility"): Promise<WhistleblowingPost[]>;
+  getWhistleblowingPostById(id: string): Promise<WhistleblowingPost | undefined>;
+  voteOnWhistleblowing(postId: string, userId: string, vote: "credible" | "not_credible"): Promise<void>;
+  getUserWhistleblowingVote(postId: string, userId: string): Promise<WhistleblowingVote | undefined>;
+  deleteWhistleblowingPost(postId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5228,6 +5236,103 @@ export class DatabaseStorage implements IStorage {
     return sharedGroupMembers
       .filter(m => m.userId !== userId)
       .map(m => ({ userId: m.userId, count: Number(m.count) }));
+  }
+
+  // Whistleblowing methods
+  async createWhistleblowingPost(post: InsertWhistleblowingPost): Promise<WhistleblowingPost> {
+    const [newPost] = await db.insert(whistleblowingPosts).values(post).returning();
+    return newPost;
+  }
+
+  async getWhistleblowingPosts(limit: number = 20, offset: number = 0, sortBy: "recent" | "credibility" = "recent"): Promise<WhistleblowingPost[]> {
+    const orderBy = sortBy === "credibility" 
+      ? desc(whistleblowingPosts.credibilityScore)
+      : desc(whistleblowingPosts.createdAt);
+    
+    const posts = await db
+      .select()
+      .from(whistleblowingPosts)
+      .where(eq(whistleblowingPosts.isDeleted, false))
+      .orderBy(orderBy)
+      .limit(limit)
+      .offset(offset);
+    
+    return posts;
+  }
+
+  async getWhistleblowingPostById(id: string): Promise<WhistleblowingPost | undefined> {
+    const [post] = await db
+      .select()
+      .from(whistleblowingPosts)
+      .where(and(
+        eq(whistleblowingPosts.id, id),
+        eq(whistleblowingPosts.isDeleted, false)
+      ));
+    return post || undefined;
+  }
+
+  async voteOnWhistleblowing(postId: string, userId: string, vote: "credible" | "not_credible"): Promise<void> {
+    // Check if user already voted
+    const existingVote = await this.getUserWhistleblowingVote(postId, userId);
+    
+    if (existingVote) {
+      // Update existing vote
+      if (existingVote.vote !== vote) {
+        // Change vote
+        await db
+          .update(whistleblowingVotes)
+          .set({ vote })
+          .where(and(
+            eq(whistleblowingVotes.postId, postId),
+            eq(whistleblowingVotes.userId, userId)
+          ));
+        
+        // Update post counters
+        await db.execute(sql`
+          UPDATE whistleblowing_posts
+          SET 
+            credible_votes = CASE WHEN ${vote} = 'credible' THEN credible_votes + 1 ELSE credible_votes - 1 END,
+            not_credible_votes = CASE WHEN ${vote} = 'not_credible' THEN not_credible_votes + 1 ELSE not_credible_votes - 1 END,
+            credibility_score = (CASE WHEN ${vote} = 'credible' THEN credible_votes + 1 ELSE credible_votes - 1 END) - (CASE WHEN ${vote} = 'not_credible' THEN not_credible_votes + 1 ELSE not_credible_votes - 1 END)
+          WHERE id = ${postId}
+        `);
+      }
+    } else {
+      // Create new vote
+      await db.insert(whistleblowingVotes).values({
+        postId,
+        userId,
+        vote,
+      });
+      
+      // Update post counters
+      await db.execute(sql`
+        UPDATE whistleblowing_posts
+        SET 
+          credible_votes = CASE WHEN ${vote} = 'credible' THEN credible_votes + 1 ELSE credible_votes END,
+          not_credible_votes = CASE WHEN ${vote} = 'not_credible' THEN not_credible_votes + 1 ELSE not_credible_votes END,
+          credibility_score = credibility_score + CASE WHEN ${vote} = 'credible' THEN 1 ELSE -1 END
+        WHERE id = ${postId}
+      `);
+    }
+  }
+
+  async getUserWhistleblowingVote(postId: string, userId: string): Promise<WhistleblowingVote | undefined> {
+    const [vote] = await db
+      .select()
+      .from(whistleblowingVotes)
+      .where(and(
+        eq(whistleblowingVotes.postId, postId),
+        eq(whistleblowingVotes.userId, userId)
+      ));
+    return vote || undefined;
+  }
+
+  async deleteWhistleblowingPost(postId: string): Promise<void> {
+    await db
+      .update(whistleblowingPosts)
+      .set({ isDeleted: true })
+      .where(eq(whistleblowingPosts.id, postId));
   }
 }
 
