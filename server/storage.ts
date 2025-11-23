@@ -4713,11 +4713,59 @@ export class DatabaseStorage implements IStorage {
 
   // Content Moderation Implementation
   async getFlaggedContent(status?: string): Promise<any[]> {
-    let query = db.select().from(flaggedContent);
-    if (status) {
-      query = query.where(eq(flaggedContent.status, status)) as any;
-    }
-    return await query.orderBy(desc(flaggedContent.createdAt));
+    // Get flagged posts with aggregated counts
+    const flaggedPosts = await db
+      .select({
+        postId: flags.targetId,
+        flagCount: sql<number>`count(*)`,
+        dislikeCount: sql<number>`count(*) filter (where ${flags.reason} = 'not_interested')`,
+        reportCount: sql<number>`count(*) filter (where ${flags.reason} != 'not_interested')`,
+        firstFlaggedAt: sql<Date>`min(${flags.createdAt})`,
+        reasons: sql<string[]>`array_agg(distinct ${flags.reason})`,
+      })
+      .from(flags)
+      .where(eq(flags.targetType, 'post'))
+      .groupBy(flags.targetId);
+
+    // Get posts with author info
+    const flaggedPostsWithDetails = await Promise.all(
+      flaggedPosts.map(async (flagged) => {
+        const [post] = await db
+          .select({
+            id: posts.id,
+            content: posts.content,
+            createdAt: posts.createdAt,
+            authorId: posts.authorId,
+            authorUsername: users.username,
+            authorFirstName: users.firstName,
+            authorLastName: users.lastName,
+            likesCount: posts.likesCount,
+            commentsCount: posts.commentsCount,
+          })
+          .from(posts)
+          .leftJoin(users, eq(posts.authorId, users.id))
+          .where(eq(posts.id, flagged.postId));
+
+        if (!post) return null;
+
+        return {
+          postId: flagged.postId,
+          post,
+          flagCount: Number(flagged.flagCount),
+          dislikeCount: Number(flagged.dislikeCount),
+          reportCount: Number(flagged.reportCount),
+          totalUrgency: Number(flagged.flagCount) + Number(flagged.dislikeCount),
+          firstFlaggedAt: flagged.firstFlaggedAt,
+          reasons: flagged.reasons,
+          status: 'pending',
+        };
+      })
+    );
+
+    // Filter out nulls and sort by urgency (most flagged/disliked on top)
+    return flaggedPostsWithDetails
+      .filter((item) => item !== null)
+      .sort((a, b) => b!.totalUrgency - a!.totalUrgency);
   }
 
   async createFlaggedContent(data: any): Promise<any> {
