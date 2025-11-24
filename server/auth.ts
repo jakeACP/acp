@@ -6,6 +6,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import { getClientIp, getCountryFromIp } from "./ip-utils";
 
 declare global {
   namespace Express {
@@ -85,10 +86,18 @@ export function setupAuth(app: Express) {
       const userCount = await storage.getUserCount();
       const isFirstUser = userCount === 0;
 
+      // Capture registration IP and country
+      const registrationIp = getClientIp(req);
+      const registrationCountry = await getCountryFromIp(registrationIp);
+
       const user = await storage.createUser({
         ...userData,
         password: await hashPassword(userData.password),
         role: isFirstUser ? "admin" : "citizen",
+        registrationIp,
+        registrationCountry,
+        lastLoginIp: registrationIp,
+        lastLoginCountry: registrationCountry,
       });
 
       // Mark invitation as used if one was provided
@@ -136,8 +145,23 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+  app.post("/api/login", passport.authenticate("local"), async (req, res) => {
+    try {
+      // Update last login IP and country
+      const lastLoginIp = getClientIp(req);
+      const lastLoginCountry = await getCountryFromIp(lastLoginIp);
+      
+      await storage.updateUser(req.user.id, {
+        lastLoginIp,
+        lastLoginCountry,
+      });
+      
+      res.status(200).json(req.user);
+    } catch (error) {
+      console.error("Error updating login IP:", error);
+      // Still send user data even if IP update fails
+      res.status(200).json(req.user);
+    }
   });
 
   app.post("/api/logout", (req, res, next) => {
