@@ -131,3 +131,16 @@ Preferred communication style: Simple, everyday language.
 - **Authentication**: Inline authentication checks (`req.isAuthenticated()`) with toast notifications for non-logged users
 - **Rating Updates**: Users can modify their rating by clicking a different grade; system auto-submits the change
 - **User Experience**: Compact, non-intrusive design in top-right corner with clear separation of admin vs community perspectives
+
+### Live Trending Topics & Event Posts (November 2025)
+- **Real-Time Trending Hashtags**: Activity sidebar displays live trending topics from posts in the last 72 hours
+- **SQL-Based Aggregation**: Backend efficiently counts hashtag occurrences using regex extraction on latest 1000 posts
+- **Performance Optimization**: Indexed timestamp column, ORDER BY DESC, and 5-minute cache (staleTime) minimize database load
+- **Loading States**: Skeleton loaders show while fetching trending data and event details
+- **Event Post Integration**: Posts linked to events now display full event information inline within the feed
+- **Event Data Structure**: Added `eventId` field to posts table as nullable foreign key to events table
+- **Rich Event Display**: Shows event title, location, dates/times, attendee count, and RSVP status in PostCard component
+- **Feed Query Updates**: All feed methods (getAllFeed, getFollowingFeed, getNewsFeed) now explicitly select eventId field
+- **Backend Support**: New API endpoint `GET /api/events/:id` for fetching individual event details
+- **Query Caching**: Event details cached for 10 minutes to reduce redundant API calls
+- **Database Schema**: Posts table includes `eventId varchar REFERENCES events(id)` for event linkage
