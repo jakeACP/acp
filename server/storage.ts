@@ -680,6 +680,16 @@ export class DatabaseStorage implements IStorage {
         flagsCount: posts.flagsCount,
         isDeleted: posts.isDeleted,
         createdAt: posts.createdAt,
+        // Poll fields
+        pollId: polls.id,
+        pollTitle: polls.title,
+        pollDescription: polls.description,
+        pollOptions: polls.options,
+        pollVotingType: polls.votingType,
+        pollIsBlockchainVerified: polls.isBlockchainVerified,
+        pollTotalVotes: polls.totalVotes,
+        pollEndDate: polls.endDate,
+        pollIsActive: polls.isActive,
         author: {
           username: users.username,
           firstName: users.firstName,
@@ -688,6 +698,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(posts)
       .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(polls, eq(posts.id, polls.postId))
       .where(privacyFilter)
       .orderBy(desc(posts.createdAt))
       .limit(limit)
@@ -947,6 +958,16 @@ export class DatabaseStorage implements IStorage {
         flagsCount: posts.flagsCount,
         isDeleted: posts.isDeleted,
         createdAt: posts.createdAt,
+        // Poll fields
+        pollId: polls.id,
+        pollTitle: polls.title,
+        pollDescription: polls.description,
+        pollOptions: polls.options,
+        pollVotingType: polls.votingType,
+        pollIsBlockchainVerified: polls.isBlockchainVerified,
+        pollTotalVotes: polls.totalVotes,
+        pollEndDate: polls.endDate,
+        pollIsActive: polls.isActive,
         author: {
           username: users.username,
           firstName: users.firstName,
@@ -955,6 +976,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(posts)
       .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(polls, eq(posts.id, polls.postId))
       .where(and(
         eq(posts.isDeleted, false),
         privacyFilter
@@ -1004,6 +1026,16 @@ export class DatabaseStorage implements IStorage {
         flagsCount: posts.flagsCount,
         isDeleted: posts.isDeleted,
         createdAt: posts.createdAt,
+        // Poll fields
+        pollId: polls.id,
+        pollTitle: polls.title,
+        pollDescription: polls.description,
+        pollOptions: polls.options,
+        pollVotingType: polls.votingType,
+        pollIsBlockchainVerified: polls.isBlockchainVerified,
+        pollTotalVotes: polls.totalVotes,
+        pollEndDate: polls.endDate,
+        pollIsActive: polls.isActive,
         author: {
           username: users.username,
           firstName: users.firstName,
@@ -1012,6 +1044,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(posts)
       .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(polls, eq(posts.id, polls.postId))
       .innerJoin(userFollows, eq(userFollows.followeeId, posts.authorId))
       .where(and(
         eq(userFollows.followerId, userId),
@@ -1073,6 +1106,16 @@ export class DatabaseStorage implements IStorage {
         flagsCount: posts.flagsCount,
         isDeleted: posts.isDeleted,
         createdAt: posts.createdAt,
+        // Poll fields
+        pollId: polls.id,
+        pollTitle: polls.title,
+        pollDescription: polls.description,
+        pollOptions: polls.options,
+        pollVotingType: polls.votingType,
+        pollIsBlockchainVerified: polls.isBlockchainVerified,
+        pollTotalVotes: polls.totalVotes,
+        pollEndDate: polls.endDate,
+        pollIsActive: polls.isActive,
         author: {
           username: users.username,
           firstName: users.firstName,
@@ -1081,6 +1124,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(posts)
       .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(polls, eq(posts.id, polls.postId))
       .leftJoin(biasVotes, eq(biasVotes.postId, posts.id))
       .where(and(
         eq(posts.type, 'news'),
@@ -1088,7 +1132,7 @@ export class DatabaseStorage implements IStorage {
         gte(posts.createdAt, cutoffTimestamp),
         privacyFilter
       ))
-      .groupBy(posts.id, users.id)
+      .groupBy(posts.id, users.id, polls.id)
       .orderBy(sql`
         COUNT(CASE WHEN ${biasVotes.vote} = 'Neutral' THEN 1 END) DESC,
         COUNT(${biasVotes.vote}) DESC,
