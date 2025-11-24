@@ -694,6 +694,7 @@ export class DatabaseStorage implements IStorage {
           username: users.username,
           firstName: users.firstName,
           lastName: users.lastName,
+          avatar: users.avatar,
         },
       })
       .from(posts)
@@ -972,6 +973,7 @@ export class DatabaseStorage implements IStorage {
           username: users.username,
           firstName: users.firstName,
           lastName: users.lastName,
+          avatar: users.avatar,
         },
       })
       .from(posts)
@@ -1040,6 +1042,7 @@ export class DatabaseStorage implements IStorage {
           username: users.username,
           firstName: users.firstName,
           lastName: users.lastName,
+          avatar: users.avatar,
         },
       })
       .from(posts)
@@ -1120,6 +1123,7 @@ export class DatabaseStorage implements IStorage {
           username: users.username,
           firstName: users.firstName,
           lastName: users.lastName,
+          avatar: users.avatar,
         },
       })
       .from(posts)

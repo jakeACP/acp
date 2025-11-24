@@ -408,6 +408,7 @@ export function PostCard({ post }: PostCardProps) {
           <div className="flex items-center gap-3">
             <Link href={`/profile/${post.authorId}`}>
               <Avatar className="cursor-pointer hover:opacity-80 transition-opacity">
+                <AvatarImage src={post.author?.avatar || undefined} alt={getDisplayName()} />
                 <AvatarFallback>
                   {post.authorId.slice(0, 2).toUpperCase()}
                 </AvatarFallback>

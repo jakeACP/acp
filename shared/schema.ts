@@ -1590,6 +1590,7 @@ export type PostWithAuthor = Post & {
     username: string;
     firstName: string | null;
     lastName: string | null;
+    avatar: string | null;
   } | null;
   pollId?: string | null;
   pollTitle?: string | null;
