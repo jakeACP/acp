@@ -382,6 +382,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/user/followers", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const followers = await storage.getFollowers(req.user.id);
+      res.json(followers);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/user/following", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const following = await storage.getFollowing(req.user.id);
+      res.json(following);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/user/friends/count", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);

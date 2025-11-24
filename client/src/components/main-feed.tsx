@@ -16,7 +16,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { PostWithAuthor, Poll, Event, Charity } from "@shared/schema";
+import { PostWithAuthor, Poll, Event, Charity, User, Group } from "@shared/schema";
 import { 
   Loader2, 
   MessageSquare, 
@@ -31,9 +31,15 @@ import {
   Ban,
   FileText,
   ScrollText,
-  Building2
+  Building2,
+  UserPlus,
+  Leaf,
+  GraduationCap,
+  Scale
 } from "lucide-react";
 import { format } from "date-fns";
+import { useFeedView } from "@/contexts/feed-view-context";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type FeedType = 'all' | 'news' | 'following' | 'polls' | 'events' | 'charities' | 'debates' | 'boycotts' | 'initiatives' | 'petitions' | 'unions';
 
@@ -309,11 +315,293 @@ function InitiativeFeedCard({ initiative }: { initiative: any }) {
   );
 }
 
+// Friends View Component
+function FriendsView() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const { data: followers = [], isLoading: isLoadingFollowers } = useQuery<User[]>({
+    queryKey: ["/api/user/followers"],
+    enabled: !!user,
+  });
+
+  const { data: following = [], isLoading: isLoadingFollowing } = useQuery<User[]>({
+    queryKey: ["/api/user/following"],
+    enabled: !!user,
+  });
+
+  const followMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const response = await apiRequest(`/api/user/follow/${userId}`, "POST");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user/followers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/friends/count"] });
+      toast({
+        title: "Success",
+        description: "You are now following this user.",
+      });
+    },
+  });
+
+  const unfollowMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const response = await apiRequest(`/api/user/unfollow/${userId}`, "DELETE");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user/followers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/friends/count"] });
+      toast({
+        title: "Success",
+        description: "You have unfollowed this user.",
+      });
+    },
+  });
+
+  const isLoading = isLoadingFollowers || isLoadingFollowing;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Combine and deduplicate friends
+  const allFriends = new Map<number, User>();
+  [...followers, ...following].forEach(friend => {
+    allFriends.set(friend.id, friend);
+  });
+  const friends = Array.from(allFriends.values());
+
+  return (
+    <div className="space-y-4">
+      <Card className="floating-card bg-card border border-border">
+        <CardContent className="p-6">
+          <h2 className="text-2xl font-bold mb-4 text-foreground">My Friends</h2>
+          {friends.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              You don't have any friends yet. Start following people to build your network!
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {friends.map((friend) => (
+                <div 
+                  key={friend.id} 
+                  className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  data-testid={`friend-item-${friend.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={friend.avatar || ""} />
+                      <AvatarFallback>
+                        {friend.firstName?.[0]}{friend.lastName?.[0] || friend.username?.[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-semibold text-foreground">
+                        {friend.firstName ? `${friend.firstName} ${friend.lastName}` : friend.username}
+                      </p>
+                      {friend.location && (
+                        <p className="text-sm text-muted-foreground">{friend.location}</p>
+                      )}
+                    </div>
+                  </div>
+                  {following.some(f => f.id === friend.id) ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => unfollowMutation.mutate(friend.id)}
+                      disabled={unfollowMutation.isPending}
+                      data-testid={`button-unfollow-${friend.id}`}
+                    >
+                      Unfollow
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => followMutation.mutate(friend.id)}
+                      disabled={followMutation.isPending}
+                      data-testid={`button-follow-${friend.id}`}
+                    >
+                      <UserPlus className="h-4 w-4 mr-1" />
+                      Follow
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Groups View Component
+function GroupsView() {
+  const { user } = useAuth();
+
+  const { data: groups = [], isLoading } = useQuery<Group[]>({
+    queryKey: ["/api/groups/user", user?.id],
+    enabled: !!user,
+  });
+
+  const getGroupIcon = (category: string | null) => {
+    switch (category) {
+      case "climate": return <Leaf className="h-6 w-6 text-white" />;
+      case "education": return <GraduationCap className="h-6 w-6 text-white" />;
+      case "corruption": return <Scale className="h-6 w-6 text-white" />;
+      default: return <Users className="h-6 w-6 text-white" />;
+    }
+  };
+
+  const getGroupColor = (category: string | null) => {
+    switch (category) {
+      case "climate": return "bg-green-500";
+      case "education": return "bg-blue-500";
+      case "corruption": return "bg-red-500";
+      default: return "bg-slate-500";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="floating-card bg-card border border-border">
+        <CardContent className="p-6">
+          <h2 className="text-2xl font-bold mb-4 text-foreground">My Groups</h2>
+          {groups.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              You haven't joined any groups yet. Explore groups to connect with like-minded people!
+            </p>
+          ) : (
+            <div className="grid gap-4">
+              {groups.map((group) => (
+                <div 
+                  key={group.id}
+                  className="flex items-start gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  data-testid={`group-item-${group.id}`}
+                >
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${getGroupColor(group.category)}`}>
+                    {getGroupIcon(group.category)}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-foreground">{group.name}</h3>
+                    {group.description && (
+                      <p className="text-sm text-muted-foreground mt-1">{group.description}</p>
+                    )}
+                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                      <span>{group.memberCount} members</span>
+                      {group.category && (
+                        <Badge variant="secondary" className="capitalize">
+                          {group.category}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Votes View Component
+function VotesView() {
+  const { user } = useAuth();
+
+  const { data: polls = [], isLoading } = useQuery<Poll[]>({
+    queryKey: ["/api/polls"],
+    enabled: !!user,
+  });
+
+  // Filter to show only polls the user has voted on
+  // For now, we'll show all polls since we don't have a voted status
+  const votedPolls = polls;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="floating-card bg-card border border-border">
+        <CardContent className="p-6">
+          <h2 className="text-2xl font-bold mb-4 text-foreground">My Votes</h2>
+          {votedPolls.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              You haven't cast any votes yet. Participate in polls to make your voice heard!
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {votedPolls.map((poll) => (
+                <div 
+                  key={poll.id}
+                  className="p-4 rounded-lg bg-muted/50"
+                  data-testid={`vote-item-${poll.id}`}
+                >
+                  <h3 className="font-semibold text-foreground mb-2">{poll.question}</h3>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>{poll.totalVotes || 0} votes</span>
+                    {poll.votingMethod && (
+                      <Badge variant="secondary" className="ml-2">
+                        {poll.votingMethod === "ranked_choice" ? "Ranked Choice" : 
+                         poll.votingMethod === "blockchain" ? "Blockchain" : "Simple"}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function MainFeed() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const { activeView, setActiveView } = useFeedView();
   const [showBlockchain, setShowBlockchain] = useState(false);
   const [activeFeed, setActiveFeed] = useState<FeedType>('all');
   const [showMobileCreatePost, setShowMobileCreatePost] = useState(false);
+
+  // Check if we should show special views
+  if (activeView === "friends") {
+    return <FriendsView />;
+  }
+
+  if (activeView === "groups") {
+    return <GroupsView />;
+  }
+
+  if (activeView === "votes") {
+    return <VotesView />;
+  }
 
   // Three-tier feed system queries
   const { data: allFeedPosts = [], isLoading: isLoadingAll } = useQuery<PostWithAuthor[]>({

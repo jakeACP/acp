@@ -129,6 +129,7 @@ export default function HomePage() {
           </DialogContent>
         </Dialog>
       </div>
+      </div>
     </FeedViewProvider>
   );
 }
