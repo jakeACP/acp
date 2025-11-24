@@ -144,3 +144,18 @@ Preferred communication style: Simple, everyday language.
 - **Backend Support**: New API endpoint `GET /api/events/:id` for fetching individual event details
 - **Query Caching**: Event details cached for 10 minutes to reduce redundant API calls
 - **Database Schema**: Posts table includes `eventId varchar REFERENCES events(id)` for event linkage
+
+### IP Tracking & Admin User Management (November 2025)
+- **Registration IP Tracking**: Automatically captures and stores user's IP address and country at signup time
+- **Login IP Tracking**: Updates user's last login IP and country on each login attempt for security monitoring
+- **Geolocation Integration**: Uses ip-api.com free API with 5-second timeout for country lookup from IP addresses
+- **Database Schema**: Added `registrationIp`, `lastLoginIp`, `registrationCountry`, `lastLoginCountry` fields to users table
+- **IP Utility Functions**: Server-side utilities for extracting client IP from Express request headers (x-forwarded-for, x-real-ip, req.ip)
+- **Admin Users Page**: New admin panel page displaying all users with pagination (20 users per page)
+- **User Information Display**: Shows username, email, role, registration IP/country, and last login IP/country in card layout
+- **Pagination Controls**: Next/Previous navigation with proper URL query parameters for page state
+- **Error Handling**: Graceful degradation when geolocation API fails - still allows registration/login
+- **API Endpoints**: `GET /api/admin/users?limit=20&offset=0` for paginated user list retrieval
+- **Admin Navigation**: Added "Users" link to admin panel navigation for quick access
+- **Security Considerations**: IP data stored for admin visibility only, no automated blocking or enforcement
+- **Performance**: Async IP lookup doesn't block auth flows, pagination prevents large data loads
