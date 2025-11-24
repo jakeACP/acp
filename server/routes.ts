@@ -3617,6 +3617,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/admin/posts/:postId/mark-safe", ensureAdmin, async (req, res) => {
+    try {
+      const { postId } = req.params;
+      
+      // Mark all flags for this post as dismissed
+      await storage.dismissPostFlags(postId, req.user!.id);
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Admin mark post safe error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.patch("/api/admin/flagged-content/:id/review", ensureAdmin, async (req, res) => {
     try {
       const { id } = req.params;

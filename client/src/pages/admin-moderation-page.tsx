@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AdminNavigation } from "@/components/admin-navigation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, Flag, ThumbsDown, Trash2, User } from "lucide-react";
+import { AlertTriangle, Flag, ThumbsDown, Trash2, User, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function AdminModerationPage() {
@@ -36,10 +36,34 @@ export default function AdminModerationPage() {
     },
   });
 
+  const markSafeMutation = useMutation({
+    mutationFn: async (postId: string) => {
+      return await apiRequest(`/api/admin/posts/${postId}/mark-safe`, 'POST');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/flagged-content'] });
+      toast({ 
+        title: "Post marked as safe",
+        description: "All flags have been dismissed for this post."
+      });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Error marking post as safe", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
   const handleDeletePost = (postId: string) => {
     if (confirm("Are you sure you want to permanently delete this post?")) {
       deletePostMutation.mutate(postId);
     }
+  };
+
+  const handleMarkSafe = (postId: string) => {
+    markSafeMutation.mutate(postId);
   };
 
   const getReasonBadge = (reason: string) => {
@@ -98,16 +122,28 @@ export default function AdminModerationPage() {
                         ))}
                       </div>
                     </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDeletePost(item.postId)}
-                      disabled={deletePostMutation.isPending}
-                      data-testid={`button-delete-${item.postId}`}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Remove Post
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleMarkSafe(item.postId)}
+                        disabled={markSafeMutation.isPending}
+                        data-testid={`button-mark-safe-${item.postId}`}
+                      >
+                        <ShieldCheck className="h-4 w-4 mr-2" />
+                        Mark as Safe
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeletePost(item.postId)}
+                        disabled={deletePostMutation.isPending}
+                        data-testid={`button-delete-${item.postId}`}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Remove Post
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>

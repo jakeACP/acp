@@ -397,6 +397,7 @@ export interface IStorage {
   getFlaggedContent(status?: string): Promise<any[]>;
   createFlaggedContent(data: any): Promise<any>;
   reviewFlaggedContent(id: string, reviewedBy: string, status: string, actionTaken?: string, reviewNote?: string): Promise<void>;
+  dismissPostFlags(postId: string, reviewedBy: string): Promise<void>;
 
   // User Bans
   getBannedUsers(activeOnly?: boolean): Promise<any[]>;
@@ -4807,6 +4808,26 @@ export class DatabaseStorage implements IStorage {
         reviewedAt: new Date(),
       })
       .where(eq(flaggedContent.id, id));
+  }
+
+  async dismissPostFlags(postId: string, reviewedBy: string): Promise<void> {
+    // Mark all flags for this post as dismissed with no action taken
+    await db
+      .update(flaggedContent)
+      .set({
+        status: 'dismissed',
+        reviewedBy,
+        actionTaken: 'no_action',
+        reviewNote: 'Marked as safe by admin',
+        reviewedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(flaggedContent.contentType, 'post'),
+          eq(flaggedContent.contentId, postId),
+          eq(flaggedContent.status, 'pending')
+        )
+      );
   }
 
   // User Bans Implementation
