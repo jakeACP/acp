@@ -750,6 +750,15 @@ export class DatabaseStorage implements IStorage {
       // Delete any bias votes related to this post
       await tx.delete(biasVotes).where(eq(biasVotes.postId, postId));
       
+      // Handle shared posts - nullify the sharedPostId reference in posts that shared this one
+      await tx
+        .update(posts)
+        .set({ sharedPostId: null })
+        .where(eq(posts.sharedPostId, postId));
+      
+      // Delete associated poll if it exists
+      await tx.delete(polls).where(eq(polls.postId, postId));
+      
       // Finally delete the post itself
       await tx.delete(posts).where(eq(posts.id, postId));
     });

@@ -180,7 +180,16 @@ export function PostCard({ post }: PostCardProps) {
       return await apiRequest(`/api/posts/${post.id}`, "DELETE");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      // Immediately remove from feeds
+      const removeFromFeed = (old: any) => {
+        if (!old) return old;
+        return old.filter((p: PostWithAuthor) => p.id !== post.id);
+      };
+      
+      queryClient.setQueryData(["/api/feeds/all"], removeFromFeed);
+      queryClient.setQueryData(["/api/feeds/following"], removeFromFeed);
+      queryClient.setQueryData(["/api/feeds/news"], removeFromFeed);
+      
       toast({
         title: "Post Deleted",
         description: "Your post has been deleted successfully.",
