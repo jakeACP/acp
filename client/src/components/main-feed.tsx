@@ -331,7 +331,7 @@ function FriendsView() {
   });
 
   const followMutation = useMutation({
-    mutationFn: async (userId: number) => {
+    mutationFn: async (userId: string) => {
       const response = await apiRequest(`/api/user/follow/${userId}`, "POST");
       return response.json();
     },
@@ -347,7 +347,7 @@ function FriendsView() {
   });
 
   const unfollowMutation = useMutation({
-    mutationFn: async (userId: number) => {
+    mutationFn: async (userId: string) => {
       const response = await apiRequest(`/api/user/unfollow/${userId}`, "DELETE");
       return response.json();
     },
@@ -373,7 +373,7 @@ function FriendsView() {
   }
 
   // Combine and deduplicate friends
-  const allFriends = new Map<number, User>();
+  const allFriends = new Map<string, User>();
   [...followers, ...following].forEach(friend => {
     allFriends.set(friend.id, friend);
   });
@@ -561,14 +561,14 @@ function VotesView() {
                   className="p-4 rounded-lg bg-muted/50"
                   data-testid={`vote-item-${poll.id}`}
                 >
-                  <h3 className="font-semibold text-foreground mb-2">{poll.question}</h3>
+                  <h3 className="font-semibold text-foreground mb-2">{poll.title}</h3>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <BarChart3 className="h-4 w-4" />
                     <span>{poll.totalVotes || 0} votes</span>
-                    {poll.votingMethod && (
+                    {poll.votingType && (
                       <Badge variant="secondary" className="ml-2">
-                        {poll.votingMethod === "ranked_choice" ? "Ranked Choice" : 
-                         poll.votingMethod === "blockchain" ? "Blockchain" : "Simple"}
+                        {poll.votingType === "ranked_choice" ? "Ranked Choice" : 
+                         poll.votingType === "blockchain" ? "Blockchain" : "Simple"}
                       </Badge>
                     )}
                   </div>
@@ -698,7 +698,7 @@ export function MainFeed() {
     const content = post.content.toLowerCase();
     const tags = post.tags || [];
     return debateKeywords.some(keyword => content.includes(keyword)) || 
-           tags.some(tag => debateKeywords.includes(tag.toLowerCase()));
+           tags.some((tag: string) => debateKeywords.includes(tag.toLowerCase()));
   };
 
   // Helper function to check if post is news-related
@@ -708,7 +708,7 @@ export function MainFeed() {
     const tags = post.tags || [];
     return post.type === 'announcement' ||
            newsKeywords.some(keyword => content.includes(keyword)) ||
-           tags.some(tag => newsKeywords.includes(tag.toLowerCase()));
+           tags.some((tag: string) => newsKeywords.includes(tag.toLowerCase()));
   };
 
   // Combine content for feed display based on active feed
