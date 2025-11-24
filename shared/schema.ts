@@ -43,6 +43,11 @@ export const users = pgTable("users", {
   normalizedEmail: text("normalized_email"), // Lowercase email for matching
   discoverableByPhone: boolean("discoverable_by_phone").default(false),
   discoverableByEmail: boolean("discoverable_by_email").default(false),
+  // IP tracking for security and analytics
+  registrationIp: text("registration_ip"),
+  lastLoginIp: text("last_login_ip"),
+  registrationCountry: text("registration_country"),
+  lastLoginCountry: text("last_login_country"),
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,
