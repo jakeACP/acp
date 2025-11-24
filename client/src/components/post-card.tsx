@@ -9,11 +9,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Post, PostWithAuthor, Comment } from "@shared/schema";
-import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Post, PostWithAuthor, Comment, Event } from "@shared/schema";
+import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown, MapPin, Calendar, Users, ExternalLink } from "lucide-react";
+import { formatDistanceToNow, format } from "date-fns";
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link as WouterLink } from "wouter";
 import { VideoEmbedDisplay } from "@/components/video-embed";
 
 interface PostCardProps {
@@ -48,6 +48,12 @@ export function PostCard({ post }: PostCardProps) {
   const { data: userVoteData } = useQuery<{ optionId: string } | null>({
     queryKey: ["/api/polls", post.pollId, "my-vote"],
     enabled: !!user && !!post.pollId,
+  });
+
+  const { data: eventData, isLoading: eventLoading, isError: eventError } = useQuery<Event>({
+    queryKey: [`/api/events/${post.eventId}`],
+    enabled: !!post.eventId && post.type === "event",
+    staleTime: 10 * 60 * 1000, // Cache event data for 10 minutes
   });
 
   const likeMutation = useMutation({
@@ -406,20 +412,20 @@ export function PostCard({ post }: PostCardProps) {
       <CardHeader>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <Link href={`/profile/${post.authorId}`}>
+            <WouterLink href={`/profile/${post.authorId}`}>
               <Avatar className="cursor-pointer hover:opacity-80 transition-opacity">
                 <AvatarImage src={post.author?.avatar || undefined} alt={getDisplayName()} />
                 <AvatarFallback>
                   {post.authorId.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-            </Link>
+            </WouterLink>
             <div>
-              <Link href={`/profile/${post.authorId}`}>
+              <WouterLink href={`/profile/${post.authorId}`}>
                 <h4 className="font-semibold text-slate-900 dark:text-slate-100 hover:text-primary cursor-pointer transition-colors" data-testid={`link-author-${post.authorId}`}>
                   {getDisplayName()}
                 </h4>
-              </Link>
+              </WouterLink>
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 {timeAgo || "Recently"}
               </p>
@@ -542,6 +548,104 @@ export function PostCard({ post }: PostCardProps) {
           </div>
         )}
         
+        {post.type === "event" && post.eventId && (
+          <div className="mb-4 border border-border rounded-lg overflow-hidden bg-gradient-to-br from-primary/5 to-blue-500/5">
+            {eventLoading ? (
+              <div className="p-4 space-y-3">
+                <div className="h-6 w-3/4 bg-muted animate-pulse rounded"></div>
+                <div className="h-4 w-full bg-muted animate-pulse rounded"></div>
+                <div className="h-4 w-5/6 bg-muted animate-pulse rounded"></div>
+                <div className="h-10 w-full bg-muted animate-pulse rounded"></div>
+              </div>
+            ) : eventError || !eventData ? (
+              <div className="p-4 text-center text-muted-foreground">
+                <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Event details unavailable</p>
+              </div>
+            ) : (
+              <>
+                {eventData.image && (
+                  <div className="w-full h-48 bg-muted">
+                    <img 
+                      src={eventData.image} 
+                      alt={eventData.title} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="p-4">
+                  <h3 className="font-bold text-lg text-foreground mb-2">{eventData.title}</h3>
+                  {eventData.description && (
+                    <p className="text-sm text-muted-foreground mb-3">{eventData.description}</p>
+                  )}
+                  
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-start gap-2 text-sm">
+                      <Calendar className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
+                      <div>
+                        <div className="font-medium text-foreground">
+                          {format(new Date(eventData.startDate), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+                        </div>
+                        {eventData.endDate && (
+                          <div className="text-xs text-muted-foreground">
+                            Until {format(new Date(eventData.endDate), "h:mm a")}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2 text-sm">
+                      <MapPin className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
+                      <div>
+                        {eventData.isVirtual ? (
+                          <div>
+                            <div className="font-medium text-foreground">Virtual Event</div>
+                            {eventData.virtualLink && (
+                              <a 
+                                href={eventData.virtualLink} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline flex items-center gap-1"
+                              >
+                                Join online <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="font-medium text-foreground">{eventData.location}</div>
+                            {eventData.address && (
+                              <div className="text-xs text-muted-foreground">{eventData.address}</div>
+                            )}
+                            <div className="text-xs text-muted-foreground">
+                              {eventData.city}, {eventData.state} {eventData.zipCode || ''}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {eventData.maxAttendees && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Users className="h-4 w-4 text-primary" />
+                        <span className="text-foreground">
+                          {eventData.currentAttendees || 0} / {eventData.maxAttendees} attendees
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <WouterLink href={`/events`}>
+                    <Button variant="default" className="w-full" size="sm">
+                      View Event Details
+                    </Button>
+                  </WouterLink>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        
         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
           <div className="flex space-x-6">
             <Button
@@ -609,18 +713,18 @@ export function PostCard({ post }: PostCardProps) {
                         <div key={comment.id} className="border rounded-lg p-3">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              <Link href={`/profile/${comment.authorId}`}>
+                              <WouterLink href={`/profile/${comment.authorId}`}>
                                 <Avatar className="h-6 w-6 cursor-pointer hover:opacity-80 transition-opacity">
                                   <AvatarFallback className="text-xs">
                                     {comment.authorId.slice(0, 2).toUpperCase()}
                                   </AvatarFallback>
                                 </Avatar>
-                              </Link>
-                              <Link href={`/profile/${comment.authorId}`}>
+                              </WouterLink>
+                              <WouterLink href={`/profile/${comment.authorId}`}>
                                 <span className="text-sm font-medium text-slate-900 dark:text-slate-100 hover:text-primary cursor-pointer transition-colors" data-testid={`link-comment-author-${comment.authorId}`}>
                                   {comment.authorId}
                                 </span>
-                              </Link>
+                              </WouterLink>
                               <span className="text-xs text-slate-500 dark:text-slate-400">
                                 {comment.createdAt && formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                               </span>

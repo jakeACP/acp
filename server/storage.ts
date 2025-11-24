@@ -916,14 +916,16 @@ export class DatabaseStorage implements IStorage {
   async getTrendingHashtags(limit = 10, hoursAgo = 72): Promise<Array<{ tag: string; count: number }>> {
     const cutoffTime = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
     
-    // Get all posts from the last X hours
+    // Get all posts from the last X hours (indexed query with limit to avoid full table scan)
     const recentPosts = await db
       .select({ content: posts.content, tags: posts.tags })
       .from(posts)
       .where(and(
         gte(posts.createdAt, cutoffTime),
         eq(posts.isDeleted, false)
-      ));
+      ))
+      .orderBy(desc(posts.createdAt))
+      .limit(1000); // Limit to most recent 1000 posts to prevent memory issues
     
     // Extract and count hashtags
     const hashtagCounts = new Map<string, number>();
@@ -946,7 +948,7 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    // Sort by count and return top N
+    // Sort by count descending and return top N
     return Array.from(hashtagCounts.entries())
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count)
@@ -994,6 +996,7 @@ export class DatabaseStorage implements IStorage {
         linkPreview: posts.linkPreview,
         sharesCount: posts.sharesCount,
         sharedPostId: posts.sharedPostId,
+        eventId: posts.eventId,
         privacy: posts.privacy,
         emojiReactionsCount: posts.emojiReactionsCount,
         gifReactionsCount: posts.gifReactionsCount,
@@ -1063,6 +1066,7 @@ export class DatabaseStorage implements IStorage {
         linkPreview: posts.linkPreview,
         sharesCount: posts.sharesCount,
         sharedPostId: posts.sharedPostId,
+        eventId: posts.eventId,
         privacy: posts.privacy,
         emojiReactionsCount: posts.emojiReactionsCount,
         gifReactionsCount: posts.gifReactionsCount,
@@ -1144,6 +1148,7 @@ export class DatabaseStorage implements IStorage {
         linkPreview: posts.linkPreview,
         sharesCount: posts.sharesCount,
         sharedPostId: posts.sharedPostId,
+        eventId: posts.eventId,
         privacy: posts.privacy,
         emojiReactionsCount: posts.emojiReactionsCount,
         gifReactionsCount: posts.gifReactionsCount,

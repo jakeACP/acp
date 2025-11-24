@@ -173,8 +173,9 @@ export function ActivitySidebar() {
     queryKey: ["/api/politician-profiles/featured"],
   });
 
-  const { data: trendingTopics = [] } = useQuery<Array<{ tag: string; count: number }>>({
+  const { data: trendingTopics = [], isLoading: trendingLoading } = useQuery<Array<{ tag: string; count: number }>>({
     queryKey: ["/api/trending-hashtags"],
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes to reduce backend load
   });
 
   const getPollProgress = (poll: Poll) => {
@@ -315,7 +316,16 @@ export function ActivitySidebar() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {trendingTopics.length > 0 ? (
+          {trendingLoading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="h-4 w-24 bg-muted animate-pulse rounded"></div>
+                  <div className="h-3 w-16 bg-muted animate-pulse rounded"></div>
+                </div>
+              ))}
+            </div>
+          ) : trendingTopics.length > 0 ? (
             <div className="space-y-3">
               {trendingTopics.slice(0, 4).map((topic) => (
                 <div key={topic.tag} className="flex items-center justify-between">
