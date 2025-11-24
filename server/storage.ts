@@ -31,6 +31,8 @@ export interface IStorage {
   getPostsByTag(tag: string, userId?: string): Promise<Post[]>;
   incrementPostShares(postId: string): Promise<void>;
   sharePost(originalPostId: string, userId: string): Promise<Post>;
+  getTrendingHashtags(limit?: number, hoursAgo?: number): Promise<Array<{ tag: string; count: number }>>;
+
 
   // Feed System
   getAllFeed(limit?: number, offset?: number, userId?: string): Promise<PostWithAuthor[]>;
@@ -909,6 +911,46 @@ export class DatabaseStorage implements IStorage {
 
       return sharedPost;
     });
+  }
+
+  async getTrendingHashtags(limit = 10, hoursAgo = 72): Promise<Array<{ tag: string; count: number }>> {
+    const cutoffTime = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
+    
+    // Get all posts from the last X hours
+    const recentPosts = await db
+      .select({ content: posts.content, tags: posts.tags })
+      .from(posts)
+      .where(and(
+        gte(posts.createdAt, cutoffTime),
+        eq(posts.isDeleted, false)
+      ));
+    
+    // Extract and count hashtags
+    const hashtagCounts = new Map<string, number>();
+    
+    for (const post of recentPosts) {
+      // Extract hashtags from content
+      const hashtagRegex = /#(\w+)/g;
+      let match;
+      while ((match = hashtagRegex.exec(post.content)) !== null) {
+        const tag = `#${match[1]}`;
+        hashtagCounts.set(tag, (hashtagCounts.get(tag) || 0) + 1);
+      }
+      
+      // Also count tags from the tags array
+      if (post.tags && Array.isArray(post.tags)) {
+        for (const tag of post.tags) {
+          const formattedTag = tag.startsWith('#') ? tag : `#${tag}`;
+          hashtagCounts.set(formattedTag, (hashtagCounts.get(formattedTag) || 0) + 1);
+        }
+      }
+    }
+    
+    // Sort by count and return top N
+    return Array.from(hashtagCounts.entries())
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, limit);
   }
 
   // Feed System Implementation

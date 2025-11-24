@@ -657,6 +657,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get trending hashtags (public endpoint)
+  app.get("/api/trending-hashtags", async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const hoursAgo = req.query.hoursAgo ? parseInt(req.query.hoursAgo as string) : 72;
+      const trendingHashtags = await storage.getTrendingHashtags(limit, hoursAgo);
+      res.json(trendingHashtags);
+    } catch (error: any) {
+      console.error("Get trending hashtags error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Toggle featured status for a poll (admin only)
   app.patch("/api/admin/polls/:id/featured", ensureAdmin, async (req, res) => {
     try {

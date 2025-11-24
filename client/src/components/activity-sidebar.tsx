@@ -173,6 +173,10 @@ export function ActivitySidebar() {
     queryKey: ["/api/politician-profiles/featured"],
   });
 
+  const { data: trendingTopics = [] } = useQuery<Array<{ tag: string; count: number }>>({
+    queryKey: ["/api/trending-hashtags"],
+  });
+
   const getPollProgress = (poll: Poll) => {
     if (!poll.totalVotes || poll.totalVotes === 0) return 0;
     return Math.round((poll.totalVotes / 1000) * 100); // Mock calculation
@@ -182,13 +186,6 @@ export function ActivitySidebar() {
     const colors = ["border-primary", "border-green-500", "border-red-500"];
     return colors[index % colors.length];
   };
-
-  const trendingTopics = [
-    { tag: "#ClimateAction", posts: 234 },
-    { tag: "#EducationReform", posts: 189 },
-    { tag: "#AffordableHousing", posts: 156 },
-    { tag: "#TransportEquity", posts: 98 },
-  ];
 
   const getGradeColor = (grade?: string) => {
     if (!grade) return "bg-slate-500";
@@ -318,16 +315,22 @@ export function ActivitySidebar() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {trendingTopics.map((topic, index) => (
-              <div key={topic.tag} className="flex items-center justify-between">
-                <span className="text-sm font-medium text-primary hover:underline cursor-pointer">
-                  {topic.tag}
-                </span>
-                <span className="text-xs text-muted-foreground">{topic.posts} posts</span>
-              </div>
-            ))}
-          </div>
+          {trendingTopics.length > 0 ? (
+            <div className="space-y-3">
+              {trendingTopics.slice(0, 4).map((topic) => (
+                <div key={topic.tag} className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-primary hover:underline cursor-pointer">
+                    {topic.tag}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{topic.count} post{topic.count !== 1 ? 's' : ''}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No trending topics yet
+            </p>
+          )}
         </CardContent>
       </Card>
 
