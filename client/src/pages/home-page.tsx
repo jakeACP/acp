@@ -6,33 +6,35 @@ import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CreatePostForm } from "@/components/create-post-form";
+import { FeedViewProvider } from "@/contexts/feed-view-context";
 
 export default function HomePage() {
   const [location] = useLocation();
   const [showCreatePost, setShowCreatePost] = useState(false);
 
   return (
-    <div className="bg-slate-50 min-h-screen">
-      <Navigation />
-      
-      {/* Desktop Layout - Expanded */}
-      <div className="hidden md:block">
-        <div className="max-w-[1400px] 2xl:max-w-[1600px] mx-auto px-4 lg:px-6 xl:px-8 py-6">
-          <div className="grid grid-cols-5 xl:grid-cols-6 gap-6">
-            <div className="col-span-1 xl:col-span-1">
-              <UserSidebar />
-            </div>
-            
-            <div className="col-span-3 xl:col-span-4">
-              <MainFeed />
-            </div>
-            
-            <div className="col-span-1">
-              <ActivitySidebar />
+    <FeedViewProvider>
+      <div className="bg-slate-50 min-h-screen">
+        <Navigation />
+        
+        {/* Desktop Layout - Expanded */}
+        <div className="hidden md:block">
+          <div className="max-w-[1400px] 2xl:max-w-[1600px] mx-auto px-4 lg:px-6 xl:px-8 py-6">
+            <div className="grid grid-cols-5 xl:grid-cols-6 gap-6">
+              <div className="col-span-1 xl:col-span-1">
+                <UserSidebar />
+              </div>
+              
+              <div className="col-span-3 xl:col-span-4">
+                <MainFeed />
+              </div>
+              
+              <div className="col-span-1">
+                <ActivitySidebar />
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Mobile Layout - TikTok Style */}
       <div className="md:hidden">
@@ -127,6 +129,6 @@ export default function HomePage() {
           </DialogContent>
         </Dialog>
       </div>
-    </div>
+    </FeedViewProvider>
   );
 }

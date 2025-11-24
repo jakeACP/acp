@@ -10,11 +10,13 @@ import { Link } from "wouter";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { useFeedView } from "@/contexts/feed-view-context";
 
 export function UserSidebar() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const { activeView, setActiveView } = useFeedView();
   
   const { data: userGroups = [] } = useQuery<Group[]>({
     queryKey: ["/api/groups/user", user?.id],
@@ -23,6 +25,11 @@ export function UserSidebar() {
 
   const { data: voteData } = useQuery<{ voteCount: number }>({
     queryKey: ["/api/user/vote-count"],
+    enabled: !!user?.id,
+  });
+
+  const { data: friendData } = useQuery<{ friendCount: number }>({
+    queryKey: ["/api/user/friends/count"],
     enabled: !!user?.id,
   });
 
@@ -104,15 +111,43 @@ export function UserSidebar() {
             )}
           </div>
           
-          <div className="mt-6 grid grid-cols-2 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold text-foreground">{voteData?.voteCount || 0}</p>
-              <p className="text-xs text-muted-foreground">Votes Cast</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{userGroups.length}</p>
+          <div className="mt-6 grid grid-cols-3 gap-2 text-center">
+            <button 
+              onClick={() => setActiveView("votes")}
+              className={`p-2 rounded-lg transition-colors ${
+                activeView === "votes" 
+                  ? "bg-primary/10 border-2 border-primary" 
+                  : "hover:bg-muted"
+              }`}
+              data-testid="sidebar-stat-votes"
+            >
+              <p className="text-xl font-bold text-foreground">{voteData?.voteCount || 0}</p>
+              <p className="text-xs text-muted-foreground">Votes</p>
+            </button>
+            <button 
+              onClick={() => setActiveView("friends")}
+              className={`p-2 rounded-lg transition-colors ${
+                activeView === "friends" 
+                  ? "bg-primary/10 border-2 border-primary" 
+                  : "hover:bg-muted"
+              }`}
+              data-testid="sidebar-stat-friends"
+            >
+              <p className="text-xl font-bold text-foreground">{friendData?.friendCount || 0}</p>
+              <p className="text-xs text-muted-foreground">Friends</p>
+            </button>
+            <button 
+              onClick={() => setActiveView("groups")}
+              className={`p-2 rounded-lg transition-colors ${
+                activeView === "groups" 
+                  ? "bg-primary/10 border-2 border-primary" 
+                  : "hover:bg-muted"
+              }`}
+              data-testid="sidebar-stat-groups"
+            >
+              <p className="text-xl font-bold text-foreground">{userGroups.length}</p>
               <p className="text-xs text-muted-foreground">Groups</p>
-            </div>
+            </button>
           </div>
         </CardContent>
       </Card>

@@ -382,6 +382,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/user/friends/count", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const followers = await storage.getFollowers(req.user.id);
+      const following = await storage.getFollowing(req.user.id);
+      // Combine and deduplicate to get unique connections
+      const uniqueConnections = new Set([
+        ...followers.map(u => u.id),
+        ...following.map(u => u.id)
+      ]);
+      res.json({ friendCount: uniqueConnections.size });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Enhanced Reactions API
   app.post("/api/reactions", async (req, res) => {
     if (!req.isAuthenticated()) {
