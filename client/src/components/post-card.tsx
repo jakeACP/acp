@@ -402,6 +402,34 @@ export function PostCard({ post }: PostCardProps) {
         
         <VideoEmbedDisplay content={post.content} postId={post.id} />
         
+        {post.linkPreview && (
+          <div className="mb-4 border border-border rounded-lg overflow-hidden bg-card hover:bg-accent/10 transition-colors">
+            <a href={post.linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
+              {post.linkPreview.image && (
+                <div className="w-full h-48 bg-muted">
+                  <img 
+                    src={post.linkPreview.image} 
+                    alt={post.linkPreview.title || 'Link preview'} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              <div className="p-4">
+                {post.linkPreview.siteName && (
+                  <p className="text-xs text-muted-foreground mb-1">{post.linkPreview.siteName}</p>
+                )}
+                {post.linkPreview.title && (
+                  <h4 className="font-semibold text-foreground mb-1 line-clamp-2">{post.linkPreview.title}</h4>
+                )}
+                {post.linkPreview.description && (
+                  <p className="text-sm text-muted-foreground line-clamp-2">{post.linkPreview.description}</p>
+                )}
+                <p className="text-xs text-primary mt-2">{new URL(post.linkPreview.url).hostname}</p>
+              </div>
+            </a>
+          </div>
+        )}
+        
         {post.image && (
           <img
             src={post.image}

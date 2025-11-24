@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,6 +54,45 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [postType, setPostType] = useState<PostType>('post');
   const [privacy, setPrivacy] = useState<'public' | 'friends'>('public');
   
+  const [linkPreview, setLinkPreview] = useState<{url: string; title?: string; description?: string; image?: string; siteName?: string} | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  useEffect(() => {
+    const extractUrl = (text: string): string | null => {
+      const urlRegex = /(https?:\/\/[^\s]+)/gi;
+      const matches = text.match(urlRegex);
+      return matches ? matches[0] : null;
+    };
+
+    const fetchPreview = async () => {
+      const url = extractUrl(content);
+      
+      if (!url) {
+        setLinkPreview(null);
+        return;
+      }
+
+      if (linkPreview?.url === url) {
+        return;
+      }
+
+      setLoadingPreview(true);
+      try {
+        const res = await apiRequest("/api/link-preview", "POST", { url });
+        const preview = await res.json();
+        setLinkPreview(preview);
+      } catch (error) {
+        console.error("Failed to fetch link preview:", error);
+        setLinkPreview(null);
+      } finally {
+        setLoadingPreview(false);
+      }
+    };
+
+    const timeoutId = setTimeout(fetchPreview, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [content]);
+  
   // Event-specific fields
   const [eventDate, setEventDate] = useState("");
   const [eventTime, setEventTime] = useState("");
@@ -101,6 +140,7 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
       queryClient.invalidateQueries({ queryKey: ["/api/polls"] });
       setContent("");
       setTags([]);
+      setLinkPreview(null);
       setEventDate("");
       setEventTime("");
       setEventLocation("");
@@ -307,7 +347,8 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
       content: content.trim(),
       tags,
       type: postType,
-      privacy
+      privacy,
+      linkPreview: linkPreview || undefined
     };
 
     if (postType === 'event') {
@@ -435,6 +476,40 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
               className="min-h-[120px] border-0 p-0 resize-none focus:ring-0 text-lg placeholder:text-muted-foreground"
               autoFocus
             />
+
+            {loadingPreview && (
+              <div className="p-4 border border-border rounded-lg bg-muted/50">
+                <p className="text-sm text-muted-foreground">Loading link preview...</p>
+              </div>
+            )}
+
+            {linkPreview && !loadingPreview && (
+              <div className="border border-border rounded-lg overflow-hidden bg-card hover:bg-accent/10 transition-colors">
+                <a href={linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
+                  {linkPreview.image && (
+                    <div className="w-full h-48 bg-muted">
+                      <img 
+                        src={linkPreview.image} 
+                        alt={linkPreview.title || 'Link preview'} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className="p-4">
+                    {linkPreview.siteName && (
+                      <p className="text-xs text-muted-foreground mb-1">{linkPreview.siteName}</p>
+                    )}
+                    {linkPreview.title && (
+                      <h4 className="font-semibold text-foreground mb-1 line-clamp-2">{linkPreview.title}</h4>
+                    )}
+                    {linkPreview.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">{linkPreview.description}</p>
+                    )}
+                    <p className="text-xs text-primary mt-2">{new URL(linkPreview.url).hostname}</p>
+                  </div>
+                </a>
+              </div>
+            )}
 
             {/* Type-specific fields */}
             {postType === 'boycott' && (

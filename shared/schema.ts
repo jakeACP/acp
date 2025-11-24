@@ -264,6 +264,7 @@ export const posts = pgTable("posts", {
   url: text("url"), // For news articles and external links
   title: text("title"), // News headlines
   newsSourceName: text("news_source_name"), // Original news source
+  linkPreview: json("link_preview").$type<{ url: string; title?: string; description?: string; image?: string; siteName?: string }>(), // Metadata for link previews
   sharedPostId: varchar("shared_post_id").references(() => posts.id), // ID of the original post if this is a share
   privacy: text("privacy").notNull().default("public"), // "friends" or "public"
   likesCount: integer("likes_count").default(0),

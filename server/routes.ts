@@ -11,6 +11,7 @@ import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEvent
 import { db } from "./db";
 import { findRepresentativesByZipCode } from "./openai";
 import { z } from "zod";
+import { fetchLinkPreview } from "./lib/link-preview";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -119,6 +120,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.isAuthenticated() ? req.user.id : undefined;
       const posts = await storage.getPostsByTag(req.params.tag, userId);
       res.json(posts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/link-preview", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { url } = req.body;
+      
+      if (!url || typeof url !== 'string') {
+        return res.status(400).json({ message: "URL is required" });
+      }
+
+      try {
+        new URL(url);
+      } catch {
+        return res.status(400).json({ message: "Invalid URL format" });
+      }
+
+      const preview = await fetchLinkPreview(url);
+      res.json(preview);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
