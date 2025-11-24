@@ -590,20 +590,8 @@ export function MainFeed() {
   const [activeFeed, setActiveFeed] = useState<FeedType>('all');
   const [showMobileCreatePost, setShowMobileCreatePost] = useState(false);
 
-  // Check if we should show special views
-  if (activeView === "friends") {
-    return <FriendsView />;
-  }
-
-  if (activeView === "groups") {
-    return <GroupsView />;
-  }
-
-  if (activeView === "votes") {
-    return <VotesView />;
-  }
-
   // Three-tier feed system queries
+  // NOTE: All hooks must be called BEFORE any conditional returns to maintain React's Rules of Hooks
   const { data: allFeedPosts = [], isLoading: isLoadingAll } = useQuery<PostWithAuthor[]>({
     queryKey: ["/api/feeds/all"],
     enabled: activeFeed === 'all',
@@ -661,6 +649,19 @@ export function MainFeed() {
   });
 
   const isLoading = isLoadingAll || isLoadingFollowing || isLoadingNews;
+
+  // Check if we should show special views (AFTER all hooks to maintain hook order consistency)
+  if (activeView === "friends") {
+    return <FriendsView />;
+  }
+
+  if (activeView === "groups") {
+    return <GroupsView />;
+  }
+
+  if (activeView === "votes") {
+    return <VotesView />;
+  }
 
   if (isLoading) {
     return (
