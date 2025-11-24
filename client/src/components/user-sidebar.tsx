@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Group, User } from "@shared/schema";
 import { Leaf, GraduationCap, Scale, Users, Coins, Wallet, Copy, Check, Share2, Circle } from "lucide-react";
 import { Link } from "wouter";
-import logoPath from "@assets/logo1_1753819424851.png";
+import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 

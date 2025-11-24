@@ -10,7 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { Vote, Users, Shield, Megaphone, AlertCircle } from "lucide-react";
-import logoPath from "@assets/logo1_1753819424851.png";
+import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { Redirect, Link, useLocation } from "wouter";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { ErrorMessage } from "@/components/error-message";

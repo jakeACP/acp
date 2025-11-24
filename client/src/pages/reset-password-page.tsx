@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { CheckCircle, ArrowLeft, Lock } from "lucide-react";
-import logoPath from "@assets/logo1_1753819424851.png";
+import logoPath from "@assets/logo-tpb_1763998990798.png";
 
 const resetPasswordSchema = z.object({
   newPassword: z.string().min(6, "Password must be at least 6 characters"),

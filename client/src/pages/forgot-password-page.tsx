@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { ArrowLeft, Mail, Shield } from "lucide-react";
-import logoPath from "@assets/logo1_1753819424851.png";
+import logoPath from "@assets/logo-tpb_1763998990798.png";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Please enter a valid email address"),

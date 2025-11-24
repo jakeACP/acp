@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useQuery } from "@tanstack/react-query";
 import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield } from "lucide-react";
-import logoPath from "@assets/logo1_1753819424851.png";
+import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { cn } from "@/lib/utils";
 
 export function Navigation() {
