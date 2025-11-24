@@ -45,6 +45,11 @@ export function PostCard({ post }: PostCardProps) {
     enabled: showComments && !!post.id,
   });
 
+  const { data: userVoteData } = useQuery<{ optionId: string } | null>({
+    queryKey: ["/api/polls", post.pollId, "my-vote"],
+    enabled: !!user && !!post.pollId,
+  });
+
   const likeMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest("/api/likes", "POST", {
@@ -128,6 +133,30 @@ export function PostCard({ post }: PostCardProps) {
       toast({
         title: "Error",
         description: error.message || "Failed to add comment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const pollVoteMutation = useMutation({
+    mutationFn: async (optionId: string) => {
+      if (!post.pollId) throw new Error("No poll ID");
+      return await apiRequest(`/api/polls/${post.pollId}/vote`, "POST", { optionId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/polls", post.pollId, "my-vote"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
+      toast({
+        title: "Vote Cast",
+        description: "Your vote has been recorded successfully!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to cast vote",
         variant: "destructive",
       });
     },
@@ -445,6 +474,71 @@ export function PostCard({ post }: PostCardProps) {
             alt="Post content"
             className="w-full h-48 object-cover rounded-lg mb-4"
           />
+        )}
+        
+        {post.pollOptions && post.pollOptions.length > 0 && (
+          <div className="mb-4 border border-border rounded-lg p-4 bg-card">
+            {post.pollTitle && (
+              <h3 className="font-semibold text-foreground mb-2">{post.pollTitle}</h3>
+            )}
+            {post.pollDescription && (
+              <p className="text-sm text-muted-foreground mb-4">{post.pollDescription}</p>
+            )}
+            <div className="space-y-2">
+              {post.pollOptions.map((option: any) => {
+                const hasVoted = !!userVoteData?.optionId;
+                const isUserChoice = userVoteData?.optionId === option.id;
+                const percentage = post.pollTotalVotes ? Math.round((option.votes / post.pollTotalVotes) * 100) : 0;
+                
+                return (
+                  <div key={option.id}>
+                    {hasVoted ? (
+                      <div className="relative bg-muted rounded p-3">
+                        <div 
+                          className="absolute inset-0 bg-primary/20 rounded transition-all"
+                          style={{ width: `${percentage}%` }}
+                        />
+                        <div className="relative flex items-center justify-between">
+                          <span className={`font-medium ${isUserChoice ? 'text-primary' : 'text-foreground'}`}>
+                            {option.text} {isUserChoice && '✓'}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            {option.votes} ({percentage}%)
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          if (!user) {
+                            toast({
+                              title: "Login Required",
+                              description: "Please log in to vote on polls",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          pollVoteMutation.mutate(option.id);
+                        }}
+                        disabled={pollVoteMutation.isPending}
+                        data-testid={`button-poll-option-${option.id}`}
+                      >
+                        {option.text}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
+              <span>{post.pollTotalVotes || 0} {(post.pollTotalVotes || 0) === 1 ? 'vote' : 'votes'}</span>
+              {post.pollEndDate && (
+                <span>Ends {formatDistanceToNow(new Date(post.pollEndDate), { addSuffix: true })}</span>
+              )}
+            </div>
+          </div>
         )}
         
         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">

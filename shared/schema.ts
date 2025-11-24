@@ -1591,6 +1591,15 @@ export type PostWithAuthor = Post & {
     firstName: string | null;
     lastName: string | null;
   } | null;
+  pollId?: string | null;
+  pollTitle?: string | null;
+  pollDescription?: string | null;
+  pollOptions?: { id: string; text: string; votes: number }[] | null;
+  pollVotingType?: string | null;
+  pollIsBlockchainVerified?: boolean | null;
+  pollTotalVotes?: number | null;
+  pollEndDate?: Date | null;
+  pollIsActive?: boolean | null;
 };
 export type Poll = typeof polls.$inferSelect;
 export type InsertPoll = z.infer<typeof insertPollSchema>;
