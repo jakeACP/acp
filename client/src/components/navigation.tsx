@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useQuery } from "@tanstack/react-query";
-import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield } from "lucide-react";
+import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield, Flag } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { cn } from "@/lib/utils";
 
@@ -90,6 +90,8 @@ export function Navigation() {
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="button-theme-toggle">
                   {actualTheme === "dark" ? (
                     <Moon className="h-5 w-5" />
+                  ) : actualTheme === "patriot" ? (
+                    <Flag className="h-5 w-5" />
                   ) : (
                     <Sun className="h-5 w-5" />
                   )}
@@ -104,6 +106,10 @@ export function Navigation() {
                 <DropdownMenuItem onClick={() => setTheme("dark")} className="cursor-pointer" data-testid="theme-dark">
                   <Moon className="mr-2 h-4 w-4" />
                   <span>Dark</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme("patriot")} className="cursor-pointer" data-testid="theme-patriot">
+                  <Flag className="mr-2 h-4 w-4" />
+                  <span>Red, White & Blue</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTheme("system")} className="cursor-pointer" data-testid="theme-system">
                   <Monitor className="mr-2 h-4 w-4" />
@@ -224,6 +230,15 @@ export function Navigation() {
                     data-testid="mobile-theme-dark"
                   >
                     <Moon className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={theme === "patriot" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setTheme("patriot")}
+                    className="h-8 w-8 p-0"
+                    data-testid="mobile-theme-patriot"
+                  >
+                    <Flag className="h-4 w-4" />
                   </Button>
                   <Button
                     variant={theme === "system" ? "default" : "ghost"}

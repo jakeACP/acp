@@ -62,6 +62,36 @@
   --floating-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
 }
 
+.patriot {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(220, 15%, 20%);
+  --muted: hsl(220, 60%, 97%);
+  --muted-foreground: hsl(220, 10%, 45%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(220, 15%, 20%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(220, 15%, 20%);
+  --border: hsl(214, 80%, 88%);
+  --input: hsl(214, 80%, 88%);
+  --primary: hsl(220, 85%, 50%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(0, 75%, 55%);
+  --secondary-foreground: hsl(0, 0%, 100%);
+  --accent: hsl(214, 90%, 95%);
+  --accent-foreground: hsl(220, 85%, 50%);
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --ring: hsl(220, 85%, 50%);
+  --radius: 0.5rem;
+  
+  /* Patriot theme background and floating module variables */
+  --bg-pattern: radial-gradient(circle at 1px 1px, hsl(214, 80%, 92%) 1px, transparent 0);
+  --bg-pattern-size: 20px 20px;
+  --floating-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.1), 0 2px 4px -1px rgba(220, 38, 38, 0.05);
+  --floating-shadow-lg: 0 10px 15px -3px rgba(37, 99, 235, 0.15), 0 4px 6px -2px rgba(220, 38, 38, 0.08);
+  --floating-shadow-xl: 0 20px 25px -5px rgba(37, 99, 235, 0.2), 0 10px 10px -5px rgba(220, 38, 38, 0.1);
+}
+
 @layer base {
   * {
     @apply border-border;

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "light" | "dark" | "system";
+type Theme = "light" | "dark" | "patriot" | "system";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -11,7 +11,7 @@ type ThemeProviderProps = {
 type ThemeProviderState = {
   theme: Theme;
   setTheme: (theme: Theme) => void;
-  actualTheme: "light" | "dark";
+  actualTheme: "light" | "dark" | "patriot";
 };
 
 const initialState: ThemeProviderState = {
@@ -32,20 +32,20 @@ export function ThemeProvider({
     () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
   );
 
-  const [actualTheme, setActualTheme] = useState<"light" | "dark">(() => {
+  const [actualTheme, setActualTheme] = useState<"light" | "dark" | "patriot">(() => {
     if (theme === "system") {
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
-    return theme as "light" | "dark";
+    return theme as "light" | "dark" | "patriot";
   });
 
   useEffect(() => {
     const root = window.document.documentElement;
 
     // Remove previous theme classes
-    root.classList.remove("light", "dark");
+    root.classList.remove("light", "dark", "patriot");
 
-    let newActualTheme: "light" | "dark";
+    let newActualTheme: "light" | "dark" | "patriot";
 
     if (theme === "system") {
       const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -54,7 +54,7 @@ export function ThemeProvider({
       newActualTheme = systemTheme;
       root.classList.add(systemTheme);
     } else {
-      newActualTheme = theme as "light" | "dark";
+      newActualTheme = theme as "light" | "dark" | "patriot";
       root.classList.add(theme);
     }
 
@@ -72,7 +72,7 @@ export function ThemeProvider({
       setActualTheme(newActualTheme);
       
       const root = window.document.documentElement;
-      root.classList.remove("light", "dark");
+      root.classList.remove("light", "dark", "patriot");
       root.classList.add(newActualTheme);
     };
 
