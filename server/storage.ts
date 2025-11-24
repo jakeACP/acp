@@ -873,6 +873,7 @@ export class DatabaseStorage implements IStorage {
           url: originalPost.url,
           title: originalPost.title,
           newsSourceName: originalPost.newsSourceName,
+          linkPreview: originalPost.linkPreview,
           sharedPostId: originalPost.id,
           privacy: originalPost.privacy === 'friends' ? 'friends' : 'public', // Keep friends-only if author is sharing their own post
         })
@@ -926,6 +927,7 @@ export class DatabaseStorage implements IStorage {
         url: posts.url,
         title: posts.title,
         newsSourceName: posts.newsSourceName,
+        linkPreview: posts.linkPreview,
         sharesCount: posts.sharesCount,
         sharedPostId: posts.sharedPostId,
         privacy: posts.privacy,
@@ -982,6 +984,7 @@ export class DatabaseStorage implements IStorage {
         url: posts.url,
         title: posts.title,
         newsSourceName: posts.newsSourceName,
+        linkPreview: posts.linkPreview,
         sharesCount: posts.sharesCount,
         sharedPostId: posts.sharedPostId,
         privacy: posts.privacy,
@@ -1050,6 +1053,7 @@ export class DatabaseStorage implements IStorage {
         url: posts.url,
         title: posts.title,
         newsSourceName: posts.newsSourceName,
+        linkPreview: posts.linkPreview,
         sharesCount: posts.sharesCount,
         sharedPostId: posts.sharedPostId,
         privacy: posts.privacy,
