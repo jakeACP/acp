@@ -3605,6 +3605,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin Users List API
+  app.get("/api/admin/users", ensureAdmin, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const allUsers = await storage.getAllUsers(limit, offset);
+      const totalCount = await storage.getUserCount();
+      
+      res.json({
+        users: allUsers,
+        total: totalCount,
+        limit,
+        offset,
+      });
+    } catch (error: any) {
+      console.error("Admin users list error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Content Moderation APIs
   app.get("/api/admin/flagged-content", ensureAdmin, async (req, res) => {
     try {

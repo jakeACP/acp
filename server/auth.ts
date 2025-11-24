@@ -146,6 +146,10 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", passport.authenticate("local"), async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Authentication failed" });
+    }
+    
     try {
       // Update last login IP and country
       const lastLoginIp = getClientIp(req);

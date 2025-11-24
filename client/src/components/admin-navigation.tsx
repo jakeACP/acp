@@ -4,6 +4,7 @@ import {
   LayoutDashboard, 
   Shield, 
   Users, 
+  UserCircle,
   Lock, 
   Database, 
   Cpu, 
@@ -23,6 +24,11 @@ const adminMenuItems = [
     name: "Moderation",
     href: "/admin/moderation",
     icon: Shield,
+  },
+  {
+    name: "Users",
+    href: "/admin/users",
+    icon: UserCircle,
   },
   {
     name: "Politicians",

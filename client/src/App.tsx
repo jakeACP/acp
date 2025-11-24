@@ -37,6 +37,7 @@ import AdminInvitationsPage from "@/pages/admin-invitations-page";
 import AdminRepresentativesPage from "@/pages/admin-representatives-page";
 import AdminDashboardPage from "@/pages/admin-dashboard-page";
 import AdminModerationPage from "@/pages/admin-moderation-page";
+import AdminUsersPage from "@/pages/admin-users-page";
 import AdminUserBansPage from "@/pages/admin-user-bans-page";
 import AdminIpBlocksPage from "@/pages/admin-ip-blocks-page";
 import AdminPoliticiansPage from "@/pages/admin-politicians-page";
@@ -83,6 +84,7 @@ function Router() {
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/admin/dashboard" component={AdminDashboardPage} />
       <ProtectedRoute path="/admin/moderation" component={AdminModerationPage} />
+      <ProtectedRoute path="/admin/users" component={AdminUsersPage} />
       <ProtectedRoute path="/admin/bans" component={AdminUserBansPage} />
       <ProtectedRoute path="/admin/ip-blocks" component={AdminIpBlocksPage} />
       <ProtectedRoute path="/admin/invitations" component={AdminInvitationsPage} />
