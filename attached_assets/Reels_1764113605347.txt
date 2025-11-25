@@ -1,0 +1,196 @@
+Here’s the updated Replit prompt with **Signals** instead of Shorts:
+
+```text
+You are editing my existing Anti-Corruption Party (ACP) app in this Replit project.
+
+Goal: Build the **video capture / “Signal” recorder** screen used to record 60-second vertical videos (like TikTok). These short 1-minute videos are called **Signals** in this app.
+
+Design notes from the latest mockup:
+
+- Hyper-realistic selfie preview in the center
+- Buttons INSIDE the video frame, not outside it
+- Big red record button centered at the bottom
+- Bottom-left: small thumbnail of the creator’s page / previous Signals to return to your page
+- Right side: vertical stack of buttons for camera tools, Filters, and Effects
+- Max length: 60 seconds
+
+Use the same tech stack that already exists in this project (likely React + whatever CSS/Tailwind system it’s using). Reuse existing auth and database wiring for Signals; don’t create a new backend if API helpers already exist.
+
+-------------------------------------------------------------------------------
+1. Component & Routing
+-------------------------------------------------------------------------------
+
+Create a main component called **`SignalRecorderScreen`** and hook it into the existing router so it can be navigated to from the “Create” / “+” button in the bottom nav.
+
+Responsibilities:
+
+- Request camera + mic permission.
+- Show a **full-height vertical preview** (16:9 or 9:16) with rounded corners and a subtle glass frame.
+- Record a video up to **60 seconds** using the browser’s `MediaDevices.getUserMedia` + `MediaRecorder` (or whatever abstraction already exists).
+- Save recorded video and metadata via existing API (search the repo for Signal/short-form upload utilities and reuse them).
+
+If there are existing components or API functions named `Short`, `Shorts`, or similar, treat them as “Signals” in the UI and re-use the same infrastructure instead of duplicating code.
+
+-------------------------------------------------------------------------------
+2. Layout & UI (match the selfie mockup)
+-------------------------------------------------------------------------------
+
+Single vertical screen:
+
+Background
+- Red/white/blue “liquid glass” gradient background (you can reuse the feed background if it exists).
+
+Video frame
+- Centered vertical video area occupying most of the screen.
+- Rounded corners at the top and bottom.
+- Light border + shadow to look like glass.
+
+Inside this frame (all positioned absolutely):
+
+Right side (vertical stack, centered):
+- Camera flip icon (front/back).
+- Speed indicator (`1x` label for now).
+- Timer icon (for countdown).
+- “Filters” button.
+- “Effects” button.
+
+Bottom center:
+- Large circular **red record button**.
+- Just above/below it, a duration selector: `15s` | `60s` (tabs/pills).
+  - 60s is default and is the enforced max Signal length.
+
+Bottom left:
+- Small rounded thumbnail of the user’s last posted Signal or profile/Signal page preview.
+- Tap → navigate back to that profile/Signal list route.
+
+Top:
+- Optional mini header inside the frame: “Signals · Recording” plus an “X” close button in the top-left to exit.
+
+All buttons should use the same glassmorphism style as the rest of the app: translucent, blurred, white icons/text.
+
+-------------------------------------------------------------------------------
+3. Recording Logic
+-------------------------------------------------------------------------------
+
+Implement recording flow:
+
+On mount:
+- Ask for camera + mic permission.
+- Use `getUserMedia({ video: { facingMode: "user" }, audio: true })`.
+- Bind the stream to a `<video>` element (`playsInline`, `muted`, `autoPlay`).
+
+On record button press:
+- If not recording:
+  - Respect any countdown timer if enabled (3-second, 10-second, etc.).
+  - Start `MediaRecorder` on the stream.
+  - Show:
+    - Circular progress ring around the record button **or** a slim progress bar at the top of the frame.
+    - Elapsed time label like `00:05 / 00:60`.
+  - Automatically stop when elapsed time reaches the chosen duration (15 or 60 seconds).
+
+- If recording:
+  - Tapping again stops recording manually.
+
+On stop:
+- Collect the recorded blob from `MediaRecorder`.
+- Open a **review screen/modal**:
+  - Full-screen or slide-up sheet.
+  - Show video preview.
+  - Input for caption and tags (e.g., issue/topic tags).
+  - Buttons: “Discard” and **“Post Signal”**.
+
+On “Post Signal”:
+- Call the existing upload API / function for short-form content:
+  - Upload video blob + caption + duration + filter/effect metadata + any issue tags.
+- Show loading state while posting.
+- On success:
+  - Navigate to the new Signal’s detail screen or to the creator’s Signal list.
+- On failure:
+  - Show an error toast and keep the review screen open.
+
+Make sure to stop tracks and clean up the media stream on unmount.
+
+-------------------------------------------------------------------------------
+4. Filters & Effects (simple, client-side)
+-------------------------------------------------------------------------------
+
+For now, keep everything simple and in-browser:
+
+Filters:
+- Maintain a `currentFilter` state.
+- When user taps **Filters** on the right, open a small horizontal filter picker at the bottom of the frame.
+- Provide a few presets:
+  - None
+  - Vivid (higher saturation/contrast)
+  - Mono (grayscale)
+  - Cool (slight blue tint)
+- Apply via CSS on the preview `<video>` and later on playback using something like:
+
+  - `filter: var(--signal-filter)` or direct filter values:
+    - `none`
+    - `contrast(1.1) saturate(1.2)`
+    - `grayscale(1)`
+    - `contrast(1.05) saturate(1.05) hue-rotate(-10deg)`
+
+Effects:
+- Keep it minimal:
+  - e.g., vignette overlay, light ACP color overlay, subtle glow.
+- Tapping **Effects** opens a small overlay panel with toggles.
+- Save selected effect names in metadata when posting a Signal.
+
+-------------------------------------------------------------------------------
+5. Camera Tools
+-------------------------------------------------------------------------------
+
+Flip camera:
+- Toggle between `"user"` and `"environment"` for `facingMode`.
+- Reinitialize the media stream when toggled.
+
+Timer:
+- Simple countdown options (off, 3s, 10s).
+- When timer > 0:
+  - Pressing record triggers a large centered countdown (3, 2, 1), then recording starts.
+
+Speed:
+- For now use a static `1x` label in the UI.
+- Code should be structured to later support different speeds by saving a `speed` field (e.g., 0.5, 1, 2) and using it at playback or processing time.
+
+-------------------------------------------------------------------------------
+6. Styling & Glassmorphism
+-------------------------------------------------------------------------------
+
+Reuse the ACP liquid glass style:
+
+- Background: red/blue gradients with soft flowing shapes.
+- Video frame:
+  - `border-radius` ~24px
+  - `backdrop-filter: blur(18px)` (and `-webkit-backdrop-filter`)
+  - Semi-transparent border and light shadow
+- Overlay controls:
+  - Small rounded glass buttons, white icons/text.
+
+Ensure good contrast and touch targets large enough for mobile (at least ~44x44 px).
+
+-------------------------------------------------------------------------------
+7. Code Structure
+-------------------------------------------------------------------------------
+
+Break into small, reusable components:
+
+- `SignalRecorderScreen` (main container + high-level state)
+- `SignalCameraPreview` (handles video element + media stream)
+- `SignalRecordButton` (red button + progress ring)
+- `SignalDurationSelector`
+- `SignalRightControls` (flip, speed, timer, filters, effects)
+- `SignalFilterPicker`
+- `SignalEffectsPicker`
+- `SignalReviewModal` (preview + caption + post)
+
+Use React hooks to manage:
+
+- Media stream lifecycle
+- Recording state machine: `idle`, `countdown`, `recording`, `reviewing`
+- Timers and cleanup
+
+Wire this feature into the existing ACP project data layer so Signals are fully integrated with profiles, the main feed, and any existing “short video” endpoints. Implement all of the above now.
+```

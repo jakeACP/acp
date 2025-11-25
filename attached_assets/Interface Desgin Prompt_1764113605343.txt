@@ -1,0 +1,238 @@
+Here’s a prompt you can paste straight into Replit’s AI in your ACP project:
+
+```text
+You are editing my existing Anti-Corruption Party (ACP) app in this Replit project.
+
+Goal: Build a **mobile-first “Feed” screen** that matches the following “liquid glass / red-white-blue” iOS-style mockup and wires into the existing database and APIs already in this project.
+
+### Tech assumptions
+- Use the same stack that this project already uses (likely React + whatever styling system is already present).
+- If Tailwind is already installed, prefer Tailwind utility classes.
+- If not, use the existing styling approach (CSS Modules / styled-components / plain CSS), but still follow the visual spec below.
+
+---
+
+## 1. New Screen / Component
+
+Create a main component called **`FeedScreen`** (or integrate into the existing main feed route if one already exists).
+
+Responsibilities:
+- Fetch and display a **paginated news feed** of mixed content types from the existing data layer.
+- Show **4 items per page** in a **2×2 grid**: Shorts (videos), News, Polls, Petitions.
+- Allow filtering by content type with a segmented control.
+- Show ACP-themed bottom navigation.
+
+Use whatever data abstractions already exist:
+- Search the project for feed/news/post models (e.g. `Post`, `Short`, `Poll`, `Petition`) and any hooks like `useFeed`, `usePosts`, etc.
+- If there is an existing API client (e.g. `/api/feed`), reuse it, don’t re-invent the backend.
+
+---
+
+## 2. Layout & Structure
+
+### Top bar (liquid glass)
+
+At the very top, full width:
+- Left: **ACP logo** in a small circular glass container.
+- Center: Title **“FEED”** and subtitle **“United Against Corruption”**.
+- Right: **Notification bell icon** inside a rounded glass square.
+
+The top bar should:
+- Be slightly translucent with backdrop blur.
+- Have rounded bottom corners and a soft drop shadow, like a floating iOS glass panel.
+
+### Filter strip
+
+Directly under the top bar, add a horizontal segmented control with these tabs:
+
+- ALL
+- SHORTS
+- POLLS
+- VOTES
+- PETITION
+
+Behavior:
+- Clicking a tab filters the feed by content type.
+- **“ALL”** shows everything.
+- Active tab = solid **red pill** with white text.
+- Inactive tabs = subtle glass outline with white text.
+
+### Feed grid (4 items per page)
+
+Below the filters:
+- Vertical scroll area with **2×2 grid** of cards.
+- Each page shows exactly 4 cards; when there are more than 4, allow scrolling and visually indicate page position with small dots on the right edge (or bottom).
+- Use a mobile breakpoint first (design for ~390px width).
+
+Pagination logic:
+- Use simple client-side pagination: 4 items per “page”.
+- State: `currentPage`, derived list of items, etc.
+- Optional: infinite scroll or “Load more” if needed by existing API.
+
+---
+
+## 3. Card Types & Behavior
+
+All cards share:
+- Rounded corners (~20–24px).
+- Glassmorphism: translucent background, backdrop blur, inner shadow / soft border.
+- A **type tag** chip at top-left.
+- A 3-dot menu icon at top-right for future actions (no need to implement actions yet).
+
+### A. Shorts (Videos)
+
+Type tag:
+- Red pill with text **“SHORT”** in white.
+
+Content:
+- Dominant video thumbnail (or first frame), filling most of the card.
+- Centered play icon overlay (white, soft glow).
+- Bottom overlay gradient from transparent → navy.
+
+Text at bottom:
+- Video title (1–2 lines).
+- Meta row: source (e.g. “Grassroots”), duration (e.g. `0:15`).
+
+Behavior:
+- On tap: navigate to existing **shorts / video viewer** route if it exists.
+  - Search the project for any Shorts/Video pages and reuse.
+- If no such route exists, create a full-screen vertical video view component that:
+  - Plays the video.
+  - Allows swipe up/down to move between Shorts (optional, but structure the component so we can extend later).
+
+### B. News Article
+
+Type tag:
+- Blue pill with text **“NEWS”**.
+
+Card layout:
+- Left: small rectangular thumbnail in a mini glass frame.
+- Right: headline (white, bold) and a second line with `source • timeAgo` (e.g. `Politico • 12m ago`).
+
+Behavior:
+- On tap: open a slide-up **article sheet** (bottom sheet).
+  - Show title, source, time, short summary, and a button like “Open full article”.
+  - Use existing routing / article page if already implemented.
+
+### C. Poll
+
+Type tag:
+- White pill with blue border and text **“POLL”**.
+
+Content:
+- Main question text at top.
+- Below: 3–4 options as stacked **glass pill buttons**.
+- Under options:
+  - A link: `View results without voting`.
+  - Small secondary text: `X votes · closes in Y`.
+
+Behavior:
+- When user taps an option:
+  - Call the existing voting API / mutation for polls.
+  - Visually transform the options into a results view with animated fill bars.
+  - Highlight the chosen option with a colored glow and slightly larger bar.
+- If the user clicks “View results without voting”, show results but mark that user has not voted (respect whatever flags already exist in the DB if present).
+
+### D. Petition
+
+Type tag:
+- Red pill with text **“PETITION”**.
+
+Content:
+- Title (2 lines max).
+- Brief subtitle/summary.
+- **Progress bar** for signatures:
+  - Rounded bar with inner gradient red→blue.
+  - Label below: `currentSignatures | targetSignatures`.
+- Bottom row:
+  - Left: ACP verification badge if petition is official (check existing model field).
+  - Right: **“SIGN”** button as a small red glass pill.
+
+Behavior:
+- On tap of the card or SIGN button:
+  - Open a slide-up sheet with petition details.
+  - Include a main button: “Sign with ACP Profile”.
+  - If there is a way to sign anonymously in the existing schema, show a checkbox/toggle for that.
+  - Wire to the existing petitions/signatures API.
+
+---
+
+## 4. Bottom Navigation Bar
+
+Create or update an existing bottom nav to match this spec:
+
+- Floating, full-width, glass pill at the bottom with safe-area padding.
+- Icons (white) with minimal labels underneath:
+
+  - Home (Feed)
+  - Shorts (play icon)
+  - Create (center red circular button with “+”)
+  - Groups (people icon)
+  - Profile / Votes (person or fist icon)
+
+Behavior:
+- Hook into whatever router the app uses (React Router / Next.js, etc.).
+- Highlight active route with a subtle red glow and slightly brighter icon.
+
+---
+
+## 5. Visual Style (Liquid Glass + Red/White/Blue)
+
+Global visual rules:
+
+- **Background:**
+  - Deep navy to royal blue gradient with subtle diagonal red accents.
+  - Optionally add a moving / animated gradient or radial blobs to feel “liquid”.
+- **Glass cards:**
+  - `backdrop-filter: blur(20px)` or equivalent.
+  - Semi-transparent white/blue background with opacity around 0.1–0.18.
+  - 1px border in semi-transparent white or light blue.
+  - Soft outer shadow to “float” above the background.
+- **Color palette (can adjust to existing theme tokens):**
+  - Navy: #071A3A (or project’s primary blue).
+  - Red: #E6393A (or existing ACP red).
+  - White: #F5F7FA for text and highlights.
+  - Use high contrast for accessibility.
+
+Typography:
+- Use the existing primary font.
+- Headlines: bold, all caps for tags like FEED, SHORT, POLL, PETITION.
+- Body: slightly smaller, high readability.
+
+---
+
+## 6. Data Integration
+
+- Reuse existing data fetching utilities.
+- For each feed item, infer its “type” from whatever field is available (e.g. `kind`, `type`, `contentType`).
+- Implement a small type guard / mapping so that:
+
+  - `SHORT` → Shorts card  
+  - `NEWS` → News card  
+  - `POLL` → Poll card  
+  - `PETITION` → Petition card
+
+- If additional types exist (e.g. EVENTS, GROUP POSTS), either:
+  - Map them to the NEWS layout as a fallback, or
+  - Skip them for now with a clear TODO comment.
+
+---
+
+## 7. Code Quality
+
+- Break things into reusable components:
+  - `FeedScreen`
+  - `FeedFilters`
+  - `FeedGrid`
+  - `ShortCard`
+  - `NewsCard`
+  - `PollCard`
+  - `PetitionCard`
+  - `BottomNav`
+- Keep styling tokens (colors, radii, shadows) centralized so the design can be tuned quickly.
+- Ensure the layout looks great on common mobile widths and still works on small desktop widths.
+
+Implement all of the above now, using the current project structure and wiring into the existing database / API functions instead of mocking data.
+```
+
+

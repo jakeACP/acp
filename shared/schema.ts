@@ -1429,6 +1429,79 @@ export const liveStreamViewers = pgTable("live_stream_viewers", {
   userIndex: index("live_stream_viewers_user_idx").on(table.userId),
 }));
 
+// Mobile App Signals (TikTok-style short videos)
+export const signals = pgTable("signals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  authorId: varchar("author_id").notNull().references(() => users.id),
+  title: text("title"),
+  description: text("description"),
+  videoUrl: text("video_url").notNull(),
+  thumbnailUrl: text("thumbnail_url"),
+  duration: integer("duration").notNull(), // Duration in seconds
+  maxDuration: integer("max_duration").default(60), // 60s default, 300s for ACP+
+  filter: text("filter").default("none"), // Applied filter name
+  overlays: json("overlays").$type<{
+    texts: { id: string; content: string; x: number; y: number; fontSize: number; color: string; background?: string; font?: string }[];
+    emojis: { id: string; emoji: string; x: number; y: number; size: number }[];
+    graphics: { id: string; url: string; x: number; y: number; width: number; height: number }[];
+  }>(),
+  tags: text("tags").array().default([]),
+  viewCount: integer("view_count").default(0),
+  likesCount: integer("likes_count").default(0),
+  commentsCount: integer("comments_count").default(0),
+  sharesCount: integer("shares_count").default(0),
+  isPublic: boolean("is_public").default(true),
+  isDeleted: boolean("is_deleted").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  authorIndex: index("signals_author_idx").on(table.authorId),
+  createdAtIndex: index("signals_created_at_idx").on(table.createdAt.desc()),
+  viewCountIndex: index("signals_view_count_idx").on(table.viewCount.desc()),
+}));
+
+// Signal recording chunks for progressive upload
+export const signalChunks = pgTable("signal_chunks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signalId: varchar("signal_id").references(() => signals.id, { onDelete: "cascade" }),
+  authorId: varchar("author_id").notNull().references(() => users.id),
+  chunkNumber: integer("chunk_number").notNull(),
+  blobUrl: text("blob_url").notNull(),
+  duration: integer("duration").notNull(), // Duration of this chunk in ms
+  status: text("status").default("pending"), // pending, uploaded, merged
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  signalIndex: index("signal_chunks_signal_idx").on(table.signalId),
+  authorIndex: index("signal_chunks_author_idx").on(table.authorId),
+  orderIndex: index("signal_chunks_order_idx").on(table.signalId, table.chunkNumber),
+}));
+
+// Signal likes (separate from post likes)
+export const signalLikes = pgTable("signal_likes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signalId: varchar("signal_id").notNull().references(() => signals.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  signalIndex: index("signal_likes_signal_idx").on(table.signalId),
+  userIndex: index("signal_likes_user_idx").on(table.userId),
+  uniqueLike: sql`UNIQUE(${table.signalId}, ${table.userId})`,
+}));
+
+// Signal comments
+export const signalComments = pgTable("signal_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  signalId: varchar("signal_id").notNull().references(() => signals.id, { onDelete: "cascade" }),
+  authorId: varchar("author_id").notNull().references(() => users.id),
+  content: text("content").notNull(),
+  parentId: varchar("parent_id"),
+  likesCount: integer("likes_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  signalIndex: index("signal_comments_signal_idx").on(table.signalId),
+  authorIndex: index("signal_comments_author_idx").on(table.authorId),
+  parentIndex: index("signal_comments_parent_idx").on(table.parentId),
+}));
+
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
@@ -1771,6 +1844,33 @@ export const insertAlgorithmSettingsSchema = createInsertSchema(algorithmSetting
   updatedAt: true,
 });
 
+// Mobile Signals insert schemas
+export const insertSignalSchema = createInsertSchema(signals).omit({
+  id: true,
+  createdAt: true,
+  viewCount: true,
+  likesCount: true,
+  commentsCount: true,
+  sharesCount: true,
+  isDeleted: true,
+});
+
+export const insertSignalChunkSchema = createInsertSchema(signalChunks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSignalLikeSchema = createInsertSchema(signalLikes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSignalCommentSchema = createInsertSchema(signalComments).omit({
+  id: true,
+  createdAt: true,
+  likesCount: true,
+});
+
 // Citizen Initiative type exports
 export type Jurisdiction = typeof jurisdictions.$inferSelect;
 export type InsertJurisdiction = z.infer<typeof insertJurisdictionSchema>;
@@ -1849,5 +1949,27 @@ export type LiveStreamWithOwner = LiveStream & {
     firstName: string | null;
     lastName: string | null;
     avatar: string | null;
+  } | null;
+};
+
+// Mobile Signals types
+export type Signal = typeof signals.$inferSelect;
+export type InsertSignal = z.infer<typeof insertSignalSchema>;
+export type SignalChunk = typeof signalChunks.$inferSelect;
+export type InsertSignalChunk = z.infer<typeof insertSignalChunkSchema>;
+export type SignalLike = typeof signalLikes.$inferSelect;
+export type InsertSignalLike = z.infer<typeof insertSignalLikeSchema>;
+export type SignalComment = typeof signalComments.$inferSelect;
+export type InsertSignalComment = z.infer<typeof insertSignalCommentSchema>;
+
+// Signal with author info for feed display
+export type SignalWithAuthor = Signal & {
+  author: {
+    id: string;
+    username: string;
+    firstName: string | null;
+    lastName: string | null;
+    avatar: string | null;
+    subscriptionStatus: string | null;
   } | null;
 };
