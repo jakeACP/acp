@@ -3799,6 +3799,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Mobile App - Signals API (TikTok-style short videos)
+  app.get("/api/mobile/signals", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const signals = await storage.getSignals(limit, offset);
+      res.json(signals);
+    } catch (error: any) {
+      console.error("Get signals error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/mobile/signals/user/:userId", async (req, res) => {
+    try {
+      const signals = await storage.getSignalsByUser(req.params.userId);
+      res.json(signals);
+    } catch (error: any) {
+      console.error("Get user signals error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/mobile/signals/:id", async (req, res) => {
+    try {
+      const signal = await storage.getSignalById(req.params.id);
+      if (!signal) {
+        return res.status(404).json({ message: "Signal not found" });
+      }
+      res.json(signal);
+    } catch (error: any) {
+      console.error("Get signal error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/mobile/signals", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      // For now, handle as JSON - video upload will be handled separately
+      const signalData = {
+        authorId: req.user.id,
+        title: req.body.title || '',
+        description: req.body.description || '',
+        videoUrl: req.body.videoUrl || '',
+        thumbnailUrl: req.body.thumbnailUrl,
+        duration: parseInt(req.body.duration) || 0,
+        maxDuration: req.user.subscriptionStatus === 'premium' ? 300 : 60,
+        filter: req.body.filter || 'none',
+        overlays: req.body.overlays,
+        tags: req.body.tags || [],
+        isPublic: true,
+      };
+      
+      const signal = await storage.createSignal(signalData);
+      res.status(201).json(signal);
+    } catch (error: any) {
+      console.error("Create signal error:", error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/mobile/signals/:id/like", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.likeSignal(req.params.id, req.user.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Like signal error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/mobile/signals/:id/like", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.unlikeSignal(req.params.id, req.user.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Unlike signal error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/mobile/signals/:id/view", async (req, res) => {
+    try {
+      await storage.incrementSignalViewCount(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Increment view count error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   
   // WebSocket setup for real-time messaging

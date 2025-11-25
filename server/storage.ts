@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest } from "@shared/schema";
+import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray, gte } from "drizzle-orm";
 import session from "express-session";
@@ -438,6 +438,15 @@ export interface IStorage {
   voteOnWhistleblowing(postId: string, userId: string, vote: "credible" | "not_credible"): Promise<void>;
   getUserWhistleblowingVote(postId: string, userId: string): Promise<WhistleblowingVote | undefined>;
   deleteWhistleblowingPost(postId: string): Promise<void>;
+
+  // Mobile App Signals
+  getSignals(limit?: number, offset?: number): Promise<SignalWithAuthor[]>;
+  getSignalById(id: string): Promise<SignalWithAuthor | undefined>;
+  getSignalsByUser(userId: string): Promise<SignalWithAuthor[]>;
+  createSignal(signal: InsertSignal): Promise<Signal>;
+  likeSignal(signalId: string, userId: string): Promise<void>;
+  unlikeSignal(signalId: string, userId: string): Promise<void>;
+  incrementSignalViewCount(signalId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5562,6 +5571,169 @@ export class DatabaseStorage implements IStorage {
       .update(whistleblowingPosts)
       .set({ isDeleted: true })
       .where(eq(whistleblowingPosts.id, postId));
+  }
+
+  // Mobile App Signals Implementation
+  async getSignals(limit: number = 20, offset: number = 0): Promise<SignalWithAuthor[]> {
+    const result = await db
+      .select({
+        id: signals.id,
+        authorId: signals.authorId,
+        title: signals.title,
+        description: signals.description,
+        videoUrl: signals.videoUrl,
+        thumbnailUrl: signals.thumbnailUrl,
+        duration: signals.duration,
+        maxDuration: signals.maxDuration,
+        filter: signals.filter,
+        overlays: signals.overlays,
+        tags: signals.tags,
+        viewCount: signals.viewCount,
+        likesCount: signals.likesCount,
+        commentsCount: signals.commentsCount,
+        sharesCount: signals.sharesCount,
+        isPublic: signals.isPublic,
+        isDeleted: signals.isDeleted,
+        createdAt: signals.createdAt,
+        author: {
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+          subscriptionStatus: users.subscriptionStatus,
+        },
+      })
+      .from(signals)
+      .leftJoin(users, eq(signals.authorId, users.id))
+      .where(eq(signals.isDeleted, false))
+      .orderBy(desc(signals.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return result as SignalWithAuthor[];
+  }
+
+  async getSignalById(id: string): Promise<SignalWithAuthor | undefined> {
+    const [result] = await db
+      .select({
+        id: signals.id,
+        authorId: signals.authorId,
+        title: signals.title,
+        description: signals.description,
+        videoUrl: signals.videoUrl,
+        thumbnailUrl: signals.thumbnailUrl,
+        duration: signals.duration,
+        maxDuration: signals.maxDuration,
+        filter: signals.filter,
+        overlays: signals.overlays,
+        tags: signals.tags,
+        viewCount: signals.viewCount,
+        likesCount: signals.likesCount,
+        commentsCount: signals.commentsCount,
+        sharesCount: signals.sharesCount,
+        isPublic: signals.isPublic,
+        isDeleted: signals.isDeleted,
+        createdAt: signals.createdAt,
+        author: {
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+          subscriptionStatus: users.subscriptionStatus,
+        },
+      })
+      .from(signals)
+      .leftJoin(users, eq(signals.authorId, users.id))
+      .where(and(eq(signals.id, id), eq(signals.isDeleted, false)));
+
+    return result as SignalWithAuthor | undefined;
+  }
+
+  async getSignalsByUser(userId: string): Promise<SignalWithAuthor[]> {
+    const result = await db
+      .select({
+        id: signals.id,
+        authorId: signals.authorId,
+        title: signals.title,
+        description: signals.description,
+        videoUrl: signals.videoUrl,
+        thumbnailUrl: signals.thumbnailUrl,
+        duration: signals.duration,
+        maxDuration: signals.maxDuration,
+        filter: signals.filter,
+        overlays: signals.overlays,
+        tags: signals.tags,
+        viewCount: signals.viewCount,
+        likesCount: signals.likesCount,
+        commentsCount: signals.commentsCount,
+        sharesCount: signals.sharesCount,
+        isPublic: signals.isPublic,
+        isDeleted: signals.isDeleted,
+        createdAt: signals.createdAt,
+        author: {
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+          subscriptionStatus: users.subscriptionStatus,
+        },
+      })
+      .from(signals)
+      .leftJoin(users, eq(signals.authorId, users.id))
+      .where(and(eq(signals.authorId, userId), eq(signals.isDeleted, false)))
+      .orderBy(desc(signals.createdAt));
+
+    return result as SignalWithAuthor[];
+  }
+
+  async createSignal(signalData: InsertSignal): Promise<Signal> {
+    const [signal] = await db
+      .insert(signals)
+      .values(signalData)
+      .returning();
+    return signal;
+  }
+
+  async likeSignal(signalId: string, userId: string): Promise<void> {
+    await db.insert(signalLikes).values({
+      signalId,
+      userId,
+    }).onConflictDoNothing();
+
+    await db.execute(sql`
+      UPDATE signals 
+      SET likes_count = likes_count + 1 
+      WHERE id = ${signalId}
+    `);
+  }
+
+  async unlikeSignal(signalId: string, userId: string): Promise<void> {
+    const result = await db
+      .delete(signalLikes)
+      .where(and(
+        eq(signalLikes.signalId, signalId),
+        eq(signalLikes.userId, userId)
+      ))
+      .returning();
+
+    if (result.length > 0) {
+      await db.execute(sql`
+        UPDATE signals 
+        SET likes_count = GREATEST(0, likes_count - 1) 
+        WHERE id = ${signalId}
+      `);
+    }
+  }
+
+  async incrementSignalViewCount(signalId: string): Promise<void> {
+    await db.execute(sql`
+      UPDATE signals 
+      SET view_count = view_count + 1 
+      WHERE id = ${signalId}
+    `);
   }
 }
 

@@ -1,0 +1,574 @@
+/* ACP Mobile Liquid Glass Theme - Red, White, Blue */
+
+:root {
+  --mobile-navy: #071A3A;
+  --mobile-navy-dark: #050b1b;
+  --mobile-red: #E6393A;
+  --mobile-red-glow: rgba(230, 57, 58, 0.45);
+  --mobile-blue: #3B5BA9;
+  --mobile-blue-glow: rgba(59, 91, 169, 0.65);
+  --mobile-white: #F5F7FA;
+  --mobile-white-glow: rgba(255, 255, 255, 0.18);
+  --mobile-glass-bg: rgba(7, 16, 40, 0.45);
+  --mobile-glass-border: rgba(255, 255, 255, 0.16);
+  --mobile-glass-shadow: rgba(0, 0, 0, 0.35);
+  --scroll-ratio: 0;
+}
+
+/* Mobile App Root Container */
+.mobile-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  padding-bottom: 80px;
+  background:
+    radial-gradient(circle at calc(20% + 40% * var(--scroll-ratio, 0))
+                            calc(20% + 30% * var(--scroll-ratio, 0)),
+                    var(--mobile-white-glow),
+                    transparent 55%),
+    radial-gradient(circle at calc(80% - 30% * var(--scroll-ratio, 0))
+                            calc(60% - 20% * var(--scroll-ratio, 0)),
+                    var(--mobile-red-glow),
+                    transparent 60%),
+    radial-gradient(circle at 50% 100%,
+                    var(--mobile-blue-glow),
+                    var(--mobile-navy-dark) 70%);
+  background-attachment: fixed;
+  background-size: cover;
+  overflow-x: hidden;
+}
+
+/* Liquid Glass Card Base */
+.glass-card {
+  position: relative;
+  border-radius: 22px;
+  background: var(--mobile-glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--mobile-glass-border);
+  box-shadow: 0 18px 30px var(--mobile-glass-shadow);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Scroll-reactive reflection overlay */
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.35;
+  background:
+    radial-gradient(circle at calc(30% + 40% * var(--scroll-ratio, 0))
+                            calc(0% + 40% * var(--scroll-ratio, 0)),
+                    rgba(255, 255, 255, 0.75),
+                    transparent 55%);
+  transition: opacity 150ms ease-out;
+  z-index: 1;
+}
+
+.glass-card:active::before,
+.glass-card:hover::before {
+  opacity: 0.5;
+}
+
+.glass-card:active {
+  transform: scale(0.98);
+}
+
+/* Glass Top Bar */
+.glass-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 12px 16px;
+  background: rgba(7, 26, 58, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  margin-bottom: 8px;
+}
+
+/* Glass Bottom Navigation */
+.glass-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: rgba(7, 26, 58, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--mobile-glass-border);
+}
+
+.glass-bottom-nav-inner {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* Nav Button */
+.nav-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  color: var(--mobile-white);
+  opacity: 0.7;
+  transition: opacity 0.2s, transform 0.2s;
+  border-radius: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.nav-button:hover,
+.nav-button.active {
+  opacity: 1;
+}
+
+.nav-button.active {
+  text-shadow: 0 0 12px var(--mobile-red);
+}
+
+.nav-button.active svg {
+  filter: drop-shadow(0 0 8px var(--mobile-red));
+}
+
+/* Create Button (center red button) */
+.create-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--mobile-red), #c42a2b);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 20px rgba(230, 57, 58, 0.5);
+  transform: translateY(-8px);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.create-button:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 6px 28px rgba(230, 57, 58, 0.65);
+}
+
+.create-button:active {
+  transform: translateY(-6px) scale(0.95);
+}
+
+/* Type Tags */
+.type-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.type-tag.signal {
+  background: var(--mobile-red);
+  color: white;
+}
+
+.type-tag.news {
+  background: var(--mobile-blue);
+  color: white;
+}
+
+.type-tag.poll {
+  background: transparent;
+  border: 1px solid var(--mobile-blue);
+  color: white;
+}
+
+.type-tag.petition {
+  background: var(--mobile-red);
+  color: white;
+}
+
+/* Filter Tabs */
+.filter-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  margin-bottom: 16px;
+}
+
+.filter-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-tab {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid var(--mobile-glass-border);
+  background: transparent;
+  color: var(--mobile-white);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-tab.active {
+  background: var(--mobile-red);
+  border-color: var(--mobile-red);
+}
+
+.filter-tab:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Feed Grid */
+.feed-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 0 12px;
+}
+
+/* Glass Button */
+.glass-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--mobile-glass-border);
+  color: var(--mobile-white);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.glass-button.primary {
+  background: var(--mobile-red);
+  border-color: var(--mobile-red);
+}
+
+.glass-button.primary:hover {
+  background: #c42a2b;
+}
+
+/* Poll Option Glass Button */
+.poll-option {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--mobile-glass-border);
+  color: var(--mobile-white);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.poll-option:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.poll-option.selected {
+  border-color: var(--mobile-red);
+  box-shadow: 0 0 12px rgba(230, 57, 58, 0.3);
+}
+
+/* Progress Bar */
+.petition-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.petition-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--mobile-red), var(--mobile-blue));
+  transition: width 0.3s ease;
+}
+
+/* Logo Container */
+.logo-container {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--mobile-glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.logo-container img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+/* Notification Bell */
+.notification-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--mobile-glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mobile-white);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.notification-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Video Thumbnail */
+.video-thumbnail {
+  position: relative;
+  aspect-ratio: 9/16;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.video-thumbnail img,
+.video-thumbnail video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-thumbnail::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(7, 26, 58, 0.9) 0%, transparent 50%);
+}
+
+.play-button-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+}
+
+/* Signal Recorder Styles */
+.recorder-frame {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  aspect-ratio: 9/16;
+  border-radius: 24px;
+  overflow: hidden;
+  background: black;
+  border: 2px solid var(--mobile-glass-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.recorder-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.record-button {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--mobile-red);
+  border: 4px solid rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.record-button::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: var(--mobile-red);
+  transition: all 0.2s;
+}
+
+.record-button.recording::after {
+  border-radius: 4px;
+  inset: 18px;
+}
+
+.record-button:hover {
+  transform: scale(1.05);
+}
+
+.record-button:active {
+  transform: scale(0.95);
+}
+
+/* Duration Selector */
+.duration-selector {
+  display: flex;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  border-radius: 16px;
+}
+
+.duration-option {
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mobile-white);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.duration-option.active {
+  background: var(--mobile-red);
+}
+
+/* Side Controls */
+.side-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.side-control-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--mobile-glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mobile-white);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.side-control-button:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* Text Overlay on Video */
+.text-overlay {
+  position: absolute;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: move;
+  user-select: none;
+}
+
+.text-overlay.contrast {
+  background: rgba(0, 0, 0, 0.9);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Emoji Overlay */
+.emoji-overlay {
+  position: absolute;
+  cursor: move;
+  user-select: none;
+  font-size: 48px;
+}
+
+/* Loading Skeleton */
+.skeleton {
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.05) 25%, 
+    rgba(255, 255, 255, 0.1) 50%, 
+    rgba(255, 255, 255, 0.05) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Scrollbar Styling */
+.mobile-root::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mobile-root::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mobile-root::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+/* Touch Optimization */
+@media (hover: none) and (pointer: coarse) {
+  .glass-card:hover::before {
+    opacity: 0.35;
+  }
+  
+  .glass-card:active::before {
+    opacity: 0.5;
+  }
+}
