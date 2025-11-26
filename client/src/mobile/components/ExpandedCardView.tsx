@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Heart, MessageCircle, Share2, ChevronDown } from "lucide-react";
+import { X, Heart, MessageCircle, Share2, ChevronDown, Check } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { LazyYouTubePlayer, LazyTikTokPlayer } from "./LazyYouTubeThumbnail";
 import { findVideoInPost } from "../utils/youtube";
+import { useToast } from "@/hooks/use-toast";
 
 interface ExpandedCardViewProps {
   item: {
@@ -19,8 +20,11 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [opacity, setOpacity] = useState(1);
+  const [votedOptionId, setVotedOptionId] = useState<string | null>(null);
+  const [localVotes, setLocalVotes] = useState<Record<string, number>>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const startY = useRef(0);
+  const { toast } = useToast();
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     startY.current = e.touches[0].clientY;
@@ -288,10 +292,43 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
         const pollId = 'pollId' in data ? data.pollId : data.id;
         const pollOptionsData = 'pollOptions' in data ? data.pollOptions : ('options' in data ? data.options : []);
         const pollOptionsArray = Array.isArray(pollOptionsData) ? pollOptionsData : [];
-        const totalVotes = pollOptionsArray.reduce((sum: number, opt: any) => sum + (opt.votes || 0), 0);
         const pollTitleText = 'pollTitle' in data ? data.pollTitle : ('title' in data ? data.title : 'Poll');
         const pollDescText = 'pollDescription' in data ? data.pollDescription : ('description' in data ? data.description : null);
         const pollEndDateVal = 'pollEndDate' in data ? data.pollEndDate : ('endDate' in data ? data.endDate : null);
+        
+        const optionsWithLocalVotes = pollOptionsArray.map((opt: any) => ({
+          ...opt,
+          votes: localVotes[opt.id] !== undefined ? localVotes[opt.id] : (opt.votes || 0)
+        }));
+        const totalVotes = optionsWithLocalVotes.reduce((sum: number, opt: any) => sum + opt.votes, 0);
+        
+        const handleVote = async (optionId: string) => {
+          if (votedOptionId || !pollId) return;
+          
+          setVotedOptionId(optionId);
+          
+          const newLocalVotes: Record<string, number> = {};
+          pollOptionsArray.forEach((opt: any) => {
+            newLocalVotes[opt.id] = (opt.votes || 0) + (opt.id === optionId ? 1 : 0);
+          });
+          setLocalVotes(newLocalVotes);
+          
+          try {
+            await apiRequest(`/api/polls/${pollId}/vote`, 'POST', { optionId });
+            toast({ title: 'Vote recorded!', description: 'Thank you for voting.' });
+            
+            queryClient.invalidateQueries({ queryKey: ['/api/polls'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/feeds/all'] });
+            
+            setTimeout(() => {
+              onClose();
+            }, 1000);
+          } catch (error) {
+            toast({ title: 'Error', description: 'Failed to record vote.', variant: 'destructive' });
+            setVotedOptionId(null);
+            setLocalVotes({});
+          }
+        };
         
         return (
           <div className="space-y-4">
@@ -306,32 +343,34 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
             )}
             
             <div className="space-y-3">
-              {pollOptionsArray.map((option: any, idx: number) => {
+              {optionsWithLocalVotes.map((option: any, idx: number) => {
                 const percentage = totalVotes > 0 
                   ? Math.round((option.votes / totalVotes) * 100) 
                   : 0;
+                const isSelected = votedOptionId === option.id;
                 return (
                   <button 
                     key={option.id || idx}
-                    onClick={() => {
-                      if (pollId) {
-                        apiRequest(`/api/polls/${pollId}/vote`, 'POST', { optionId: option.id })
-                          .then(() => {
-                            queryClient.invalidateQueries({ queryKey: ['/api/polls'] });
-                            queryClient.invalidateQueries({ queryKey: ['/api/feeds/all'] });
-                          })
-                          .catch(console.error);
-                      }
-                    }}
-                    className="w-full p-4 rounded-xl bg-white/10 border border-white/20 text-left relative overflow-hidden hover:bg-white/20 transition-colors active:scale-[0.98]"
+                    onClick={() => handleVote(option.id)}
+                    disabled={!!votedOptionId}
+                    className={`w-full p-4 rounded-xl text-left relative overflow-hidden transition-all active:scale-[0.98] ${
+                      isSelected 
+                        ? 'bg-gradient-to-r from-purple-500/30 to-violet-500/30 border-2 border-purple-400' 
+                        : votedOptionId 
+                          ? 'bg-white/5 border border-white/10 opacity-70'
+                          : 'bg-white/10 border border-white/20 hover:bg-white/20'
+                    }`}
                   >
                     <div 
-                      className="absolute inset-0 bg-gradient-to-r from-purple-500/40 to-violet-500/40"
-                      style={{ width: `${percentage}%` }}
+                      className={`absolute inset-0 ${isSelected ? 'bg-gradient-to-r from-purple-500/50 to-violet-500/50' : 'bg-gradient-to-r from-purple-500/30 to-violet-500/30'}`}
+                      style={{ width: `${percentage}%`, transition: 'width 0.5s ease-out' }}
                     />
-                    <div className="relative flex justify-between">
-                      <span className="text-white font-medium">{option.text}</span>
-                      <span className="text-white/70">{percentage}%</span>
+                    <div className="relative flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        {isSelected && <Check className="w-5 h-5 text-purple-300" />}
+                        <span className={`font-medium ${isSelected ? 'text-white' : 'text-white'}`}>{option.text}</span>
+                      </div>
+                      <span className={`${isSelected ? 'text-purple-200 font-bold' : 'text-white/70'}`}>{percentage}%</span>
                     </div>
                   </button>
                 );
@@ -343,9 +382,11 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               {pollEndDateVal && ` • Ends ${format(new Date(pollEndDateVal), 'MMM d, yyyy')}`}
             </p>
             
-            <p className="text-white/40 text-xs text-center">
-              Tap an option to vote
-            </p>
+            {!votedOptionId && (
+              <p className="text-white/40 text-xs text-center">
+                Tap an option to vote
+              </p>
+            )}
           </div>
         );
 
