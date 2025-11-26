@@ -28,7 +28,15 @@ export function getTikTokEmbedUrl(videoId: string): string {
 export type VideoInfo = {
   platform: 'youtube' | 'tiktok';
   videoId: string;
+  originalUrl?: string;
 } | null;
+
+// Extract the full TikTok URL from text
+function extractTikTokUrl(text: string): string | null {
+  if (!text) return null;
+  const urlMatch = text.match(/(https?:\/\/(?:www\.)?(?:tiktok\.com\/@[\w.-]+\/video\/\d+|vm\.tiktok\.com\/[\w]+|tiktok\.com\/t\/[\w]+))/i);
+  return urlMatch ? urlMatch[1] : null;
+}
 
 export function findVideoInPost(post: {
   content?: string;
@@ -42,7 +50,10 @@ export function findVideoInPost(post: {
     if (youtubeId) return { platform: 'youtube', videoId: youtubeId };
     
     const tiktokId = extractTikTokId(source);
-    if (tiktokId) return { platform: 'tiktok', videoId: tiktokId };
+    if (tiktokId) {
+      const tiktokUrl = extractTikTokUrl(source);
+      return { platform: 'tiktok', videoId: tiktokId, originalUrl: tiktokUrl || undefined };
+    }
   }
   
   return null;

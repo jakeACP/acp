@@ -213,6 +213,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               ) : (
                 <LazyTikTokPlayer 
                   videoId={postVideo.videoId}
+                  tiktokUrl={postVideo.originalUrl}
                   className="rounded-xl overflow-hidden aspect-[9/16] max-h-[60vh]"
                 />
               )
@@ -266,6 +267,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               ) : (
                 <LazyTikTokPlayer 
                   videoId={newsVideo.videoId}
+                  tiktokUrl={newsVideo.originalUrl}
                   className="rounded-xl overflow-hidden aspect-[9/16] max-h-[60vh]"
                 />
               )

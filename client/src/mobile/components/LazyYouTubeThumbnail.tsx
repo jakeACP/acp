@@ -163,17 +163,22 @@ export const LazyYouTubePlayer = memo(function LazyYouTubePlayer({
 
 interface LazyTikTokThumbnailProps {
   videoId: string;
+  tiktokUrl?: string;
   className?: string;
 }
 
 export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
   videoId,
+  tiktokUrl,
   className = "",
 }: LazyTikTokThumbnailProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [embedHtml, setEmbedHtml] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const embedContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -193,33 +198,92 @@ export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
     return () => observer.disconnect();
   }, []);
 
-  const handlePlay = () => {
+  useEffect(() => {
+    if (embedHtml && embedContainerRef.current) {
+      const script = document.createElement('script');
+      script.src = 'https://www.tiktok.com/embed.js';
+      script.async = true;
+      embedContainerRef.current.appendChild(script);
+      
+      return () => {
+        if (embedContainerRef.current && script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      };
+    }
+  }, [embedHtml]);
+
+  const handlePlay = async () => {
     setIsLoading(true);
     setIsPlaying(true);
+    
+    try {
+      const urlToFetch = tiktokUrl || `https://www.tiktok.com/@user/video/${videoId}`;
+      const response = await fetch(`/api/tiktok/oembed?url=${encodeURIComponent(urlToFetch)}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch TikTok embed');
+      }
+      
+      const data = await response.json();
+      setEmbedHtml(data.html);
+    } catch (err) {
+      setError('Unable to load TikTok video. Try opening in TikTok app.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const embedUrl = getTikTokEmbedUrl(videoId);
+  const openInTikTok = () => {
+    const url = tiktokUrl || `https://www.tiktok.com/@user/video/${videoId}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
-  if (isPlaying) {
+  if (isPlaying && embedHtml) {
     return (
       <div 
         ref={containerRef}
         className={`relative overflow-hidden bg-black ${className}`}
       >
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#ff0050]/20 via-[#00f2ea]/20 to-black z-10">
-            <div className="w-8 h-8 border-2 border-white/30 border-t-[#00f2ea] rounded-full animate-spin" />
-          </div>
-        )}
-        <iframe
-          src={embedUrl}
-          title="TikTok video player"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          onLoad={() => setIsLoading(false)}
-          className="w-full h-full border-0"
-          style={{ minHeight: '400px' }}
+        <div 
+          ref={embedContainerRef}
+          className="w-full flex justify-center"
+          dangerouslySetInnerHTML={{ __html: embedHtml }}
         />
+      </div>
+    );
+  }
+
+  if (isPlaying && error) {
+    return (
+      <div 
+        ref={containerRef}
+        className={`relative overflow-hidden bg-gradient-to-br from-[#ff0050]/30 via-[#00f2ea]/20 to-black ${className}`}
+      >
+        <div className="w-full h-full flex items-center justify-center p-4">
+          <div className="text-center">
+            <p className="text-white/70 text-sm mb-3">{error}</p>
+            <button 
+              onClick={openInTikTok}
+              className="px-4 py-2 bg-black/50 rounded-full text-white text-sm font-medium border border-white/20 hover:bg-black/70 transition-colors"
+            >
+              Open in TikTok
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isPlaying && isLoading) {
+    return (
+      <div 
+        ref={containerRef}
+        className={`relative overflow-hidden bg-gradient-to-br from-[#ff0050]/20 via-[#00f2ea]/20 to-black ${className}`}
+      >
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-white/30 border-t-[#00f2ea] rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
@@ -258,15 +322,21 @@ export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
 
 interface LazyTikTokPlayerProps {
   videoId: string;
+  tiktokUrl?: string;
   className?: string;
 }
 
 export const LazyTikTokPlayer = memo(function LazyTikTokPlayer({
   videoId,
+  tiktokUrl,
   className = "",
 }: LazyTikTokPlayerProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [embedHtml, setEmbedHtml] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const embedContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -286,27 +356,90 @@ export const LazyTikTokPlayer = memo(function LazyTikTokPlayer({
     return () => observer.disconnect();
   }, []);
 
-  const embedUrl = getTikTokEmbedUrl(videoId);
+  useEffect(() => {
+    if (isVisible && !embedHtml && !error) {
+      const fetchEmbed = async () => {
+        try {
+          const urlToFetch = tiktokUrl || `https://www.tiktok.com/@user/video/${videoId}`;
+          const response = await fetch(`/api/tiktok/oembed?url=${encodeURIComponent(urlToFetch)}`);
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch TikTok embed');
+          }
+          
+          const data = await response.json();
+          setEmbedHtml(data.html);
+        } catch (err) {
+          setError('Unable to load TikTok video');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchEmbed();
+    }
+  }, [isVisible, videoId, tiktokUrl, embedHtml, error]);
 
-  if (!isVisible) {
+  useEffect(() => {
+    if (embedHtml && embedContainerRef.current) {
+      const script = document.createElement('script');
+      script.src = 'https://www.tiktok.com/embed.js';
+      script.async = true;
+      embedContainerRef.current.appendChild(script);
+      
+      return () => {
+        if (embedContainerRef.current && script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      };
+    }
+  }, [embedHtml]);
+
+  const openInTikTok = () => {
+    const url = tiktokUrl || `https://www.tiktok.com/@user/video/${videoId}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  if (!isVisible || isLoading) {
     return (
-      <div ref={containerRef} className={`bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-blue-500/20 flex items-center justify-center ${className}`}>
-        <div className="w-12 h-12 rounded-full bg-black flex items-center justify-center">
-          <Play className="w-6 h-6 text-white" />
+      <div ref={containerRef} className={`bg-gradient-to-br from-[#ff0050]/20 via-[#00f2ea]/20 to-black flex items-center justify-center ${className}`}>
+        <div className="w-8 h-8 border-2 border-white/30 border-t-[#00f2ea] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div ref={containerRef} className={`bg-gradient-to-br from-[#ff0050]/30 via-[#00f2ea]/20 to-black flex items-center justify-center ${className}`}>
+        <div className="text-center p-4">
+          <p className="text-white/70 text-sm mb-3">{error}</p>
+          <button 
+            onClick={openInTikTok}
+            className="px-4 py-2 bg-black/50 rounded-full text-white text-sm font-medium border border-white/20 hover:bg-black/70 transition-colors"
+          >
+            Open in TikTok
+          </button>
         </div>
       </div>
     );
   }
 
+  if (embedHtml) {
+    return (
+      <div ref={containerRef} className={`bg-black ${className}`}>
+        <div 
+          ref={embedContainerRef}
+          className="w-full flex justify-center"
+          dangerouslySetInnerHTML={{ __html: embedHtml }}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div ref={containerRef} className={className}>
-      <iframe
-        src={embedUrl}
-        title="TikTok video player"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        className="w-full h-full border-0"
-      />
+    <div ref={containerRef} className={`bg-gradient-to-br from-[#ff0050]/20 via-[#00f2ea]/20 to-black flex items-center justify-center ${className}`}>
+      <div className="w-12 h-12 rounded-full bg-black flex items-center justify-center">
+        <Play className="w-6 h-6 text-white" />
+      </div>
     </div>
   );
 });

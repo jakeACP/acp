@@ -150,6 +150,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // TikTok oEmbed API proxy
+  app.get("/api/tiktok/oembed", async (req, res) => {
+    try {
+      const url = req.query.url as string;
+      
+      if (!url) {
+        return res.status(400).json({ message: "URL is required" });
+      }
+
+      // Validate it's a TikTok URL
+      if (!url.includes('tiktok.com')) {
+        return res.status(400).json({ message: "Invalid TikTok URL" });
+      }
+
+      const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
+      const response = await fetch(oembedUrl);
+      
+      if (!response.ok) {
+        return res.status(response.status).json({ message: "Failed to fetch TikTok embed" });
+      }
+
+      const data = await response.json();
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Whistleblowing API
   app.get("/api/whistleblowing", async (req, res) => {
     try {

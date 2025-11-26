@@ -188,7 +188,8 @@ export function MobileFeedPage() {
                 />
               ) : (
                 <LazyTikTokThumbnail 
-                  videoId={postVideo.videoId} 
+                  videoId={postVideo.videoId}
+                  tiktokUrl={postVideo.originalUrl}
                   className="w-full h-full rounded-lg"
                 />
               )}
