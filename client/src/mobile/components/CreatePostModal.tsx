@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, FileText, Video, Image, BarChart2, Calendar, Megaphone, Send, MapPin, Clock, Users, Link as LinkIcon } from "lucide-react";
+import { X, FileText, Video, Image, BarChart2, Calendar, Megaphone, Send, MapPin, Clock, Users, Link as LinkIcon, BookOpen } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -9,15 +9,15 @@ interface CreatePostModalProps {
   onClose: () => void;
 }
 
-type PostType = 'text' | 'signal' | 'image' | 'poll' | 'event' | 'petition';
+type PostType = 'text' | 'signal' | 'image' | 'poll' | 'event' | 'petition' | 'blog';
 
 const postTypes: { type: PostType; icon: typeof FileText; label: string; color: string }[] = [
   { type: 'text', icon: FileText, label: 'Text Post', color: 'from-blue-500 to-blue-600' },
+  { type: 'blog', icon: BookOpen, label: 'Article', color: 'from-purple-500 to-indigo-500' },
   { type: 'signal', icon: Video, label: 'Signal Video', color: 'from-red-500 to-pink-500' },
   { type: 'image', icon: Image, label: 'Image Post', color: 'from-green-500 to-emerald-500' },
   { type: 'poll', icon: BarChart2, label: 'Poll', color: 'from-purple-500 to-violet-500' },
   { type: 'event', icon: Calendar, label: 'Event', color: 'from-orange-500 to-amber-500' },
-  { type: 'petition', icon: Megaphone, label: 'Petition', color: 'from-cyan-500 to-teal-500' },
 ];
 
 interface EventFormData {
@@ -54,6 +54,20 @@ const initialEventData: EventFormData = {
   maxAttendees: '',
 };
 
+interface BlogFormData {
+  title: string;
+  excerpt: string;
+  articleBody: string;
+  featuredImage: string;
+}
+
+const initialBlogData: BlogFormData = {
+  title: '',
+  excerpt: '',
+  articleBody: '',
+  featuredImage: '',
+};
+
 export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
   const [selectedType, setSelectedType] = useState<PostType | null>(null);
   const [content, setContent] = useState('');
@@ -61,6 +75,7 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
   const [videoUrl, setVideoUrl] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [eventData, setEventData] = useState<EventFormData>(initialEventData);
+  const [blogData, setBlogData] = useState<BlogFormData>(initialBlogData);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -132,6 +147,7 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
     setVideoUrl('');
     setPollOptions(['', '']);
     setEventData(initialEventData);
+    setBlogData(initialBlogData);
     onClose();
   };
 
@@ -208,6 +224,33 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
       };
 
       createEventMutation.mutate(eventPayload);
+      return;
+    }
+
+    if (selectedType === 'blog') {
+      if (!blogData.title.trim()) {
+        toast({ title: 'Title required', description: 'Please enter an article title.', variant: 'destructive' });
+        return;
+      }
+      if (!blogData.articleBody.trim()) {
+        toast({ title: 'Content required', description: 'Please write the article content.', variant: 'destructive' });
+        return;
+      }
+
+      const words = blogData.articleBody.trim().split(/\s+/).length;
+      const readingTime = Math.max(1, Math.ceil(words / 200));
+
+      const blogPostData = {
+        content: blogData.excerpt || blogData.articleBody.slice(0, 200) + '...',
+        title: blogData.title,
+        type: 'blog',
+        articleBody: blogData.articleBody,
+        featuredImage: blogData.featuredImage || null,
+        excerpt: blogData.excerpt || null,
+        readingTime,
+      };
+
+      createPostMutation.mutate(blogPostData);
       return;
     }
 
@@ -337,6 +380,63 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
                     )}
                   </div>
                 </>
+              )}
+
+              {selectedType === 'blog' && (
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                  <div>
+                    <label className="text-white/70 text-sm mb-1 block">Article Title *</label>
+                    <input
+                      type="text"
+                      value={blogData.title}
+                      onChange={(e) => setBlogData({ ...blogData, title: e.target.value })}
+                      placeholder="Your article headline..."
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                      data-testid="input-blog-title"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-white/70 text-sm mb-1 block">Featured Image URL (optional)</label>
+                    <input
+                      type="url"
+                      value={blogData.featuredImage}
+                      onChange={(e) => setBlogData({ ...blogData, featuredImage: e.target.value })}
+                      placeholder="https://..."
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                      data-testid="input-blog-image"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-white/70 text-sm mb-1 block">Excerpt (optional)</label>
+                    <textarea
+                      value={blogData.excerpt}
+                      onChange={(e) => setBlogData({ ...blogData, excerpt: e.target.value })}
+                      placeholder="A brief summary for the feed preview..."
+                      rows={2}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none"
+                      data-testid="input-blog-excerpt"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-white/70 text-sm mb-1 block">Article Content *</label>
+                    <textarea
+                      value={blogData.articleBody}
+                      onChange={(e) => setBlogData({ ...blogData, articleBody: e.target.value })}
+                      placeholder="Write your full article here..."
+                      rows={8}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none"
+                      data-testid="input-blog-body"
+                    />
+                  </div>
+
+                  <p className="text-white/40 text-xs">
+                    {blogData.articleBody.trim().split(/\s+/).filter(w => w).length} words 
+                    • ~{Math.max(1, Math.ceil(blogData.articleBody.trim().split(/\s+/).filter(w => w).length / 200))} min read
+                  </p>
+                </div>
               )}
 
               {selectedType === 'event' && (
