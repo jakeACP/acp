@@ -171,6 +171,8 @@ export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
   className = "",
 }: LazyTikTokThumbnailProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -191,18 +193,56 @@ export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
     return () => observer.disconnect();
   }, []);
 
+  const handlePlay = () => {
+    setIsLoading(true);
+    setIsPlaying(true);
+  };
+
+  const embedUrl = getTikTokEmbedUrl(videoId);
+
+  if (isPlaying) {
+    return (
+      <div 
+        ref={containerRef}
+        className={`relative overflow-hidden bg-black ${className}`}
+      >
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#ff0050]/20 via-[#00f2ea]/20 to-black z-10">
+            <div className="w-8 h-8 border-2 border-white/30 border-t-[#00f2ea] rounded-full animate-spin" />
+          </div>
+        )}
+        <iframe
+          src={embedUrl}
+          title="TikTok video player"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          onLoad={() => setIsLoading(false)}
+          className="w-full h-full border-0"
+          style={{ minHeight: '400px' }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div 
       ref={containerRef}
-      className={`relative overflow-hidden bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-blue-500/20 ${className}`}
+      className={`relative overflow-hidden bg-gradient-to-br from-[#ff0050]/30 via-[#00f2ea]/20 to-black cursor-pointer group ${className}`}
+      onClick={isVisible ? handlePlay : undefined}
     >
       {isVisible ? (
         <div className="w-full h-full flex items-center justify-center">
           <div className="text-center">
-            <div className="w-12 h-12 mx-auto rounded-full bg-black flex items-center justify-center mb-2">
-              <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+            <div className="w-16 h-16 mx-auto rounded-full bg-black/80 flex items-center justify-center mb-3 shadow-xl group-hover:scale-110 transition-transform border border-white/20">
+              <Play className="w-8 h-8 text-white fill-white ml-1" />
             </div>
-            <span className="text-white/70 text-xs font-medium">TikTok</span>
+            <div className="flex items-center justify-center gap-1">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" fill="white"/>
+              </svg>
+              <span className="text-white/90 text-sm font-semibold">TikTok</span>
+            </div>
+            <p className="text-white/60 text-xs mt-2">Tap to play</p>
           </div>
         </div>
       ) : (
