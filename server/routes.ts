@@ -383,6 +383,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/users/:userId", async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const followers = await storage.getFollowers(req.params.userId);
+      const following = await storage.getFollowing(req.params.userId);
+      res.json({
+        id: user.id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        avatar: user.avatar,
+        bio: user.bio,
+        location: user.location,
+        createdAt: user.createdAt,
+        followersCount: followers.length,
+        followingCount: following.length,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Online status and friends
   app.post("/api/user/lastseen", async (req, res) => {
     if (!req.isAuthenticated()) {

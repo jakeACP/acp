@@ -5,6 +5,7 @@ import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { FilterTabs } from "../components/FilterTabs";
 import { ExpandedCardView } from "../components/ExpandedCardView";
+import { FriendSuggestionsWidget } from "../components/FriendSuggestionsWidget";
 import { LazyYouTubeThumbnail, LazyTikTokThumbnail } from "../components/LazyYouTubeThumbnail";
 import { findVideoInPost } from "../utils/youtube";
 import type { Poll, Petition, SignalWithAuthor, Event, User } from "@shared/schema";
@@ -362,6 +363,8 @@ export function MobileFeedPage() {
         activeFilter={activeFilter} 
         onFilterChange={setActiveFilter} 
       />
+
+      <FriendSuggestionsWidget />
 
       <div className="feed-grid pb-20">
         {isLoading ? (
