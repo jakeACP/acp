@@ -4,14 +4,8 @@ import { useScrollLight } from "../hooks/useScrollLight";
 import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { FilterTabs } from "../components/FilterTabs";
-import { SignalCard } from "../components/cards/SignalCard";
-import { PostCard } from "../components/cards/PostCard";
-import { NewsCard } from "../components/cards/NewsCard";
-import { PollCard } from "../components/cards/PollCard";
-import { PetitionCard } from "../components/cards/PetitionCard";
-import { AnnouncementCard } from "../components/cards/AnnouncementCard";
-import { EventCard } from "../components/cards/EventCard";
-import type { Post, Poll, Petition, SignalWithAuthor, Event } from "@shared/schema";
+import { ExpandedCardView } from "../components/ExpandedCardView";
+import type { Poll, Petition, SignalWithAuthor, Event } from "@shared/schema";
 
 interface PostWithAuthor {
   id: string;
@@ -65,6 +59,7 @@ type FeedItem =
 export function MobileFeedPage() {
   useScrollLight();
   const [activeFilter, setActiveFilter] = useState("all");
+  const [expandedItem, setExpandedItem] = useState<FeedItem | null>(null);
 
   const { data: signals = [], isLoading: signalsLoading } = useQuery<SignalWithAuthor[]>({
     queryKey: ['/api/mobile/signals'],
@@ -121,37 +116,107 @@ export function MobileFeedPage() {
 
   const displayItems = filteredItems.slice(0, 30);
 
-  const renderCard = (item: FeedItem, index: number) => {
+  const getCardPreview = (item: FeedItem) => {
+    const author = 'author' in item.data ? item.data.author : null;
+    const displayName = author?.firstName && author?.lastName
+      ? `${author.firstName} ${author.lastName}`
+      : author?.username || 'Anonymous';
+
     switch (item.type) {
       case 'signal':
-        return <SignalCard key={`signal-${item.data.id}`} signal={item.data} />;
+        return (
+          <div className="h-full flex flex-col">
+            <span className="type-tag signal mb-2 w-fit">Signal</span>
+            <h4 className="text-white font-semibold text-sm line-clamp-2 mb-1">{item.data.title || 'Video'}</h4>
+            <p className="text-white/60 text-xs line-clamp-2">{item.data.description}</p>
+            <div className="mt-auto pt-2 flex items-center gap-2 text-white/50 text-xs">
+              <span>{displayName}</span>
+            </div>
+          </div>
+        );
       case 'post':
-        return <PostCard key={`post-${item.data.id}`} post={item.data} />;
+        return (
+          <div className="h-full flex flex-col">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-red-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-white/70 text-xs truncate">{displayName}</span>
+            </div>
+            <p className="text-white text-sm line-clamp-4 flex-1">{item.data.content}</p>
+            {item.data.image && (
+              <div className="mt-2 h-16 rounded-lg overflow-hidden bg-white/10">
+                <img src={item.data.image} alt="" className="w-full h-full object-cover" />
+              </div>
+            )}
+          </div>
+        );
       case 'news':
-        return <NewsCard key={`news-${item.data.id}`} post={item.data} />;
+        const thumbnailUrl = item.data.linkPreview?.image || item.data.image;
+        return (
+          <div className="h-full flex flex-col">
+            <span className="type-tag news mb-2 w-fit">News</span>
+            {thumbnailUrl && (
+              <div className="h-16 rounded-lg overflow-hidden mb-2 bg-white/10">
+                <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <h4 className="text-white font-semibold text-sm line-clamp-2">{item.data.title || item.data.linkPreview?.title || 'Article'}</h4>
+            <p className="text-white/50 text-xs mt-auto">{item.data.newsSourceName || 'News'}</p>
+          </div>
+        );
       case 'poll':
-        const pollData: Poll = {
-          id: item.data.pollId!,
-          postId: item.data.id,
-          title: item.data.pollTitle || 'Untitled Poll',
-          description: item.data.pollDescription || null,
-          options: item.data.pollOptions || [],
-          votingType: item.data.pollVotingType || 'simple',
-          isBlockchainVerified: item.data.pollIsBlockchainVerified || false,
-          blockchainHash: null,
-          totalVotes: item.data.pollTotalVotes || 0,
-          endDate: item.data.pollEndDate ? new Date(item.data.pollEndDate as string) : null,
-          isActive: item.data.pollIsActive ?? true,
-          featured: false,
-          createdAt: item.data.createdAt ? new Date(item.data.createdAt as string) : null,
-        };
-        return <PollCard key={`poll-${item.data.id}`} poll={pollData} />;
+        return (
+          <div className="h-full flex flex-col">
+            <span className="type-tag poll mb-2 w-fit">Poll</span>
+            <h4 className="text-white font-semibold text-sm line-clamp-2 mb-2">{item.data.pollTitle}</h4>
+            <div className="space-y-1 flex-1">
+              {(item.data.pollOptions || []).slice(0, 2).map((opt: any, idx: number) => (
+                <div key={opt.id || idx} className="text-white/60 text-xs truncate bg-white/5 rounded px-2 py-1">
+                  {opt.text}
+                </div>
+              ))}
+            </div>
+            <p className="text-white/50 text-xs mt-2">{item.data.pollTotalVotes || 0} votes</p>
+          </div>
+        );
       case 'announcement':
-        return <AnnouncementCard key={`announcement-${item.data.id}`} post={item.data} />;
+        return (
+          <div className="h-full flex flex-col border-l-4 border-red-500 pl-3">
+            <span className="type-tag announcement mb-2 w-fit">Official</span>
+            {item.data.title && <h4 className="text-white font-bold text-sm mb-1">{item.data.title}</h4>}
+            <p className="text-white/80 text-sm line-clamp-4 flex-1">{item.data.content}</p>
+          </div>
+        );
       case 'event':
-        return <EventCard key={`event-${item.data.id}`} post={item.data} event={item.event} />;
+        return (
+          <div className="h-full flex flex-col">
+            <span className="type-tag event mb-2 w-fit">Event</span>
+            <h4 className="text-white font-semibold text-sm line-clamp-2 mb-1">
+              {item.event?.title || item.data.content.slice(0, 50)}
+            </h4>
+            {item.event?.location && (
+              <p className="text-white/60 text-xs truncate">📍 {item.event.location}</p>
+            )}
+            <p className="text-white/50 text-xs mt-auto">Tap to view details</p>
+          </div>
+        );
       case 'petition':
-        return <PetitionCard key={`petition-${item.data.id}`} petition={item.data} />;
+        const progress = item.data.targetSignatures 
+          ? Math.min(100, Math.round((item.data.currentSignatures || 0) / item.data.targetSignatures * 100))
+          : 0;
+        return (
+          <div className="h-full flex flex-col">
+            <span className="type-tag petition mb-2 w-fit">Petition</span>
+            <h4 className="text-white font-semibold text-sm line-clamp-2 mb-2">{item.data.title}</h4>
+            <div className="mt-auto">
+              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden mb-1">
+                <div className="h-full bg-gradient-to-r from-red-500 to-blue-500" style={{ width: `${progress}%` }} />
+              </div>
+              <p className="text-white/50 text-xs">{progress}% signed</p>
+            </div>
+          </div>
+        );
       default:
         return null;
     }
@@ -188,7 +253,7 @@ export function MobileFeedPage() {
           </>
         ) : displayItems.length === 0 ? (
           <div className="col-span-2 text-center py-12">
-            <div className="glass-card p-6">
+            <div className="glass-card p-6" style={{ height: 'auto' }}>
               <p className="text-white/70 text-sm">
                 No content available yet.
               </p>
@@ -198,11 +263,27 @@ export function MobileFeedPage() {
             </div>
           </div>
         ) : (
-          displayItems.map((item, index) => renderCard(item, index))
+          displayItems.map((item) => (
+            <div
+              key={`${item.type}-${item.data.id}`}
+              className="glass-card p-3 cursor-pointer hover:scale-[1.02] transition-transform"
+              onClick={() => setExpandedItem(item)}
+              data-testid={`card-${item.type}-${item.data.id}`}
+            >
+              {getCardPreview(item)}
+            </div>
+          ))
         )}
       </div>
 
       <MobileBottomNav />
+
+      {expandedItem && (
+        <ExpandedCardView 
+          item={expandedItem} 
+          onClose={() => setExpandedItem(null)} 
+        />
+      )}
     </div>
   );
 }

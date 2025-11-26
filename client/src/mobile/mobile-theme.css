@@ -265,6 +265,93 @@
   padding: 0 12px;
 }
 
+/* Uniform card height in grid */
+.feed-grid > * {
+  height: 200px;
+  overflow: hidden;
+}
+
+/* Expanded Card Overlay */
+.expanded-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  touch-action: pan-y;
+}
+
+.expanded-card-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 16px;
+  padding-top: 60px;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.expanded-card-container.dragging {
+  transition: none;
+}
+
+.expanded-close-bar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.4);
+  cursor: grab;
+}
+
+.expanded-close-button {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.expanded-close-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Expanded card content */
+.expanded-card-content {
+  background: var(--mobile-glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--mobile-glass-border);
+  border-radius: 24px;
+  padding: 20px;
+  max-width: 500px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Swipe indicator */
+.swipe-indicator {
+  text-align: center;
+  padding: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
+
 /* Glass Button */
 .glass-button {
   display: inline-flex;
