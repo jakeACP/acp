@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo } from "react";
-import { Play } from "lucide-react";
+import { Play, X } from "lucide-react";
 import { getYouTubeThumbnail, getTikTokEmbedUrl } from "../utils/youtube";
 
 interface LazyYouTubeThumbnailProps {
@@ -173,7 +173,7 @@ export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
   className = "",
 }: LazyTikTokThumbnailProps) {
   const [isVisible, setIsVisible] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [embedHtml, setEmbedHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -213,9 +213,20 @@ export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
     }
   }, [embedHtml]);
 
+  useEffect(() => {
+    if (isExpanded) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isExpanded]);
+
   const handlePlay = async () => {
     setIsLoading(true);
-    setIsPlaying(true);
+    setIsExpanded(true);
     
     try {
       const urlToFetch = tiktokUrl || `https://www.tiktok.com/@user/video/${videoId}`;
@@ -234,89 +245,109 @@ export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
     }
   };
 
+  const handleClose = () => {
+    setIsExpanded(false);
+    setEmbedHtml(null);
+    setError(null);
+  };
+
   const openInTikTok = () => {
     const url = tiktokUrl || `https://www.tiktok.com/@user/video/${videoId}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  if (isPlaying && embedHtml) {
-    return (
+  return (
+    <>
       <div 
         ref={containerRef}
-        className={`relative overflow-hidden bg-black ${className}`}
+        className={`relative overflow-hidden bg-gradient-to-br from-[#ff0050]/30 via-[#00f2ea]/20 to-black cursor-pointer group ${className}`}
+        onClick={isVisible ? handlePlay : undefined}
       >
-        <div 
-          ref={embedContainerRef}
-          className="w-full flex justify-center"
-          dangerouslySetInnerHTML={{ __html: embedHtml }}
-        />
+        {isVisible ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto rounded-full bg-black/80 flex items-center justify-center mb-3 shadow-xl group-hover:scale-110 transition-transform border border-white/20">
+                <Play className="w-8 h-8 text-white fill-white ml-1" />
+              </div>
+              <div className="flex items-center justify-center gap-1">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" fill="white"/>
+                </svg>
+                <span className="text-white/90 text-sm font-semibold">TikTok</span>
+              </div>
+              <p className="text-white/60 text-xs mt-2">Tap to play</p>
+            </div>
+          </div>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+              <Play className="w-4 h-4 text-white/50" />
+            </div>
+          </div>
+        )}
       </div>
-    );
-  }
 
-  if (isPlaying && error) {
-    return (
-      <div 
-        ref={containerRef}
-        className={`relative overflow-hidden bg-gradient-to-br from-[#ff0050]/30 via-[#00f2ea]/20 to-black ${className}`}
-      >
-        <div className="w-full h-full flex items-center justify-center p-4">
-          <div className="text-center">
-            <p className="text-white/70 text-sm mb-3">{error}</p>
+      {isExpanded && (
+        <div 
+          className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-xl flex flex-col"
+          onClick={handleClose}
+        >
+          <div className="flex items-center justify-between p-4 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+              </svg>
+              <span className="text-white font-semibold">TikTok</span>
+            </div>
             <button 
-              onClick={openInTikTok}
-              className="px-4 py-2 bg-black/50 rounded-full text-white text-sm font-medium border border-white/20 hover:bg-black/70 transition-colors"
+              onClick={handleClose}
+              className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
             >
-              Open in TikTok
+              <X className="w-5 h-5 text-white" />
             </button>
           </div>
-        </div>
-      </div>
-    );
-  }
 
-  if (isPlaying && isLoading) {
-    return (
-      <div 
-        ref={containerRef}
-        className={`relative overflow-hidden bg-gradient-to-br from-[#ff0050]/20 via-[#00f2ea]/20 to-black ${className}`}
-      >
-        <div className="w-full h-full flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-white/30 border-t-[#00f2ea] rounded-full animate-spin" />
-        </div>
-      </div>
-    );
-  }
+          <div 
+            className="flex-1 flex items-center justify-center p-4 overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isLoading && (
+              <div className="text-center">
+                <div className="w-12 h-12 border-3 border-white/30 border-t-[#00f2ea] rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-white/70">Loading TikTok video...</p>
+              </div>
+            )}
 
-  return (
-    <div 
-      ref={containerRef}
-      className={`relative overflow-hidden bg-gradient-to-br from-[#ff0050]/30 via-[#00f2ea]/20 to-black cursor-pointer group ${className}`}
-      onClick={isVisible ? handlePlay : undefined}
-    >
-      {isVisible ? (
-        <div className="w-full h-full flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-black/80 flex items-center justify-center mb-3 shadow-xl group-hover:scale-110 transition-transform border border-white/20">
-              <Play className="w-8 h-8 text-white fill-white ml-1" />
-            </div>
-            <div className="flex items-center justify-center gap-1">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" fill="white"/>
-              </svg>
-              <span className="text-white/90 text-sm font-semibold">TikTok</span>
-            </div>
-            <p className="text-white/60 text-xs mt-2">Tap to play</p>
-          </div>
-        </div>
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-            <Play className="w-4 h-4 text-white/50" />
+            {error && (
+              <div className="text-center p-6 max-w-sm">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#ff0050] to-[#00f2ea] flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                  </svg>
+                </div>
+                <p className="text-white/80 text-lg mb-2">Video unavailable</p>
+                <p className="text-white/50 text-sm mb-6">{error}</p>
+                <button 
+                  onClick={openInTikTok}
+                  className="px-6 py-3 bg-gradient-to-r from-[#ff0050] to-[#00f2ea] rounded-full text-white font-semibold hover:opacity-90 transition-opacity"
+                >
+                  Open in TikTok
+                </button>
+              </div>
+            )}
+
+            {embedHtml && (
+              <div 
+                ref={embedContainerRef}
+                className="w-full max-w-md mx-auto"
+                style={{ maxHeight: 'calc(100vh - 120px)' }}
+                dangerouslySetInnerHTML={{ __html: embedHtml }}
+              />
+            )}
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 });
 
