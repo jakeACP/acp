@@ -113,10 +113,10 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       
       <div 
-        className="relative w-full max-w-lg bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl rounded-t-3xl border-t border-white/10 animate-in slide-in-from-bottom duration-300"
+        className="relative w-full max-w-lg bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl rounded-3xl border border-white/10 animate-in slide-in-from-bottom duration-300 mb-20"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center justify-between p-4 border-b border-white/10">
           <h2 className="text-white font-semibold text-lg">
             {selectedType ? `Create ${postTypes.find(p => p.type === selectedType)?.label}` : 'Create Post'}
           </h2>
@@ -129,7 +129,7 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
           </button>
         </div>
 
-        <div className="p-4">
+        <div className="p-4 pb-6">
           {!selectedType ? (
             <div className="grid grid-cols-3 gap-2">
               {postTypes.map(({ type, icon: Icon, label, color }) => (
