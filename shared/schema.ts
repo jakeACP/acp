@@ -263,15 +263,21 @@ export const posts = pgTable("posts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   authorId: varchar("author_id").notNull().references(() => users.id),
   content: text("content").notNull(),
-  type: text("type").notNull().default("post"), // post, poll, announcement, charity_donation, news, event
+  type: text("type").notNull().default("post"), // post, poll, announcement, charity_donation, news, event, blog
   tags: text("tags").array().default([]),
   image: text("image"),
   url: text("url"), // For news articles and external links
-  title: text("title"), // News headlines
+  title: text("title"), // News headlines or blog titles
   newsSourceName: text("news_source_name"), // Original news source
   linkPreview: json("link_preview").$type<{ url: string; title?: string; description?: string; image?: string; siteName?: string }>(), // Metadata for link previews
   sharedPostId: varchar("shared_post_id"), // ID of the original post if this is a share - forward reference resolved later
   eventId: varchar("event_id"),  // Reference to events table for event-type posts - forward reference resolved later
+  // Blog post fields
+  articleBody: text("article_body"), // Full article content (markdown/HTML)
+  featuredImage: text("featured_image"), // Main header image for blog posts
+  excerpt: text("excerpt"), // Short preview text for blog posts in feed
+  articleImages: json("article_images").$type<{ url: string; caption?: string; position?: number }[]>(), // Embedded images in article
+  readingTime: integer("reading_time"), // Estimated reading time in minutes
   privacy: text("privacy").notNull().default("public"), // "friends" or "public"
   likesCount: integer("likes_count").default(0),
   commentsCount: integer("comments_count").default(0),
