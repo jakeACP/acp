@@ -352,6 +352,16 @@ export interface IStorage {
   createReferral(referrerId: string, referredUserId: string, invitationId?: string): Promise<void>;
   getAdminUserId(): Promise<string | undefined>;
 
+  // Contact Upload & Friend Discovery
+  uploadUserContacts(userId: string, contacts: { name?: string; phoneHash?: string; emailHash?: string; phoneLast4?: string }[]): Promise<{ matched: any[]; unmatchedCount: number }>;
+  getUserContacts(userId: string): Promise<any[]>;
+  getMatchedContacts(userId: string): Promise<any[]>;
+  deleteUserContacts(userId: string): Promise<void>;
+  getFriendSuggestions(userId: string, limit?: number): Promise<any[]>;
+  dismissFriendSuggestion(userId: string, suggestedUserId: string): Promise<void>;
+  getMutualFriendsCount(userId1: string, userId2: string): Promise<number>;
+  getUsersInSameLocation(userId: string, limit?: number): Promise<any[]>;
+
   // Social Petitions (for feeds - different from initiative petitions)
   getSocialPetitions(limit?: number, offset?: number): Promise<any[]>;
   createSocialPetition(petition: any): Promise<any>;
@@ -4421,6 +4431,295 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.role, 'admin'))
       .limit(1);
     return adminUser?.id;
+  }
+
+  // Contact Upload & Friend Discovery Implementation
+  async uploadUserContacts(
+    userId: string, 
+    contacts: { name?: string; phoneHash?: string; emailHash?: string; phoneLast4?: string }[]
+  ): Promise<{ matched: any[]; unmatchedCount: number }> {
+    const matched: any[] = [];
+    let unmatchedCount = 0;
+
+    for (const contact of contacts) {
+      let matchedUserId: string | null = null;
+      let matchedUser = null;
+
+      if (contact.phoneHash) {
+        const [userByPhone] = await db.select({
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+          discoverableByPhone: users.discoverableByPhone,
+        })
+        .from(users)
+        .where(and(
+          eq(users.phoneHash, contact.phoneHash),
+          eq(users.discoverableByPhone, true),
+          sql`${users.id} != ${userId}`
+        ))
+        .limit(1);
+        
+        if (userByPhone) {
+          matchedUserId = userByPhone.id;
+          matchedUser = userByPhone;
+        }
+      }
+
+      if (!matchedUserId && contact.emailHash) {
+        const normalizedEmailHash = contact.emailHash.toLowerCase();
+        const [userByEmail] = await db.select({
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+          discoverableByEmail: users.discoverableByEmail,
+        })
+        .from(users)
+        .where(and(
+          eq(users.normalizedEmail, normalizedEmailHash),
+          eq(users.discoverableByEmail, true),
+          sql`${users.id} != ${userId}`
+        ))
+        .limit(1);
+        
+        if (userByEmail) {
+          matchedUserId = userByEmail.id;
+          matchedUser = userByEmail;
+        }
+      }
+
+      await db.execute(sql`
+        INSERT INTO user_contacts (owner_id, contact_name, phone_hash, email_hash, phone_last_4, matched_user_id)
+        VALUES (${userId}, ${contact.name || null}, ${contact.phoneHash || null}, ${contact.emailHash || null}, ${contact.phoneLast4 || null}, ${matchedUserId})
+        ON CONFLICT DO NOTHING
+      `);
+
+      if (matchedUser) {
+        matched.push({ ...matchedUser, contactName: contact.name, reason: 'contact' });
+      } else {
+        unmatchedCount++;
+      }
+    }
+
+    await db.execute(sql`
+      INSERT INTO contact_uploads (user_id, total_contacts, matched_count, unmatched_count)
+      VALUES (${userId}, ${contacts.length}, ${matched.length}, ${unmatchedCount})
+    `);
+
+    return { matched, unmatchedCount };
+  }
+
+  async getUserContacts(userId: string): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT uc.*, u.username, u.first_name, u.last_name, u.avatar
+      FROM user_contacts uc
+      LEFT JOIN users u ON uc.matched_user_id = u.id
+      WHERE uc.owner_id = ${userId}
+      ORDER BY uc.created_at DESC
+    `);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      contactName: row.contact_name,
+      phoneLast4: row.phone_last_4,
+      matchedUserId: row.matched_user_id,
+      matchedUser: row.matched_user_id ? {
+        id: row.matched_user_id,
+        username: row.username,
+        firstName: row.first_name,
+        lastName: row.last_name,
+        avatar: row.avatar,
+      } : null,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async getMatchedContacts(userId: string): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT uc.*, u.username, u.first_name, u.last_name, u.avatar
+      FROM user_contacts uc
+      INNER JOIN users u ON uc.matched_user_id = u.id
+      WHERE uc.owner_id = ${userId} AND uc.matched_user_id IS NOT NULL
+      ORDER BY uc.created_at DESC
+    `);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      contactName: row.contact_name,
+      phoneLast4: row.phone_last_4,
+      matchedUser: {
+        id: row.matched_user_id,
+        username: row.username,
+        firstName: row.first_name,
+        lastName: row.last_name,
+        avatar: row.avatar,
+      },
+      reason: 'contact',
+      createdAt: row.created_at,
+    }));
+  }
+
+  async deleteUserContacts(userId: string): Promise<void> {
+    await db.execute(sql`DELETE FROM user_contacts WHERE owner_id = ${userId}`);
+  }
+
+  async getFriendSuggestions(userId: string, limit: number = 30): Promise<any[]> {
+    const dismissedResult = await db.execute(sql`
+      SELECT dismissed_user_id FROM friend_suggestion_dismissals WHERE user_id = ${userId}
+    `);
+    const dismissedIds = new Set(dismissedResult.rows.map((r: any) => r.dismissed_user_id));
+
+    const existingFriendsResult = await db.execute(sql`
+      SELECT CASE WHEN requester_id = ${userId} THEN addressee_id ELSE requester_id END as friend_id
+      FROM friendships
+      WHERE (requester_id = ${userId} OR addressee_id = ${userId})
+        AND status IN ('accepted', 'pending', 'blocked')
+    `);
+    const existingFriendIds = new Set(existingFriendsResult.rows.map((r: any) => r.friend_id));
+
+    const suggestions: any[] = [];
+    const seenUserIds = new Set<string>([userId]);
+
+    const contactMatches = await this.getMatchedContacts(userId);
+    for (const contact of contactMatches) {
+      if (!seenUserIds.has(contact.matchedUser.id) && 
+          !dismissedIds.has(contact.matchedUser.id) && 
+          !existingFriendIds.has(contact.matchedUser.id)) {
+        seenUserIds.add(contact.matchedUser.id);
+        suggestions.push({
+          user: contact.matchedUser,
+          score: 100,
+          reasons: ['contact'],
+          contactName: contact.contactName,
+          mutualCount: 0,
+        });
+      }
+    }
+
+    const mutualResult = await db.execute(sql`
+      WITH my_friends AS (
+        SELECT CASE WHEN requester_id = ${userId} THEN addressee_id ELSE requester_id END as friend_id
+        FROM friendships
+        WHERE (requester_id = ${userId} OR addressee_id = ${userId}) AND status = 'accepted'
+      ),
+      friends_of_friends AS (
+        SELECT 
+          CASE WHEN f.requester_id = mf.friend_id THEN f.addressee_id ELSE f.requester_id END as fof_id,
+          COUNT(*) as mutual_count
+        FROM friendships f
+        INNER JOIN my_friends mf ON (f.requester_id = mf.friend_id OR f.addressee_id = mf.friend_id)
+        WHERE f.status = 'accepted'
+          AND CASE WHEN f.requester_id = mf.friend_id THEN f.addressee_id ELSE f.requester_id END != ${userId}
+          AND CASE WHEN f.requester_id = mf.friend_id THEN f.addressee_id ELSE f.requester_id END NOT IN (SELECT friend_id FROM my_friends)
+        GROUP BY fof_id
+        ORDER BY mutual_count DESC
+        LIMIT 50
+      )
+      SELECT fof.fof_id, fof.mutual_count, u.username, u.first_name, u.last_name, u.avatar
+      FROM friends_of_friends fof
+      INNER JOIN users u ON u.id = fof.fof_id
+    `);
+
+    for (const row of mutualResult.rows as any[]) {
+      if (!seenUserIds.has(row.fof_id) && 
+          !dismissedIds.has(row.fof_id) && 
+          !existingFriendIds.has(row.fof_id)) {
+        seenUserIds.add(row.fof_id);
+        const mutualScore = 20 * Math.log2((row.mutual_count || 0) + 1);
+        suggestions.push({
+          user: {
+            id: row.fof_id,
+            username: row.username,
+            firstName: row.first_name,
+            lastName: row.last_name,
+            avatar: row.avatar,
+          },
+          score: mutualScore,
+          reasons: ['mutual_friends'],
+          mutualCount: parseInt(row.mutual_count) || 0,
+        });
+      }
+    }
+
+    const geoUsers = await this.getUsersInSameLocation(userId, 30);
+    for (const geoUser of geoUsers) {
+      if (!seenUserIds.has(geoUser.id) && 
+          !dismissedIds.has(geoUser.id) && 
+          !existingFriendIds.has(geoUser.id)) {
+        seenUserIds.add(geoUser.id);
+        suggestions.push({
+          user: geoUser,
+          score: geoUser.sameCity ? 15 : 10,
+          reasons: ['location'],
+          location: geoUser.location,
+          mutualCount: 0,
+        });
+      }
+    }
+
+    suggestions.sort((a, b) => b.score - a.score);
+    return suggestions.slice(0, limit);
+  }
+
+  async dismissFriendSuggestion(userId: string, suggestedUserId: string): Promise<void> {
+    await db.execute(sql`
+      INSERT INTO friend_suggestion_dismissals (user_id, dismissed_user_id)
+      VALUES (${userId}, ${suggestedUserId})
+      ON CONFLICT DO NOTHING
+    `);
+  }
+
+  async getMutualFriendsCount(userId1: string, userId2: string): Promise<number> {
+    const result = await db.execute(sql`
+      WITH user1_friends AS (
+        SELECT CASE WHEN requester_id = ${userId1} THEN addressee_id ELSE requester_id END as friend_id
+        FROM friendships
+        WHERE (requester_id = ${userId1} OR addressee_id = ${userId1}) AND status = 'accepted'
+      ),
+      user2_friends AS (
+        SELECT CASE WHEN requester_id = ${userId2} THEN addressee_id ELSE requester_id END as friend_id
+        FROM friendships
+        WHERE (requester_id = ${userId2} OR addressee_id = ${userId2}) AND status = 'accepted'
+      )
+      SELECT COUNT(*) as count FROM user1_friends u1 INNER JOIN user2_friends u2 ON u1.friend_id = u2.friend_id
+    `);
+    return parseInt((result.rows[0] as any)?.count) || 0;
+  }
+
+  async getUsersInSameLocation(userId: string, limit: number = 20): Promise<any[]> {
+    const [currentUser] = await db.select({ location: users.location })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!currentUser?.location) return [];
+
+    const locationParts = currentUser.location.split(',').map(s => s.trim());
+    const city = locationParts[0] || '';
+    const state = locationParts.length > 1 ? locationParts[locationParts.length - 1] : '';
+
+    const result = await db.execute(sql`
+      SELECT id, username, first_name, last_name, avatar, location,
+             CASE WHEN location ILIKE ${`${city}%`} THEN true ELSE false END as same_city
+      FROM users
+      WHERE id != ${userId}
+        AND location IS NOT NULL
+        AND (location ILIKE ${`%${state}%`} OR location ILIKE ${`%${city}%`})
+      ORDER BY same_city DESC, last_seen DESC NULLS LAST
+      LIMIT ${limit}
+    `);
+
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      username: row.username,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      avatar: row.avatar,
+      location: row.location,
+      sameCity: row.same_city,
+    }));
   }
 
   // Social Petitions (for feeds - different from initiative petitions)

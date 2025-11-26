@@ -455,6 +455,202 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Contact Upload & Friend Discovery API
+  app.post("/api/contacts/upload", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { contacts } = req.body;
+      if (!Array.isArray(contacts)) {
+        return res.status(400).json({ message: "Contacts must be an array" });
+      }
+
+      // Normalize and hash contacts server-side for security
+      const crypto = await import('crypto');
+      const processedContacts = contacts.map((c: any) => {
+        const processed: any = { name: c.name };
+        
+        if (c.phone) {
+          // Normalize phone: remove non-digits, ensure E.164 format
+          const normalizedPhone = c.phone.replace(/\D/g, '').slice(-10);
+          processed.phoneHash = crypto.createHash('sha256').update(normalizedPhone).digest('hex');
+          processed.phoneLast4 = normalizedPhone.slice(-4);
+        }
+        
+        if (c.email) {
+          // Normalize email: lowercase
+          const normalizedEmail = c.email.toLowerCase().trim();
+          processed.emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex');
+        }
+        
+        return processed;
+      });
+
+      const result = await storage.uploadUserContacts(req.user.id, processedContacts);
+      res.json({
+        matched: result.matched,
+        matchedCount: result.matched.length,
+        unmatchedCount: result.unmatchedCount,
+        totalProcessed: contacts.length,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/contacts", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const contacts = await storage.getUserContacts(req.user.id);
+      res.json(contacts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/contacts/matches", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const matches = await storage.getMatchedContacts(req.user.id);
+      res.json(matches);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/contacts", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.deleteUserContacts(req.user.id);
+      res.json({ message: "Contacts deleted successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/friends/suggestions", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const limit = parseInt(req.query.limit as string) || 30;
+      const suggestions = await storage.getFriendSuggestions(req.user.id, limit);
+      res.json(suggestions);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/suggestions/:suggestedUserId/dismiss", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.dismissFriendSuggestion(req.user.id, req.params.suggestedUserId);
+      res.json({ message: "Suggestion dismissed" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/friendships/request", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { addresseeId } = req.body;
+      if (!addresseeId) {
+        return res.status(400).json({ message: "addresseeId is required" });
+      }
+      if (addresseeId === req.user.id) {
+        return res.status(400).json({ message: "Cannot send friend request to yourself" });
+      }
+      await storage.createFriendship(req.user.id, addresseeId);
+      res.status(201).json({ message: "Friend request sent" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/friendships/:friendshipId/accept", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.acceptFriendship(req.params.friendshipId);
+      res.json({ message: "Friend request accepted" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/friendships/:friendshipId/reject", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.rejectFriendship(req.params.friendshipId);
+      res.json({ message: "Friend request rejected" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/friends", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const friends = await storage.getFriends(req.user.id);
+      res.json(friends);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/friends/requests", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const requests = await storage.getFriendRequests(req.user.id);
+      res.json(requests);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/friends/mutual/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const count = await storage.getMutualFriendsCount(req.user.id, req.params.userId);
+      res.json({ mutualCount: count });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Enhanced Reactions API
   app.post("/api/reactions", async (req, res) => {
     if (!req.isAuthenticated()) {
