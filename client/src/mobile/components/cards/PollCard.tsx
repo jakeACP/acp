@@ -13,8 +13,9 @@ export function PollCard({ poll }: PollCardProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   
-  const options = poll.options as { id: string; text: string; votes: number }[];
-  const totalVotes = options.reduce((sum, opt) => sum + opt.votes, 0);
+  const rawOptions = poll.options as { id: string; text: string; votes: number }[] | null;
+  const options = Array.isArray(rawOptions) ? rawOptions.filter(opt => opt && opt.id) : [];
+  const totalVotes = options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
   
   const timeLeft = poll.endDate 
     ? formatDistanceToNow(new Date(poll.endDate), { addSuffix: true })

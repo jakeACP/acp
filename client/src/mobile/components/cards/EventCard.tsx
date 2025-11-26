@@ -32,13 +32,38 @@ interface EventCardProps {
 }
 
 export function EventCard({ post, event }: EventCardProps) {
-  if (!event) {
-    return null;
-  }
-
-  const startDate = event.startDate ? new Date(event.startDate) : null;
+  const hasEvent = !!event;
+  const startDate = event?.startDate ? new Date(event.startDate) : null;
   const isUpcoming = startDate && startDate > new Date();
-  const isVirtual = event.venueType === 'virtual' || !!event.virtualLink;
+  const isVirtual = event?.venueType === 'virtual' || !!event?.virtualLink;
+
+  if (!hasEvent) {
+    return (
+      <article className="glass-card p-3" data-testid={`event-card-${post.id}`}>
+        <div className="absolute top-3 left-3 z-10">
+          <span className="type-tag event flex items-center gap-1">
+            <Calendar className="w-3 h-3" />
+            Event
+          </span>
+        </div>
+        <div className="pt-10">
+          <p className="text-white text-sm line-clamp-4 mb-3">
+            {post.content}
+          </p>
+          {post.eventId && (
+            <Link href={`/events/${post.eventId}`}>
+              <button 
+                className="glass-button primary text-xs py-1.5 px-3"
+                data-testid={`view-event-${post.eventId}`}
+              >
+                View Event
+              </button>
+            </Link>
+          )}
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className="glass-card p-3 overflow-hidden" data-testid={`event-card-${post.id}`}>
