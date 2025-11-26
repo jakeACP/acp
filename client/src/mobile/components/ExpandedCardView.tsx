@@ -3,8 +3,8 @@ import { X, Heart, MessageCircle, Share2, ChevronDown } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { LazyYouTubePlayer } from "./LazyYouTubeThumbnail";
-import { findYouTubeInPost } from "../utils/youtube";
+import { LazyYouTubePlayer, LazyTikTokPlayer } from "./LazyYouTubeThumbnail";
+import { findVideoInPost } from "../utils/youtube";
 
 interface ExpandedCardViewProps {
   item: {
@@ -165,7 +165,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
         );
 
       case 'post':
-        const postYouTubeId = findYouTubeInPost(data);
+        const postVideo = findVideoInPost(data);
         const contentWithoutLinks = data.content?.replace(/https?:\/\/[^\s]+/g, '').trim() || '';
         return (
           <div className="space-y-4">
@@ -185,18 +185,25 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               </div>
             </div>
             
-            {postYouTubeId && (
-              <LazyYouTubePlayer 
-                videoId={postYouTubeId}
-                className="rounded-xl overflow-hidden aspect-video"
-              />
+            {postVideo && (
+              postVideo.platform === 'youtube' ? (
+                <LazyYouTubePlayer 
+                  videoId={postVideo.videoId}
+                  className="rounded-xl overflow-hidden aspect-video"
+                />
+              ) : (
+                <LazyTikTokPlayer 
+                  videoId={postVideo.videoId}
+                  className="rounded-xl overflow-hidden aspect-[9/16] max-h-[60vh]"
+                />
+              )
             )}
             
             <p className="text-white text-lg leading-relaxed">
-              {postYouTubeId ? contentWithoutLinks : data.content}
+              {postVideo ? contentWithoutLinks : data.content}
             </p>
             
-            {!postYouTubeId && data.image && (
+            {!postVideo && data.image && (
               <div className="rounded-xl overflow-hidden">
                 <img src={data.image} alt="" className="w-full" loading="lazy" />
               </div>
@@ -223,7 +230,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
         );
 
       case 'news':
-        const newsYouTubeId = findYouTubeInPost(data);
+        const newsVideo = findVideoInPost(data);
         const thumbnailUrl = data.linkPreview?.image || data.image;
         return (
           <div className="space-y-4">
@@ -231,11 +238,18 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               News
             </span>
             
-            {newsYouTubeId ? (
-              <LazyYouTubePlayer 
-                videoId={newsYouTubeId}
-                className="rounded-xl overflow-hidden aspect-video"
-              />
+            {newsVideo ? (
+              newsVideo.platform === 'youtube' ? (
+                <LazyYouTubePlayer 
+                  videoId={newsVideo.videoId}
+                  className="rounded-xl overflow-hidden aspect-video"
+                />
+              ) : (
+                <LazyTikTokPlayer 
+                  videoId={newsVideo.videoId}
+                  className="rounded-xl overflow-hidden aspect-[9/16] max-h-[60vh]"
+                />
+              )
             ) : thumbnailUrl && (
               <div className="rounded-xl overflow-hidden aspect-video">
                 <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -257,7 +271,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               <span>{timeAgo}</span>
             </div>
             
-            {data.url && !newsYouTubeId && (
+            {data.url && !newsVideo && (
               <a 
                 href={data.url} 
                 target="_blank" 

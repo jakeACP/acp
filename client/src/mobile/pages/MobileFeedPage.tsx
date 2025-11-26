@@ -5,8 +5,8 @@ import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { FilterTabs } from "../components/FilterTabs";
 import { ExpandedCardView } from "../components/ExpandedCardView";
-import { LazyYouTubeThumbnail } from "../components/LazyYouTubeThumbnail";
-import { findYouTubeInPost } from "../utils/youtube";
+import { LazyYouTubeThumbnail, LazyTikTokThumbnail } from "../components/LazyYouTubeThumbnail";
+import { findVideoInPost } from "../utils/youtube";
 import type { Poll, Petition, SignalWithAuthor, Event } from "@shared/schema";
 
 interface PostWithAuthor {
@@ -127,17 +127,46 @@ export function MobileFeedPage() {
     switch (item.type) {
       case 'signal':
         return (
-          <div className="h-full flex flex-col">
-            <span className="type-tag signal mb-2 w-fit">Signal</span>
-            <h4 className="text-white font-semibold text-sm line-clamp-2 mb-1">{item.data.title || 'Video'}</h4>
-            <p className="text-white/60 text-xs line-clamp-2">{item.data.description}</p>
-            <div className="mt-auto pt-2 flex items-center gap-2 text-white/50 text-xs">
-              <span>{displayName}</span>
+          <div className="h-full flex flex-col justify-center relative">
+            {item.data.thumbnailUrl ? (
+              <img 
+                src={item.data.thumbnailUrl} 
+                alt={item.data.title || 'Video'} 
+                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-red-500/20 to-blue-500/20 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+                  <div className="w-0 h-0 border-l-[12px] border-l-white border-y-[8px] border-y-transparent ml-1" />
+                </div>
+              </div>
+            )}
+            <div className="absolute bottom-2 left-2 right-2">
+              <span className="type-tag signal text-xs">Signal</span>
             </div>
           </div>
         );
       case 'post':
-        const postYouTubeId = findYouTubeInPost(item.data);
+        const postVideo = findVideoInPost(item.data);
+        if (postVideo) {
+          return (
+            <div className="h-full flex flex-col justify-center">
+              {postVideo.platform === 'youtube' ? (
+                <LazyYouTubeThumbnail 
+                  videoId={postVideo.videoId} 
+                  className="w-full h-full rounded-lg"
+                  quality="hqdefault"
+                />
+              ) : (
+                <LazyTikTokThumbnail 
+                  videoId={postVideo.videoId} 
+                  className="w-full h-full rounded-lg"
+                />
+              )}
+            </div>
+          );
+        }
         return (
           <div className="h-full flex flex-col">
             <div className="flex items-center gap-2 mb-2">
@@ -146,24 +175,11 @@ export function MobileFeedPage() {
               </div>
               <span className="text-white/70 text-xs truncate">{displayName}</span>
             </div>
-            {postYouTubeId ? (
-              <>
-                <LazyYouTubeThumbnail 
-                  videoId={postYouTubeId} 
-                  className="h-20 rounded-lg mb-2"
-                  quality="mqdefault"
-                />
-                <p className="text-white text-xs line-clamp-2 flex-1">{item.data.content.replace(/https?:\/\/[^\s]+/g, '').trim()}</p>
-              </>
-            ) : (
-              <>
-                <p className="text-white text-sm line-clamp-4 flex-1">{item.data.content}</p>
-                {item.data.image && (
-                  <div className="mt-2 h-16 rounded-lg overflow-hidden bg-white/10">
-                    <img src={item.data.image} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  </div>
-                )}
-              </>
+            <p className="text-white text-sm line-clamp-4 flex-1">{item.data.content}</p>
+            {item.data.image && (
+              <div className="mt-2 h-16 rounded-lg overflow-hidden bg-white/10">
+                <img src={item.data.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+              </div>
             )}
           </div>
         );

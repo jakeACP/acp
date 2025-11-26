@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from "react";
 import { Play } from "lucide-react";
-import { getYouTubeThumbnail } from "../utils/youtube";
+import { getYouTubeThumbnail, getTikTokEmbedUrl } from "../utils/youtube";
 
 interface LazyYouTubeThumbnailProps {
   videoId: string;
@@ -157,6 +157,116 @@ export const LazyYouTubePlayer = memo(function LazyYouTubePlayer({
           <Play className="w-8 h-8 text-white fill-white ml-1" />
         </div>
       </div>
+    </div>
+  );
+});
+
+interface LazyTikTokThumbnailProps {
+  videoId: string;
+  className?: string;
+}
+
+export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
+  videoId,
+  className = "",
+}: LazyTikTokThumbnailProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '100px', threshold: 0.1 }
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div 
+      ref={containerRef}
+      className={`relative overflow-hidden bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-blue-500/20 ${className}`}
+    >
+      {isVisible ? (
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 mx-auto rounded-full bg-black flex items-center justify-center mb-2">
+              <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+            </div>
+            <span className="text-white/70 text-xs font-medium">TikTok</span>
+          </div>
+        </div>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+            <Play className="w-4 h-4 text-white/50" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+interface LazyTikTokPlayerProps {
+  videoId: string;
+  className?: string;
+}
+
+export const LazyTikTokPlayer = memo(function LazyTikTokPlayer({
+  videoId,
+  className = "",
+}: LazyTikTokPlayerProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  const embedUrl = getTikTokEmbedUrl(videoId);
+
+  if (!isVisible) {
+    return (
+      <div ref={containerRef} className={`bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-blue-500/20 flex items-center justify-center ${className}`}>
+        <div className="w-12 h-12 rounded-full bg-black flex items-center justify-center">
+          <Play className="w-6 h-6 text-white" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className={className}>
+      <iframe
+        src={embedUrl}
+        title="TikTok video player"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        className="w-full h-full border-0"
+      />
     </div>
   );
 });

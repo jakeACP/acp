@@ -1,8 +1,15 @@
 const YOUTUBE_REGEX = /(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+const TIKTOK_REGEX = /(?:tiktok\.com\/@[\w.-]+\/video\/|vm\.tiktok\.com\/|tiktok\.com\/t\/)(\d+|[\w]+)/;
 
 export function extractYouTubeId(text: string): string | null {
   if (!text) return null;
   const match = text.match(YOUTUBE_REGEX);
+  return match ? match[1] : null;
+}
+
+export function extractTikTokId(text: string): string | null {
+  if (!text) return null;
+  const match = text.match(TIKTOK_REGEX);
   return match ? match[1] : null;
 }
 
@@ -12,6 +19,33 @@ export function getYouTubeThumbnail(videoId: string, quality: 'default' | 'hqdef
 
 export function getYouTubeEmbedUrl(videoId: string): string {
   return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+}
+
+export function getTikTokEmbedUrl(videoId: string): string {
+  return `https://www.tiktok.com/embed/v2/${videoId}`;
+}
+
+export type VideoInfo = {
+  platform: 'youtube' | 'tiktok';
+  videoId: string;
+} | null;
+
+export function findVideoInPost(post: {
+  content?: string;
+  url?: string | null;
+  linkPreview?: { url?: string } | null;
+}): VideoInfo {
+  const sources = [post.url, post.linkPreview?.url, post.content].filter(Boolean) as string[];
+  
+  for (const source of sources) {
+    const youtubeId = extractYouTubeId(source);
+    if (youtubeId) return { platform: 'youtube', videoId: youtubeId };
+    
+    const tiktokId = extractTikTokId(source);
+    if (tiktokId) return { platform: 'tiktok', videoId: tiktokId };
+  }
+  
+  return null;
 }
 
 export function findYouTubeInPost(post: {
