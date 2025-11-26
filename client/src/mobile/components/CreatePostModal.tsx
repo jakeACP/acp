@@ -60,6 +60,21 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
     },
   });
 
+  const createPollMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest('/api/polls', 'POST', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/feeds/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/polls'] });
+      toast({ title: 'Poll created!', description: 'Your poll has been published.' });
+      handleClose();
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to create poll. Please try again.', variant: 'destructive' });
+    },
+  });
+
   const handleClose = () => {
     setSelectedType(null);
     setContent('');
@@ -70,7 +85,30 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
   };
 
   const handleSubmit = () => {
-    if (!content.trim() && selectedType !== 'poll') {
+    if (selectedType === 'poll') {
+      const validOptions = pollOptions.filter(o => o.trim());
+      if (!title.trim()) {
+        toast({ title: 'Question required', description: 'Please enter a poll question.', variant: 'destructive' });
+        return;
+      }
+      if (validOptions.length < 2) {
+        toast({ title: 'Options required', description: 'Please add at least 2 options.', variant: 'destructive' });
+        return;
+      }
+      
+      const pollData = {
+        title: title,
+        description: content || null,
+        options: validOptions.map((text, i) => ({ id: String(i + 1), text, votes: 0 })),
+        votingType: 'simple',
+        isBlockchainVerified: false,
+      };
+      
+      createPollMutation.mutate(pollData);
+      return;
+    }
+
+    if (!content.trim()) {
       toast({ title: 'Content required', description: 'Please write something to post.', variant: 'destructive' });
       return;
     }
@@ -83,15 +121,8 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
 
     const postData: any = {
       content: postContent,
-      type: selectedType === 'poll' ? 'poll' : 'post',
+      type: 'post',
     };
-
-    if (selectedType === 'poll') {
-      postData.pollTitle = title || 'Poll';
-      postData.pollOptions = pollOptions.filter(o => o.trim()).map((text, i) => ({ id: i + 1, text, votes: 0 }));
-      postData.pollVotingSystem = 'simple';
-      postData.content = title || 'Poll';
-    }
 
     createPostMutation.mutate(postData);
   };
@@ -231,16 +262,16 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={createPostMutation.isPending}
+                  disabled={createPostMutation.isPending || createPollMutation.isPending}
                   className="flex-1 py-3 rounded-xl bg-gradient-to-r from-red-500 to-blue-500 text-white font-medium flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
                   data-testid="submit-post"
                 >
-                  {createPostMutation.isPending ? (
+                  {(createPostMutation.isPending || createPollMutation.isPending) ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      Post
+                      {selectedType === 'poll' ? 'Create Poll' : 'Post'}
                     </>
                   )}
                 </button>

@@ -7,7 +7,16 @@ import { FilterTabs } from "../components/FilterTabs";
 import { ExpandedCardView } from "../components/ExpandedCardView";
 import { LazyYouTubeThumbnail, LazyTikTokThumbnail } from "../components/LazyYouTubeThumbnail";
 import { findVideoInPost } from "../utils/youtube";
-import type { Poll, Petition, SignalWithAuthor, Event } from "@shared/schema";
+import type { Poll, Petition, SignalWithAuthor, Event, User } from "@shared/schema";
+
+interface PollWithAuthor extends Poll {
+  author?: {
+    username: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatar?: string | null;
+  };
+}
 
 interface PostWithAuthor {
   id: string;
@@ -53,7 +62,7 @@ type FeedItem =
   | { type: 'signal'; data: SignalWithAuthor }
   | { type: 'post'; data: PostWithAuthor }
   | { type: 'news'; data: PostWithAuthor }
-  | { type: 'poll'; data: PostWithAuthor }
+  | { type: 'poll'; data: PostWithAuthor | PollWithAuthor }
   | { type: 'announcement'; data: PostWithAuthor }
   | { type: 'event'; data: PostWithAuthor; event?: Event }
   | { type: 'petition'; data: Petition };
@@ -73,13 +82,20 @@ export function MobileFeedPage() {
     staleTime: 30000,
   });
 
+  const { data: polls = [], isLoading: pollsLoading } = useQuery<Poll[]>({
+    queryKey: ['/api/polls'],
+    staleTime: 30000,
+  });
+
   const { data: petitions = [], isLoading: petitionsLoading } = useQuery<Petition[]>({
     queryKey: ['/api/petitions'],
     staleTime: 60000,
   });
 
-  const isLoading = signalsLoading || postsLoading || petitionsLoading;
+  const isLoading = signalsLoading || postsLoading || pollsLoading || petitionsLoading;
 
+  const postPollIds = new Set(feedPosts.filter(p => p.pollId).map(p => p.pollId));
+  
   const allItems: FeedItem[] = [
     ...signals.map(s => ({ type: 'signal' as const, data: s })),
     ...feedPosts.map(p => {
@@ -97,6 +113,9 @@ export function MobileFeedPage() {
       }
       return { type: 'post' as const, data: p };
     }),
+    ...polls
+      .filter(p => !postPollIds.has(p.id))
+      .map(p => ({ type: 'poll' as const, data: p as PollWithAuthor })),
     ...petitions.map(p => ({ type: 'petition' as const, data: p })),
   ].sort((a, b) => {
     const dateA = 'createdAt' in a.data && a.data.createdAt ? new Date(a.data.createdAt as string).getTime() : 0;
@@ -225,18 +244,22 @@ export function MobileFeedPage() {
           </div>
         );
       case 'poll':
+        const pollData = item.data;
+        const pollTitle = 'pollTitle' in pollData ? pollData.pollTitle : ('title' in pollData ? pollData.title : 'Poll');
+        const pollOptions = 'pollOptions' in pollData ? pollData.pollOptions : ('options' in pollData ? pollData.options : []);
+        const pollTotalVotes = 'pollTotalVotes' in pollData ? pollData.pollTotalVotes : ('totalVotes' in pollData ? pollData.totalVotes : 0);
         return (
           <div className="h-full flex flex-col">
             <span className="type-tag poll mb-2 w-fit">Poll</span>
-            <h4 className="text-white font-semibold text-sm line-clamp-2 mb-2">{item.data.pollTitle}</h4>
+            <h4 className="text-white font-semibold text-sm line-clamp-2 mb-2">{pollTitle}</h4>
             <div className="space-y-1 flex-1">
-              {(item.data.pollOptions || []).slice(0, 2).map((opt: any, idx: number) => (
+              {(pollOptions || []).slice(0, 2).map((opt: any, idx: number) => (
                 <div key={opt.id || idx} className="text-white/60 text-xs truncate bg-white/5 rounded px-2 py-1">
                   {opt.text}
                 </div>
               ))}
             </div>
-            <p className="text-white/50 text-xs mt-2">{item.data.pollTotalVotes || 0} votes</p>
+            <p className="text-white/50 text-xs mt-2">{pollTotalVotes || 0} votes</p>
           </div>
         );
       case 'announcement':
