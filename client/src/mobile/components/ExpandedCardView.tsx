@@ -285,36 +285,52 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
         );
 
       case 'poll':
-        const pollOptions = Array.isArray(data.pollOptions) ? data.pollOptions : [];
-        const totalVotes = pollOptions.reduce((sum: number, opt: any) => sum + (opt.votes || 0), 0);
+        const pollId = 'pollId' in data ? data.pollId : data.id;
+        const pollOptionsData = 'pollOptions' in data ? data.pollOptions : ('options' in data ? data.options : []);
+        const pollOptionsArray = Array.isArray(pollOptionsData) ? pollOptionsData : [];
+        const totalVotes = pollOptionsArray.reduce((sum: number, opt: any) => sum + (opt.votes || 0), 0);
+        const pollTitleText = 'pollTitle' in data ? data.pollTitle : ('title' in data ? data.title : 'Poll');
+        const pollDescText = 'pollDescription' in data ? data.pollDescription : ('description' in data ? data.description : null);
+        const pollEndDateVal = 'pollEndDate' in data ? data.pollEndDate : ('endDate' in data ? data.endDate : null);
+        
         return (
           <div className="space-y-4">
-            <span className="inline-block px-3 py-1 rounded-full border border-blue-500 text-white text-sm font-semibold">
+            <span className="inline-block px-3 py-1 rounded-full bg-gradient-to-r from-purple-500 to-violet-500 text-white text-sm font-semibold">
               Poll
             </span>
             
-            <h3 className="text-white font-bold text-xl">{data.pollTitle}</h3>
+            <h3 className="text-white font-bold text-xl">{pollTitleText}</h3>
             
-            {data.pollDescription && (
-              <p className="text-white/70">{data.pollDescription}</p>
+            {pollDescText && (
+              <p className="text-white/70">{pollDescText}</p>
             )}
             
             <div className="space-y-3">
-              {pollOptions.map((option: any, idx: number) => {
+              {pollOptionsArray.map((option: any, idx: number) => {
                 const percentage = totalVotes > 0 
                   ? Math.round((option.votes / totalVotes) * 100) 
                   : 0;
                 return (
                   <button 
                     key={option.id || idx}
-                    className="w-full p-4 rounded-xl bg-white/10 border border-white/20 text-left relative overflow-hidden"
+                    onClick={() => {
+                      if (pollId) {
+                        apiRequest(`/api/polls/${pollId}/vote`, 'POST', { optionId: option.id })
+                          .then(() => {
+                            queryClient.invalidateQueries({ queryKey: ['/api/polls'] });
+                            queryClient.invalidateQueries({ queryKey: ['/api/feeds/all'] });
+                          })
+                          .catch(console.error);
+                      }
+                    }}
+                    className="w-full p-4 rounded-xl bg-white/10 border border-white/20 text-left relative overflow-hidden hover:bg-white/20 transition-colors active:scale-[0.98]"
                   >
                     <div 
-                      className="absolute inset-0 bg-gradient-to-r from-red-500/30 to-blue-500/30"
+                      className="absolute inset-0 bg-gradient-to-r from-purple-500/40 to-violet-500/40"
                       style={{ width: `${percentage}%` }}
                     />
                     <div className="relative flex justify-between">
-                      <span className="text-white">{option.text}</span>
+                      <span className="text-white font-medium">{option.text}</span>
                       <span className="text-white/70">{percentage}%</span>
                     </div>
                   </button>
@@ -324,7 +340,11 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
             
             <p className="text-white/50 text-sm text-center">
               {totalVotes} total votes
-              {data.pollEndDate && ` • Ends ${format(new Date(data.pollEndDate), 'MMM d, yyyy')}`}
+              {pollEndDateVal && ` • Ends ${format(new Date(pollEndDateVal), 'MMM d, yyyy')}`}
+            </p>
+            
+            <p className="text-white/40 text-xs text-center">
+              Tap an option to vote
             </p>
           </div>
         );
