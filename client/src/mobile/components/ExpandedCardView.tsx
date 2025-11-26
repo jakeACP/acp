@@ -26,6 +26,21 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
   const startY = useRef(0);
   const { toast } = useToast();
 
+  const pollId = item.type === 'poll' 
+    ? ('pollId' in item.data ? item.data.pollId : item.data.id) 
+    : null;
+
+  const { data: existingVote } = useQuery<{ optionId?: string }>({
+    queryKey: ['/api/polls', pollId, 'my-vote'],
+    enabled: !!pollId && item.type === 'poll',
+  });
+
+  useEffect(() => {
+    if (existingVote?.optionId && !votedOptionId) {
+      setVotedOptionId(existingVote.optionId);
+    }
+  }, [existingVote, votedOptionId]);
+
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     startY.current = e.touches[0].clientY;
     setIsDragging(true);
@@ -323,10 +338,16 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
             setTimeout(() => {
               onClose();
             }, 1000);
-          } catch (error) {
-            toast({ title: 'Error', description: 'Failed to record vote.', variant: 'destructive' });
-            setVotedOptionId(null);
-            setLocalVotes({});
+          } catch (error: any) {
+            const errorMessage = error?.message || 'Failed to record vote.';
+            if (errorMessage.includes('already voted')) {
+              toast({ title: 'Already voted', description: 'You have already voted on this poll.' });
+              setTimeout(() => onClose(), 1500);
+            } else {
+              toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+              setVotedOptionId(null);
+              setLocalVotes({});
+            }
           }
         };
         
