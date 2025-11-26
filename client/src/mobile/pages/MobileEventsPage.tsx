@@ -32,7 +32,7 @@ export default function MobileEventsPage() {
 
   const filteredEvents = selectedDate 
     ? eventsOnDate(selectedDate)
-    : events.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+    : [...events].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
 
   return (
     <div className="mobile-root">

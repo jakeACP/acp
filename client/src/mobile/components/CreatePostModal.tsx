@@ -182,6 +182,16 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
         ? new Date(`${eventData.endDate}T${eventData.endTime}`) 
         : null;
 
+      let maxAttendeesValue: number | null = null;
+      if (eventData.maxAttendees.trim()) {
+        const parsed = parseInt(eventData.maxAttendees, 10);
+        if (isNaN(parsed) || parsed < 1) {
+          toast({ title: 'Invalid attendees', description: 'Max attendees must be a positive number.', variant: 'destructive' });
+          return;
+        }
+        maxAttendeesValue = parsed;
+      }
+
       const eventPayload = {
         title: eventData.title,
         description: eventData.description || null,
@@ -194,7 +204,7 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
         endDate: endDateTime?.toISOString() || null,
         isVirtual: eventData.isVirtual,
         virtualLink: eventData.isVirtual ? eventData.virtualLink : null,
-        maxAttendees: eventData.maxAttendees ? parseInt(eventData.maxAttendees) : null,
+        maxAttendees: maxAttendeesValue,
       };
 
       createEventMutation.mutate(eventPayload);
