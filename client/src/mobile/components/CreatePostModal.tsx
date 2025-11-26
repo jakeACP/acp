@@ -113,8 +113,7 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       
       <div 
-        className="relative w-full max-w-lg bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl rounded-t-3xl border-t border-white/10 flex flex-col animate-in slide-in-from-bottom duration-300"
-        style={{ maxHeight: '75vh', touchAction: 'pan-y' }}
+        className="relative w-full max-w-lg bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl rounded-t-3xl border-t border-white/10 animate-in slide-in-from-bottom duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0">
@@ -130,23 +129,20 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
           </button>
         </div>
 
-        <div 
-          className="p-4 flex-1 overscroll-contain"
-          style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
-        >
+        <div className="p-4">
           {!selectedType ? (
-            <div className="grid grid-cols-3 gap-3 pb-4">
+            <div className="grid grid-cols-3 gap-2">
               {postTypes.map(({ type, icon: Icon, label, color }) => (
                 <button
                   key={type}
                   onClick={() => setSelectedType(type)}
-                  className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all active:scale-95"
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-all active:scale-95"
                   data-testid={`create-${type}`}
                 >
-                  <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${color} flex items-center justify-center`}>
-                    <Icon className="w-6 h-6 text-white" />
+                  <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${color} flex items-center justify-center`}>
+                    <Icon className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-white text-xs font-medium text-center">{label}</span>
+                  <span className="text-white text-[10px] font-medium text-center leading-tight">{label}</span>
                 </button>
               ))}
             </div>
