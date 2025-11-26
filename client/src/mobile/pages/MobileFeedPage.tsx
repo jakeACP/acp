@@ -142,8 +142,17 @@ export function MobileFeedPage() {
                 </div>
               </div>
             )}
-            <div className="absolute bottom-2 left-2 right-2">
-              <span className="type-tag signal text-xs">Signal</span>
+            <div className="absolute bottom-2 left-2 right-2 flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-500 to-blue-500 overflow-hidden flex-shrink-0 border border-white/30">
+                {author?.avatar ? (
+                  <img src={author.avatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white text-[8px] font-bold">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <span className="text-white text-xs font-medium truncate drop-shadow-lg">{displayName}</span>
             </div>
           </div>
         );
@@ -151,7 +160,7 @@ export function MobileFeedPage() {
         const postVideo = findVideoInPost(item.data);
         if (postVideo) {
           return (
-            <div className="h-full flex flex-col justify-center">
+            <div className="h-full flex flex-col justify-center relative">
               {postVideo.platform === 'youtube' ? (
                 <LazyYouTubeThumbnail 
                   videoId={postVideo.videoId} 
@@ -164,14 +173,32 @@ export function MobileFeedPage() {
                   className="w-full h-full rounded-lg"
                 />
               )}
+              <div className="absolute bottom-2 left-2 right-2 flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-500 to-blue-500 overflow-hidden flex-shrink-0 border border-white/30">
+                  {author?.avatar ? (
+                    <img src={author.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white text-[8px] font-bold">
+                      {displayName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <span className="text-white text-xs font-medium truncate drop-shadow-lg">{displayName}</span>
+              </div>
             </div>
           );
         }
         return (
           <div className="h-full flex flex-col">
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-red-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
-                {displayName.charAt(0).toUpperCase()}
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-red-500 to-blue-500 overflow-hidden flex-shrink-0">
+                {author?.avatar ? (
+                  <img src={author.avatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
               </div>
               <span className="text-white/70 text-xs truncate">{displayName}</span>
             </div>
