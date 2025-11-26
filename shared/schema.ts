@@ -157,6 +157,37 @@ export const friendSuggestionDismissals = pgTable("friend_suggestion_dismissals"
   uniqueDismissal: sql`UNIQUE(${table.userId}, ${table.dismissedUserId})`,
 }));
 
+// User uploaded contacts for friend matching
+export const userContacts = pgTable("user_contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerId: varchar("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  contactName: text("contact_name"),
+  phoneHash: text("phone_hash"), // SHA-256 hash of normalized phone
+  emailHash: text("email_hash"), // SHA-256 hash of normalized email
+  phoneLast4: text("phone_last_4"), // Last 4 digits for display
+  matchedUserId: varchar("matched_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  ownerIndex: index("user_contacts_owner_idx").on(table.ownerId),
+  phoneHashIndex: index("user_contacts_phone_hash_idx").on(table.phoneHash),
+  emailHashIndex: index("user_contacts_email_hash_idx").on(table.emailHash),
+  matchedUserIndex: index("user_contacts_matched_user_idx").on(table.matchedUserId),
+  uniqueOwnerPhone: sql`UNIQUE NULLS NOT DISTINCT(${table.ownerId}, ${table.phoneHash})`,
+  uniqueOwnerEmail: sql`UNIQUE NULLS NOT DISTINCT(${table.ownerId}, ${table.emailHash})`,
+}));
+
+// Contact upload audit log
+export const contactUploads = pgTable("contact_uploads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  totalContacts: integer("total_contacts").notNull().default(0),
+  matchedCount: integer("matched_count").notNull().default(0),
+  unmatchedCount: integer("unmatched_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("contact_uploads_user_idx").on(table.userId),
+}));
+
 // Referral tracking and credits system
 export const userReferrals = pgTable("user_referrals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -796,6 +827,17 @@ export const insertFriendSuggestionSchema = createInsertSchema(friendSuggestions
 });
 
 export const insertFriendSuggestionDismissalSchema = createInsertSchema(friendSuggestionDismissals).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserContactSchema = createInsertSchema(userContacts).omit({
+  id: true,
+  createdAt: true,
+  matchedUserId: true,
+});
+
+export const insertContactUploadSchema = createInsertSchema(contactUploads).omit({
   id: true,
   createdAt: true,
 });
@@ -1911,6 +1953,10 @@ export type FriendSuggestion = typeof friendSuggestions.$inferSelect;
 export type InsertFriendSuggestion = z.infer<typeof insertFriendSuggestionSchema>;
 export type FriendSuggestionDismissal = typeof friendSuggestionDismissals.$inferSelect;
 export type InsertFriendSuggestionDismissal = z.infer<typeof insertFriendSuggestionDismissalSchema>;
+export type UserContact = typeof userContacts.$inferSelect;
+export type InsertUserContact = z.infer<typeof insertUserContactSchema>;
+export type ContactUpload = typeof contactUploads.$inferSelect;
+export type InsertContactUpload = z.infer<typeof insertContactUploadSchema>;
 export type UserReferral = typeof userReferrals.$inferSelect;
 export type InsertUserReferral = z.infer<typeof insertUserReferralSchema>;
 
