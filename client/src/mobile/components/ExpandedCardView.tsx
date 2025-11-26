@@ -3,6 +3,8 @@ import { X, Heart, MessageCircle, Share2, ChevronDown } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { LazyYouTubePlayer } from "./LazyYouTubeThumbnail";
+import { findYouTubeInPost } from "../utils/youtube";
 
 interface ExpandedCardViewProps {
   item: {
@@ -163,6 +165,8 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
         );
 
       case 'post':
+        const postYouTubeId = findYouTubeInPost(data);
+        const contentWithoutLinks = data.content?.replace(/https?:\/\/[^\s]+/g, '').trim() || '';
         return (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
@@ -181,11 +185,20 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               </div>
             </div>
             
-            <p className="text-white text-lg leading-relaxed">{data.content}</p>
+            {postYouTubeId && (
+              <LazyYouTubePlayer 
+                videoId={postYouTubeId}
+                className="rounded-xl overflow-hidden aspect-video"
+              />
+            )}
             
-            {data.image && (
+            <p className="text-white text-lg leading-relaxed">
+              {postYouTubeId ? contentWithoutLinks : data.content}
+            </p>
+            
+            {!postYouTubeId && data.image && (
               <div className="rounded-xl overflow-hidden">
-                <img src={data.image} alt="" className="w-full" />
+                <img src={data.image} alt="" className="w-full" loading="lazy" />
               </div>
             )}
             
@@ -210,6 +223,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
         );
 
       case 'news':
+        const newsYouTubeId = findYouTubeInPost(data);
         const thumbnailUrl = data.linkPreview?.image || data.image;
         return (
           <div className="space-y-4">
@@ -217,9 +231,14 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               News
             </span>
             
-            {thumbnailUrl && (
+            {newsYouTubeId ? (
+              <LazyYouTubePlayer 
+                videoId={newsYouTubeId}
+                className="rounded-xl overflow-hidden aspect-video"
+              />
+            ) : thumbnailUrl && (
               <div className="rounded-xl overflow-hidden aspect-video">
-                <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
               </div>
             )}
             
@@ -238,7 +257,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               <span>{timeAgo}</span>
             </div>
             
-            {data.url && (
+            {data.url && !newsYouTubeId && (
               <a 
                 href={data.url} 
                 target="_blank" 
