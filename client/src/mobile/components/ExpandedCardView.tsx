@@ -510,6 +510,109 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
           </div>
         );
 
+      case 'blog':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-block px-3 py-1 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-sm font-semibold">
+                Article
+              </span>
+              {data.readingTime && (
+                <span className="text-white/50 text-sm">{data.readingTime} min read</span>
+              )}
+            </div>
+            
+            {data.featuredImage && (
+              <div className="rounded-xl overflow-hidden aspect-video -mx-4">
+                <img 
+                  src={data.featuredImage} 
+                  alt="" 
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            )}
+            
+            <h3 className="text-white font-bold text-2xl leading-tight">{data.title || 'Untitled Article'}</h3>
+            
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-blue-500 overflow-hidden">
+                {author.avatar ? (
+                  <img src={author.avatar} alt={displayName} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white font-bold">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-white font-medium">{displayName}</p>
+                <p className="text-white/50 text-sm">{timeAgo}</p>
+              </div>
+            </div>
+            
+            <div className="article-body prose prose-invert prose-sm max-w-none">
+              {data.articleBody ? (
+                <div 
+                  className="text-white/90 leading-relaxed whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{ __html: data.articleBody }}
+                />
+              ) : (
+                <p className="text-white/90 leading-relaxed">{data.content}</p>
+              )}
+            </div>
+            
+            {data.articleImages && data.articleImages.length > 0 && (
+              <div className="space-y-4">
+                {data.articleImages.map((img: any, idx: number) => (
+                  <div key={idx} className="rounded-xl overflow-hidden">
+                    <img 
+                      src={img.url} 
+                      alt={img.caption || ''} 
+                      className="w-full"
+                      loading="lazy"
+                    />
+                    {img.caption && (
+                      <p className="text-white/50 text-sm text-center mt-2 italic">{img.caption}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {data.tags && data.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-4 border-t border-white/10">
+                {data.tags.map((tag: string) => (
+                  <span 
+                    key={tag} 
+                    className="px-2 py-1 rounded-full bg-white/10 text-white/70 text-xs"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex items-center gap-6 pt-4 border-t border-white/10">
+              <button 
+                onClick={() => likeMutation.mutate()}
+                className="flex items-center gap-2 text-white/70 hover:text-red-400"
+              >
+                <Heart className="w-6 h-6" />
+                <span>{data.likesCount || 0}</span>
+              </button>
+              <button className="flex items-center gap-2 text-white/70 hover:text-blue-400">
+                <MessageCircle className="w-6 h-6" />
+                <span>{data.commentsCount || 0}</span>
+              </button>
+              <button className="flex items-center gap-2 text-white/70 hover:text-green-400">
+                <Share2 className="w-6 h-6" />
+                <span>{data.sharesCount || 0}</span>
+              </button>
+            </div>
+          </div>
+        );
+
       default:
         return (
           <div className="text-white">

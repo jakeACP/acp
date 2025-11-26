@@ -31,6 +31,11 @@ interface PostWithAuthor {
   linkPreview?: { url: string; title?: string; description?: string; image?: string; siteName?: string } | null;
   sharedPostId?: string | null;
   eventId?: string | null;
+  articleBody?: string | null;
+  featuredImage?: string | null;
+  excerpt?: string | null;
+  articleImages?: { url: string; caption?: string; position?: number }[] | null;
+  readingTime?: number | null;
   privacy?: string;
   likesCount?: number;
   commentsCount?: number;
@@ -65,7 +70,8 @@ type FeedItem =
   | { type: 'poll'; data: PostWithAuthor | PollWithAuthor }
   | { type: 'announcement'; data: PostWithAuthor }
   | { type: 'event'; data: PostWithAuthor; event?: Event }
-  | { type: 'petition'; data: Petition };
+  | { type: 'petition'; data: Petition }
+  | { type: 'blog'; data: PostWithAuthor };
 
 export function MobileFeedPage() {
   useScrollLight();
@@ -108,6 +114,9 @@ export function MobileFeedPage() {
       if (p.type === 'event' && p.eventId) {
         return { type: 'event' as const, data: p };
       }
+      if (p.type === 'blog' || p.articleBody) {
+        return { type: 'blog' as const, data: p };
+      }
       if (p.type === 'news' || p.url || p.linkPreview) {
         return { type: 'news' as const, data: p };
       }
@@ -132,6 +141,7 @@ export function MobileFeedPage() {
         if (activeFilter === "petitions") return item.type === "petition";
         if (activeFilter === "events") return item.type === "event";
         if (activeFilter === "posts") return item.type === "post";
+        if (activeFilter === "blogs") return item.type === "blog";
         return true;
       });
 
@@ -297,6 +307,45 @@ export function MobileFeedPage() {
                 <div className="h-full bg-gradient-to-r from-red-500 to-blue-500" style={{ width: `${progress}%` }} />
               </div>
               <p className="text-white/50 text-xs">{progress}% signed</p>
+            </div>
+          </div>
+        );
+      case 'blog':
+        const blogAuthor = item.data.author;
+        const blogDisplayName = blogAuthor?.firstName && blogAuthor?.lastName
+          ? `${blogAuthor.firstName} ${blogAuthor.lastName}`
+          : blogAuthor?.username || 'Anonymous';
+        return (
+          <div className="h-full flex flex-col">
+            {item.data.featuredImage && (
+              <div className="h-20 -mx-3 -mt-3 mb-2 overflow-hidden rounded-t-xl">
+                <img 
+                  src={item.data.featuredImage} 
+                  alt="" 
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="type-tag blog w-fit text-[10px] px-1.5 py-0.5">Article</span>
+              {item.data.readingTime && (
+                <span className="text-white/40 text-[10px]">{item.data.readingTime} min read</span>
+              )}
+            </div>
+            <h4 className="text-white font-semibold text-sm line-clamp-2 mb-1">{item.data.title || 'Untitled Article'}</h4>
+            <p className="text-white/60 text-xs line-clamp-2 flex-1">{item.data.excerpt || item.data.content}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-500 to-blue-500 overflow-hidden flex-shrink-0">
+                {blogAuthor?.avatar ? (
+                  <img src={blogAuthor.avatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white text-[8px] font-bold">
+                    {blogDisplayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <span className="text-white/50 text-xs truncate">{blogDisplayName}</span>
             </div>
           </div>
         );
