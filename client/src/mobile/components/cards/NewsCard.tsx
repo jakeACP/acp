@@ -1,9 +1,23 @@
 import { Link } from "wouter";
-import type { Post } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 interface NewsCardProps {
-  post: Post & { author?: { username: string; avatar: string | null } };
+  post: {
+    id: string;
+    content: string;
+    title?: string | null;
+    image?: string | null;
+    url?: string | null;
+    newsSourceName?: string | null;
+    linkPreview?: { url: string; title?: string; description?: string; image?: string; siteName?: string } | null;
+    createdAt?: Date | string | null;
+    author?: { 
+      username: string; 
+      firstName?: string | null;
+      lastName?: string | null;
+      avatar?: string | null;
+    };
+  };
 }
 
 export function NewsCard({ post }: NewsCardProps) {

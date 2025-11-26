@@ -203,6 +203,21 @@
   color: white;
 }
 
+.type-tag.announcement {
+  background: linear-gradient(135deg, var(--mobile-red), #c42a2b);
+  color: white;
+}
+
+.type-tag.event {
+  background: var(--mobile-blue);
+  color: white;
+}
+
+.type-tag.virtual {
+  background: rgba(34, 197, 94, 0.8);
+  color: white;
+}
+
 /* Filter Tabs */
 .filter-tabs {
   display: flex;

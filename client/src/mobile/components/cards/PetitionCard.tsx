@@ -1,9 +1,15 @@
 import { Link } from "wouter";
 import { CheckCircle } from "lucide-react";
-import type { Petition } from "@shared/schema";
 
 interface PetitionCardProps {
-  petition: Petition;
+  petition: {
+    id: string;
+    title: string;
+    objective?: string | null;
+    targetSignatures?: number | null;
+    currentSignatures?: number | null;
+    isActive?: boolean | null;
+  };
 }
 
 export function PetitionCard({ petition }: PetitionCardProps) {
