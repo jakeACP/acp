@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, FileText, Video, Image, BarChart2, Calendar, Megaphone, Send } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -27,6 +27,23 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
   const [videoUrl, setVideoUrl] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    };
+  }, [isOpen]);
 
   const createPostMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -89,13 +106,15 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-50 flex items-end justify-center touch-none"
       onClick={handleClose}
+      style={{ touchAction: 'none' }}
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       
       <div 
-        className="relative w-full max-w-lg bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl rounded-t-3xl border-t border-white/10 max-h-[80vh] flex flex-col animate-in slide-in-from-bottom duration-300"
+        className="relative w-full max-w-lg bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl rounded-t-3xl border-t border-white/10 flex flex-col animate-in slide-in-from-bottom duration-300"
+        style={{ maxHeight: '75vh', touchAction: 'pan-y' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0">
@@ -111,9 +130,12 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
           </button>
         </div>
 
-        <div className="p-4 overflow-y-auto flex-1">
+        <div 
+          className="p-4 flex-1 overscroll-contain"
+          style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+        >
           {!selectedType ? (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3 pb-4">
               {postTypes.map(({ type, icon: Icon, label, color }) => (
                 <button
                   key={type}
