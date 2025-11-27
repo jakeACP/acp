@@ -3819,7 +3819,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = z.object({
         sigId: z.string().min(1),
-        relationshipType: z.enum(['sponsor', 'donor', 'affiliated', 'endorsed']).optional(),
+        relationshipType: z.enum(['primary_sponsor', 'sponsor', 'donor', 'affiliated', 'endorsed']).optional(),
         reportedAmount: z.number().int().optional(),
         amountCurrency: z.string().optional(),
         contributionPeriod: z.string().optional(),
@@ -3862,7 +3862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/politician-sponsorships/:id", ensureAdmin, async (req, res) => {
     try {
       const data = z.object({
-        relationshipType: z.enum(['sponsor', 'donor', 'affiliated', 'endorsed']).optional(),
+        relationshipType: z.enum(['primary_sponsor', 'sponsor', 'donor', 'affiliated', 'endorsed']).optional(),
         reportedAmount: z.number().int().optional(),
         amountCurrency: z.string().optional(),
         contributionPeriod: z.string().optional(),

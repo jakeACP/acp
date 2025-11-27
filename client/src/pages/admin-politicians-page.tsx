@@ -13,8 +13,29 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link, Unlink } from "lucide-react";
 import { ObjectUploader } from "@/components/ObjectUploader";
+
+type SpecialInterestGroup = {
+  id: string;
+  name: string;
+  acronym?: string;
+  category: string;
+  industry?: string;
+  isActive: boolean;
+};
+
+type PoliticianSponsorship = {
+  id: string;
+  politicianId: string;
+  sigId: string;
+  relationshipType: string;
+  reportedAmount?: number;
+  contributionPeriod?: string;
+  disclosureSource?: string;
+  isVerified?: boolean;
+  sig?: SpecialInterestGroup;
+};
 
 type PoliticalPosition = {
   id: string;
@@ -70,6 +91,9 @@ export default function AdminPoliticiansPage() {
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | undefined>(undefined);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assigningProfile, setAssigningProfile] = useState<PoliticianProfile | null>(null);
+  const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
+  const [selectedPoliticianForSponsor, setSelectedPoliticianForSponsor] = useState<PoliticianProfile | null>(null);
+  const [sponsorshipFilter, setSponsorshipFilter] = useState<string>("");
 
   const { data: positions = [], isLoading: positionsLoading } = useQuery<PoliticalPosition[]>({
     queryKey: ["/api/admin/political-positions"],
@@ -81,6 +105,26 @@ export default function AdminPoliticiansPage() {
 
   const { data: claimRequests = [], isLoading: claimsLoading } = useQuery<ClaimRequest[]>({
     queryKey: ["/api/admin/politician-profiles/claim-requests"],
+  });
+
+  const { data: sigs = [] } = useQuery<SpecialInterestGroup[]>({
+    queryKey: ["/api/admin/sigs"],
+    queryFn: async () => {
+      const response = await fetch("/api/admin/sigs?isActive=true", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch SIGs");
+      return response.json();
+    },
+  });
+
+  const { data: politicianSponsors = [], isLoading: sponsorsLoading } = useQuery<PoliticianSponsorship[]>({
+    queryKey: ["/api/admin/politician-profiles", selectedPoliticianForSponsor?.id, "sponsors"],
+    queryFn: async () => {
+      if (!selectedPoliticianForSponsor) return [];
+      const response = await fetch(`/api/admin/politician-profiles/${selectedPoliticianForSponsor.id}/sponsors`, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch sponsors");
+      return response.json();
+    },
+    enabled: !!selectedPoliticianForSponsor,
   });
 
   const createPositionMutation = useMutation({
@@ -243,6 +287,32 @@ export default function AdminPoliticiansPage() {
     },
   });
 
+  const linkSponsorMutation = useMutation({
+    mutationFn: async (data: { politicianId: string; sigId: string; relationshipType: string; reportedAmount?: number; contributionPeriod?: string; disclosureSource?: string }) => {
+      return await apiRequest(`/api/admin/politician-profiles/${data.politicianId}/sponsors`, "POST", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles", selectedPoliticianForSponsor?.id, "sponsors"] });
+      toast({ title: "Sponsor linked successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error linking sponsor", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const unlinkSponsorMutation = useMutation({
+    mutationFn: async ({ politicianId, sigId }: { politicianId: string; sigId: string }) => {
+      return await apiRequest(`/api/admin/politician-profiles/${politicianId}/sponsors/${sigId}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles", selectedPoliticianForSponsor?.id, "sponsors"] });
+      toast({ title: "Sponsor unlinked successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error unlinking sponsor", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handlePositionSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -300,6 +370,29 @@ export default function AdminPoliticiansPage() {
     
     if (positionId) {
       assignMutation.mutate({ profileId: assigningProfile.id, positionId });
+    }
+  };
+
+  const handleSponsorSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedPoliticianForSponsor) return;
+    
+    const formData = new FormData(e.currentTarget);
+    const sigId = formData.get("sigId") as string;
+    const relationshipType = formData.get("relationshipType") as string;
+    const reportedAmountStr = formData.get("reportedAmount") as string;
+    const contributionPeriod = formData.get("contributionPeriod") as string;
+    const disclosureSource = formData.get("disclosureSource") as string;
+    
+    if (sigId && relationshipType) {
+      linkSponsorMutation.mutate({
+        politicianId: selectedPoliticianForSponsor.id,
+        sigId,
+        relationshipType,
+        reportedAmount: reportedAmountStr ? parseInt(reportedAmountStr) * 100 : undefined,
+        contributionPeriod: contributionPeriod || undefined,
+        disclosureSource: disclosureSource || undefined,
+      });
     }
   };
 
@@ -386,10 +479,11 @@ export default function AdminPoliticiansPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="positions" data-testid="tab-positions">Political Positions</TabsTrigger>
-                <TabsTrigger value="profiles" data-testid="tab-profiles">Politician Profiles</TabsTrigger>
-                <TabsTrigger value="claims" data-testid="tab-claim-requests">Claim Requests</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="positions" data-testid="tab-positions">Positions</TabsTrigger>
+                <TabsTrigger value="profiles" data-testid="tab-profiles">Profiles</TabsTrigger>
+                <TabsTrigger value="sponsorships" data-testid="tab-sponsorships">Sponsorships</TabsTrigger>
+                <TabsTrigger value="claims" data-testid="tab-claim-requests">Claims</TabsTrigger>
               </TabsList>
 
               <TabsContent value="positions" className="space-y-4">
@@ -648,6 +742,137 @@ export default function AdminPoliticiansPage() {
                     </Table>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="sponsorships" className="space-y-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Link Special Interest Groups (PACs, corporate sponsors, etc.) to politician profiles for corruption scorecard tracking
+                    </p>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <Select value={sponsorshipFilter} onValueChange={(val) => {
+                      setSponsorshipFilter(val);
+                      const politician = profiles.find(p => p.id === val);
+                      setSelectedPoliticianForSponsor(politician || null);
+                    }}>
+                      <SelectTrigger className="w-[300px]" data-testid="select-politician-sponsor">
+                        <SelectValue placeholder="Select a politician to manage sponsors..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {profiles.map(profile => (
+                          <SelectItem key={profile.id} value={profile.id}>{profile.fullName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    {selectedPoliticianForSponsor && (
+                      <Button
+                        onClick={() => setSponsorDialogOpen(true)}
+                        data-testid="btn-add-sponsor"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Link Sponsor
+                      </Button>
+                    )}
+                  </div>
+
+                  {selectedPoliticianForSponsor ? (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center gap-3">
+                          {selectedPoliticianForSponsor.photoUrl ? (
+                            <img src={selectedPoliticianForSponsor.photoUrl} alt="" className="w-12 h-12 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                              <Users className="h-6 w-6 text-slate-400" />
+                            </div>
+                          )}
+                          <div>
+                            <CardTitle className="text-lg">{selectedPoliticianForSponsor.fullName}</CardTitle>
+                            <CardDescription>{selectedPoliticianForSponsor.party || "No party"}</CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {sponsorsLoading ? (
+                          <div className="text-center py-4">Loading sponsors...</div>
+                        ) : politicianSponsors.length === 0 ? (
+                          <div className="text-center py-8 text-slate-500">
+                            <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p>No sponsors linked yet</p>
+                            <p className="text-sm mt-1">Click "Link Sponsor" to add a SIG relationship</p>
+                          </div>
+                        ) : (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Organization</TableHead>
+                                <TableHead>Category</TableHead>
+                                <TableHead>Relationship</TableHead>
+                                <TableHead>Amount</TableHead>
+                                <TableHead>Period</TableHead>
+                                <TableHead>Source</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {politicianSponsors.map((sponsorship) => (
+                                <TableRow key={sponsorship.id}>
+                                  <TableCell className="font-medium">
+                                    {sponsorship.sig?.name || "Unknown"}
+                                    {sponsorship.sig?.acronym && <span className="text-slate-500 ml-1">({sponsorship.sig.acronym})</span>}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline">{sponsorship.sig?.category || "-"}</Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant={sponsorship.relationshipType === "primary_sponsor" ? "default" : "secondary"}>
+                                      {sponsorship.relationshipType.replace(/_/g, " ")}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    {sponsorship.reportedAmount 
+                                      ? `$${(sponsorship.reportedAmount / 100).toLocaleString()}`
+                                      : "-"}
+                                  </TableCell>
+                                  <TableCell>{sponsorship.contributionPeriod || "-"}</TableCell>
+                                  <TableCell className="max-w-[150px] truncate">
+                                    {sponsorship.disclosureSource || "-"}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        if (confirm(`Unlink ${sponsorship.sig?.name} from ${selectedPoliticianForSponsor.fullName}?`)) {
+                                          unlinkSponsorMutation.mutate({
+                                            politicianId: selectedPoliticianForSponsor.id,
+                                            sigId: sponsorship.sigId
+                                          });
+                                        }
+                                      }}
+                                      data-testid={`btn-unlink-${sponsorship.id}`}
+                                    >
+                                      <Unlink className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="text-center py-12 text-slate-500 dark:text-slate-400 border rounded-lg">
+                      <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Select a politician to view and manage their campaign sponsors</p>
+                    </div>
+                  )}
+                </div>
               </TabsContent>
 
               <TabsContent value="claims" className="space-y-4">
@@ -1116,6 +1341,104 @@ export default function AdminPoliticiansPage() {
               </Button>
               <Button type="submit" data-testid="button-submit-assign">
                 Assign
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={sponsorDialogOpen} onOpenChange={setSponsorDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Link Campaign Sponsor</DialogTitle>
+            <DialogDescription>
+              Add a SIG/sponsor relationship for {selectedPoliticianForSponsor?.fullName}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            handleSponsorSubmit(e);
+            setSponsorDialogOpen(false);
+          }}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="sigId">Organization *</Label>
+                <Select name="sigId" required>
+                  <SelectTrigger data-testid="select-sig">
+                    <SelectValue placeholder="Select a Special Interest Group..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sigs.filter(sig => 
+                      !politicianSponsors.some(s => s.sigId === sig.id)
+                    ).map(sig => (
+                      <SelectItem key={sig.id} value={sig.id}>
+                        {sig.name} {sig.acronym && `(${sig.acronym})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {sigs.length === 0 && (
+                  <p className="text-sm text-amber-600">
+                    No SIGs found. Create some in the SIGs management page first.
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="relationshipType">Relationship Type *</Label>
+                <Select name="relationshipType" defaultValue="donor" required>
+                  <SelectTrigger data-testid="select-relationship-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="primary_sponsor">Primary Sponsor</SelectItem>
+                    <SelectItem value="donor">Donor</SelectItem>
+                    <SelectItem value="affiliated">Affiliated</SelectItem>
+                    <SelectItem value="endorsed">Endorsed By</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="reportedAmount">Reported Amount ($)</Label>
+                  <Input
+                    id="reportedAmount"
+                    name="reportedAmount"
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="e.g., 50000"
+                    data-testid="input-amount"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="contributionPeriod">Period</Label>
+                  <Input
+                    id="contributionPeriod"
+                    name="contributionPeriod"
+                    placeholder="e.g., 2020-2024"
+                    data-testid="input-period"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="disclosureSource">Disclosure Source</Label>
+                <Input
+                  id="disclosureSource"
+                  name="disclosureSource"
+                  placeholder="e.g., FEC, OpenSecrets, Campaign Finance Database"
+                  data-testid="input-source"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSponsorDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={linkSponsorMutation.isPending} data-testid="btn-submit-sponsor">
+                {linkSponsorMutation.isPending ? "Linking..." : "Link Sponsor"}
               </Button>
             </DialogFooter>
           </form>
