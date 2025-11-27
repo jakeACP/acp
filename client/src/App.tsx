@@ -50,6 +50,7 @@ import AdminAlgorithmSettingsPage from "@/pages/admin-algorithm-settings-page";
 import AdminAcpPlusPage from "@/pages/admin-acp-plus-page";
 import AdminSettingsPage from "@/pages/admin-settings-page";
 import AdminVoterVerificationPage from "@/pages/admin-voter-verification-page";
+import AdminSigsPage from "@/pages/admin-sigs-page";
 import WhistleblowingPage from "@/pages/whistleblowing-page";
 import NotFound from "@/pages/not-found";
 import { AlertTriangle } from "lucide-react";
@@ -91,6 +92,7 @@ function Router() {
       <ProtectedRoute path="/admin/invitations" component={AdminInvitationsPage} />
       <ProtectedRoute path="/admin/representatives" component={AdminRepresentativesPage} />
       <ProtectedRoute path="/admin/politicians" component={AdminPoliticiansPage} />
+      <ProtectedRoute path="/admin/sigs" component={AdminSigsPage} />
       <ProtectedRoute path="/admin/polls" component={AdminPollsPage} />
       <ProtectedRoute path="/admin/security" component={AdminSecurityPage} />
       <ProtectedRoute path="/admin/database" component={AdminDatabasePage} />

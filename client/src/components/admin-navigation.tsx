@@ -11,7 +11,8 @@ import {
   Coins, 
   Settings,
   BarChart3,
-  Sliders
+  Sliders,
+  Building2
 } from "lucide-react";
 
 // Organized by category for better navigation
@@ -44,6 +45,12 @@ const adminMenuItems = [
     name: "Politicians",
     href: "/admin/politicians",
     icon: Users,
+    category: "people",
+  },
+  {
+    name: "SIGs",
+    href: "/admin/sigs",
+    icon: Building2,
     category: "people",
   },
   {
