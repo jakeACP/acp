@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike } from "@shared/schema";
 import { db } from "./db";
@@ -209,6 +209,22 @@ export interface IStorage {
   submitCorruptionRating(politicianId: string, userId: string, grade: string, reasoning?: string): Promise<PoliticianCorruptionRating>;
   getUserCorruptionRating(politicianId: string, userId: string): Promise<PoliticianCorruptionRating | undefined>;
   getCorruptionRatingStats(politicianId: string): Promise<{ averageGrade: string; gradeDistribution: Record<string, number>; totalRatings: number }>;
+
+  // Special Interest Groups (SIGs)
+  listSpecialInterestGroups(filters?: { category?: string; industry?: string; search?: string; isActive?: boolean }): Promise<SpecialInterestGroup[]>;
+  getSpecialInterestGroup(id: string): Promise<SpecialInterestGroup | undefined>;
+  createSpecialInterestGroup(data: InsertSpecialInterestGroup): Promise<SpecialInterestGroup>;
+  updateSpecialInterestGroup(id: string, patch: Partial<SpecialInterestGroup>): Promise<SpecialInterestGroup>;
+  deleteSpecialInterestGroup(id: string): Promise<void>;
+  getSigCategories(): Promise<string[]>;
+  getSigIndustries(): Promise<string[]>;
+  
+  // Politician SIG Sponsorships
+  listPoliticianSponsors(politicianId: string): Promise<any[]>;
+  linkSponsorToPolitician(data: InsertPoliticianSigSponsorship): Promise<PoliticianSigSponsorship>;
+  updatePoliticianSponsorship(id: string, patch: Partial<PoliticianSigSponsorship>): Promise<PoliticianSigSponsorship>;
+  unlinkSponsorFromPolitician(politicianId: string, sigId: string): Promise<void>;
+  getPoliticiansBySig(sigId: string): Promise<any[]>;
 
   // Boycotts
   getBoycotts(limit?: number, offset?: number): Promise<Boycott[]>;
@@ -3231,6 +3247,146 @@ export class DatabaseStorage implements IStorage {
     else if (averageValue >= 0.5) averageGrade = 'D';
 
     return { averageGrade, gradeDistribution, totalRatings };
+  }
+
+  // Special Interest Groups (SIGs)
+  async listSpecialInterestGroups(filters?: { category?: string; industry?: string; search?: string; isActive?: boolean }): Promise<SpecialInterestGroup[]> {
+    let query = db.select().from(specialInterestGroups);
+    const conditions = [];
+    
+    if (filters?.category) {
+      conditions.push(eq(specialInterestGroups.category, filters.category));
+    }
+    if (filters?.industry) {
+      conditions.push(eq(specialInterestGroups.industry, filters.industry));
+    }
+    if (filters?.search) {
+      conditions.push(
+        or(
+          sql`${specialInterestGroups.name} ILIKE ${'%' + filters.search + '%'}`,
+          sql`${specialInterestGroups.acronym} ILIKE ${'%' + filters.search + '%'}`
+        )
+      );
+    }
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(specialInterestGroups.isActive, filters.isActive));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(specialInterestGroups.name);
+  }
+
+  async getSpecialInterestGroup(id: string): Promise<SpecialInterestGroup | undefined> {
+    const [sig] = await db
+      .select()
+      .from(specialInterestGroups)
+      .where(eq(specialInterestGroups.id, id));
+    return sig || undefined;
+  }
+
+  async createSpecialInterestGroup(data: InsertSpecialInterestGroup): Promise<SpecialInterestGroup> {
+    const [sig] = await db
+      .insert(specialInterestGroups)
+      .values(data)
+      .returning();
+    return sig;
+  }
+
+  async updateSpecialInterestGroup(id: string, patch: Partial<SpecialInterestGroup>): Promise<SpecialInterestGroup> {
+    const [sig] = await db
+      .update(specialInterestGroups)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(specialInterestGroups.id, id))
+      .returning();
+    return sig;
+  }
+
+  async deleteSpecialInterestGroup(id: string): Promise<void> {
+    await db
+      .delete(specialInterestGroups)
+      .where(eq(specialInterestGroups.id, id));
+  }
+
+  async getSigCategories(): Promise<string[]> {
+    const results = await db
+      .selectDistinct({ category: specialInterestGroups.category })
+      .from(specialInterestGroups)
+      .where(sql`${specialInterestGroups.category} IS NOT NULL`);
+    return results.map(r => r.category).filter(Boolean) as string[];
+  }
+
+  async getSigIndustries(): Promise<string[]> {
+    const results = await db
+      .selectDistinct({ industry: specialInterestGroups.industry })
+      .from(specialInterestGroups)
+      .where(sql`${specialInterestGroups.industry} IS NOT NULL`);
+    return results.map(r => r.industry).filter(Boolean) as string[];
+  }
+
+  // Politician SIG Sponsorships
+  async listPoliticianSponsors(politicianId: string): Promise<any[]> {
+    const results = await db
+      .select({
+        sponsorship: politicianSigSponsorships,
+        sig: specialInterestGroups,
+      })
+      .from(politicianSigSponsorships)
+      .innerJoin(specialInterestGroups, eq(politicianSigSponsorships.sigId, specialInterestGroups.id))
+      .where(eq(politicianSigSponsorships.politicianId, politicianId))
+      .orderBy(desc(politicianSigSponsorships.reportedAmount));
+    
+    return results.map(r => ({
+      ...r.sponsorship,
+      sig: r.sig,
+    }));
+  }
+
+  async linkSponsorToPolitician(data: InsertPoliticianSigSponsorship): Promise<PoliticianSigSponsorship> {
+    const [sponsorship] = await db
+      .insert(politicianSigSponsorships)
+      .values(data)
+      .returning();
+    return sponsorship;
+  }
+
+  async updatePoliticianSponsorship(id: string, patch: Partial<PoliticianSigSponsorship>): Promise<PoliticianSigSponsorship> {
+    const [sponsorship] = await db
+      .update(politicianSigSponsorships)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(politicianSigSponsorships.id, id))
+      .returning();
+    return sponsorship;
+  }
+
+  async unlinkSponsorFromPolitician(politicianId: string, sigId: string): Promise<void> {
+    await db
+      .delete(politicianSigSponsorships)
+      .where(
+        and(
+          eq(politicianSigSponsorships.politicianId, politicianId),
+          eq(politicianSigSponsorships.sigId, sigId)
+        )
+      );
+  }
+
+  async getPoliticiansBySig(sigId: string): Promise<any[]> {
+    const results = await db
+      .select({
+        sponsorship: politicianSigSponsorships,
+        politician: politicianProfiles,
+      })
+      .from(politicianSigSponsorships)
+      .innerJoin(politicianProfiles, eq(politicianSigSponsorships.politicianId, politicianProfiles.id))
+      .where(eq(politicianSigSponsorships.sigId, sigId))
+      .orderBy(desc(politicianSigSponsorships.reportedAmount));
+    
+    return results.map(r => ({
+      ...r.sponsorship,
+      politician: r.politician,
+    }));
   }
 
   async createPasswordResetToken(email: string, token: string, expiresAt: Date): Promise<PasswordResetToken> {
