@@ -1,5 +1,6 @@
-import { extractVideoEmbeds, getTikTokEmbedUrl, type VideoEmbed } from "@/lib/video-embed";
+import { extractVideoEmbeds, type VideoEmbed } from "@/lib/video-embed";
 import { YouTubeEmbed } from "./youtube-embed";
+import { TikTokEmbed } from "./tiktok-embed";
 
 interface VideoEmbedDisplayProps {
   content: string;
@@ -22,17 +23,7 @@ export function VideoEmbedDisplay({ content, postId }: VideoEmbedDisplayProps) {
           )}
           
           {embed.type === 'tiktok' && (
-            <div className="relative w-full mx-auto max-w-[325px] mb-4" style={{ paddingBottom: '177.78%' }}>
-              <iframe
-                className="absolute top-0 left-0 w-full h-full rounded-lg"
-                src={getTikTokEmbedUrl(embed.id)}
-                title="TikTok video player"
-                frameBorder="0"
-                allow="encrypted-media"
-                allowFullScreen
-                data-testid={`tiktok-embed-${embed.id}`}
-              />
-            </div>
+            <TikTokEmbed videoId={embed.id} tiktokUrl={embed.url} />
           )}
         </div>
       ))}
