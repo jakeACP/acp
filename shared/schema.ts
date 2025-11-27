@@ -1273,6 +1273,54 @@ export const politicianCorruptionRatings = pgTable("politician_corruption_rating
   gradeCheck: sql`CHECK (${table.grade} IN ('A', 'B', 'C', 'D', 'F'))`,
 }));
 
+// Special Interest Groups - Organizations that can sponsor politicians
+export const specialInterestGroups = pgTable("special_interest_groups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  acronym: text("acronym"), // e.g., "NRA", "AIPAC", "AFL-CIO"
+  description: text("description"),
+  category: text("category").notNull(), // e.g., "corporate", "union", "pac", "lobby", "nonprofit"
+  website: text("website"),
+  logoUrl: text("logo_url"),
+  contactEmail: text("contact_email"),
+  headquarters: text("headquarters"), // City, State
+  foundedYear: integer("founded_year"),
+  industry: text("industry"), // e.g., "defense", "healthcare", "energy", "finance"
+  disclosureNotes: text("disclosure_notes"), // Admin notes about the organization
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  nameIndex: index("sig_name_idx").on(table.name),
+  categoryIndex: index("sig_category_idx").on(table.category),
+  industryIndex: index("sig_industry_idx").on(table.industry),
+  activeIndex: index("sig_active_idx").on(table.isActive),
+}));
+
+// Politician SIG Sponsorships - Links between politicians and their sponsors
+export const politicianSigSponsorships = pgTable("politician_sig_sponsorships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  politicianId: varchar("politician_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  sigId: varchar("sig_id").notNull().references(() => specialInterestGroups.id, { onDelete: "cascade" }),
+  relationshipType: text("relationship_type").notNull().default("donor"), // sponsor, donor, affiliated, endorsed
+  reportedAmount: integer("reported_amount"), // Total reported contribution in cents
+  amountCurrency: text("amount_currency").default("USD"),
+  contributionPeriod: text("contribution_period"), // e.g., "2020-2024", "lifetime"
+  firstContributionDate: timestamp("first_contribution_date"),
+  lastContributionDate: timestamp("last_contribution_date"),
+  disclosureSource: text("disclosure_source"), // Where the info came from (FEC, OpenSecrets, etc.)
+  disclosureUrl: text("disclosure_url"), // Link to disclosure document
+  notes: text("notes"), // Admin notes
+  isVerified: boolean("is_verified").default(false), // Has this been fact-checked
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  politicianIndex: index("sig_sponsorship_politician_idx").on(table.politicianId),
+  sigIndex: index("sig_sponsorship_sig_idx").on(table.sigId),
+  relationshipIndex: index("sig_sponsorship_relationship_idx").on(table.relationshipType),
+  uniquePoliticianSig: sql`UNIQUE(${table.politicianId}, ${table.sigId})`,
+}));
+
 // Voter Verification Requests - Secure storage of voter verification data
 export const voterVerificationRequests = pgTable("voter_verification_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1686,6 +1734,18 @@ export const insertPoliticianCorruptionRatingSchema = createInsertSchema(politic
   updatedAt: true,
 });
 
+export const insertSpecialInterestGroupSchema = createInsertSchema(specialInterestGroups).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPoliticianSigSponsorshipSchema = createInsertSchema(politicianSigSponsorships).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertVoterVerificationRequestSchema = createInsertSchema(voterVerificationRequests).omit({
   id: true,
   submittedAt: true,
@@ -1785,6 +1845,10 @@ export type PoliticianProfile = typeof politicianProfiles.$inferSelect;
 export type InsertPoliticianProfile = z.infer<typeof insertPoliticianProfileSchema>;
 export type PoliticianCorruptionRating = typeof politicianCorruptionRatings.$inferSelect;
 export type InsertPoliticianCorruptionRating = z.infer<typeof insertPoliticianCorruptionRatingSchema>;
+export type SpecialInterestGroup = typeof specialInterestGroups.$inferSelect;
+export type InsertSpecialInterestGroup = z.infer<typeof insertSpecialInterestGroupSchema>;
+export type PoliticianSigSponsorship = typeof politicianSigSponsorships.$inferSelect;
+export type InsertPoliticianSigSponsorship = z.infer<typeof insertPoliticianSigSponsorshipSchema>;
 export type VoterVerificationRequest = typeof voterVerificationRequests.$inferSelect;
 export type InsertVoterVerificationRequest = z.infer<typeof insertVoterVerificationRequestSchema>;
 export type Boycott = typeof boycotts.$inferSelect;
