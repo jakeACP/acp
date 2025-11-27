@@ -3662,6 +3662,244 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==========================================
+  // Special Interest Groups (SIGs) Admin API
+  // ==========================================
+
+  // List all SIGs with optional filters
+  app.get("/api/admin/sigs", ensureAdmin, async (req, res) => {
+    try {
+      const filters = {
+        category: req.query.category as string | undefined,
+        industry: req.query.industry as string | undefined,
+        search: req.query.search as string | undefined,
+        isActive: req.query.isActive ? req.query.isActive === 'true' : undefined,
+      };
+      const sigs = await storage.listSpecialInterestGroups(filters);
+      res.json(sigs);
+    } catch (error: any) {
+      console.error("List SIGs error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get SIG categories for filtering
+  app.get("/api/admin/sigs/categories", ensureAdmin, async (req, res) => {
+    try {
+      const categories = await storage.getSigCategories();
+      res.json(categories);
+    } catch (error: any) {
+      console.error("Get SIG categories error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get SIG industries for filtering
+  app.get("/api/admin/sigs/industries", ensureAdmin, async (req, res) => {
+    try {
+      const industries = await storage.getSigIndustries();
+      res.json(industries);
+    } catch (error: any) {
+      console.error("Get SIG industries error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get a single SIG
+  app.get("/api/admin/sigs/:id", ensureAdmin, async (req, res) => {
+    try {
+      const sig = await storage.getSpecialInterestGroup(req.params.id);
+      if (!sig) {
+        return res.status(404).json({ message: "Special Interest Group not found" });
+      }
+      res.json(sig);
+    } catch (error: any) {
+      console.error("Get SIG error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Create a new SIG
+  app.post("/api/admin/sigs", ensureAdmin, async (req, res) => {
+    try {
+      const data = z.object({
+        name: z.string().min(1),
+        acronym: z.string().optional(),
+        description: z.string().optional(),
+        category: z.string().min(1),
+        website: z.string().url().optional().or(z.literal('')),
+        logoUrl: z.string().optional(),
+        contactEmail: z.string().email().optional().or(z.literal('')),
+        headquarters: z.string().optional(),
+        foundedYear: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
+        industry: z.string().optional(),
+        disclosureNotes: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }).parse(req.body);
+
+      const sig = await storage.createSpecialInterestGroup(data);
+      res.status(201).json(sig);
+    } catch (error: any) {
+      console.error("Create SIG error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Update a SIG
+  app.patch("/api/admin/sigs/:id", ensureAdmin, async (req, res) => {
+    try {
+      const data = z.object({
+        name: z.string().min(1).optional(),
+        acronym: z.string().optional(),
+        description: z.string().optional(),
+        category: z.string().min(1).optional(),
+        website: z.string().url().optional().or(z.literal('')),
+        logoUrl: z.string().optional(),
+        contactEmail: z.string().email().optional().or(z.literal('')),
+        headquarters: z.string().optional(),
+        foundedYear: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
+        industry: z.string().optional(),
+        disclosureNotes: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }).parse(req.body);
+
+      const sig = await storage.updateSpecialInterestGroup(req.params.id, data);
+      res.json(sig);
+    } catch (error: any) {
+      console.error("Update SIG error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Delete a SIG
+  app.delete("/api/admin/sigs/:id", ensureAdmin, async (req, res) => {
+    try {
+      await storage.deleteSpecialInterestGroup(req.params.id);
+      res.sendStatus(204);
+    } catch (error: any) {
+      console.error("Delete SIG error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get politicians sponsored by a SIG
+  app.get("/api/admin/sigs/:id/politicians", ensureAdmin, async (req, res) => {
+    try {
+      const politicians = await storage.getPoliticiansBySig(req.params.id);
+      res.json(politicians);
+    } catch (error: any) {
+      console.error("Get SIG politicians error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ==========================================
+  // Politician SIG Sponsorships API
+  // ==========================================
+
+  // Get sponsors for a politician (public endpoint)
+  app.get("/api/politician-profiles/:id/sponsors", async (req, res) => {
+    try {
+      const sponsors = await storage.listPoliticianSponsors(req.params.id);
+      res.json(sponsors);
+    } catch (error: any) {
+      console.error("Get politician sponsors error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Link a sponsor to a politician
+  app.post("/api/admin/politician-profiles/:politicianId/sponsors", ensureAdmin, async (req, res) => {
+    try {
+      const data = z.object({
+        sigId: z.string().min(1),
+        relationshipType: z.enum(['sponsor', 'donor', 'affiliated', 'endorsed']).optional(),
+        reportedAmount: z.number().int().optional(),
+        amountCurrency: z.string().optional(),
+        contributionPeriod: z.string().optional(),
+        firstContributionDate: z.string().datetime().optional(),
+        lastContributionDate: z.string().datetime().optional(),
+        disclosureSource: z.string().optional(),
+        disclosureUrl: z.string().url().optional().or(z.literal('')),
+        notes: z.string().optional(),
+        isVerified: z.boolean().optional(),
+      }).parse(req.body);
+
+      const sponsorship = await storage.linkSponsorToPolitician({
+        politicianId: req.params.politicianId,
+        sigId: data.sigId,
+        relationshipType: data.relationshipType || 'donor',
+        reportedAmount: data.reportedAmount,
+        amountCurrency: data.amountCurrency,
+        contributionPeriod: data.contributionPeriod,
+        firstContributionDate: data.firstContributionDate ? new Date(data.firstContributionDate) : undefined,
+        lastContributionDate: data.lastContributionDate ? new Date(data.lastContributionDate) : undefined,
+        disclosureSource: data.disclosureSource,
+        disclosureUrl: data.disclosureUrl,
+        notes: data.notes,
+        isVerified: data.isVerified,
+      });
+      res.status(201).json(sponsorship);
+    } catch (error: any) {
+      console.error("Link sponsor error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      if (error.code === '23505') {
+        return res.status(409).json({ message: "This sponsor is already linked to this politician" });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Update a sponsorship
+  app.patch("/api/admin/politician-sponsorships/:id", ensureAdmin, async (req, res) => {
+    try {
+      const data = z.object({
+        relationshipType: z.enum(['sponsor', 'donor', 'affiliated', 'endorsed']).optional(),
+        reportedAmount: z.number().int().optional(),
+        amountCurrency: z.string().optional(),
+        contributionPeriod: z.string().optional(),
+        firstContributionDate: z.string().datetime().optional(),
+        lastContributionDate: z.string().datetime().optional(),
+        disclosureSource: z.string().optional(),
+        disclosureUrl: z.string().url().optional().or(z.literal('')),
+        notes: z.string().optional(),
+        isVerified: z.boolean().optional(),
+      }).parse(req.body);
+
+      const sponsorship = await storage.updatePoliticianSponsorship(req.params.id, {
+        ...data,
+        firstContributionDate: data.firstContributionDate ? new Date(data.firstContributionDate) : undefined,
+        lastContributionDate: data.lastContributionDate ? new Date(data.lastContributionDate) : undefined,
+      });
+      res.json(sponsorship);
+    } catch (error: any) {
+      console.error("Update sponsorship error:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Unlink a sponsor from a politician
+  app.delete("/api/admin/politician-profiles/:politicianId/sponsors/:sigId", ensureAdmin, async (req, res) => {
+    try {
+      await storage.unlinkSponsorFromPolitician(req.params.politicianId, req.params.sigId);
+      res.sendStatus(204);
+    } catch (error: any) {
+      console.error("Unlink sponsor error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin Audit Logs API
   app.get("/api/admin/audit-logs", ensureOwnerAdmin, async (req, res) => {
     try {
