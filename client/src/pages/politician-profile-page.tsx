@@ -12,14 +12,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star } from "lucide-react";
+import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
-import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating } from "@shared/schema";
+import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating, SpecialInterestGroup, PoliticianSigSponsorship } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 
 type PoliticianProfileWithPosition = PoliticianProfile & {
   position?: PoliticalPosition | null;
+};
+
+type SponsorWithSig = PoliticianSigSponsorship & {
+  sig?: SpecialInterestGroup | null;
 };
 
 const claimFormSchema = z.object({
@@ -68,6 +72,12 @@ export default function PoliticianProfilePage() {
   const { data: userRating } = useQuery<PoliticianCorruptionRating | null>({
     queryKey: [`/api/politician-profiles/${id}/rating/me`],
     enabled: !!id && !!user,
+  });
+
+  // Fetch campaign sponsors
+  const { data: sponsors = [] } = useQuery<SponsorWithSig[]>({
+    queryKey: [`/api/politician-profiles/${id}/sponsors`],
+    enabled: !!id,
   });
 
   const form = useForm<ClaimFormData>({
@@ -449,6 +459,101 @@ export default function PoliticianProfilePage() {
         </Card>
       )}
 
+      {/* Campaign Sponsors Section */}
+      {sponsors.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5" />
+              Campaign Sponsors & Donors
+            </CardTitle>
+            <CardDescription>
+              Organizations and groups that have contributed to {profile.fullName}'s campaigns
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              {sponsors
+                .filter(sponsor => sponsor.sig) // Only show sponsors with valid SIG data
+                .map((sponsor) => (
+                <div 
+                  key={sponsor.id} 
+                  className="border rounded-lg p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                  data-testid={`sponsor-${sponsor.id}`}
+                >
+                  <div className="flex items-start gap-3">
+                    {sponsor.sig?.logoUrl ? (
+                      <img 
+                        src={sponsor.sig.logoUrl} 
+                        alt={sponsor.sig?.name ?? "Organization"} 
+                        className="w-10 h-10 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-slate-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium truncate">
+                          {sponsor.sig?.name ?? "Unknown Organization"}
+                        </h4>
+                        {sponsor.sig?.acronym && (
+                          <span className="text-sm text-slate-500">({sponsor.sig.acronym})</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {sponsor.sig?.category && (
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {sponsor.sig.category.replace(/_/g, " ")}
+                          </Badge>
+                        )}
+                        <Badge 
+                          variant={sponsor.relationshipType === "primary_sponsor" ? "default" : "secondary"}
+                          className="text-xs capitalize"
+                        >
+                          {(sponsor.relationshipType ?? "donor").replace(/_/g, " ")}
+                        </Badge>
+                        {sponsor.isVerified && (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            Verified
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-slate-600 dark:text-slate-400">
+                        {typeof sponsor.reportedAmount === 'number' && sponsor.reportedAmount > 0 && (
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            ${(sponsor.reportedAmount / 100).toLocaleString()}
+                          </span>
+                        )}
+                        {sponsor.contributionPeriod && (
+                          <span>{sponsor.contributionPeriod}</span>
+                        )}
+                      </div>
+                      {sponsor.disclosureSource && (
+                        <p className="text-xs text-slate-500 mt-1 truncate">
+                          Source: {sponsor.disclosureSource}
+                        </p>
+                      )}
+                      {sponsor.sig?.website && (
+                        <a 
+                          href={sponsor.sig.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Website
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* News Feed Section */}
       <Card>
