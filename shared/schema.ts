@@ -294,7 +294,7 @@ export const posts = pgTable("posts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   authorId: varchar("author_id").notNull().references(() => users.id),
   content: text("content").notNull(),
-  type: text("type").notNull().default("post"), // post, poll, announcement, charity_donation, news, event, blog
+  type: text("type").notNull().default("post"), // post, poll, announcement, charity_donation, news, event, blog, volunteer
   tags: text("tags").array().default([]),
   image: text("image"),
   url: text("url"), // For news articles and external links
@@ -309,6 +309,23 @@ export const posts = pgTable("posts", {
   excerpt: text("excerpt"), // Short preview text for blog posts in feed
   articleImages: json("article_images").$type<{ url: string; caption?: string; position?: number }[]>(), // Embedded images in article
   readingTime: integer("reading_time"), // Estimated reading time in minutes
+  // Volunteer opportunity fields
+  volunteerTitle: text("volunteer_title"), // Position/role title
+  volunteerOrganization: text("volunteer_organization"), // Organization name
+  volunteerLocation: text("volunteer_location"), // Location address or "Remote"
+  volunteerIsRemote: boolean("volunteer_is_remote").default(false),
+  volunteerStartDate: timestamp("volunteer_start_date"), // When opportunity starts
+  volunteerEndDate: timestamp("volunteer_end_date"), // When opportunity ends (optional for ongoing)
+  volunteerCommitment: text("volunteer_commitment"), // e.g., "4 hours/week", "One-time event"
+  volunteerSkills: text("volunteer_skills").array(), // Required/preferred skills
+  volunteerRequirements: text("volunteer_requirements"), // Age, background check, etc.
+  volunteerBenefits: text("volunteer_benefits"), // Meals, training, experience, etc.
+  volunteerSpotsTotal: integer("volunteer_spots_total"), // Total volunteer spots available
+  volunteerSpotsFilled: integer("volunteer_spots_filled").default(0), // How many are filled
+  volunteerContactEmail: text("volunteer_contact_email"),
+  volunteerContactPhone: text("volunteer_contact_phone"),
+  volunteerCategory: text("volunteer_category"), // environment, education, healthcare, community, etc.
+  volunteerUrgency: text("volunteer_urgency").default("normal"), // normal, urgent, critical
   privacy: text("privacy").notNull().default("public"), // "friends" or "public"
   likesCount: integer("likes_count").default(0),
   commentsCount: integer("comments_count").default(0),
@@ -587,6 +604,26 @@ export const eventAttendees = pgTable("event_attendees", {
   status: text("status").default("attending"), // attending, maybe, not_attending, pending
   registeredAt: timestamp("registered_at").defaultNow(),
 });
+
+// Volunteer signups - Track who signs up for volunteer opportunities
+export const volunteerSignups = pgTable("volunteer_signups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  status: text("status").default("pending"), // pending, approved, declined, completed, cancelled
+  message: text("message"), // Volunteer's message/application
+  phone: text("phone"), // Contact phone
+  email: text("email"), // Contact email
+  availability: text("availability"), // When they're available
+  experience: text("experience"), // Relevant experience
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  postIndex: index("volunteer_signups_post_idx").on(table.postId),
+  userIndex: index("volunteer_signups_user_idx").on(table.userId),
+  statusIndex: index("volunteer_signups_status_idx").on(table.status),
+  uniqueSignup: sql`UNIQUE(${table.postId}, ${table.userId})`,
+}));
 
 export const userAddressesRelations = relations(userAddresses, ({ one }) => ({
   user: one(users, {
@@ -1114,6 +1151,12 @@ export const charityDonationsRelations = relations(charityDonations, ({ one }) =
 export const insertEventAttendeeSchema = createInsertSchema(eventAttendees).omit({
   id: true,
   registeredAt: true,
+});
+
+export const insertVolunteerSignupSchema = createInsertSchema(volunteerSignups).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertStoreItemSchema = createInsertSchema(storeItems).omit({
@@ -1823,6 +1866,8 @@ export type Event = typeof events.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type EventAttendee = typeof eventAttendees.$inferSelect;
 export type InsertEventAttendee = z.infer<typeof insertEventAttendeeSchema>;
+export type VolunteerSignup = typeof volunteerSignups.$inferSelect;
+export type InsertVolunteerSignup = z.infer<typeof insertVolunteerSignupSchema>;
 export type ACPTransaction = typeof acpTransactions.$inferSelect;
 export type InsertACPTransaction = z.infer<typeof insertACPTransactionSchema>;
 export type ACPBlock = typeof acpBlocks.$inferSelect;
