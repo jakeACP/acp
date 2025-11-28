@@ -26,16 +26,21 @@ import {
   FileText,
   UserCheck,
   Handshake,
-  Lock
+  Lock,
+  HandHeart,
+  MapPin,
+  Clock,
+  Briefcase
 } from "lucide-react";
 
-type PostType = 'post' | 'news' | 'poll' | 'event' | 'charity' | 'boycott' | 'initiative' | 'petition' | 'union' | 'debate';
+type PostType = 'post' | 'news' | 'poll' | 'event' | 'charity' | 'boycott' | 'initiative' | 'petition' | 'union' | 'debate' | 'volunteer';
 
 const postTypeOptions = [
   { value: 'post', label: 'Posts', icon: Globe, placeholder: 'Share your thoughts about policies, community issues, or democratic processes...' },
   { value: 'news', label: 'News', icon: Newspaper, placeholder: 'Share important news or announcements with the community...' },
   { value: 'poll', label: 'Polls', icon: BarChart3, placeholder: 'Ask the community a question and let them vote...' },
   { value: 'event', label: 'Events', icon: Calendar, placeholder: 'Organize a community event, town hall, or meeting...' },
+  { value: 'volunteer', label: 'Volunteer', icon: HandHeart, placeholder: 'Post a volunteer opportunity for the community...' },
   { value: 'charity', label: 'Charities', icon: Heart, placeholder: 'Start a fundraising campaign for a good cause...' },
   { value: 'boycott', label: 'Boycotts', icon: Ban, placeholder: 'Organize a boycott against a company or organization...' },
   { value: 'initiative', label: 'Initiatives', icon: FileText, placeholder: 'Propose a community initiative or policy change...' },
@@ -127,6 +132,23 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [unionIndustry, setUnionIndustry] = useState("");
   const [unionContact, setUnionContact] = useState("");
 
+  // Volunteer-specific fields
+  const [volunteerTitle, setVolunteerTitle] = useState("");
+  const [volunteerOrganization, setVolunteerOrganization] = useState("");
+  const [volunteerLocation, setVolunteerLocation] = useState("");
+  const [volunteerIsRemote, setVolunteerIsRemote] = useState(false);
+  const [volunteerStartDate, setVolunteerStartDate] = useState("");
+  const [volunteerEndDate, setVolunteerEndDate] = useState("");
+  const [volunteerCommitment, setVolunteerCommitment] = useState("");
+  const [volunteerSkills, setVolunteerSkills] = useState("");
+  const [volunteerRequirements, setVolunteerRequirements] = useState("");
+  const [volunteerBenefits, setVolunteerBenefits] = useState("");
+  const [volunteerSpotsTotal, setVolunteerSpotsTotal] = useState("");
+  const [volunteerContactEmail, setVolunteerContactEmail] = useState("");
+  const [volunteerContactPhone, setVolunteerContactPhone] = useState("");
+  const [volunteerCategory, setVolunteerCategory] = useState("");
+  const [volunteerUrgency, setVolunteerUrgency] = useState("normal");
+
   const createPostMutation = useMutation({
     mutationFn: async (postData: any) => {
       const res = await apiRequest("/api/posts", "POST", postData);
@@ -159,6 +181,21 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
       setUnionName("");
       setUnionIndustry("");
       setUnionContact("");
+      setVolunteerTitle("");
+      setVolunteerOrganization("");
+      setVolunteerLocation("");
+      setVolunteerIsRemote(false);
+      setVolunteerStartDate("");
+      setVolunteerEndDate("");
+      setVolunteerCommitment("");
+      setVolunteerSkills("");
+      setVolunteerRequirements("");
+      setVolunteerBenefits("");
+      setVolunteerSpotsTotal("");
+      setVolunteerContactEmail("");
+      setVolunteerContactPhone("");
+      setVolunteerCategory("");
+      setVolunteerUrgency("normal");
       setPrivacy('public');
       setShowForm(false);
       toast({
@@ -342,6 +379,25 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
       }
     }
 
+    if (postType === 'volunteer') {
+      if (!volunteerTitle.trim()) {
+        toast({
+          title: "Title Required",
+          description: "Please provide a title for the volunteer opportunity",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!volunteerLocation.trim() && !volunteerIsRemote) {
+        toast({
+          title: "Location Required",
+          description: "Please provide a location or mark as remote",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     // Prepare submission data based on post type
     let submissionData: any = {
       content: content.trim(),
@@ -399,6 +455,44 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
       if (unionContact.trim()) {
         submissionData.unionContact = unionContact.trim();
       }
+    }
+
+    if (postType === 'volunteer') {
+      submissionData.volunteerTitle = volunteerTitle.trim();
+      submissionData.volunteerOrganization = volunteerOrganization.trim();
+      submissionData.volunteerLocation = volunteerIsRemote ? 'Remote' : volunteerLocation.trim();
+      submissionData.volunteerIsRemote = volunteerIsRemote;
+      if (volunteerStartDate) {
+        submissionData.volunteerStartDate = volunteerStartDate;
+      }
+      if (volunteerEndDate) {
+        submissionData.volunteerEndDate = volunteerEndDate;
+      }
+      if (volunteerCommitment.trim()) {
+        submissionData.volunteerCommitment = volunteerCommitment.trim();
+      }
+      if (volunteerSkills.trim()) {
+        submissionData.volunteerSkills = volunteerSkills.split(',').map((s: string) => s.trim()).filter((s: string) => s);
+      }
+      if (volunteerRequirements.trim()) {
+        submissionData.volunteerRequirements = volunteerRequirements.trim();
+      }
+      if (volunteerBenefits.trim()) {
+        submissionData.volunteerBenefits = volunteerBenefits.trim();
+      }
+      if (volunteerSpotsTotal && parseInt(volunteerSpotsTotal) > 0) {
+        submissionData.volunteerSpotsTotal = parseInt(volunteerSpotsTotal);
+      }
+      if (volunteerContactEmail.trim()) {
+        submissionData.volunteerContactEmail = volunteerContactEmail.trim();
+      }
+      if (volunteerContactPhone.trim()) {
+        submissionData.volunteerContactPhone = volunteerContactPhone.trim();
+      }
+      if (volunteerCategory) {
+        submissionData.volunteerCategory = volunteerCategory;
+      }
+      submissionData.volunteerUrgency = volunteerUrgency;
     }
     
     createPostMutation.mutate(submissionData);
@@ -668,6 +762,211 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
                     onChange={(e) => setUnionContact(e.target.value)}
                     className="w-full"
                   />
+                </div>
+              </div>
+            )}
+
+            {postType === 'volunteer' && (
+              <div className="space-y-4 p-4 bg-teal-50 dark:bg-teal-950 rounded-lg border border-teal-200 dark:border-teal-800">
+                <h4 className="font-medium text-teal-900 dark:text-teal-100 flex items-center gap-2">
+                  <HandHeart className="h-4 w-4" />
+                  Volunteer Opportunity Details
+                </h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Position Title *</label>
+                    <Input
+                      placeholder="e.g., Community Outreach Volunteer"
+                      value={volunteerTitle}
+                      onChange={(e) => setVolunteerTitle(e.target.value)}
+                      className="w-full"
+                      required
+                      data-testid="input-volunteer-title"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Organization</label>
+                    <Input
+                      placeholder="Your organization name"
+                      value={volunteerOrganization}
+                      onChange={(e) => setVolunteerOrganization(e.target.value)}
+                      className="w-full"
+                      data-testid="input-volunteer-organization"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Category</label>
+                    <Select value={volunteerCategory} onValueChange={setVolunteerCategory}>
+                      <SelectTrigger className="w-full" data-testid="select-volunteer-category">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="environment">Environment</SelectItem>
+                        <SelectItem value="education">Education</SelectItem>
+                        <SelectItem value="healthcare">Healthcare</SelectItem>
+                        <SelectItem value="community">Community Service</SelectItem>
+                        <SelectItem value="politics">Political Campaign</SelectItem>
+                        <SelectItem value="disaster">Disaster Relief</SelectItem>
+                        <SelectItem value="animals">Animal Welfare</SelectItem>
+                        <SelectItem value="elderly">Senior Services</SelectItem>
+                        <SelectItem value="youth">Youth Programs</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Urgency</label>
+                    <Select value={volunteerUrgency} onValueChange={setVolunteerUrgency}>
+                      <SelectTrigger className="w-full" data-testid="select-volunteer-urgency">
+                        <SelectValue placeholder="Select urgency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="normal">Normal</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                        <SelectItem value="critical">Critical - Immediate Need</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="volunteerIsRemote"
+                      checked={volunteerIsRemote}
+                      onChange={(e) => setVolunteerIsRemote(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
+                      data-testid="checkbox-volunteer-remote"
+                    />
+                    <label htmlFor="volunteerIsRemote" className="text-sm font-medium text-foreground">
+                      Remote / Virtual
+                    </label>
+                  </div>
+                </div>
+
+                {!volunteerIsRemote && (
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Location *</label>
+                    <Input
+                      placeholder="Address or location details"
+                      value={volunteerLocation}
+                      onChange={(e) => setVolunteerLocation(e.target.value)}
+                      className="w-full"
+                      required
+                      data-testid="input-volunteer-location"
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Start Date</label>
+                    <Input
+                      type="date"
+                      value={volunteerStartDate}
+                      onChange={(e) => setVolunteerStartDate(e.target.value)}
+                      className="w-full"
+                      data-testid="input-volunteer-start-date"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">End Date (Optional)</label>
+                    <Input
+                      type="date"
+                      value={volunteerEndDate}
+                      onChange={(e) => setVolunteerEndDate(e.target.value)}
+                      className="w-full"
+                      data-testid="input-volunteer-end-date"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Time Commitment</label>
+                    <Input
+                      placeholder="e.g., 4 hours/week, One-time event"
+                      value={volunteerCommitment}
+                      onChange={(e) => setVolunteerCommitment(e.target.value)}
+                      className="w-full"
+                      data-testid="input-volunteer-commitment"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Spots Available</label>
+                    <Input
+                      type="number"
+                      placeholder="Number of volunteers needed"
+                      value={volunteerSpotsTotal}
+                      onChange={(e) => setVolunteerSpotsTotal(e.target.value)}
+                      className="w-full"
+                      min="1"
+                      data-testid="input-volunteer-spots"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Skills Needed (comma-separated)</label>
+                  <Input
+                    placeholder="e.g., Communication, First Aid, Spanish, Driving"
+                    value={volunteerSkills}
+                    onChange={(e) => setVolunteerSkills(e.target.value)}
+                    className="w-full"
+                    data-testid="input-volunteer-skills"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Requirements</label>
+                  <Textarea
+                    placeholder="Age requirements, background check, physical requirements, etc."
+                    value={volunteerRequirements}
+                    onChange={(e) => setVolunteerRequirements(e.target.value)}
+                    className="w-full min-h-[60px]"
+                    data-testid="input-volunteer-requirements"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Benefits</label>
+                  <Input
+                    placeholder="e.g., Meals provided, Training included, Community service hours"
+                    value={volunteerBenefits}
+                    onChange={(e) => setVolunteerBenefits(e.target.value)}
+                    className="w-full"
+                    data-testid="input-volunteer-benefits"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Contact Email</label>
+                    <Input
+                      type="email"
+                      placeholder="volunteer@example.com"
+                      value={volunteerContactEmail}
+                      onChange={(e) => setVolunteerContactEmail(e.target.value)}
+                      className="w-full"
+                      data-testid="input-volunteer-email"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Contact Phone</label>
+                    <Input
+                      type="tel"
+                      placeholder="(555) 123-4567"
+                      value={volunteerContactPhone}
+                      onChange={(e) => setVolunteerContactPhone(e.target.value)}
+                      className="w-full"
+                      data-testid="input-volunteer-phone"
+                    />
+                  </div>
                 </div>
               </div>
             )}
