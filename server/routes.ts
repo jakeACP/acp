@@ -2641,6 +2641,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Volunteer Signup Routes
+  app.post("/api/volunteer/:postId/signup", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { message, phone, email, availability, experience } = req.body;
+      const signup = await storage.signUpForVolunteer(req.params.postId, req.user.id, {
+        message,
+        phone,
+        email,
+        availability,
+        experience
+      });
+      res.status(201).json(signup);
+    } catch (error: any) {
+      console.error("Error signing up for volunteer:", error);
+      if (error.message === "Already signed up for this volunteer opportunity") {
+        return res.status(400).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to sign up for volunteer opportunity" });
+    }
+  });
+
+  app.delete("/api/volunteer/:postId/signup", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.withdrawVolunteerSignup(req.params.postId, req.user.id);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error("Error withdrawing from volunteer:", error);
+      res.status(500).json({ message: "Failed to withdraw from volunteer opportunity" });
+    }
+  });
+
+  app.get("/api/volunteer/:postId/signups", async (req, res) => {
+    try {
+      const signups = await storage.getVolunteerSignups(req.params.postId);
+      res.json(signups);
+    } catch (error) {
+      console.error("Error fetching volunteer signups:", error);
+      res.status(500).json({ message: "Failed to fetch volunteer signups" });
+    }
+  });
+
+  app.get("/api/volunteer/:postId/my-signup", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const signup = await storage.getVolunteerSignupStatus(req.params.postId, req.user.id);
+      res.json(signup || null);
+    } catch (error) {
+      console.error("Error fetching volunteer signup status:", error);
+      res.status(500).json({ message: "Failed to fetch signup status" });
+    }
+  });
+
+  app.get("/api/user/volunteer-signups", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const signups = await storage.getUserVolunteerSignups(req.user.id);
+      res.json(signups);
+    } catch (error) {
+      console.error("Error fetching user volunteer signups:", error);
+      res.status(500).json({ message: "Failed to fetch volunteer signups" });
+    }
+  });
+
+  app.patch("/api/volunteer/signups/:signupId/status", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { status } = req.body;
+      if (!status || !["pending", "approved", "declined", "completed", "cancelled"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+      const updated = await storage.updateVolunteerSignupStatus(req.params.signupId, status);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating volunteer signup status:", error);
+      res.status(500).json({ message: "Failed to update signup status" });
+    }
+  });
+
   // ACP Cryptocurrency Routes
   app.get("/api/user/balance", async (req, res) => {
     if (!req.isAuthenticated()) {

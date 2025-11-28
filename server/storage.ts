@@ -1,4 +1,4 @@
-import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
+import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike } from "@shared/schema";
 import { db } from "./db";
@@ -317,6 +317,16 @@ export interface IStorage {
   getEventAttendees(eventId: string): Promise<EventAttendee[]>;
   getUserEventRegistrations(userId: string): Promise<EventAttendee[]>;
   updateEventAttendeeStatus(eventId: string, userId: string, status: string): Promise<EventAttendee>;
+
+  // Volunteer Signups
+  signUpForVolunteer(postId: string, userId: string, data: { message?: string; phone?: string; email?: string; availability?: string; experience?: string }): Promise<VolunteerSignup>;
+  withdrawVolunteerSignup(postId: string, userId: string): Promise<void>;
+  getVolunteerSignups(postId: string): Promise<VolunteerSignup[]>;
+  getUserVolunteerSignups(userId: string): Promise<VolunteerSignup[]>;
+  getVolunteerSignupStatus(postId: string, userId: string): Promise<VolunteerSignup | undefined>;
+  updateVolunteerSignupStatus(signupId: string, status: string): Promise<VolunteerSignup>;
+  incrementVolunteerSpotsFilled(postId: string): Promise<void>;
+  decrementVolunteerSpotsFilled(postId: string): Promise<void>;
 
   sessionStore: any;
 
@@ -3580,6 +3590,81 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(eventAttendees.eventId, eventId), eq(eventAttendees.userId, userId)))
       .returning();
     return updatedAttendee;
+  }
+
+  // Volunteer Signups Implementation
+  async signUpForVolunteer(postId: string, userId: string, data: { message?: string; phone?: string; email?: string; availability?: string; experience?: string }): Promise<VolunteerSignup> {
+    const existing = await db
+      .select()
+      .from(volunteerSignups)
+      .where(and(eq(volunteerSignups.postId, postId), eq(volunteerSignups.userId, userId)));
+    
+    if (existing.length > 0) {
+      throw new Error("Already signed up for this volunteer opportunity");
+    }
+    
+    const [signup] = await db
+      .insert(volunteerSignups)
+      .values({ postId, userId, ...data })
+      .returning();
+    
+    await this.incrementVolunteerSpotsFilled(postId);
+    return signup;
+  }
+
+  async withdrawVolunteerSignup(postId: string, userId: string): Promise<void> {
+    await db
+      .delete(volunteerSignups)
+      .where(and(eq(volunteerSignups.postId, postId), eq(volunteerSignups.userId, userId)));
+    
+    await this.decrementVolunteerSpotsFilled(postId);
+  }
+
+  async getVolunteerSignups(postId: string): Promise<VolunteerSignup[]> {
+    return await db
+      .select()
+      .from(volunteerSignups)
+      .where(eq(volunteerSignups.postId, postId))
+      .orderBy(desc(volunteerSignups.createdAt));
+  }
+
+  async getUserVolunteerSignups(userId: string): Promise<VolunteerSignup[]> {
+    return await db
+      .select()
+      .from(volunteerSignups)
+      .where(eq(volunteerSignups.userId, userId))
+      .orderBy(desc(volunteerSignups.createdAt));
+  }
+
+  async getVolunteerSignupStatus(postId: string, userId: string): Promise<VolunteerSignup | undefined> {
+    const [signup] = await db
+      .select()
+      .from(volunteerSignups)
+      .where(and(eq(volunteerSignups.postId, postId), eq(volunteerSignups.userId, userId)));
+    return signup;
+  }
+
+  async updateVolunteerSignupStatus(signupId: string, status: string): Promise<VolunteerSignup> {
+    const [updated] = await db
+      .update(volunteerSignups)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(volunteerSignups.id, signupId))
+      .returning();
+    return updated;
+  }
+
+  async incrementVolunteerSpotsFilled(postId: string): Promise<void> {
+    await db
+      .update(posts)
+      .set({ volunteerSpotsFilled: sql`COALESCE(${posts.volunteerSpotsFilled}, 0) + 1` })
+      .where(eq(posts.id, postId));
+  }
+
+  async decrementVolunteerSpotsFilled(postId: string): Promise<void> {
+    await db
+      .update(posts)
+      .set({ volunteerSpotsFilled: sql`GREATEST(COALESCE(${posts.volunteerSpotsFilled}, 0) - 1, 0)` })
+      .where(eq(posts.id, postId));
   }
 
   // ACP Cryptocurrency System Implementation
