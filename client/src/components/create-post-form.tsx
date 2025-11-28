@@ -459,8 +459,12 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
 
     if (postType === 'volunteer') {
       submissionData.volunteerTitle = volunteerTitle.trim();
-      submissionData.volunteerOrganization = volunteerOrganization.trim();
-      submissionData.volunteerLocation = volunteerIsRemote ? 'Remote' : volunteerLocation.trim();
+      if (volunteerOrganization.trim()) {
+        submissionData.volunteerOrganization = volunteerOrganization.trim();
+      }
+      if (volunteerLocation.trim()) {
+        submissionData.volunteerLocation = volunteerLocation.trim();
+      }
       submissionData.volunteerIsRemote = volunteerIsRemote;
       if (volunteerStartDate) {
         submissionData.volunteerStartDate = volunteerStartDate;
@@ -472,7 +476,7 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
         submissionData.volunteerCommitment = volunteerCommitment.trim();
       }
       if (volunteerSkills.trim()) {
-        submissionData.volunteerSkills = volunteerSkills.split(',').map((s: string) => s.trim()).filter((s: string) => s);
+        submissionData.volunteerSkills = volunteerSkills.trim();
       }
       if (volunteerRequirements.trim()) {
         submissionData.volunteerRequirements = volunteerRequirements.trim();

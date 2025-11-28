@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Post, PostWithAuthor, Comment, Event } from "@shared/schema";
-import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown, MapPin, Calendar, Users, ExternalLink, FileText, Clock } from "lucide-react";
+import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown, MapPin, Calendar, Users, ExternalLink, FileText, Clock, HandHeart, Briefcase, Mail, Phone, AlertCircle, CheckCircle } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useState } from "react";
 import { Link as WouterLink } from "wouter";
@@ -694,6 +694,137 @@ export function PostCard({ post }: PostCardProps) {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {post.type === "volunteer" && (
+          <div className="mb-4 border border-teal-200 dark:border-teal-800 rounded-lg overflow-hidden bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950 dark:to-emerald-950">
+            <div className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-teal-100 dark:bg-teal-900">
+                    <HandHeart className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-foreground">{(post as any).volunteerTitle || "Volunteer Opportunity"}</h3>
+                    {(post as any).volunteerOrganization && (
+                      <p className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Briefcase className="h-3 w-3" />
+                        {(post as any).volunteerOrganization}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {(post as any).volunteerUrgency && (post as any).volunteerUrgency !== "normal" && (
+                  <Badge variant={(post as any).volunteerUrgency === "critical" ? "destructive" : "secondary"} className="flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {(post as any).volunteerUrgency === "critical" ? "Urgent Need" : "Urgent"}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="space-y-2 mb-3">
+                {(post as any).volunteerLocation && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <span className="text-foreground">
+                      {(post as any).volunteerIsRemote ? "Remote / Virtual" : (post as any).volunteerLocation}
+                    </span>
+                  </div>
+                )}
+
+                {((post as any).volunteerStartDate || (post as any).volunteerEndDate) && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <span className="text-foreground">
+                      {(post as any).volunteerStartDate && format(new Date((post as any).volunteerStartDate), "MMM d, yyyy")}
+                      {(post as any).volunteerEndDate && ` - ${format(new Date((post as any).volunteerEndDate), "MMM d, yyyy")}`}
+                    </span>
+                  </div>
+                )}
+
+                {(post as any).volunteerCommitment && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <span className="text-foreground">{(post as any).volunteerCommitment}</span>
+                  </div>
+                )}
+
+                {(post as any).volunteerSpotsTotal && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Users className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <span className="text-foreground">
+                      {(post as any).volunteerSpotsAvailable || (post as any).volunteerSpotsTotal} spots available
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {(post as any).volunteerSkills && (
+                <div className="mb-3">
+                  <p className="text-xs text-muted-foreground mb-1">Skills Needed:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {(() => {
+                      const skillsStr = (post as any).volunteerSkills as string;
+                      const skillsArray = skillsStr.split(',').map(s => s.trim()).filter(s => s);
+                      return (
+                        <>
+                          {skillsArray.slice(0, 5).map((skill: string, index: number) => (
+                            <Badge key={index} variant="outline" className="text-xs bg-teal-50 dark:bg-teal-900/50 border-teal-200 dark:border-teal-700">
+                              {skill}
+                            </Badge>
+                          ))}
+                          {skillsArray.length > 5 && (
+                            <Badge variant="outline" className="text-xs">+{skillsArray.length - 5} more</Badge>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {(post as any).volunteerCategory && (
+                <Badge variant="secondary" className="mb-3 capitalize">
+                  {(post as any).volunteerCategory}
+                </Badge>
+              )}
+
+              {((post as any).volunteerContactEmail || (post as any).volunteerContactPhone) && (
+                <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-teal-200 dark:border-teal-800">
+                  {(post as any).volunteerContactEmail && (
+                    <a 
+                      href={`mailto:${(post as any).volunteerContactEmail}`}
+                      className="flex items-center gap-1 text-sm text-teal-600 dark:text-teal-400 hover:underline"
+                      data-testid={`link-volunteer-email-${post.id}`}
+                    >
+                      <Mail className="h-3 w-3" />
+                      Email
+                    </a>
+                  )}
+                  {(post as any).volunteerContactPhone && (
+                    <a 
+                      href={`tel:${(post as any).volunteerContactPhone}`}
+                      className="flex items-center gap-1 text-sm text-teal-600 dark:text-teal-400 hover:underline"
+                      data-testid={`link-volunteer-phone-${post.id}`}
+                    >
+                      <Phone className="h-3 w-3" />
+                      Call
+                    </a>
+                  )}
+                </div>
+              )}
+
+              <Button 
+                variant="default" 
+                className="w-full mt-3 bg-teal-600 hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600"
+                size="sm"
+                data-testid={`button-volunteer-signup-${post.id}`}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Sign Up to Volunteer
+              </Button>
+            </div>
           </div>
         )}
         
