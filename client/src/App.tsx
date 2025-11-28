@@ -52,6 +52,8 @@ import AdminSettingsPage from "@/pages/admin-settings-page";
 import AdminVoterVerificationPage from "@/pages/admin-voter-verification-page";
 import AdminSigsPage from "@/pages/admin-sigs-page";
 import WhistleblowingPage from "@/pages/whistleblowing-page";
+import CreateArticlePage from "@/pages/create-article-page";
+import ArticlePage from "@/pages/article-page";
 import NotFound from "@/pages/not-found";
 import { AlertTriangle } from "lucide-react";
 
@@ -76,6 +78,8 @@ function Router() {
       <ProtectedRoute path="/charities/:id" component={CharityDetailPage} />
       <ProtectedRoute path="/boycotts" component={BoycottsPage} />
       <ProtectedRoute path="/whistleblowing" component={WhistleblowingPage} />
+      <ProtectedRoute path="/write" component={CreateArticlePage} />
+      <ProtectedRoute path="/article/:id" component={ArticlePage} />
       <ProtectedRoute path="/initiatives" component={InitiativesPage} />
       <ProtectedRoute path="/initiatives/new" component={InitiativeFormPage} />
       <ProtectedRoute path="/initiatives/edit/:id" component={InitiativeFormPage} />
