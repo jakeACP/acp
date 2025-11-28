@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useQuery } from "@tanstack/react-query";
-import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield, Flag } from "lucide-react";
+import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield, Flag, PenSquare } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +79,16 @@ export function Navigation() {
 
           {/* User Menu */}
           <div className="flex items-center gap-3">
+            {/* Write Article Button */}
+            {user && (
+              <Link href="/write">
+                <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-1.5">
+                  <PenSquare className="h-4 w-4" />
+                  <span className="hidden md:inline">Write</span>
+                </Button>
+              </Link>
+            )}
+            
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
               <Bell className="h-5 w-5" />
               <span className="sr-only">View notifications</span>

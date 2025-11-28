@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Post, PostWithAuthor, Comment, Event } from "@shared/schema";
-import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown, MapPin, Calendar, Users, ExternalLink } from "lucide-react";
+import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown, MapPin, Calendar, Users, ExternalLink, FileText, Clock } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useState } from "react";
 import { Link as WouterLink } from "wouter";
@@ -441,11 +441,62 @@ export function PostCard({ post }: PostCardProps) {
       </CardHeader>
 
       <CardContent>
-        <p className="text-slate-900 dark:text-slate-100 mb-4 whitespace-pre-wrap">
-          {post.content}
-        </p>
-        
-        <VideoEmbedDisplay content={post.content} postId={post.id} />
+        {/* Article/Blog type posts */}
+        {post.type === "blog" ? (
+          <WouterLink href={`/article/${post.id}`}>
+            <div className="group cursor-pointer mb-4">
+              {/* Featured Image */}
+              {post.featuredImage && (
+                <div className="relative overflow-hidden rounded-lg mb-4">
+                  <img 
+                    src={post.featuredImage} 
+                    alt={post.title || "Article image"}
+                    className="w-full h-48 object-cover transition-transform group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              )}
+              
+              {/* Article Badge */}
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <FileText className="w-3 h-3" />
+                  Article
+                </Badge>
+                {post.readingTime && (
+                  <span className="text-xs text-slate-500 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {post.readingTime} min read
+                  </span>
+                )}
+              </div>
+              
+              {/* Title */}
+              {post.title && (
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 group-hover:text-primary transition-colors line-clamp-2">
+                  {post.title}
+                </h3>
+              )}
+              
+              {/* Excerpt/Description */}
+              <p className="text-slate-600 dark:text-slate-300 line-clamp-3 mb-3">
+                {post.excerpt || post.content}
+              </p>
+              
+              {/* Read More Link */}
+              <span className="text-primary font-medium group-hover:underline flex items-center gap-1">
+                Read full article
+                <ExternalLink className="w-4 h-4" />
+              </span>
+            </div>
+          </WouterLink>
+        ) : (
+          <>
+            <p className="text-slate-900 dark:text-slate-100 mb-4 whitespace-pre-wrap">
+              {post.content}
+            </p>
+            
+            <VideoEmbedDisplay content={post.content} postId={post.id} />
         
         {post.linkPreview && (
           <div className="mb-4 border border-border rounded-lg overflow-hidden bg-card hover:bg-accent/10 transition-colors">
@@ -827,6 +878,8 @@ export function PostCard({ post }: PostCardProps) {
             </Button>
           </div>
         </div>
+        </>
+        )}
       </CardContent>
     </Card>
   );
