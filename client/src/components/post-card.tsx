@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ShareToMessagesModal } from "@/components/share-to-messages-modal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +36,7 @@ export function PostCard({ post }: PostCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [showShareToMessages, setShowShareToMessages] = useState(false);
 
   const { data: likeStatus } = useQuery<{ liked: boolean }>({
     queryKey: ["/api/likes", post.id, "post"],
@@ -410,6 +412,12 @@ export function PostCard({ post }: PostCardProps) {
 
   return (
     <>
+    <ShareToMessagesModal
+      open={showShareToMessages}
+      onOpenChange={setShowShareToMessages}
+      postId={post.id}
+      postContent={post.content}
+    />
     <Card data-post-id={post.id}>
       <CardHeader>
         <div className="flex items-center justify-between mb-4">
@@ -957,6 +965,13 @@ export function PostCard({ post }: PostCardProps) {
                 >
                   <Repeat2 className="h-4 w-4 mr-2" />
                   Share to My Feed
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => setShowShareToMessages(true)}
+                  data-testid="button-share-to-messages"
+                >
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Share in Messages
                 </DropdownMenuItem>
                 <DropdownMenuItem 
                   onClick={handleCopyLink}
