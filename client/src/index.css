@@ -89,19 +89,21 @@
   --ring: hsl(217, 91%, 60%);
   --radius: 1rem;
   
-  /* Patriot background gradient - Red/White/Blue with texture */
+  /* Patriot background gradient - Red/White/Blue with thin white stripe */
   --app-background: 
     /* Noise texture overlay */
     url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E"),
-    /* Patriotic gradient stripes */
+    /* Patriotic gradient stripes - thin white between red and blue */
     repeating-linear-gradient(
       135deg,
       #B22234 0px,
-      #B22234 80px,
-      #FFFFFF 80px,
-      #FFFFFF 160px,
-      #3C3B6E 160px,
-      #3C3B6E 240px
+      #B22234 100px,
+      #FFFFFF 100px,
+      #FFFFFF 108px,
+      #3C3B6E 108px,
+      #3C3B6E 208px,
+      #FFFFFF 208px,
+      #FFFFFF 216px
     );
   --app-background-color: transparent;
   
