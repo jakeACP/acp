@@ -70,7 +70,7 @@ export default function CreateArticlePage() {
       const wordCount = data.articleBody.replace(/<[^>]*>/g, "").split(/\s+/).length;
       const readingTime = Math.ceil(wordCount / 200);
 
-      const response = await apiRequest("POST", "/api/posts", {
+      const response = await apiRequest("/api/posts", "POST", {
         type: "blog",
         title: data.title,
         content: data.excerpt,

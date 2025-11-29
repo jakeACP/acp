@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import { 
   BarChart3, 
   Image, 
@@ -33,10 +34,11 @@ import {
   Briefcase
 } from "lucide-react";
 
-type PostType = 'post' | 'news' | 'poll' | 'event' | 'charity' | 'boycott' | 'initiative' | 'petition' | 'union' | 'debate' | 'volunteer';
+type PostType = 'post' | 'news' | 'poll' | 'event' | 'charity' | 'boycott' | 'initiative' | 'petition' | 'union' | 'debate' | 'volunteer' | 'article';
 
 const postTypeOptions = [
   { value: 'post', label: 'Posts', icon: Globe, placeholder: 'Share your thoughts about policies, community issues, or democratic processes...' },
+  { value: 'article', label: 'Article', icon: FileText, placeholder: 'Write a long-form article with rich text formatting...' },
   { value: 'news', label: 'News', icon: Newspaper, placeholder: 'Share important news or announcements with the community...' },
   { value: 'poll', label: 'Polls', icon: BarChart3, placeholder: 'Ask the community a question and let them vote...' },
   { value: 'event', label: 'Events', icon: Calendar, placeholder: 'Organize a community event, town hall, or meeting...' },
@@ -52,6 +54,7 @@ const postTypeOptions = [
 export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [content, setContent] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -544,7 +547,13 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
             {/* Post Type Selector */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Content Type</label>
-              <Select value={postType} onValueChange={(value) => setPostType(value as PostType)}>
+              <Select value={postType} onValueChange={(value) => {
+                if (value === 'article') {
+                  navigate('/write');
+                  return;
+                }
+                setPostType(value as PostType);
+              }}>
                 <SelectTrigger className="border-border hover:border-primary/50 transition-colors">
                   <SelectValue />
                 </SelectTrigger>
