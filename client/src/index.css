@@ -237,7 +237,9 @@
    ========================================== */
 
 /* Fixed zigzag gradient background with red, white, blue */
-.patriot {
+.patriot,
+.patriot html,
+.patriot body {
   background:
     repeating-linear-gradient(
       45deg,
@@ -249,13 +251,11 @@
       #3B5BA9 180px,
       #050b1b 180px,
       #050b1b 240px
-    );
-  background-attachment: fixed;
+    ) !important;
+  background-attachment: fixed !important;
   min-height: 100vh;
 }
 
-.patriot html,
-.patriot body,
 .patriot .page-background {
   background-color: transparent;
 }
