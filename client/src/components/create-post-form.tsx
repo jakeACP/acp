@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { 
   BarChart3, 
-  Image, 
+  Image as ImageIcon, 
   Hash, 
   Send, 
   X, 
@@ -31,7 +31,9 @@ import {
   HandHeart,
   MapPin,
   Clock,
-  Briefcase
+  Briefcase,
+  Upload,
+  Loader2
 } from "lucide-react";
 
 type PostType = 'post' | 'news' | 'poll' | 'event' | 'charity' | 'boycott' | 'initiative' | 'petition' | 'union' | 'debate' | 'volunteer' | 'article';
@@ -152,6 +154,119 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [volunteerCategory, setVolunteerCategory] = useState("");
   const [volunteerUrgency, setVolunteerUrgency] = useState("normal");
 
+  // Image upload state
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  // Accepted image types
+  const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/heic', 'image/heif'];
+
+  // Handle file upload to object storage
+  const uploadImage = async (file: File): Promise<string | null> => {
+    if (!acceptedImageTypes.includes(file.type.toLowerCase()) && 
+        !file.name.toLowerCase().endsWith('.heic') && 
+        !file.name.toLowerCase().endsWith('.heif')) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload a JPEG, PNG, or HEIC image",
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Image must be less than 10MB",
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'post-image');
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const result = await response.json();
+      toast({
+        title: "Photo Added",
+        description: "Your photo has been uploaded successfully",
+      });
+      return result.url;
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      const imageUrl = await uploadImage(file);
+      if (imageUrl) {
+        setUploadedImage(imageUrl);
+      }
+    }
+  }, []);
+
+  // Handle file input change (for the button)
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const imageUrl = await uploadImage(file);
+      if (imageUrl) {
+        setUploadedImage(imageUrl);
+      }
+    }
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+  };
+
+  // Remove uploaded image
+  const removeUploadedImage = () => {
+    setUploadedImage(null);
+  };
+
   const createPostMutation = useMutation({
     mutationFn: async (postData: any) => {
       const res = await apiRequest("/api/posts", "POST", postData);
@@ -199,6 +314,7 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
       setVolunteerContactPhone("");
       setVolunteerCategory("");
       setVolunteerUrgency("normal");
+      setUploadedImage(null);
       setPrivacy('public');
       setShowForm(false);
       toast({
@@ -407,7 +523,8 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
       tags,
       type: postType,
       privacy,
-      linkPreview: linkPreview || undefined
+      linkPreview: linkPreview || undefined,
+      image: uploadedImage || undefined
     };
 
     if (postType === 'event') {
@@ -533,8 +650,22 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   }
 
   return (
-    <Card className="shadow-sm border-0 bg-card/90 backdrop-blur-sm">
-      <CardContent className="p-6">
+    <Card 
+      className={`shadow-sm border-0 bg-card/90 backdrop-blur-sm transition-all duration-200 ${isDraggingOver ? 'ring-2 ring-primary ring-offset-2 bg-primary/5' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <CardContent className="p-6 relative">
+        {isDraggingOver && (
+          <div className="absolute inset-0 bg-primary/10 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary">
+            <div className="text-center">
+              <Upload className="h-12 w-12 text-primary mx-auto mb-2" />
+              <p className="text-lg font-medium text-primary">Drop your photo here</p>
+              <p className="text-sm text-muted-foreground">JPEG, PNG, or HEIC accepted</p>
+            </div>
+          </div>
+        )}
         <div className="flex items-start space-x-3">
           <Avatar className="ring-2 ring-primary/20">
             <AvatarImage src={user?.avatar || ""} />
@@ -1193,6 +1324,35 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
               </span>
             </div>
 
+            {/* Uploaded Image Preview */}
+            {uploadedImage && (
+              <div className="relative rounded-lg overflow-hidden border border-border">
+                <img 
+                  src={uploadedImage} 
+                  alt="Uploaded preview" 
+                  className="w-full h-auto max-h-80 object-cover"
+                  data-testid="img-uploaded-preview"
+                />
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg"
+                  onClick={removeUploadedImage}
+                  data-testid="button-remove-image"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {/* Uploading indicator */}
+            {isUploading && (
+              <div className="flex items-center justify-center p-4 border border-border rounded-lg bg-muted/50">
+                <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
+                <span className="text-sm text-muted-foreground">Uploading photo...</span>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex justify-between items-center pt-4 border-t border-border">
               <div className="flex items-center space-x-4">
@@ -1200,10 +1360,20 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
                   <currentPostType.icon className="h-4 w-4 text-primary" />
                   <span className="font-medium">{currentPostType.label}</span>
                 </div>
-                <Button variant="ghost" size="sm" className="text-slate-500 hover:text-primary transition-colors">
-                  <Image className="h-4 w-4 mr-2" />
-                  Photo
-                </Button>
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif"
+                    className="hidden"
+                    onChange={handleFileInputChange}
+                    disabled={isUploading}
+                    data-testid="input-file-photo"
+                  />
+                  <div className="flex items-center text-slate-500 hover:text-primary transition-colors text-sm px-3 py-2 rounded-md hover:bg-accent">
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Photo
+                  </div>
+                </label>
               </div>
               
               <div className="flex space-x-2">
@@ -1232,6 +1402,7 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
                     setUnionName("");
                     setUnionIndustry("");
                     setUnionContact("");
+                    setUploadedImage(null);
                     setPrivacy('public');
                     setPostType('post');
                   }}

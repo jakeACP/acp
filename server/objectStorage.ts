@@ -12,7 +12,7 @@ export enum ObjectPermission {
   WRITE = "write",
 }
 
-// Simplified access control for profile pictures
+// Access control for objects - supports both authenticated and public access
 export async function canAccessObject({
   userId,
   objectFile,
@@ -22,13 +22,31 @@ export async function canAccessObject({
   objectFile: any;
   requestedPermission: ObjectPermission;
 }): Promise<boolean> {
-  // For now, allow access to all authenticated users for profile pictures
+  // Get the ACL policy for the object
+  const aclPolicy = await getObjectAclPolicy(objectFile);
+  
+  // If the object is public and we're only reading, allow access
+  if (aclPolicy?.visibility === "public" && requestedPermission === ObjectPermission.READ) {
+    return true;
+  }
+  
+  // For non-public objects or write operations, require authentication
   return !!userId;
 }
 
 export async function getObjectAclPolicy(objectFile: any): Promise<ObjectAclPolicy | null> {
-  // Simplified - assume all profile pictures are public
-  return { owner: "", visibility: "public" };
+  try {
+    const [metadata] = await objectFile.getMetadata();
+    const aclPolicyStr = metadata?.metadata?.["custom:aclPolicy"];
+    if (aclPolicyStr) {
+      return JSON.parse(aclPolicyStr);
+    }
+    // Default to public if no ACL policy is set
+    return { owner: "", visibility: "public" };
+  } catch (error) {
+    console.error("Error getting object ACL policy:", error);
+    return { owner: "", visibility: "public" };
+  }
 }
 
 export async function setObjectAclPolicy(objectFile: any, aclPolicy: ObjectAclPolicy): Promise<void> {

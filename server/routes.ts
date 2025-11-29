@@ -12,9 +12,96 @@ import { db } from "./db";
 import { findRepresentativesByZipCode } from "./openai";
 import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
+import multer from "multer";
+import { ObjectStorageService, objectStorageClient } from "./objectStorage";
+import { randomUUID } from "crypto";
+
+// Configure multer for file uploads (memory storage for streaming to object storage)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept JPEG, PNG, and HEIC images
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/heic', 'image/heif'];
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.heic', '.heif'];
+    const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+    
+    if (allowedTypes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, PNG, and HEIC images are allowed'));
+    }
+  }
+});
+
+const objectStorageService = new ObjectStorageService();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+
+  // File Upload API
+  app.post("/api/upload", upload.single('file'), async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    try {
+      const privateObjectDir = objectStorageService.getPrivateObjectDir();
+      const fileId = randomUUID();
+      const ext = req.file.originalname.toLowerCase().slice(req.file.originalname.lastIndexOf('.')) || '.jpg';
+      const objectName = `uploads/${fileId}${ext}`;
+      const fullPath = `${privateObjectDir}/${objectName}`;
+      
+      // Parse path to get bucket and object name
+      const pathParts = fullPath.split('/').filter(p => p);
+      const bucketName = pathParts[0];
+      const objectPath = pathParts.slice(1).join('/');
+      
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(objectPath);
+      
+      // Determine content type
+      let contentType = req.file.mimetype;
+      if (ext === '.heic' || ext === '.heif') {
+        contentType = 'image/heic';
+      }
+      
+      // Upload file to object storage
+      await file.save(req.file.buffer, {
+        contentType: contentType,
+        metadata: {
+          originalName: req.file.originalname,
+          uploadedBy: req.user.id.toString(),
+          uploadedAt: new Date().toISOString(),
+        },
+      });
+      
+      // Set ACL policy to make the file public (for post images)
+      const { setObjectAclPolicy } = await import("./objectStorage");
+      await setObjectAclPolicy(file, {
+        owner: req.user.id.toString(),
+        visibility: "public",
+      });
+      
+      // Generate a public URL for the uploaded file
+      const publicUrl = `/objects/uploads/${fileId}${ext}`;
+      
+      res.json({ 
+        url: publicUrl,
+        id: fileId,
+        originalName: req.file.originalname,
+      });
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      res.status(500).json({ message: error.message || "Failed to upload file" });
+    }
+  });
 
   // Posts API
   app.get("/api/posts", async (req, res) => {
@@ -2352,13 +2439,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Object Storage API endpoints for profile picture uploads
   const { ObjectStorageService, ObjectNotFoundError, ObjectPermission } = await import("./objectStorage");
 
-  // Endpoint for serving private objects (profile pictures)
+  // Endpoint for serving objects (supports both authenticated and public access)
   app.get("/objects/:objectPath(*)", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
-
-    const userId = req.user.id;
+    // Get user ID if authenticated (optional for public objects)
+    const userId = req.isAuthenticated() ? req.user.id.toString() : undefined;
     const objectStorageService = new ObjectStorageService();
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
