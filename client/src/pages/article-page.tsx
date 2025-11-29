@@ -58,23 +58,24 @@ export default function ArticlePage() {
   const estimatedReadingTime = article.readingTime || Math.ceil(wordCount / 200);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-900 border-b sticky top-0 z-10">
+    <div className="min-h-screen bg-transparent">
+      {/* Header - Liquid Glass */}
+      <div className="sticky top-0 z-10 backdrop-blur-xl bg-white/20 dark:bg-slate-900/20 border-b border-white/10 shadow-lg shadow-black/5">
         <div className="container max-w-4xl mx-auto py-4 px-4 flex items-center justify-between">
           <Button 
             variant="ghost" 
             onClick={() => navigate("/")}
             data-testid="button-back-to-feed"
+            className="text-foreground hover:bg-white/20"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Feed
           </Button>
           <div className="flex gap-2">
-            <Button variant="ghost" size="icon" data-testid="button-share">
+            <Button variant="ghost" size="icon" data-testid="button-share" className="hover:bg-white/20">
               <Share2 className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="icon" data-testid="button-bookmark">
+            <Button variant="ghost" size="icon" data-testid="button-bookmark" className="hover:bg-white/20">
               <Bookmark className="w-4 h-4" />
             </Button>
           </div>
@@ -94,13 +95,13 @@ export default function ArticlePage() {
         </div>
       )}
 
-      {/* Article Content */}
+      {/* Article Content - Liquid Glass Panel */}
       <div className="container max-w-4xl mx-auto py-8 px-4">
-        <article>
+        <article className="backdrop-blur-xl bg-white/20 dark:bg-slate-900/20 rounded-2xl p-6 md:p-8 border border-white/15 shadow-xl shadow-black/10">
           {/* Title Section */}
           <header className="mb-8">
             <h1 
-              className="text-3xl md:text-4xl font-bold mb-4 text-slate-900 dark:text-white"
+              className="text-3xl md:text-4xl font-bold mb-4 text-foreground"
               data-testid="text-article-title"
             >
               {article.title || "Untitled Article"}
@@ -108,7 +109,7 @@ export default function ArticlePage() {
             
             {article.excerpt && (
               <p 
-                className="text-xl text-slate-600 dark:text-slate-400 mb-6"
+                className="text-xl text-muted-foreground mb-6"
                 data-testid="text-article-excerpt"
               >
                 {article.excerpt}
@@ -116,7 +117,7 @@ export default function ArticlePage() {
             )}
 
             {/* Author & Meta */}
-            <div className="flex flex-wrap items-center gap-4 py-4 border-y">
+            <div className="flex flex-wrap items-center gap-4 py-4 border-y border-white/10">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={article.author?.avatar || undefined} />
@@ -126,7 +127,7 @@ export default function ArticlePage() {
                 </Avatar>
                 <div>
                   <p 
-                    className="font-medium"
+                    className="font-medium text-foreground"
                     data-testid="text-author-name"
                   >
                     {article.author?.firstName && article.author?.lastName 
@@ -134,13 +135,13 @@ export default function ArticlePage() {
                       : article.author?.username || "Anonymous"
                     }
                   </p>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-muted-foreground">
                     @{article.author?.username || "unknown"}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 text-sm text-slate-500 ml-auto">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground ml-auto">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
                   {article.createdAt 
@@ -162,7 +163,7 @@ export default function ArticlePage() {
                   <Badge 
                     key={index} 
                     variant="secondary"
-                    className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700"
+                    className="cursor-pointer bg-white/20 hover:bg-white/30 border-white/10"
                     onClick={() => navigate(`/?tag=${tag}`)}
                     data-testid={`badge-tag-${index}`}
                   >
@@ -176,12 +177,12 @@ export default function ArticlePage() {
           {/* Article Body */}
           <div 
             className="prose prose-lg dark:prose-invert max-w-none 
-                       prose-headings:font-bold prose-headings:text-slate-900 dark:prose-headings:text-white
-                       prose-p:text-slate-700 dark:prose-p:text-slate-300
-                       prose-a:text-blue-600 hover:prose-a:underline
+                       prose-headings:font-bold prose-headings:text-foreground
+                       prose-p:text-foreground/90
+                       prose-a:text-blue-500 hover:prose-a:underline
                        prose-img:rounded-lg prose-img:shadow-lg
-                       prose-blockquote:border-l-4 prose-blockquote:border-blue-500 prose-blockquote:bg-slate-100 dark:prose-blockquote:bg-slate-800 prose-blockquote:py-2 prose-blockquote:px-4
-                       prose-code:bg-slate-100 dark:prose-code:bg-slate-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded"
+                       prose-blockquote:border-l-4 prose-blockquote:border-blue-500 prose-blockquote:bg-white/10 prose-blockquote:py-2 prose-blockquote:px-4
+                       prose-code:bg-white/10 prose-code:px-1 prose-code:py-0.5 prose-code:rounded"
             dangerouslySetInnerHTML={{ 
               __html: article.articleBody || article.content || "<p>No content available.</p>" 
             }}
@@ -189,18 +190,18 @@ export default function ArticlePage() {
           />
 
           {/* Article Footer */}
-          <footer className="mt-12 pt-8 border-t">
+          <footer className="mt-12 pt-8 border-t border-white/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <Button variant="outline" size="sm" data-testid="button-like">
+                <Button variant="outline" size="sm" data-testid="button-like" className="bg-white/10 border-white/20 hover:bg-white/20">
                   <Heart className="w-4 h-4 mr-2" />
                   {article.likesCount || 0}
                 </Button>
-                <Button variant="outline" size="sm" data-testid="button-comment">
+                <Button variant="outline" size="sm" data-testid="button-comment" className="bg-white/10 border-white/20 hover:bg-white/20">
                   <MessageCircle className="w-4 h-4 mr-2" />
                   {article.commentsCount || 0}
                 </Button>
-                <Button variant="outline" size="sm" data-testid="button-share-footer">
+                <Button variant="outline" size="sm" data-testid="button-share-footer" className="bg-white/10 border-white/20 hover:bg-white/20">
                   <Share2 className="w-4 h-4 mr-2" />
                   Share
                 </Button>
@@ -209,6 +210,7 @@ export default function ArticlePage() {
                 variant="ghost" 
                 onClick={() => navigate("/")}
                 data-testid="button-back-bottom"
+                className="hover:bg-white/20"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Feed
@@ -217,9 +219,9 @@ export default function ArticlePage() {
           </footer>
         </article>
 
-        {/* Author Card */}
+        {/* Author Card - Liquid Glass */}
         {article.author && (
-          <Card className="mt-8">
+          <Card className="mt-8 backdrop-blur-xl bg-white/20 dark:bg-slate-900/20 border-white/15 shadow-xl shadow-black/10">
             <CardHeader>
               <div className="flex items-start gap-4">
                 <Avatar className="h-16 w-16">
@@ -229,15 +231,15 @@ export default function ArticlePage() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <CardTitle className="text-lg">
+                  <CardTitle className="text-lg text-foreground">
                     {article.author.firstName && article.author.lastName 
                       ? `${article.author.firstName} ${article.author.lastName}`
                       : article.author.username
                     }
                   </CardTitle>
-                  <CardDescription>@{article.author.username}</CardDescription>
+                  <CardDescription className="text-muted-foreground">@{article.author.username}</CardDescription>
                   {article.author.bio && (
-                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    <p className="mt-2 text-sm text-muted-foreground">
                       {article.author.bio}
                     </p>
                   )}
@@ -246,6 +248,7 @@ export default function ArticlePage() {
                   variant="outline"
                   onClick={() => navigate(`/profile/${article.author?.username}`)}
                   data-testid="button-view-profile"
+                  className="bg-white/10 border-white/20 hover:bg-white/20"
                 >
                   View Profile
                 </Button>
