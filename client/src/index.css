@@ -236,22 +236,21 @@
    PATRIOT LIQUID GLASS THEME STYLES
    ========================================== */
 
-/* Scroll-reactive liquid background for entire page */
+/* Fixed zigzag gradient background with red, white, blue */
 .patriot {
   background:
-    radial-gradient(circle at calc(20% + 40% * var(--scroll-ratio, 0))
-                            calc(20% + 30% * var(--scroll-ratio, 0)),
-                    rgba(255, 255, 255, 0.18),
-                    transparent 55%),
-    radial-gradient(circle at calc(80% - 30% * var(--scroll-ratio, 0))
-                            calc(60% - 20% * var(--scroll-ratio, 0)),
-                    rgba(230, 57, 58, 0.45),
-                    transparent 60%),
-    radial-gradient(circle at 50% 100%,
-                    rgba(59, 91, 169, 0.65),
-                    #050b1b 70%);
+    repeating-linear-gradient(
+      45deg,
+      #E6393A 0px,
+      #E6393A 60px,
+      #F5F7FA 60px,
+      #F5F7FA 120px,
+      #3B5BA9 120px,
+      #3B5BA9 180px,
+      #050b1b 180px,
+      #050b1b 240px
+    );
   background-attachment: fixed;
-  background-size: cover;
   min-height: 100vh;
 }
 
@@ -267,17 +266,17 @@
   z-index: 1;
 }
 
-/* Liquid Glass Cards with Scroll-Reactive Reflections */
+/* Liquid Glass Cards - 80% transparent with strong gaussian blur */
 .patriot .floating-card,
 .patriot .floating-card-lg,
 .patriot .glass-card {
   position: relative;
   border-radius: 22px;
-  background: rgba(7, 16, 40, 0.45);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.35);
+  background: rgba(7, 16, 40, 0.2);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
