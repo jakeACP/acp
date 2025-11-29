@@ -1226,17 +1226,10 @@ export const representatives = pgTable("representatives", {
 export const zipCodeLookups = pgTable("zip_code_lookups", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   zipCode: text("zip_code").notNull(),
-  representativeId: varchar("representative_id").notNull().references(() => representatives.id, { onDelete: "cascade" }),
-  officeLevel: text("office_level").notNull(), // federal, state, local
-  district: text("district"),
-  jurisdiction: text("jurisdiction"),
-  priority: integer("priority").default(0), // Priority for ordering representatives
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  representativeIds: text("representative_ids").array(), // Array of representative IDs for this zip code
+  searchedAt: timestamp("searched_at").defaultNow(),
 }, (table) => ({
   zipCodeIndex: index("zip_code_lookups_zip_code_idx").on(table.zipCode),
-  representativeIndex: index("zip_code_lookups_representative_idx").on(table.representativeId),
-  uniqueZipRepOffice: sql`UNIQUE(${table.zipCode}, ${table.officeLevel}, ${table.representativeId})`,
 }));
 
 // Political Positions - Defines the political offices/seats that exist
@@ -1755,8 +1748,7 @@ export const insertRepresentativeSchema = createInsertSchema(representatives).om
 
 export const insertZipCodeLookupSchema = createInsertSchema(zipCodeLookups).omit({
   id: true,
-  createdAt: true,
-  updatedAt: true,
+  searchedAt: true,
 });
 
 export const insertPoliticalPositionSchema = createInsertSchema(politicalPositions).omit({
