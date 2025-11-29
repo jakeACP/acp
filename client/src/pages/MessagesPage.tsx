@@ -13,9 +13,9 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="h-screen flex bg-gray-50">
+    <div className="h-screen flex bg-background">
       {/* Sidebar */}
-      <div className="w-80 border-r border-gray-200 bg-white">
+      <div className="w-80 border-r border-border bg-card">
         <MessagingSidebar
           userId={user.id}
           selectedChannelId={selectedChannelId}
@@ -34,9 +34,9 @@ export default function MessagesPage() {
             userId={user.id}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="flex items-center justify-center h-full text-muted-foreground">
             <div className="text-center">
-              <h3 className="text-lg font-medium mb-2">Welcome to Messages</h3>
+              <h3 className="text-lg font-medium mb-2 text-foreground">Welcome to Messages</h3>
               <p>Select a channel or conversation to start messaging</p>
             </div>
           </div>

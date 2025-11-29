@@ -24,7 +24,9 @@
   --ring: hsl(20, 14.3%, 4.1%);
   --radius: 0.5rem;
   
-  /* Enhanced background and floating module variables */
+  /* Theme-driven background system */
+  --app-background: none;
+  --app-background-color: hsl(0, 0%, 98%);
   --bg-pattern: radial-gradient(circle at 1px 1px, hsl(220, 13%, 91%) 1px, transparent 0);
   --bg-pattern-size: 20px 20px;
   --floating-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -54,7 +56,9 @@
   --ring: hsl(212, 92%, 50%);
   --radius: 0.5rem;
   
-  /* Enhanced dark mode background and floating module variables */
+  /* Dark mode background system */
+  --app-background: none;
+  --app-background-color: hsl(222, 84%, 4.9%);
   --bg-pattern: radial-gradient(circle at 1px 1px, hsl(217, 32.6%, 17.5%) 1px, transparent 0);
   --bg-pattern-size: 20px 20px;
   --floating-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
@@ -64,36 +68,50 @@
 
 .patriot {
   /* Modern Liquid Glass Patriot Theme */
-  --background: hsl(220, 30%, 8%);
+  --background: transparent;
   --foreground: hsl(0, 0%, 98%);
   --muted: hsl(220, 25%, 15%);
-  --muted-foreground: hsl(220, 15%, 65%);
-  --popover: hsl(220, 30%, 12%);
+  --muted-foreground: hsl(220, 15%, 75%);
+  --popover: rgba(7, 16, 40, 0.85);
   --popover-foreground: hsl(0, 0%, 98%);
-  --card: hsl(220, 30%, 10%);
+  --card: rgba(7, 16, 40, 0.2);
   --card-foreground: hsl(0, 0%, 98%);
-  --border: hsl(220, 40%, 25%);
-  --input: hsl(220, 30%, 18%);
+  --border: rgba(255, 255, 255, 0.15);
+  --input: rgba(255, 255, 255, 0.1);
   --primary: hsl(217, 91%, 60%);
   --primary-foreground: hsl(0, 0%, 100%);
   --secondary: hsl(0, 72%, 51%);
   --secondary-foreground: hsl(0, 0%, 100%);
-  --accent: hsl(220, 40%, 20%);
+  --accent: rgba(255, 255, 255, 0.1);
   --accent-foreground: hsl(0, 0%, 98%);
   --destructive: hsl(0, 72%, 51%);
   --destructive-foreground: hsl(0, 0%, 100%);
   --ring: hsl(217, 91%, 60%);
   --radius: 1rem;
   
+  /* Patriot background gradient */
+  --app-background: repeating-linear-gradient(
+    45deg,
+    #E6393A 0px,
+    #E6393A 60px,
+    #F5F7FA 60px,
+    #F5F7FA 120px,
+    #3B5BA9 120px,
+    #3B5BA9 180px,
+    #050b1b 180px,
+    #050b1b 240px
+  );
+  --app-background-color: transparent;
+  
   /* Liquid Glass Variables */
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-blur: 20px;
+  --glass-bg: rgba(7, 16, 40, 0.2);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-blur: 24px;
   --patriot-red: hsl(0, 72%, 51%);
   --patriot-blue: hsl(217, 91%, 60%);
   --patriot-white: hsl(0, 0%, 98%);
   
-  /* Patriot gradient backgrounds */
+  /* Patriot pattern and shadows */
   --bg-pattern: none;
   --bg-pattern-size: 0;
   --floating-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
@@ -106,9 +124,17 @@
     @apply border-border;
   }
 
+  html {
+    background-image: var(--app-background, none);
+    background-color: var(--app-background-color, var(--background));
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased text-foreground;
     font-family: 'Inter', sans-serif;
+    background-color: var(--app-background-color, var(--background));
     background-image: var(--bg-pattern);
     background-size: var(--bg-pattern-size);
   }
@@ -235,39 +261,6 @@
 /* ==========================================
    PATRIOT LIQUID GLASS THEME STYLES
    ========================================== */
-
-/* Fixed zigzag gradient background with red, white, blue */
-html.patriot {
-  background:
-    repeating-linear-gradient(
-      45deg,
-      #E6393A 0px,
-      #E6393A 60px,
-      #F5F7FA 60px,
-      #F5F7FA 120px,
-      #3B5BA9 120px,
-      #3B5BA9 180px,
-      #050b1b 180px,
-      #050b1b 240px
-    ) !important;
-  background-attachment: fixed !important;
-  min-height: 100vh;
-}
-
-html.patriot body {
-  background-color: transparent !important;
-  background-image: none !important;
-  background-size: auto !important;
-  --background: transparent;
-  --foreground: hsl(0, 0%, 95%);
-  --card-foreground: hsl(0, 0%, 95%);
-  --popover-foreground: hsl(0, 0%, 95%);
-  --muted-foreground: hsl(220, 15%, 70%);
-}
-
-.patriot .page-background {
-  background-color: transparent;
-}
 
 /* Make page containers transparent to show the gradient */
 .patriot .bg-slate-50,
@@ -539,4 +532,71 @@ html.patriot body {
 .patriot .floating-card-lg,
 .patriot .glass-card {
   color: hsl(0, 0%, 95%);
+}
+
+/* Override hardcoded light mode text colors for patriot theme */
+.patriot .text-slate-900,
+.patriot .text-gray-900,
+.patriot .text-black {
+  color: hsl(0, 0%, 98%) !important;
+}
+
+.patriot .text-slate-800,
+.patriot .text-gray-800 {
+  color: hsl(0, 0%, 95%) !important;
+}
+
+.patriot .text-slate-700,
+.patriot .text-gray-700 {
+  color: hsl(0, 0%, 90%) !important;
+}
+
+.patriot .text-slate-600,
+.patriot .text-gray-600 {
+  color: hsl(220, 15%, 75%) !important;
+}
+
+.patriot .text-slate-500,
+.patriot .text-gray-500 {
+  color: hsl(220, 15%, 70%) !important;
+}
+
+/* Override hardcoded light background colors for patriot theme */
+.patriot .bg-gray-100,
+.patriot .bg-slate-100,
+.patriot .bg-gray-200,
+.patriot .bg-slate-200 {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Border overrides for patriot theme */
+.patriot .border-gray-200,
+.patriot .border-slate-200,
+.patriot .border-gray-300,
+.patriot .border-slate-300 {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Additional gray color overrides for patriot theme */
+.patriot .text-gray-400,
+.patriot .text-slate-400 {
+  color: hsl(220, 15%, 65%) !important;
+}
+
+.patriot .bg-gray-400,
+.patriot .bg-slate-400 {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.patriot .bg-gray-300,
+.patriot .bg-slate-300 {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Ensure main content areas are transparent in patriot mode */
+.patriot main,
+.patriot .min-h-screen,
+.patriot [class*="bg-slate-50"],
+.patriot [class*="bg-gray-50"] {
+  background-color: transparent !important;
 }

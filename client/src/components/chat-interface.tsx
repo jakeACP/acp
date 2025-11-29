@@ -190,7 +190,7 @@ export function ChatInterface({ channelId, conversationId, userId }: ChatInterfa
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 bg-white">
+      <div className="p-4 border-b border-border bg-card">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             {channelId ? (
@@ -263,11 +263,11 @@ export function ChatInterface({ channelId, conversationId, userId }: ChatInterfa
                       ? `${msg.author.firstName} ${msg.author.lastName}`
                       : msg.author?.username || "Unknown User"}
                   </span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-muted-foreground">
                     {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
                   </span>
                 </div>
-                <div className="text-sm text-gray-900 break-words">
+                <div className="text-sm text-foreground break-words">
                   {msg.content}
                 </div>
               </div>
@@ -276,11 +276,11 @@ export function ChatInterface({ channelId, conversationId, userId }: ChatInterfa
           
           {/* Typing Indicators */}
           {typingUsers.length > 0 && (
-            <div className="flex items-center space-x-2 text-sm text-gray-500">
+            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
               <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                <div className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
+                <div className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
               </div>
               <span>
                 {typingUsers.length === 1 
@@ -295,7 +295,7 @@ export function ChatInterface({ channelId, conversationId, userId }: ChatInterfa
       </ScrollArea>
 
       {/* Message Input */}
-      <div className="p-4 border-t border-gray-200 bg-white">
+      <div className="p-4 border-t border-border bg-card">
         <div className="flex items-center space-x-2">
           <Input
             value={message}
