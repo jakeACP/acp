@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useQuery } from "@tanstack/react-query";
-import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield, Flag, PenSquare } from "lucide-react";
+import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield, Flag, PenSquare, Palette } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { cn } from "@/lib/utils";
 
@@ -88,13 +88,7 @@ export function Navigation() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" data-testid="button-theme-toggle">
-                  {actualTheme === "dark" ? (
-                    <Moon className="h-5 w-5" />
-                  ) : actualTheme === "patriot" ? (
-                    <Flag className="h-5 w-5" />
-                  ) : (
-                    <Sun className="h-5 w-5" />
-                  )}
+                  <Palette className="h-5 w-5" />
                   <span className="sr-only">Toggle theme</span>
                 </Button>
               </DropdownMenuTrigger>
