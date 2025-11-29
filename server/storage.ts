@@ -2640,7 +2640,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(representatives)
       .where(inArray(representatives.id, representativeIds))
-      .orderBy(representatives.level, representatives.office);
+      .orderBy(representatives.officeLevel, representatives.officeTitle);
   }
 
   async saveRepresentatives(repData: InsertRepresentative[]): Promise<Representative[]> {
