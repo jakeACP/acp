@@ -643,3 +643,32 @@
 .patriot [class*="bg-gray-50"] {
   background-color: transparent !important;
 }
+
+/* Article page glass panel - explicit blur styling */
+.patriot .article-glass-panel {
+  position: relative;
+  border-radius: 22px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.15) 0%,
+    rgba(7, 16, 40, 0.2) 50%,
+    rgba(255, 255, 255, 0.10) 100%
+  ) !important;
+  backdrop-filter: blur(32px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
+  border: none !important;
+  border-top: 2px solid rgba(255, 255, 255, 0.4) !important;
+  border-left: 2px solid rgba(255, 255, 255, 0.3) !important;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.2) !important;
+  border-right: 2px solid rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 
+    0 0 30px rgba(255, 255, 255, 0.06),
+    0 12px 48px rgba(0, 0, 0, 0.25),
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    inset 0 2px 4px rgba(255, 255, 255, 0.25),
+    inset 2px 0 4px rgba(255, 255, 255, 0.12),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.15),
+    inset -2px 0 4px rgba(0, 0, 0, 0.08) !important;
+  overflow: hidden;
+  color: hsl(0, 0%, 95%);
+}
