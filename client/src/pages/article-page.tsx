@@ -97,7 +97,7 @@ export default function ArticlePage() {
 
       {/* Article Content - Liquid Glass Panel with 3D Glass Effect */}
       <div className="container max-w-4xl mx-auto py-8 px-4">
-        <article className="glass-card p-6 md:p-8">
+        <article className="glass-card p-6 md:p-8" style={{ backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)' }}>
           {/* Title Section */}
           <header className="mb-8">
             <h1 
