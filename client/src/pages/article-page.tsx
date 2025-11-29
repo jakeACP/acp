@@ -97,7 +97,7 @@ export default function ArticlePage() {
 
       {/* Article Content - Liquid Glass Panel with 3D Glass Effect */}
       <div className="container max-w-4xl mx-auto py-8 px-4">
-        <article className="article-glass-panel p-6 md:p-8">
+        <Card className="p-6 md:p-8">
           {/* Title Section */}
           <header className="mb-8">
             <h1 
@@ -217,7 +217,7 @@ export default function ArticlePage() {
               </Button>
             </div>
           </footer>
-        </article>
+        </Card>
 
         {/* Author Card - Liquid Glass with 3D Glass Effect */}
         {article.author && (
