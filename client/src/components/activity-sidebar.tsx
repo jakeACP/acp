@@ -108,40 +108,47 @@ function PeopleYouMayKnow() {
       <CardContent>
         <div className="space-y-4">
           {suggestions.slice(0, 3).map((suggestion) => (
-            <div key={suggestion.id} className="flex items-center gap-3" data-testid={`friend-suggestion-${suggestion.suggestedUserId}`}>
-              <Avatar className="h-10 w-10">
-                {suggestion.suggestedUser?.avatar && (
-                  <AvatarImage src={suggestion.suggestedUser.avatar} alt={suggestion.suggestedUser.username} />
-                )}
-                <AvatarFallback>
-                  {suggestion.suggestedUser?.username[0].toUpperCase() || "?"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <h5 className="text-sm font-medium text-foreground truncate">
-                  {suggestion.suggestedUser?.firstName && suggestion.suggestedUser?.lastName
-                    ? `${suggestion.suggestedUser.firstName} ${suggestion.suggestedUser.lastName}`
-                    : suggestion.suggestedUser?.username}
-                </h5>
-                <p className="text-xs text-muted-foreground">
-                  {getReasonLabel(suggestion.reason)}
-                </p>
+            <div key={suggestion.id} className="relative" data-testid={`friend-suggestion-${suggestion.suggestedUserId}`}>
+              {/* Dismiss button - top right corner */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute -top-1 -right-1 h-6 w-6 p-0 rounded-full opacity-60 hover:opacity-100"
+                onClick={() => dismissMutation.mutate(suggestion.suggestedUserId)}
+                disabled={dismissMutation.isPending}
+                data-testid={`button-dismiss-${suggestion.suggestedUserId}`}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+              
+              {/* User info row */}
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10 flex-shrink-0">
+                  {suggestion.suggestedUser?.avatar && (
+                    <AvatarImage src={suggestion.suggestedUser.avatar} alt={suggestion.suggestedUser.username} />
+                  )}
+                  <AvatarFallback>
+                    {suggestion.suggestedUser?.username[0].toUpperCase() || "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0 pr-6">
+                  <h5 className="text-sm font-medium text-foreground truncate">
+                    {suggestion.suggestedUser?.firstName && suggestion.suggestedUser?.lastName
+                      ? `${suggestion.suggestedUser.firstName} ${suggestion.suggestedUser.lastName}`
+                      : suggestion.suggestedUser?.username}
+                  </h5>
+                  <p className="text-xs text-muted-foreground">
+                    {getReasonLabel(suggestion.reason)}
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={() => dismissMutation.mutate(suggestion.suggestedUserId)}
-                  disabled={dismissMutation.isPending}
-                  data-testid={`button-dismiss-${suggestion.suggestedUserId}`}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+              
+              {/* Connect button - below user info */}
+              <div className="mt-2 ml-13 pl-13">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 px-3"
+                  className="h-7 px-3 ml-[52px]"
                   onClick={() => connectMutation.mutate(suggestion.suggestedUserId)}
                   disabled={connectMutation.isPending || dismissMutation.isPending}
                   data-testid={`button-connect-${suggestion.suggestedUserId}`}
