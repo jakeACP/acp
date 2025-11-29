@@ -278,17 +278,41 @@
   z-index: 1;
 }
 
-/* Liquid Glass Cards - 80% transparent with strong gaussian blur */
+/* Liquid Glass Cards - 80% transparent with strong gaussian blur and 3D glass border */
 .patriot .floating-card,
 .patriot .floating-card-lg,
-.patriot .glass-card {
+.patriot .glass-card,
+.patriot [class*="Card"],
+.patriot .bg-card {
   position: relative;
   border-radius: 22px;
-  background: rgba(7, 16, 40, 0.2);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.15) 0%,
+    rgba(7, 16, 40, 0.2) 50%,
+    rgba(255, 255, 255, 0.10) 100%
+  );
   backdrop-filter: blur(32px) saturate(180%);
   -webkit-backdrop-filter: blur(32px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  /* 3D Glass border - beveled edges */
+  border: none;
+  border-top: 2px solid rgba(255, 255, 255, 0.4);
+  border-left: 2px solid rgba(255, 255, 255, 0.3);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.2);
+  border-right: 2px solid rgba(0, 0, 0, 0.15);
+  /* Layered 3D shadows for depth */
+  box-shadow: 
+    /* Outer soft glow */
+    0 0 30px rgba(255, 255, 255, 0.06),
+    /* Primary depth shadow */
+    0 12px 48px rgba(0, 0, 0, 0.25),
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    /* Top-left inner highlight bevel */
+    inset 0 2px 4px rgba(255, 255, 255, 0.25),
+    inset 2px 0 4px rgba(255, 255, 255, 0.12),
+    /* Bottom-right inner shadow bevel */
+    inset 0 -2px 4px rgba(0, 0, 0, 0.15),
+    inset -2px 0 4px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -324,11 +348,26 @@
 
 .patriot .floating-card:hover,
 .patriot .floating-card-lg:hover,
-.patriot .glass-card:hover {
-  background: rgba(7, 16, 40, 0.55);
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.45);
-  transform: translateY(-2px);
+.patriot .glass-card:hover,
+.patriot [class*="Card"]:hover,
+.patriot .bg-card:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(7, 16, 40, 0.35) 50%,
+    rgba(255, 255, 255, 0.15) 100%
+  );
+  border-top-color: rgba(255, 255, 255, 0.5);
+  border-left-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 
+    0 0 40px rgba(255, 255, 255, 0.1),
+    0 16px 56px rgba(0, 0, 0, 0.35),
+    0 6px 20px rgba(0, 0, 0, 0.2),
+    inset 0 3px 5px rgba(255, 255, 255, 0.35),
+    inset 3px 0 5px rgba(255, 255, 255, 0.18),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.18),
+    inset -2px 0 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-3px);
 }
 
 /* Glass card content needs to be above the reflection */
