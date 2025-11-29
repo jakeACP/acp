@@ -56,6 +56,7 @@ import CreateArticlePage from "@/pages/create-article-page";
 import ArticlePage from "@/pages/article-page";
 import NotFound from "@/pages/not-found";
 import { AlertTriangle } from "lucide-react";
+import { useScrollLight } from "./hooks/useScrollLight";
 
 function Router() {
   return (
@@ -129,6 +130,8 @@ function BetaBanner() {
 function AppContent() {
   const [location] = useLocation();
   const isMobile = location.startsWith('/mobile');
+  
+  useScrollLight();
 
   if (isMobile) {
     return (
