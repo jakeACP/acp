@@ -52,7 +52,13 @@ export function FriendSuggestionsWidget() {
     return null;
   }
 
-  const displaySuggestions = suggestions.slice(0, 10);
+  // Filter out any invalid suggestions that don't have user data
+  const validSuggestions = suggestions.filter(s => s && s.user && s.user.id);
+  if (validSuggestions.length === 0) {
+    return null;
+  }
+
+  const displaySuggestions = validSuggestions.slice(0, 10);
 
   const getReasonIcon = (reasons: string[]) => {
     if (reasons.includes('contact')) return <Contact2 className="w-3 h-3" />;
