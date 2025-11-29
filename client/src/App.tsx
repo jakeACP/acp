@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "./hooks/use-auth";
-import { ThemeProvider } from "./hooks/use-theme";
+import { ThemeProvider, useTheme } from "./hooks/use-theme";
 import { FloatingVideoProvider } from "./contexts/floating-video-context";
 import { ProtectedRoute } from "./lib/protected-route";
 import { MobileApp } from "./mobile/MobileApp";
@@ -57,6 +57,34 @@ import ArticlePage from "@/pages/article-page";
 import NotFound from "@/pages/not-found";
 import { AlertTriangle } from "lucide-react";
 import { useScrollLight } from "./hooks/useScrollLight";
+
+function PatriotBackground() {
+  const { actualTheme } = useTheme();
+  
+  if (actualTheme !== 'patriot') return null;
+  
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: -1,
+        background: `repeating-linear-gradient(
+          45deg,
+          #E6393A 0px,
+          #E6393A 60px,
+          #F5F7FA 60px,
+          #F5F7FA 120px,
+          #3B5BA9 120px,
+          #3B5BA9 180px,
+          #050b1b 180px,
+          #050b1b 240px
+        )`,
+        backgroundAttachment: 'fixed',
+      }}
+    />
+  );
+}
 
 function Router() {
   return (
@@ -144,6 +172,7 @@ function AppContent() {
 
   return (
     <>
+      <PatriotBackground />
       <BetaBanner />
       <Toaster />
       <Router />

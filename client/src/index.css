@@ -269,6 +269,14 @@ html.patriot body {
   background-color: transparent;
 }
 
+/* Make page containers transparent to show the gradient */
+.patriot .bg-slate-50,
+.patriot .bg-background,
+.patriot .bg-gray-50,
+.patriot .bg-white {
+  background-color: transparent !important;
+}
+
 /* Ensure content is above background */
 .patriot body > * {
   position: relative;
