@@ -644,16 +644,11 @@
   background-color: transparent !important;
 }
 
-/* Article page glass panel - explicit blur styling */
+/* Article page glass panel - explicit blur styling with fallback */
 .patriot .article-glass-panel {
   position: relative;
   border-radius: 22px;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.15) 0%,
-    rgba(7, 16, 40, 0.2) 50%,
-    rgba(255, 255, 255, 0.10) 100%
-  ) !important;
+  background: transparent !important;
   backdrop-filter: blur(32px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
   border: none !important;
@@ -671,4 +666,45 @@
     inset -2px 0 4px rgba(0, 0, 0, 0.08) !important;
   overflow: hidden;
   color: hsl(0, 0%, 95%);
+  isolation: isolate;
+}
+
+/* Blurred background layer using pseudo-element */
+.patriot .article-glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  z-index: -1;
+  /* Recreate the patriot gradient background and blur it */
+  background: linear-gradient(
+    180deg,
+    #B22234 0%,
+    #B22234 25%,
+    #FFFFFF 25%,
+    #FFFFFF 26%,
+    #B22234 26%,
+    #B22234 51%,
+    #FFFFFF 51%,
+    #FFFFFF 52%,
+    #3C3B6E 52%,
+    #3C3B6E 100%
+  );
+  filter: blur(40px) saturate(150%);
+  opacity: 0.7;
+}
+
+/* Semi-transparent overlay for the glass effect */
+.patriot .article-glass-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  z-index: -1;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(7, 16, 40, 0.25) 50%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
 }
