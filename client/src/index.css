@@ -63,33 +63,42 @@
 }
 
 .patriot {
-  --background: hsl(0, 0%, 100%);
-  --foreground: hsl(220, 15%, 20%);
-  --muted: hsl(220, 60%, 97%);
-  --muted-foreground: hsl(220, 10%, 45%);
-  --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(220, 15%, 20%);
-  --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(220, 15%, 20%);
-  --border: hsl(214, 80%, 88%);
-  --input: hsl(214, 80%, 88%);
-  --primary: hsl(220, 85%, 50%);
+  /* Modern Liquid Glass Patriot Theme */
+  --background: hsl(220, 30%, 8%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(220, 25%, 15%);
+  --muted-foreground: hsl(220, 15%, 65%);
+  --popover: hsl(220, 30%, 12%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(220, 30%, 10%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(220, 40%, 25%);
+  --input: hsl(220, 30%, 18%);
+  --primary: hsl(217, 91%, 60%);
   --primary-foreground: hsl(0, 0%, 100%);
-  --secondary: hsl(0, 75%, 55%);
+  --secondary: hsl(0, 72%, 51%);
   --secondary-foreground: hsl(0, 0%, 100%);
-  --accent: hsl(214, 90%, 95%);
-  --accent-foreground: hsl(220, 85%, 50%);
-  --destructive: hsl(0, 84.2%, 60.2%);
+  --accent: hsl(220, 40%, 20%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 72%, 51%);
   --destructive-foreground: hsl(0, 0%, 100%);
-  --ring: hsl(220, 85%, 50%);
-  --radius: 0.5rem;
+  --ring: hsl(217, 91%, 60%);
+  --radius: 1rem;
   
-  /* Patriot theme background and floating module variables */
-  --bg-pattern: radial-gradient(circle at 1px 1px, hsl(214, 80%, 92%) 1px, transparent 0);
-  --bg-pattern-size: 20px 20px;
-  --floating-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.1), 0 2px 4px -1px rgba(220, 38, 38, 0.05);
-  --floating-shadow-lg: 0 10px 15px -3px rgba(37, 99, 235, 0.15), 0 4px 6px -2px rgba(220, 38, 38, 0.08);
-  --floating-shadow-xl: 0 20px 25px -5px rgba(37, 99, 235, 0.2), 0 10px 10px -5px rgba(220, 38, 38, 0.1);
+  /* Liquid Glass Variables */
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: 20px;
+  --patriot-red: hsl(0, 72%, 51%);
+  --patriot-blue: hsl(217, 91%, 60%);
+  --patriot-white: hsl(0, 0%, 98%);
+  
+  /* Patriot gradient backgrounds */
+  --bg-pattern: none;
+  --bg-pattern-size: 0;
+  --floating-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --floating-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --floating-shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 @layer base {
@@ -221,4 +230,227 @@
     font-weight: 600;
     box-shadow: var(--floating-shadow);
   }
+}
+
+/* ==========================================
+   PATRIOT LIQUID GLASS THEME STYLES
+   ========================================== */
+
+/* Patriot Theme Background */
+.patriot body,
+.patriot .page-background {
+  background: linear-gradient(135deg, 
+    hsl(220, 35%, 6%) 0%,
+    hsl(220, 40%, 10%) 25%,
+    hsl(220, 35%, 8%) 50%,
+    hsl(220, 40%, 12%) 75%,
+    hsl(220, 35%, 6%) 100%
+  );
+  background-attachment: fixed;
+}
+
+/* Animated gradient orbs for depth */
+.patriot body::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: 
+    radial-gradient(ellipse at 20% 30%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 70%, rgba(239, 68, 68, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.02) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+  animation: patriotGlow 20s ease-in-out infinite;
+}
+
+@keyframes patriotGlow {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(2%, 2%) rotate(1deg); }
+  50% { transform: translate(-1%, 3%) rotate(-1deg); }
+  75% { transform: translate(1%, -2%) rotate(0.5deg); }
+}
+
+/* Liquid Glass Cards */
+.patriot .floating-card,
+.patriot .floating-card-lg {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.patriot .floating-card:hover,
+.patriot .floating-card-lg:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 16px 48px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 1px rgba(59, 130, 246, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Liquid Glass Navigation */
+.patriot .floating-nav {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Liquid Glass Buttons */
+.patriot button[class*="bg-primary"],
+.patriot .btn-primary {
+  background: linear-gradient(135deg, 
+    hsl(217, 91%, 55%) 0%, 
+    hsl(217, 91%, 45%) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 4px 16px rgba(59, 130, 246, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+}
+
+.patriot button[class*="bg-primary"]:hover {
+  background: linear-gradient(135deg, 
+    hsl(217, 91%, 60%) 0%, 
+    hsl(217, 91%, 50%) 100%
+  );
+  box-shadow: 
+    0 8px 24px rgba(59, 130, 246, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Red accent buttons */
+.patriot button[class*="bg-destructive"],
+.patriot .btn-secondary {
+  background: linear-gradient(135deg, 
+    hsl(0, 72%, 50%) 0%, 
+    hsl(0, 72%, 40%) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 4px 16px rgba(239, 68, 68, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Liquid Glass Inputs */
+.patriot input,
+.patriot textarea,
+.patriot select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: hsl(0, 0%, 98%);
+  transition: all 0.2s ease;
+}
+
+.patriot input:focus,
+.patriot textarea:focus,
+.patriot select:focus {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  outline: none;
+}
+
+.patriot input::placeholder,
+.patriot textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Liquid Glass Dropdown/Popover */
+.patriot [data-radix-popper-content-wrapper] > div,
+.patriot [role="menu"],
+.patriot [role="listbox"] {
+  background: rgba(20, 30, 50, 0.95) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 
+    0 16px 48px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+.patriot [role="menuitem"]:hover,
+.patriot [role="option"]:hover {
+  background: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Patriot Theme Accent Gradient Text */
+.patriot .text-gradient {
+  background: linear-gradient(135deg, 
+    hsl(217, 91%, 60%) 0%, 
+    hsl(0, 0%, 100%) 50%, 
+    hsl(0, 72%, 55%) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Red/White/Blue accent line */
+.patriot .accent-line {
+  height: 3px;
+  background: linear-gradient(90deg, 
+    hsl(0, 72%, 51%) 0%, 
+    hsl(0, 72%, 51%) 33%, 
+    hsl(0, 0%, 100%) 33%, 
+    hsl(0, 0%, 100%) 66%, 
+    hsl(217, 91%, 60%) 66%, 
+    hsl(217, 91%, 60%) 100%
+  );
+  border-radius: 2px;
+}
+
+/* Liquid Glass Scrollbar */
+.patriot ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.patriot ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+
+.patriot ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  border: 2px solid transparent;
+}
+
+.patriot ::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.3);
+}
+
+/* Avatar Glow Effect */
+.patriot [class*="avatar"] {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+/* Tab styling in Patriot mode */
+.patriot .feed-tab[data-state="active"]::before {
+  background: linear-gradient(135deg, 
+    hsl(217, 91%, 55%) 0%, 
+    hsl(0, 72%, 50%) 100%
+  );
+}
+
+/* Toast/Notification styling */
+.patriot [data-sonner-toast],
+.patriot [role="alert"] {
+  background: rgba(20, 30, 50, 0.95) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }

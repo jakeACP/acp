@@ -103,7 +103,7 @@ export function Navigation() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTheme("patriot")} className="cursor-pointer" data-testid="theme-patriot">
                   <Flag className="mr-2 h-4 w-4" />
-                  <span>Red, White & Blue</span>
+                  <span>Patriot</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTheme("system")} className="cursor-pointer" data-testid="theme-system">
                   <Monitor className="mr-2 h-4 w-4" />
