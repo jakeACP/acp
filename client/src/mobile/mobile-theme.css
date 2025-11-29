@@ -127,7 +127,7 @@
   margin-bottom: 8px;
 }
 
-/* Glass Bottom Navigation */
+/* Glass Bottom Navigation - Enhanced blur and transparency */
 .glass-bottom-nav {
   position: fixed;
   bottom: 0;
@@ -138,15 +138,15 @@
   padding-bottom: max(12px, env(safe-area-inset-bottom));
   background: linear-gradient(
     0deg,
-    rgba(7, 26, 58, 0.65) 0%,
-    rgba(7, 26, 58, 0.45) 100%
+    rgba(7, 26, 58, 0.25) 0%,
+    rgba(7, 26, 58, 0.15) 100%
   );
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow: 
-    0 -8px 32px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 -8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .glass-bottom-nav-inner {
