@@ -1,6 +1,7 @@
-import { Bell } from "lucide-react";
+import { Bell, Sun, Moon, Flag } from "lucide-react";
 import { Link } from "wouter";
 import acpLogo from "@assets/logo-tpb_1763998990798.png";
+import { useTheme } from "@/hooks/use-theme";
 
 interface MobileTopBarProps {
   title: string;
@@ -8,6 +9,17 @@ interface MobileTopBarProps {
 }
 
 export function MobileTopBar({ title, subtitle }: MobileTopBarProps) {
+  const { setTheme, actualTheme } = useTheme();
+
+  const cycleTheme = () => {
+    const themes: Array<"light" | "dark" | "patriot"> = ["light", "dark", "patriot"];
+    const currentIndex = themes.indexOf(actualTheme);
+    const nextIndex = (currentIndex + 1) % themes.length;
+    setTheme(themes[nextIndex]);
+  };
+
+  const ThemeIcon = actualTheme === "dark" ? Moon : actualTheme === "patriot" ? Flag : Sun;
+
   return (
     <header className="glass-top-bar" data-testid="mobile-top-bar">
       <div className="flex items-center justify-between">
@@ -28,15 +40,26 @@ export function MobileTopBar({ title, subtitle }: MobileTopBarProps) {
           )}
         </div>
 
-        <Link href="/mobile/notifications">
+        <div className="flex items-center gap-2">
           <button 
             className="notification-button"
-            data-testid="mobile-notifications"
-            aria-label="Notifications"
+            data-testid="mobile-theme-toggle"
+            aria-label="Toggle theme"
+            onClick={cycleTheme}
           >
-            <Bell className="w-5 h-5" />
+            <ThemeIcon className="w-5 h-5" />
           </button>
-        </Link>
+
+          <Link href="/mobile/notifications">
+            <button 
+              className="notification-button"
+              data-testid="mobile-notifications"
+              aria-label="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+            </button>
+          </Link>
+        </div>
       </div>
     </header>
   );
