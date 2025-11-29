@@ -409,6 +409,7 @@ export function PostCard({ post }: PostCardProps) {
     : "";
 
   return (
+    <>
     <Card data-post-id={post.id}>
       <CardHeader>
         <div className="flex items-center justify-between mb-4">
@@ -496,8 +497,6 @@ export function PostCard({ post }: PostCardProps) {
             <p className="text-slate-900 dark:text-slate-100 mb-4 whitespace-pre-wrap">
               {post.content}
             </p>
-            
-            <VideoEmbedDisplay content={post.content} postId={post.id} />
         
         {post.linkPreview && (
           <div className="mb-4 border border-border rounded-lg overflow-hidden bg-card hover:bg-accent/10 transition-colors">
@@ -1014,5 +1013,7 @@ export function PostCard({ post }: PostCardProps) {
         )}
       </CardContent>
     </Card>
+    {post.type !== "blog" && <VideoEmbedDisplay content={post.content} postId={post.id} />}
+    </>
   );
 }
