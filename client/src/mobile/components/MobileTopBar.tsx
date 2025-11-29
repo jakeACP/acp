@@ -1,7 +1,8 @@
-import { Bell, Sun, Moon, Flag } from "lucide-react";
+import { Bell, Palette } from "lucide-react";
 import { Link } from "wouter";
 import acpLogo from "@assets/logo-tpb_1763998990798.png";
 import { useTheme } from "@/hooks/use-theme";
+import { useToast } from "@/hooks/use-toast";
 
 interface MobileTopBarProps {
   title: string;
@@ -10,15 +11,17 @@ interface MobileTopBarProps {
 
 export function MobileTopBar({ title, subtitle }: MobileTopBarProps) {
   const { setTheme, actualTheme } = useTheme();
+  const { toast } = useToast();
 
   const cycleTheme = () => {
     const themes: Array<"light" | "dark" | "patriot"> = ["light", "dark", "patriot"];
+    const themeNames = { light: "Light", dark: "Dark", patriot: "Patriot" };
     const currentIndex = themes.indexOf(actualTheme);
     const nextIndex = (currentIndex + 1) % themes.length;
-    setTheme(themes[nextIndex]);
+    const nextTheme = themes[nextIndex];
+    setTheme(nextTheme);
+    toast({ title: `${themeNames[nextTheme]} Theme`, duration: 1500 });
   };
-
-  const ThemeIcon = actualTheme === "dark" ? Moon : actualTheme === "patriot" ? Flag : Sun;
 
   return (
     <header className="glass-top-bar" data-testid="mobile-top-bar">
@@ -40,14 +43,14 @@ export function MobileTopBar({ title, subtitle }: MobileTopBarProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button 
-            className="notification-button"
+            className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/30 transition-colors border border-white/20"
             data-testid="mobile-theme-toggle"
             aria-label="Toggle theme"
             onClick={cycleTheme}
           >
-            <ThemeIcon className="w-5 h-5" />
+            <Palette className="w-5 h-5" />
           </button>
 
           <Link href="/mobile/notifications">
