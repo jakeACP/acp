@@ -59,8 +59,9 @@ export default function ArticlePage() {
 
   return (
     <div className="min-h-screen bg-transparent">
-      {/* Header - Liquid Glass */}
-      <div className="sticky top-0 z-10 backdrop-blur-xl bg-white/20 dark:bg-slate-900/20 border-b border-white/10 shadow-lg shadow-black/5">
+      {/* Header - Liquid Glass with 3D Effect */}
+      <div className="sticky top-0 z-10 backdrop-blur-3xl bg-white/30 dark:bg-slate-900/30 border-b border-white/30
+        shadow-[0_4px_16px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.4)]">
         <div className="container max-w-4xl mx-auto py-4 px-4 flex items-center justify-between">
           <Button 
             variant="ghost" 
@@ -95,9 +96,15 @@ export default function ArticlePage() {
         </div>
       )}
 
-      {/* Article Content - Liquid Glass Panel */}
+      {/* Article Content - Liquid Glass Panel with 3D Glass Effect */}
       <div className="container max-w-4xl mx-auto py-8 px-4">
-        <article className="backdrop-blur-xl bg-white/20 dark:bg-slate-900/20 rounded-2xl p-6 md:p-8 border border-white/15 shadow-xl shadow-black/10">
+        <article className="relative backdrop-blur-3xl bg-white/30 dark:bg-slate-900/30 rounded-2xl p-6 md:p-8 
+          border border-white/30
+          shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.4),inset_0_-1px_0_rgba(0,0,0,0.1)]
+          before:absolute before:inset-0 before:rounded-2xl before:p-[1px] 
+          before:bg-gradient-to-br before:from-white/50 before:via-transparent before:to-white/20 before:pointer-events-none
+          after:absolute after:inset-[1px] after:rounded-[15px] after:pointer-events-none
+          after:shadow-[inset_2px_2px_4px_rgba(255,255,255,0.25),inset_-2px_-2px_4px_rgba(0,0,0,0.1)]">
           {/* Title Section */}
           <header className="mb-8">
             <h1 
@@ -219,9 +226,15 @@ export default function ArticlePage() {
           </footer>
         </article>
 
-        {/* Author Card - Liquid Glass */}
+        {/* Author Card - Liquid Glass with 3D Glass Effect */}
         {article.author && (
-          <Card className="mt-8 backdrop-blur-xl bg-white/20 dark:bg-slate-900/20 border-white/15 shadow-xl shadow-black/10">
+          <Card className="mt-8 relative backdrop-blur-3xl bg-white/30 dark:bg-slate-900/30 
+            border border-white/30
+            shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.4),inset_0_-1px_0_rgba(0,0,0,0.1)]
+            before:absolute before:inset-0 before:rounded-xl before:p-[1px] 
+            before:bg-gradient-to-br before:from-white/50 before:via-transparent before:to-white/20 before:pointer-events-none
+            after:absolute after:inset-[1px] after:rounded-[11px] after:pointer-events-none
+            after:shadow-[inset_2px_2px_4px_rgba(255,255,255,0.25),inset_-2px_-2px_4px_rgba(0,0,0,0.1)]">
             <CardHeader>
               <div className="flex items-start gap-4">
                 <Avatar className="h-16 w-16">
