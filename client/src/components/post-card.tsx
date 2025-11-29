@@ -34,6 +34,7 @@ export function PostCard({ post }: PostCardProps) {
   const queryClient = useQueryClient();
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState("");
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const { data: likeStatus } = useQuery<{ liked: boolean }>({
     queryKey: ["/api/likes", post.id, "post"],
