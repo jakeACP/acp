@@ -236,10 +236,8 @@
    PATRIOT LIQUID GLASS THEME STYLES
    ========================================== */
 
-/* Scroll-reactive liquid background */
-.patriot body,
-.patriot .page-background {
-  min-height: 100vh;
+/* Scroll-reactive liquid background for entire page */
+.patriot {
   background:
     radial-gradient(circle at calc(20% + 40% * var(--scroll-ratio, 0))
                             calc(20% + 30% * var(--scroll-ratio, 0)),
@@ -254,6 +252,13 @@
                     #050b1b 70%);
   background-attachment: fixed;
   background-size: cover;
+  min-height: 100vh;
+}
+
+.patriot html,
+.patriot body,
+.patriot .page-background {
+  background-color: transparent;
 }
 
 /* Ensure content is above background */
