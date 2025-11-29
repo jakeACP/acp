@@ -25,7 +25,7 @@ export interface IStorage {
 
   // Posts
   getPosts(limit?: number, offset?: number, userId?: string): Promise<PostWithAuthor[]>;
-  getPostById(id: string, userId?: string): Promise<Post | undefined>;
+  getPostById(id: string, userId?: string): Promise<PostWithAuthor | undefined>;
   createPost(post: InsertPost): Promise<Post>;
   deletePost(postId: string): Promise<void>;
   getPostsByUser(userId: string, viewerId?: string): Promise<Post[]>;
@@ -763,7 +763,7 @@ export class DatabaseStorage implements IStorage {
       .offset(offset);
   }
 
-  async getPostById(id: string, userId?: string): Promise<Post | undefined> {
+  async getPostById(id: string, userId?: string): Promise<PostWithAuthor | undefined> {
     // Build privacy filter
     let privacyFilter;
     if (userId) {
@@ -784,14 +784,81 @@ export class DatabaseStorage implements IStorage {
       privacyFilter = eq(posts.privacy, 'public');
     }
     
-    const [post] = await db
-      .select()
+    const result = await db
+      .select({
+        id: posts.id,
+        authorId: posts.authorId,
+        content: posts.content,
+        type: posts.type,
+        tags: posts.tags,
+        image: posts.image,
+        likesCount: posts.likesCount,
+        commentsCount: posts.commentsCount,
+        url: posts.url,
+        title: posts.title,
+        newsSourceName: posts.newsSourceName,
+        linkPreview: posts.linkPreview,
+        sharesCount: posts.sharesCount,
+        sharedPostId: posts.sharedPostId,
+        eventId: posts.eventId,
+        privacy: posts.privacy,
+        emojiReactionsCount: posts.emojiReactionsCount,
+        gifReactionsCount: posts.gifReactionsCount,
+        bookmarksCount: posts.bookmarksCount,
+        flagsCount: posts.flagsCount,
+        isDeleted: posts.isDeleted,
+        createdAt: posts.createdAt,
+        // Blog/article fields
+        articleBody: posts.articleBody,
+        featuredImage: posts.featuredImage,
+        excerpt: posts.excerpt,
+        articleImages: posts.articleImages,
+        readingTime: posts.readingTime,
+        // Volunteer fields
+        volunteerTitle: posts.volunteerTitle,
+        volunteerOrganization: posts.volunteerOrganization,
+        volunteerLocation: posts.volunteerLocation,
+        volunteerIsRemote: posts.volunteerIsRemote,
+        volunteerStartDate: posts.volunteerStartDate,
+        volunteerEndDate: posts.volunteerEndDate,
+        volunteerCommitment: posts.volunteerCommitment,
+        volunteerSkills: posts.volunteerSkills,
+        volunteerRequirements: posts.volunteerRequirements,
+        volunteerBenefits: posts.volunteerBenefits,
+        volunteerSpotsTotal: posts.volunteerSpotsTotal,
+        volunteerSpotsFilled: posts.volunteerSpotsFilled,
+        volunteerContactEmail: posts.volunteerContactEmail,
+        volunteerContactPhone: posts.volunteerContactPhone,
+        volunteerCategory: posts.volunteerCategory,
+        // Poll fields
+        pollId: polls.id,
+        pollTitle: polls.title,
+        pollDescription: polls.description,
+        pollOptions: polls.options,
+        pollVotingType: polls.votingType,
+        pollIsBlockchainVerified: polls.isBlockchainVerified,
+        pollTotalVotes: polls.totalVotes,
+        pollEndDate: polls.endDate,
+        pollIsActive: polls.isActive,
+        author: {
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+          bio: users.bio,
+        },
+      })
       .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(polls, eq(posts.id, polls.postId))
       .where(and(
         eq(posts.id, id),
         privacyFilter
-      ));
-    return post || undefined;
+      ))
+      .limit(1);
+    
+    return result[0] || undefined;
   }
 
   async createPost(post: InsertPost): Promise<Post> {
