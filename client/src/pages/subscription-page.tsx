@@ -38,7 +38,7 @@ export default function SubscriptionPage() {
         title: "ACP+ Subscription Created!",
         description: `Your ${selectedPlan} subscription is active! You received ${data.totalCredits} ACP credits.`,
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/user/balance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/acp/balance"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions/history"] });
     },
     onError: (error: Error) => {

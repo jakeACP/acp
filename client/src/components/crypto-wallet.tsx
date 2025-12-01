@@ -22,7 +22,7 @@ export function CryptoWallet() {
   const [showHistory, setShowHistory] = useState(false);
 
   const { data: balance, isLoading: balanceLoading, error: balanceError } = useQuery<{ balance: string }>({
-    queryKey: ["/api/user/balance"],
+    queryKey: ["/api/acp/balance"],
   });
 
   const { data: transactions, isLoading: transactionsLoading } = useQuery<Transaction[]>({

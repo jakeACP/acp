@@ -58,9 +58,9 @@ export function DonationModal({ charity, isOpen, onClose, onSuccess }: DonationM
 
   // Get user's ACP coin balance
   const { data: userBalance } = useQuery({
-    queryKey: ["/api/user/balance"],
+    queryKey: ["/api/acp/balance"],
     queryFn: async () => {
-      const response = await fetch("/api/user/balance");
+      const response = await fetch("/api/acp/balance");
       if (!response.ok) throw new Error("Failed to fetch balance");
       const data = await response.json();
       return data.balance;

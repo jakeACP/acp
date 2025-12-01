@@ -38,7 +38,7 @@ export function PremiumStore() {
   });
 
   const { data: userBalance } = useQuery<{ balance: string }>({
-    queryKey: ["/api/user/balance"],
+    queryKey: ["/api/acp/balance"],
   });
 
   const purchaseMutation = useMutation({
@@ -60,7 +60,7 @@ export function PremiumStore() {
         title: "Purchase Successful!",
         description: "Item has been added to your profile customizations.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/user/balance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/acp/balance"] });
     },
     onError: (error: Error) => {
       toast({
