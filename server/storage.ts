@@ -1554,7 +1554,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(polls)
-      .where(and(eq(polls.featured, true), eq(polls.isActive, true)))
+      .where(eq(polls.featured, true))
       .orderBy(desc(polls.createdAt))
       .limit(3);
   }

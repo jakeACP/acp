@@ -156,27 +156,18 @@ Please respond with JSON in this exact format:
     // Convert to our Representative format
     return {
       name: result.name,
-      office: result.office || office,
-      level: result.level || "federal",
+      officeTitle: result.office || office,
+      officeLevel: result.level || "federal",
       party: result.party || null,
       phone: result.phone || null,
       email: result.email || null,
       website: result.website || null,
-      address: result.address || null,
       photoUrl: null,
       district: result.district || district || null,
-      state: result.state || state || null,
-      zipCodes: [], // Will be updated when associated with zip codes
-      // Election and term tracking
-      electedDate: result.electedDate ? new Date(result.electedDate) : null,
+      jurisdiction: result.state || state || null,
       termStart: result.termStart ? new Date(result.termStart) : null,
       termEnd: result.termEnd ? new Date(result.termEnd) : null,
-      termLength: result.termLength || null,
-      isCurrentlyServing: true,
-      lastVerified: new Date(),
-      verificationSource: "chatgpt",
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      active: true,
     };
 
   } catch (error) {
@@ -268,27 +259,18 @@ Please respond with JSON in this exact format:
     // Convert to our Representative format (omit id to let database generate it)
     return validatedReps.map(rep => ({
       name: rep.name,
-      office: rep.office,
-      level: rep.level,
+      officeTitle: rep.office,
+      officeLevel: rep.level,
       party: rep.party || null,
       phone: rep.phone || null,
       email: rep.email || null,
       website: rep.website || null,
-      address: rep.address || null,
-      photoUrl: null, // Could be enhanced later
       district: rep.district || null,
-      state: rep.state || null,
-      zipCodes: [zipCode], // Associate with the searched zip code
-      // Election and term tracking
-      electedDate: rep.electedDate ? new Date(rep.electedDate) : null,
+      jurisdiction: rep.state || null,
       termStart: rep.termStart ? new Date(rep.termStart) : null,
       termEnd: rep.termEnd ? new Date(rep.termEnd) : null,
-      termLength: rep.termLength || null,
-      isCurrentlyServing: true, // We only ask for current officials
-      lastVerified: new Date(),
-      verificationSource: "chatgpt",
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      photoUrl: null,
+      active: true,
     }));
 
   } catch (error) {
