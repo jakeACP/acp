@@ -37,7 +37,7 @@ export function PremiumStore() {
     queryKey: ["/api/store/items", selectedCategory === "all" ? "" : selectedCategory],
   });
 
-  const { data: userBalance } = useQuery<{ balance: string }>({
+  const { data: userBalance, isLoading: balanceLoading } = useQuery<{ balance: string }>({
     queryKey: ["/api/acp/balance"],
   });
 
@@ -108,8 +108,15 @@ export function PremiumStore() {
   };
 
   const canAfford = (price: string) => {
-    if (!userBalance) return false;
+    if (!userBalance?.balance) return false;
     return parseFloat(userBalance.balance) >= parseFloat(price);
+  };
+
+  const getButtonText = (price: string) => {
+    if (purchaseMutation.isPending) return <LoadingSpinner className="h-3 w-3" />;
+    if (balanceLoading) return "Loading...";
+    if (canAfford(price)) return "Purchase";
+    return "Insufficient Funds";
   };
 
   const getCategoryIcon = (category: string) => {
@@ -215,17 +222,11 @@ export function PremiumStore() {
                           </span>
                           <Button
                             onClick={() => purchaseMutation.mutate(item.id)}
-                            disabled={!canAfford(item.price) || purchaseMutation.isPending}
+                            disabled={balanceLoading || !canAfford(item.price) || purchaseMutation.isPending}
                             size="sm"
                             data-testid={`purchase-${item.id}`}
                           >
-                            {purchaseMutation.isPending ? (
-                              <LoadingSpinner className="h-3 w-3" />
-                            ) : canAfford(item.price) ? (
-                              "Purchase"
-                            ) : (
-                              "Insufficient Funds"
-                            )}
+                            {getButtonText(item.price)}
                           </Button>
                         </div>
                       </CardContent>
