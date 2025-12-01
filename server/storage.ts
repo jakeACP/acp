@@ -527,7 +527,10 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values(insertUser)
+      .values({
+        ...insertUser,
+        acpCoinBalance: "20.00000000", // Every new account starts with 20 ACP Credits
+      })
       .returning();
     return user;
   }
