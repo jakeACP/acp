@@ -1369,8 +1369,8 @@ export const voterVerificationRequests = pgTable("voter_verification_requests", 
   fullLegalName: text("full_legal_name").notNull(),
   address: text("address").notNull(),
   dateOfBirth: timestamp("date_of_birth").notNull(),
-  stateIdPhotoUrl: text("state_id_photo_url").notNull(), // Stored in object storage
-  selfiePhotoUrl: text("selfie_photo_url").notNull(), // Stored in object storage
+  stateIdPhotoUrl: text("state_id_photo_url"), // Optional - Stored in object storage
+  selfiePhotoUrl: text("selfie_photo_url"), // Optional - Stored in object storage
   phoneNumber: text("phone_number").notNull(),
   emailAddress: text("email_address").notNull(),
   hasFelonyOrIneligibility: boolean("has_felony_or_ineligibility").notNull().default(false),
@@ -1383,6 +1383,26 @@ export const voterVerificationRequests = pgTable("voter_verification_requests", 
 }, (table) => ({
   userIndex: index("voter_verification_user_idx").on(table.userId),
   statusIndex: index("voter_verification_status_idx").on(table.status),
+}));
+
+// Moderator Review Queue - for photo uploads and verification submissions
+export const moderatorReviewQueue = pgTable("moderator_review_queue", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  itemType: text("item_type").notNull(), // voter_verification, whistleblower_document, etc.
+  itemId: varchar("item_id"), // Reference to the related item
+  photoUrl: text("photo_url"), // URL of photo to review
+  photoType: text("photo_type"), // state_id, selfie, document, etc.
+  description: text("description"), // What needs review
+  status: text("status").notNull().default("pending"), // pending, approved, rejected
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("moderator_review_user_idx").on(table.userId),
+  statusIndex: index("moderator_review_status_idx").on(table.status),
+  itemTypeIndex: index("moderator_review_item_type_idx").on(table.itemType),
 }));
 
 // Boycotts - Feature for organizing consumer boycotts
