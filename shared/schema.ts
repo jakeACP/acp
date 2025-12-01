@@ -48,6 +48,11 @@ export const users = pgTable("users", {
   lastLoginIp: text("last_login_ip"),
   registrationCountry: text("registration_country"),
   lastLoginCountry: text("last_login_country"),
+  // Privacy settings
+  defaultPostPrivacy: text("default_post_privacy").default("public"), // public or private
+  hideRealNameInSearch: boolean("hide_real_name_in_search").default(false),
+  userHandle: text("user_handle"), // Username/handle for display
+  nameChangeCount: integer("name_change_count").default(0), // Track name changes for ACP charges
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,

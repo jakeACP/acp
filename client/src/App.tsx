@@ -18,6 +18,7 @@ import PoliticianProfilePage from "@/pages/politician-profile-page";
 import MessagesPage from "@/pages/messages-page";
 import RepresentativesPage from "@/pages/representatives-page";
 import SettingsPage from "@/pages/settings-page";
+import PrivacySettingsPage from "@/pages/privacy-settings-page";
 import EventsPage from "@/pages/events-page";
 import FriendsPage from "@/pages/friends-page";
 import PollDetailPage from "@/pages/poll-detail-page";
@@ -89,6 +90,7 @@ function Router() {
       <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
       <ProtectedRoute path="/subscription" component={SubscriptionPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
+      <ProtectedRoute path="/privacy-settings" component={PrivacySettingsPage} />
       <ProtectedRoute path="/admin/dashboard" component={AdminDashboardPage} />
       <ProtectedRoute path="/admin/moderation" component={AdminModerationPage} />
       <ProtectedRoute path="/admin/users" component={AdminUsersPage} />
