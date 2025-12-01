@@ -538,9 +538,24 @@ export function PostCard({ post }: PostCardProps) {
           <img
             src={post.image}
             alt="Post content"
-            className="w-full h-48 object-cover rounded-lg mb-4"
+            onClick={() => setExpandedImage(post.image)}
+            className="w-full h-auto max-h-96 object-contain rounded-lg mb-4 cursor-pointer hover:opacity-90 transition-opacity bg-muted"
+            data-testid={`image-post-${post.id}`}
           />
         )}
+        
+        {/* Image Expand Modal */}
+        <Dialog open={!!expandedImage} onOpenChange={(open) => !open && setExpandedImage(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex items-center justify-center p-2">
+            {expandedImage && (
+              <img
+                src={expandedImage}
+                alt="Expanded post content"
+                className="w-full h-auto max-h-[85vh] object-contain rounded-lg"
+              />
+            )}
+          </DialogContent>
+        </Dialog>
         
         {post.pollOptions && post.pollOptions.length > 0 && (
           <div className="mb-4 border border-border rounded-lg p-4 bg-card">
