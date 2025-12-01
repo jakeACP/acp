@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShoppingCart, Palette, Music, Image, Star, Crown, Plus } from "lucide-react";
+import { ShoppingCart, Palette, Music, Image, Star, Crown, Plus, Eye, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { ErrorMessage } from "@/components/error-message";
+
+type ThemeVariant = "patriot" | "ocean" | "forest" | "sunset" | "aurora" | "midnight";
 
 interface StoreItem {
   id: string;
@@ -28,10 +30,50 @@ interface StoreItem {
   createdAt: string;
 }
 
+const THEME_VARIANTS: Record<ThemeVariant, { name: string; description: string; background: string; colors: string }> = {
+  patriot: {
+    name: "Patriot Red/White/Blue",
+    description: "Classic liquid glass patriotic theme with red, white, and blue gradient stripes",
+    background: "repeating-linear-gradient(135deg, #B22234 0px, #B22234 100px, #FFFFFF 100px, #FFFFFF 108px, #3C3B6E 108px, #3C3B6E 208px, #FFFFFF 208px, #FFFFFF 216px)",
+    colors: "from-red-600 via-white to-blue-900"
+  },
+  ocean: {
+    name: "Ocean Depth",
+    description: "Serene liquid glass theme with deep ocean blues and aqua accents",
+    background: "linear-gradient(135deg, #1e3a8a 0%, #0369a1 50%, #06b6d4 100%)",
+    colors: "from-blue-900 via-cyan-600 to-cyan-400"
+  },
+  forest: {
+    name: "Forest Green",
+    description: "Natural liquid glass theme with rich emerald and forest tones",
+    background: "linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)",
+    colors: "from-emerald-900 via-emerald-700 to-emerald-500"
+  },
+  sunset: {
+    name: "Sunset Glow",
+    description: "Warm liquid glass theme with golden, orange, and purple sunset colors",
+    background: "linear-gradient(135deg, #7c2d12 0%, #ea580c 50%, #a855f7 100%)",
+    colors: "from-orange-900 via-orange-500 to-purple-600"
+  },
+  aurora: {
+    name: "Aurora Borealis",
+    description: "Magical liquid glass theme with green, purple, and pink northern lights",
+    background: "linear-gradient(135deg, #1e1b4b 0%, #10b981 30%, #a855f7 70%, #ec4899 100%)",
+    colors: "from-indigo-900 via-emerald-500 to-pink-500"
+  },
+  midnight: {
+    name: "Midnight Stars",
+    description: "Dark liquid glass theme with deep purple and silver starlight accents",
+    background: "linear-gradient(135deg, #1a1625 0%, #2d1b69 50%, #3d2645 100%)",
+    colors: "from-purple-950 via-purple-700 to-purple-500"
+  }
+};
+
 export function PremiumStore() {
   const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [triedTheme, setTriedTheme] = useState<ThemeVariant | null>(null);
 
   const { data: storeItems, isLoading, error } = useQuery<StoreItem[]>({
     queryKey: ["/api/store/items", selectedCategory === "all" ? "" : selectedCategory],
@@ -147,6 +189,40 @@ export function PremiumStore() {
 
   return (
     <div className="space-y-6">
+      {/* Theme Preview Container */}
+      {triedTheme && (
+        <div 
+          className="relative rounded-lg overflow-hidden shadow-xl"
+          style={{
+            background: THEME_VARIANTS[triedTheme].background,
+            minHeight: "200px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column"
+          }}
+        >
+          {/* Liquid Glass Effect */}
+          <div className="absolute inset-0 backdrop-blur-3xl opacity-40"></div>
+          
+          {/* Content */}
+          <div className="relative z-10 text-center text-white">
+            <h3 className="text-2xl font-bold mb-2">{THEME_VARIANTS[triedTheme].name} Theme</h3>
+            <p className="text-white/80 mb-4">{THEME_VARIANTS[triedTheme].description}</p>
+            <Button 
+              onClick={() => setTriedTheme(null)}
+              variant="secondary"
+              size="sm"
+              className="bg-white/20 hover:bg-white/30 text-white border-white/50"
+              data-testid="button-close-theme-preview"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Close Preview
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card data-testid="premium-store-card">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -180,6 +256,61 @@ export function PremiumStore() {
                   </Button>
                 ))}
               </div>
+
+              {/* Premium Themes Section */}
+              {(selectedCategory === "all" || selectedCategory === "theme") && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 py-2">
+                    <Palette className="h-5 w-5 text-purple-600" />
+                    <h3 className="font-semibold text-lg">Premium Liquid Glass Themes</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Object.entries(THEME_VARIANTS).map(([themeKey, theme]) => (
+                      <Card key={themeKey} className="overflow-hidden" data-testid={`theme-card-${themeKey}`}>
+                        {/* Theme Preview */}
+                        <div 
+                          className="h-32 relative overflow-hidden flex items-center justify-center"
+                          style={{ background: theme.background }}
+                        >
+                          <div className="absolute inset-0 backdrop-blur-md opacity-30"></div>
+                          <div className="relative z-10 text-white text-center px-2">
+                            <h4 className="font-bold text-sm">{theme.name}</h4>
+                          </div>
+                        </div>
+                        
+                        <CardContent className="pt-4">
+                          <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                            {theme.description}
+                          </p>
+                          
+                          <div className="flex items-center justify-between">
+                            <span className="text-lg font-bold text-purple-600">₳2.50</span>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => setTriedTheme(themeKey as ThemeVariant)}
+                                variant="outline"
+                                size="sm"
+                                data-testid={`button-try-${themeKey}`}
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                Try
+                              </Button>
+                              <Button
+                                onClick={() => purchaseMutation.mutate(`theme-${themeKey}`)}
+                                disabled={purchaseMutation.isPending}
+                                size="sm"
+                                data-testid={`purchase-theme-${themeKey}`}
+                              >
+                                {purchaseMutation.isPending ? <LoadingSpinner className="h-3 w-3" /> : "Get"}
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {storeItems && storeItems.length > 0 ? (
