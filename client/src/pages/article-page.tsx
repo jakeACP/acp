@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Calendar, Clock, User, Share2, Heart, MessageCircle, Bookmark, Eye } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, User, Share2, Heart, MessageCircle, Bookmark, Eye, Pencil } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { format } from "date-fns";
 import type { Post, User as UserType } from "@shared/schema";
 
@@ -17,6 +18,7 @@ export default function ArticlePage() {
   const [match, params] = useRoute("/article/:id");
   const [, navigate] = useLocation();
   const articleId = params?.id;
+  const { user } = useAuth();
 
   const { data: article, isLoading, error } = useQuery<PostWithAuthor>({
     queryKey: ["/api/posts", articleId],
@@ -72,6 +74,18 @@ export default function ArticlePage() {
             Back to Feed
           </Button>
           <div className="flex gap-2">
+            {user && article && user.id === article.authorId && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => navigate(`/write/${article.id}`)}
+                data-testid="button-edit-article" 
+                className="hover:bg-white/20"
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+            )}
             <Button variant="ghost" size="icon" data-testid="button-share" className="hover:bg-white/20">
               <Share2 className="w-4 h-4" />
             </Button>

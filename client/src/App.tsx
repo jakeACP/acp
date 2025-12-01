@@ -81,6 +81,7 @@ function Router() {
       <ProtectedRoute path="/boycotts" component={BoycottsPage} />
       <ProtectedRoute path="/whistleblowing" component={WhistleblowingPage} />
       <ProtectedRoute path="/write" component={CreateArticlePage} />
+      <ProtectedRoute path="/write/:id" component={CreateArticlePage} />
       <ProtectedRoute path="/article/:id" component={ArticlePage} />
       <ProtectedRoute path="/initiatives" component={InitiativesPage} />
       <ProtectedRoute path="/initiatives/new" component={InitiativeFormPage} />

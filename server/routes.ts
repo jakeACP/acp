@@ -146,6 +146,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/posts/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const post = await storage.getPostById(req.params.id, req.user.id);
+      if (!post) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      if (post.authorId !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ message: "You can only edit your own posts" });
+      }
+
+      const { title, content, excerpt, articleBody, featuredImage, privacy, tags, readingTime } = req.body;
+      
+      const updateData: Record<string, any> = {};
+      if (title !== undefined) updateData.title = title;
+      if (content !== undefined) updateData.content = content;
+      if (excerpt !== undefined) updateData.excerpt = excerpt;
+      if (articleBody !== undefined) updateData.articleBody = articleBody;
+      if (featuredImage !== undefined) updateData.featuredImage = featuredImage;
+      if (privacy !== undefined) updateData.privacy = privacy;
+      if (tags !== undefined) updateData.tags = tags;
+      if (readingTime !== undefined) updateData.readingTime = readingTime;
+      updateData.updatedAt = new Date();
+
+      const updatedPost = await storage.updatePost(req.params.id, updateData);
+      res.json(updatedPost);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.delete("/api/posts/:id", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
