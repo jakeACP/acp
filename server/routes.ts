@@ -2821,7 +2821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ACP Cryptocurrency Routes
-  app.get("/api/user/balance", async (req, res) => {
+  app.get("/api/acp/balance", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }

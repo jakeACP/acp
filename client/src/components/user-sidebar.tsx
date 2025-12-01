@@ -34,7 +34,7 @@ export function UserSidebar() {
   });
 
   const { data: balanceData } = useQuery<{ balance: string }>({
-    queryKey: ["/api/user/balance"],
+    queryKey: ["/api/acp/balance"],
     enabled: !!user?.id,
   });
 
