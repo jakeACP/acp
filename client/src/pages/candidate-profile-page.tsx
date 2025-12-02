@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Navigation } from "@/components/navigation";
+import { FriendButton } from "@/components/friend-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -196,25 +197,32 @@ export default function CandidateProfilePage() {
               </div>
 
               {!isOwnCandidacy && (
-                <Button
-                  onClick={handleSupportToggle}
-                  disabled={supportMutation.isPending}
-                  variant={supportStatus?.isSupporting ? "outline" : "default"}
-                  className="flex items-center gap-2"
-                  data-testid="button-support-toggle"
-                >
-                  {supportStatus?.isSupporting ? (
-                    <>
-                      <HeartOff className="h-4 w-4" />
-                      Unsupport
-                    </>
-                  ) : (
-                    <>
-                      <Heart className="h-4 w-4" />
-                      Support
-                    </>
-                  )}
-                </Button>
+                <div className="flex gap-2">
+                  <FriendButton 
+                    userId={candidate.userId}
+                    username={candidate.username}
+                    variant="outline"
+                  />
+                  <Button
+                    onClick={handleSupportToggle}
+                    disabled={supportMutation.isPending}
+                    variant={supportStatus?.isSupporting ? "outline" : "default"}
+                    className="flex items-center gap-2"
+                    data-testid="button-support-toggle"
+                  >
+                    {supportStatus?.isSupporting ? (
+                      <>
+                        <HeartOff className="h-4 w-4" />
+                        Unsupport
+                      </>
+                    ) : (
+                      <>
+                        <Heart className="h-4 w-4" />
+                        Support
+                      </>
+                    )}
+                  </Button>
+                </div>
               )}
             </div>
           </CardHeader>

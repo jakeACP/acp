@@ -368,11 +368,16 @@ export interface IStorage {
 
   // Friendship System
   createFriendship(requesterId: string, addresseeId: string): Promise<void>;
+  createFriendshipPending(requesterId: string, addresseeId: string): Promise<void>;
   acceptFriendship(friendshipId: string): Promise<void>;
   rejectFriendship(friendshipId: string): Promise<void>;
+  cancelFriendRequest(friendshipId: string, userId: string): Promise<void>;
+  unfriend(userId: string, friendId: string): Promise<void>;
   blockUser(friendshipId: string): Promise<void>;
   getFriends(userId: string): Promise<any[]>;
   getFriendRequests(userId: string): Promise<any[]>;
+  getSentFriendRequests(userId: string): Promise<any[]>;
+  getFriendshipStatus(userId1: string, userId2: string): Promise<{ status: string; friendshipId?: string; isRequester?: boolean } | null>;
   getFriendGroups(userId: string): Promise<any[]>;
   createFriendGroup(userId: string, name: string, color: string, description?: string): Promise<any>;
   addFriendToGroup(groupId: string, friendshipId: string): Promise<void>;
@@ -4671,6 +4676,7 @@ export class DatabaseStorage implements IStorage {
   async getFriends(userId: string): Promise<any[]> {
     return await db.select({
       id: friendships.id,
+      userId: users.id,
       username: users.username,
       firstName: users.firstName,
       lastName: users.lastName,
@@ -4690,6 +4696,7 @@ export class DatabaseStorage implements IStorage {
   async getFriendRequests(userId: string): Promise<any[]> {
     return await db.select({
       id: friendships.id,
+      userId: users.id,
       username: users.username,
       firstName: users.firstName,
       lastName: users.lastName,
@@ -4702,6 +4709,80 @@ export class DatabaseStorage implements IStorage {
       eq(friendships.addresseeId, userId),
       eq(friendships.status, 'pending')
     ));
+  }
+
+  async getSentFriendRequests(userId: string): Promise<any[]> {
+    return await db.select({
+      id: friendships.id,
+      userId: users.id,
+      username: users.username,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      avatar: users.avatar,
+      status: friendships.status,
+    })
+    .from(friendships)
+    .innerJoin(users, eq(users.id, friendships.addresseeId))
+    .where(and(
+      eq(friendships.requesterId, userId),
+      eq(friendships.status, 'pending')
+    ));
+  }
+
+  async getFriendshipStatus(userId1: string, userId2: string): Promise<{ status: string; friendshipId?: string; isRequester?: boolean } | null> {
+    const [friendship] = await db.select({
+      id: friendships.id,
+      status: friendships.status,
+      requesterId: friendships.requesterId,
+    })
+    .from(friendships)
+    .where(
+      or(
+        and(eq(friendships.requesterId, userId1), eq(friendships.addresseeId, userId2)),
+        and(eq(friendships.requesterId, userId2), eq(friendships.addresseeId, userId1))
+      )
+    )
+    .limit(1);
+    
+    if (!friendship) return null;
+    
+    return {
+      status: friendship.status,
+      friendshipId: friendship.id,
+      isRequester: friendship.requesterId === userId1
+    };
+  }
+
+  async createFriendshipPending(requesterId: string, addresseeId: string): Promise<void> {
+    await db.insert(friendships).values({
+      requesterId,
+      addresseeId,
+      status: 'pending'
+    });
+  }
+
+  async cancelFriendRequest(friendshipId: string, userId: string): Promise<void> {
+    // Only the requester can cancel their own request
+    await db.delete(friendships)
+      .where(and(
+        eq(friendships.id, friendshipId),
+        eq(friendships.requesterId, userId),
+        eq(friendships.status, 'pending')
+      ));
+  }
+
+  async unfriend(userId: string, friendId: string): Promise<void> {
+    // Delete the friendship where either party can unfriend
+    await db.delete(friendships)
+      .where(
+        and(
+          eq(friendships.status, 'accepted'),
+          or(
+            and(eq(friendships.requesterId, userId), eq(friendships.addresseeId, friendId)),
+            and(eq(friendships.requesterId, friendId), eq(friendships.addresseeId, userId))
+          )
+        )
+      );
   }
 
   async getFriendGroups(userId: string): Promise<any[]> {

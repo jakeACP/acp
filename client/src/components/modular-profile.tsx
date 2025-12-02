@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
+import { FriendButton } from "@/components/friend-button";
 import { apiRequest } from "@/lib/queryClient";
 
 interface ProfileModule {
@@ -1206,7 +1207,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
               </div>
             </div>
 
-            {isOwner && (
+            {isOwner ? (
               <div className="flex gap-2">
                 <Button
                   variant="ghost"
@@ -1234,6 +1235,13 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                   </Button>
                 )}
               </div>
+            ) : user?.id && (
+              <FriendButton 
+                userId={user.id} 
+                username={user.username}
+                variant="outline"
+                className="bg-white/10 hover:bg-white/20 text-white border-white/30"
+              />
             )}
           </div>
 

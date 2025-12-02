@@ -30,6 +30,7 @@ import { Navigation } from "@/components/navigation";
 
 interface Friend {
   id: string;
+  userId?: string;
   username: string;
   firstName?: string;
   lastName?: string;
@@ -79,9 +80,15 @@ export default function FriendsPage() {
     enabled: !!user?.id,
   });
 
-  // Fetch friend requests
+  // Fetch friend requests (incoming)
   const { data: friendRequests = [], isLoading: requestsLoading } = useQuery<Friend[]>({
-    queryKey: ["/api/friend-requests"],
+    queryKey: ["/api/friends/requests"],
+    enabled: !!user?.id,
+  });
+
+  // Fetch sent friend requests (outgoing)
+  const { data: sentRequests = [], isLoading: sentRequestsLoading } = useQuery<Friend[]>({
+    queryKey: ["/api/friends/requests/sent"],
     enabled: !!user?.id,
   });
 
@@ -122,7 +129,7 @@ export default function FriendsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/friend-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/friends/requests"] });
       toast({
         title: "Friend request accepted",
         description: "You are now friends!",
@@ -136,7 +143,7 @@ export default function FriendsPage() {
       return apiRequest(`/api/friendships/${friendshipId}/reject`, "POST");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/friend-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/friends/requests"] });
       toast({
         title: "Friend request rejected",
         description: "The friend request has been rejected.",
@@ -161,10 +168,11 @@ export default function FriendsPage() {
   // Send friend request mutation
   const sendFriendRequestMutation = useMutation({
     mutationFn: async (recipientId: string) => {
-      return apiRequest("/api/friendships/request", "POST", { recipientId });
+      return apiRequest("/api/friendships/request", "POST", { addresseeId: recipientId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/search", userSearchTerm] });
+      queryClient.invalidateQueries({ queryKey: ["/api/friends/requests/sent"] });
       toast({
         title: "Friend request sent",
         description: "Your friend request has been sent.",
@@ -174,6 +182,48 @@ export default function FriendsPage() {
       toast({
         title: "Error",
         description: error.message || "Failed to send friend request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Cancel friend request mutation
+  const cancelRequestMutation = useMutation({
+    mutationFn: async (friendshipId: string) => {
+      return apiRequest(`/api/friendships/${friendshipId}/cancel`, "POST");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/friends/requests/sent"] });
+      toast({
+        title: "Request cancelled",
+        description: "Your friend request has been cancelled.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to cancel friend request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Unfriend mutation
+  const unfriendMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return apiRequest(`/api/friends/${userId}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+      toast({
+        title: "Friend removed",
+        description: "You are no longer friends with this user.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove friend",
         variant: "destructive",
       });
     },
@@ -427,12 +477,15 @@ export default function FriendsPage() {
           {/* Main Content */}
           <div className="lg:col-span-3">
             <Tabs defaultValue="friends" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="friends" data-testid="tab-friends">
                   Friends ({friends.length})
                 </TabsTrigger>
                 <TabsTrigger value="requests" data-testid="tab-requests">
-                  Requests ({friendRequests.length})
+                  Incoming ({friendRequests.length})
+                </TabsTrigger>
+                <TabsTrigger value="sent" data-testid="tab-sent">
+                  Sent ({sentRequests.length})
                 </TabsTrigger>
               </TabsList>
 
@@ -504,9 +557,10 @@ export default function FriendsPage() {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => blockUserMutation.mutate(friend.id)}
+                              onClick={() => unfriendMutation.mutate(friend.userId || friend.id)}
+                              disabled={unfriendMutation.isPending}
                               className="text-red-600 hover:text-red-700"
-                              data-testid={`button-block-${friend.id}`}
+                              data-testid={`button-unfriend-${friend.id}`}
                             >
                               <UserX className="h-4 w-4" />
                             </Button>
@@ -520,6 +574,7 @@ export default function FriendsPage() {
 
               <TabsContent value="requests" className="space-y-6">
                 <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Incoming Requests</h3>
                   {requestsLoading ? (
                     <div className="text-center py-8">Loading friend requests...</div>
                   ) : friendRequests.length === 0 ? (
@@ -568,6 +623,55 @@ export default function FriendsPage() {
                                 Decline
                               </Button>
                             </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="sent" className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Sent Requests</h3>
+                  {sentRequestsLoading ? (
+                    <div className="text-center py-8">Loading sent requests...</div>
+                  ) : sentRequests.length === 0 ? (
+                    <div className="text-center py-8">
+                      <UserPlus className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                      <p className="text-slate-600">No sent friend requests</p>
+                      <p className="text-sm text-slate-500 mt-2">
+                        Use the "Search by Email/Username" button to find friends
+                      </p>
+                    </div>
+                  ) : (
+                    sentRequests.map((request) => (
+                      <Card key={request.id}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Avatar>
+                                <AvatarImage src={request.avatar} />
+                                <AvatarFallback>
+                                  {request.firstName?.[0]}{request.lastName?.[0] || request.username?.[0]?.toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium text-slate-900">
+                                  {request.firstName ? `${request.firstName} ${request.lastName}` : request.username}
+                                </p>
+                                <p className="text-sm text-slate-600">@{request.username}</p>
+                                <p className="text-xs text-amber-600">Request pending</p>
+                              </div>
+                            </div>
+                            <Button 
+                              variant="outline"
+                              onClick={() => cancelRequestMutation.mutate(request.id)}
+                              disabled={cancelRequestMutation.isPending}
+                              data-testid={`button-cancel-${request.id}`}
+                            >
+                              Cancel Request
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>

@@ -1,0 +1,220 @@
+You are working inside the Replit project:
+“Anti-Corruption Party” (ACP) – a social/political network with auth, posts, profiles, groups, etc.
+
+GOAL:
+Design and fully implement a robust “friends” system that works end-to-end across the entire site (web + mobile views) without breaking existing features.
+
+GENERAL APPROACH:
+1. First, scan the codebase to understand:
+   - Tech stack (backend framework, database, frontend framework).
+   - Existing User model and any follow / contact / relationship logic.
+   - Existing routes/pages for:
+     - User profile
+     - Timeline / feed
+     - Notifications
+     - Search / “Find Friends” or “People” features
+     - Mobile layout / navigation.
+2. Work incrementally and keep all existing functionality working. Re-run tests and dev server often.
+
+==================================
+DATA MODEL & BACKEND REQUIREMENTS
+==================================
+
+Add a first-class “friends” system with the following states:
+
+- `pending` (outgoing request)
+- `requested` (incoming request)
+- `accepted` (friends)
+- `blocked` (optional but preferred)
+
+Implement using whatever pattern fits the current stack best (e.g., a `Friendship` table, a many-to-many join table, or a friendship collection). It should support:
+
+- `requester_id`
+- `receiver_id`
+- `status`
+- timestamps
+- basic uniqueness constraints (no duplicate relationships, no self-friendship).
+
+Add backend APIs / routes (REST or GraphQL, matching existing style):
+
+1. Send friend request
+   - Input: target user id or username/email.
+   - Auth required.
+   - Validate: cannot send to self, cannot duplicate existing friendship or pending request.
+
+2. Accept friend request
+   - Only the receiver can accept.
+   - Convert `pending/requested` → `accepted`.
+
+3. Decline / cancel friend request
+   - Receiver can decline; requester can cancel outgoing request.
+
+4. Unfriend
+   - Either side can remove an accepted friendship.
+
+5. Block / unblock (if consistent with app norms)
+   - Optional but supported if the rest of the codebase uses blocking.
+   - Block should prevent new requests and hide friendship.
+
+6. List friends
+   - `/api/friends` → list of accepted friends for current user.
+   - Pagination if needed to match existing API patterns.
+
+7. List friend requests
+   - Incoming (`status=requested`)
+   - Outgoing (`status=pending`)
+
+8. Search for new friends
+   - Reuse existing user search if present; if not, add a simple search by:
+     - username
+     - email
+     - first/last name (if fields exist).
+
+Secure all endpoints:
+- Require auth middleware.
+- Enforce proper ownership checks.
+- Avoid leaking email or private info beyond what’s already visible elsewhere in the app.
+
+Add basic unit/integration tests for:
+- Send/accept/decline/cancel/unfriend flows.
+- Attempted duplicates.
+- Permissions (cannot accept someone else’s request, etc.).
+
+=========================
+FRONTEND / UI REQUIREMENTS
+=========================
+
+Use the existing design system and component patterns.
+
+A. GLOBAL NAVIGATION
+
+1. Add a “Friends” section that works on:
+   - Desktop navigation.
+   - Mobile navigation (drawer, bottom nav, or whatever pattern ACP uses).
+
+2. The “Friends” section should have:
+   - “My Friends” tab/list.
+   - “Requests” tab (incoming + outgoing).
+   - “Find Friends” / search tab.
+
+B. USER PROFILE INTEGRATION
+
+On each user’s profile page (except your own), add a context-aware button:
+
+- If not connected:
+  - Show “Add Friend”.
+- If request sent by current user:
+  - Show “Request Sent” (with ability to cancel).
+- If there is an incoming request from this user:
+  - Show “Accept” and “Decline”.
+- If already friends:
+  - Show “Friends ✓” with a menu: “Unfriend”, (“Block” if implemented).
+
+Make sure the button updates immediately after actions (optimistic UI or refetch).
+
+C. FRIENDS PAGE
+
+Create a dedicated Friends page/screen with:
+
+1. **My Friends list**
+   - Shows avatar, name, maybe location/role (reuse existing user card components).
+   - Actions: view profile, unfriend.
+
+2. **Friend Requests**
+   - “Incoming Requests” section with Accept / Decline buttons.
+   - “Sent Requests” section with Cancel buttons.
+
+3. **Find Friends / Search**
+   - Search box that queries the backend search endpoint.
+   - Results show users with appropriate action button:
+      - Add Friend / Request Sent / Accept / Friends ✓.
+
+D. TIMELINE / FEED INTEGRATION
+
+1. If the app supports post visibility, add support for:
+   - Friends-only posts (if not present, add a simple privacy enum: `public`, `friends`, maybe `private`).
+   - Ensure the feed only shows friends-only posts to friends.
+
+2. On the main feed:
+   - Add an optional filter/toggle:
+     - “All posts”
+     - “Friends only”
+   - Implement this with query parameters or existing filter mechanisms.
+
+E. NOTIFICATIONS INTEGRATION
+
+If there is already a notifications system:
+
+- Add notifications for:
+  - “X sent you a friend request.”
+  - “X accepted your friend request.”
+- Tie into existing notification UI (badges, dropdown, etc.).
+- Mark notifications as read when user views the relevant page.
+
+If there is no notification system, skip this but leave TODO comments pointing to where it would be integrated.
+
+F. MOBILE RESPONSIVENESS
+
+- Verify that all new “Friends” interfaces:
+  - Render correctly on narrow viewports.
+  - Use existing responsive layout components.
+- Test:
+  - Friends page.
+  - Profile “Add Friend / Accept / Friends” button.
+  - Any new navigation links.
+
+=====================
+CLEANUP & QA CHECKS
+=====================
+
+1. Lint & tests:
+   - Run the project’s linting/test commands and fix any issues you introduce.
+
+2. Manual QA paths (please actually click through using the running ACP app):
+
+   - Log in as User A and User B (create new accounts if needed).
+   - From A → send friend request to B.
+   - From B → view requests list, accept it.
+   - Confirm:
+     - Both A and B see each other in “My Friends”.
+     - Profile buttons show “Friends ✓”.
+   - A or B can:
+     - Unfriend and see state revert correctly.
+   - Create a friends-only post (if privacy added) and verify:
+     - Friend can see it in feed.
+     - Non-friend cannot.
+   - Verify mobile layout:
+     - Friends nav entry is reachable.
+     - Lists are scrollable and readable.
+
+3. Dead-end & error-state handling:
+   - Display user-friendly messages if:
+     - No friends yet.
+     - No incoming requests.
+     - Search has no results.
+   - Handle API errors gracefully with toasts/snackbars or inline error text.
+
+4. Documentation:
+   - Add a short comment block or markdown note (e.g., in README or a FRIENDS.md file) describing:
+     - Data model for friendships.
+     - Key endpoints.
+     - Where the main UI components live.
+     - Any future TODOs (e.g., blocking, mutual friends, notifications improvements).
+
+ACCEPTANCE CRITERIA (IMPORTANT):
+
+- I can register two fresh accounts and, without touching code, do the full lifecycle:
+  - Send request, accept, decline, cancel, unfriend.
+- I can see a working Friends page with lists for:
+  - My friends
+  - Incoming requests
+  - Sent requests
+  - Search results / Find Friends
+- Profile pages show the correct friend state and buttons.
+- Feed “friends-only” visibility (if added) behaves correctly.
+- No existing pages or features are broken; app runs cleanly with no console or server errors.
+
+When you’re done, summarize:
+- What files you changed/added.
+- How the friendship data model works.
+- Any known limitations or next-step enhancements.

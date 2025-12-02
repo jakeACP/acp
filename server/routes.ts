@@ -719,14 +719,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const { addresseeId } = req.body;
+      const addresseeId = req.body.addresseeId || req.body.recipientId;
       if (!addresseeId) {
-        return res.status(400).json({ message: "addresseeId is required" });
+        return res.status(400).json({ message: "addresseeId or recipientId is required" });
       }
       if (addresseeId === req.user.id) {
         return res.status(400).json({ message: "Cannot send friend request to yourself" });
       }
-      await storage.createFriendship(req.user.id, addresseeId);
+      
+      // Check if friendship already exists
+      const existingFriendship = await storage.getFriendshipStatus(req.user.id, addresseeId);
+      if (existingFriendship) {
+        if (existingFriendship.status === 'accepted') {
+          return res.status(400).json({ message: "You are already friends with this user" });
+        }
+        if (existingFriendship.status === 'pending') {
+          return res.status(400).json({ message: "A friend request already exists" });
+        }
+        if (existingFriendship.status === 'blocked') {
+          return res.status(400).json({ message: "Cannot send friend request to this user" });
+        }
+      }
+      
+      await storage.createFriendshipPending(req.user.id, addresseeId);
       res.status(201).json({ message: "Friend request sent" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -780,6 +795,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const requests = await storage.getFriendRequests(req.user.id);
       res.json(requests);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/friends/requests/sent", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const requests = await storage.getSentFriendRequests(req.user.id);
+      res.json(requests);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/friendships/status/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const status = await storage.getFriendshipStatus(req.user.id, req.params.userId);
+      res.json(status || { status: 'none' });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/friendships/:friendshipId/cancel", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.cancelFriendRequest(req.params.friendshipId, req.user.id);
+      res.json({ message: "Friend request cancelled" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/friends/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      await storage.unfriend(req.user.id, req.params.userId);
+      res.json({ message: "Friend removed" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
