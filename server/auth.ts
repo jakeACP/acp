@@ -107,11 +107,18 @@ export function setupAuth(app: Express) {
 
       // Create automatic friend connections (Tom from MySpace style)
       try {
-        // 1. Auto-friend with admin user (Tom from MySpace)
-        const adminUserId = await storage.getAdminUserId();
-        if (adminUserId && adminUserId !== user.id) {
-          console.log(`Creating friendship with admin: ${adminUserId} -> ${user.id}`);
-          await storage.createFriendship(adminUserId, user.id);
+        // 1. Auto-friend with 'jox' user (the default friend for all new users)
+        const joxUserId = await storage.getDefaultFriendUserId();
+        if (joxUserId && joxUserId !== user.id) {
+          console.log(`Creating friendship with jox: ${joxUserId} -> ${user.id}`);
+          await storage.createFriendship(joxUserId, user.id);
+        } else {
+          // Fallback to admin if jox doesn't exist
+          const adminUserId = await storage.getAdminUserId();
+          if (adminUserId && adminUserId !== user.id) {
+            console.log(`Creating friendship with admin (fallback): ${adminUserId} -> ${user.id}`);
+            await storage.createFriendship(adminUserId, user.id);
+          }
         }
 
         // 2. Auto-friend with inviter (if invitation was used)

@@ -378,6 +378,8 @@ export interface IStorage {
   addFriendToGroup(groupId: string, friendshipId: string): Promise<void>;
   createReferral(referrerId: string, referredUserId: string, invitationId?: string): Promise<void>;
   getAdminUserId(): Promise<string | undefined>;
+  getDefaultFriendUserId(): Promise<string | undefined>;
+  searchUsersByEmailOrUsername(query: string, excludeUserId?: string): Promise<User[]>;
 
   // Contact Upload & Friend Discovery
   uploadUserContacts(userId: string, contacts: { name?: string; phoneHash?: string; emailHash?: string; phoneLast4?: string }[]): Promise<{ matched: any[]; unmatchedCount: number }>;
@@ -4744,6 +4746,40 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.role, 'admin'))
       .limit(1);
     return adminUser?.id;
+  }
+
+  async getDefaultFriendUserId(): Promise<string | undefined> {
+    // Get the 'jox' user specifically for auto-friending all new users
+    const [joxUser] = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.username, 'jox'))
+      .limit(1);
+    return joxUser?.id;
+  }
+
+  async searchUsersByEmailOrUsername(query: string, excludeUserId?: string): Promise<User[]> {
+    const searchTerm = `%${query.toLowerCase()}%`;
+    
+    let searchQuery = db.select()
+      .from(users)
+      .where(
+        or(
+          sql`LOWER(${users.username}) LIKE ${searchTerm}`,
+          sql`LOWER(${users.email}) LIKE ${searchTerm}`,
+          sql`LOWER(${users.firstName}) LIKE ${searchTerm}`,
+          sql`LOWER(${users.lastName}) LIKE ${searchTerm}`
+        )
+      )
+      .limit(20);
+    
+    const results = await searchQuery;
+    
+    // Filter out the current user if excludeUserId is provided
+    if (excludeUserId) {
+      return results.filter(u => u.id !== excludeUserId);
+    }
+    
+    return results;
   }
 
   // Contact Upload & Friend Discovery Implementation

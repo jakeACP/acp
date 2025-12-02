@@ -798,6 +798,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User Search API (search by username, email, or name)
+  app.get("/api/users/search", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const query = req.query.q as string;
+      if (!query || query.length < 2) {
+        return res.status(400).json({ message: "Search query must be at least 2 characters" });
+      }
+
+      const users = await storage.searchUsersByEmailOrUsername(query, req.user.id);
+      
+      // Return safe user data (exclude password and sensitive info)
+      const safeUsers = users.map(u => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        avatar: u.avatar,
+        role: u.role,
+      }));
+      
+      res.json(safeUsers);
+    } catch (error: any) {
+      console.error("User search error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Enhanced Reactions API
   app.post("/api/reactions", async (req, res) => {
     if (!req.isAuthenticated()) {

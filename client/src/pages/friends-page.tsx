@@ -47,13 +47,25 @@ interface FriendGroup {
   memberCount: number;
 }
 
+interface SearchedUser {
+  id: string;
+  username: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
+  role?: string;
+}
+
 export default function FriendsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [userSearchTerm, setUserSearchTerm] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupColor, setNewGroupColor] = useState("#3b82f6");
+  const [showUserSearch, setShowUserSearch] = useState(false);
 
   // Fetch user's friends
   const { data: friends = [], isLoading: friendsLoading } = useQuery<Friend[]>({
@@ -71,6 +83,20 @@ export default function FriendsPage() {
   const { data: friendRequests = [], isLoading: requestsLoading } = useQuery<Friend[]>({
     queryKey: ["/api/friend-requests"],
     enabled: !!user?.id,
+  });
+
+  // Search users by email/username
+  const { data: searchedUsers = [], isLoading: searchLoading, refetch: searchUsers } = useQuery<SearchedUser[]>({
+    queryKey: ["/api/users/search", userSearchTerm],
+    queryFn: async () => {
+      if (!userSearchTerm || userSearchTerm.length < 2) return [];
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(userSearchTerm)}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Search failed");
+      return res.json();
+    },
+    enabled: userSearchTerm.length >= 2 && showUserSearch,
   });
 
   // Create friend group mutation
@@ -132,6 +158,27 @@ export default function FriendsPage() {
     },
   });
 
+  // Send friend request mutation
+  const sendFriendRequestMutation = useMutation({
+    mutationFn: async (recipientId: string) => {
+      return apiRequest("/api/friendships/request", "POST", { recipientId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/search", userSearchTerm] });
+      toast({
+        title: "Friend request sent",
+        description: "Your friend request has been sent.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send friend request",
+        variant: "destructive",
+      });
+    },
+  });
+
   const filteredFriends = friends.filter(friend => {
     const matchesSearch = friend.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       `${friend.firstName} ${friend.lastName}`.toLowerCase().includes(searchTerm.toLowerCase());
@@ -176,6 +223,86 @@ export default function FriendsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                {/* Search by email/username */}
+                <Dialog open={showUserSearch} onOpenChange={setShowUserSearch}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      data-testid="button-search-by-email"
+                    >
+                      <Search className="h-4 w-4 mr-2 text-primary" />
+                      Search by Email/Username
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Find Friends</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="userSearch">Search by email, username, or name</Label>
+                        <div className="relative">
+                          <Input
+                            id="userSearch"
+                            value={userSearchTerm}
+                            onChange={(e) => setUserSearchTerm(e.target.value)}
+                            placeholder="Enter email or username..."
+                            className="mt-1"
+                            data-testid="input-user-search"
+                          />
+                          {searchLoading && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {userSearchTerm.length >= 2 && (
+                        <div className="max-h-64 overflow-y-auto space-y-2">
+                          {searchedUsers.length === 0 && !searchLoading && (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No users found
+                            </p>
+                          )}
+                          {searchedUsers.map((searchUser) => (
+                            <div 
+                              key={searchUser.id} 
+                              className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                              data-testid={`search-result-${searchUser.id}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarImage src={searchUser.avatar} />
+                                  <AvatarFallback>
+                                    {searchUser.firstName?.[0] || searchUser.username?.[0] || "?"}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-medium text-sm">
+                                    {searchUser.firstName} {searchUser.lastName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">@{searchUser.username}</p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => sendFriendRequestMutation.mutate(searchUser.id)}
+                                disabled={sendFriendRequestMutation.isPending}
+                                data-testid={`button-add-friend-${searchUser.id}`}
+                              >
+                                <UserPlus className="h-4 w-4 mr-1" />
+                                Add
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 <Button 
                   onClick={() => handleSocialMediaSearch("Facebook")}
                   variant="outline" 
