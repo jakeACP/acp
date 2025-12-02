@@ -156,18 +156,24 @@ Please respond with JSON in this exact format:
     // Convert to our Representative format
     return {
       name: result.name,
-      officeTitle: result.office || office,
-      officeLevel: result.level || "federal",
+      office: result.office || office,
+      level: result.level || "federal",
       party: result.party || null,
       phone: result.phone || null,
       email: result.email || null,
       website: result.website || null,
+      address: result.address || null,
       photoUrl: null,
       district: result.district || district || null,
-      jurisdiction: result.state || state || null,
+      state: result.state || state || null,
+      zipCodes: [],
+      electedDate: result.electedDate ? new Date(result.electedDate) : null,
       termStart: result.termStart ? new Date(result.termStart) : null,
       termEnd: result.termEnd ? new Date(result.termEnd) : null,
-      active: true,
+      termLength: result.termLength || null,
+      isCurrentlyServing: true,
+      lastVerified: new Date(),
+      verificationSource: "chatgpt",
     };
 
   } catch (error) {
@@ -259,18 +265,24 @@ Please respond with JSON in this exact format:
     // Convert to our Representative format (omit id to let database generate it)
     return validatedReps.map(rep => ({
       name: rep.name,
-      officeTitle: rep.office,
-      officeLevel: rep.level,
+      office: rep.office,
+      level: rep.level,
       party: rep.party || null,
       phone: rep.phone || null,
       email: rep.email || null,
       website: rep.website || null,
+      address: rep.address || null,
       district: rep.district || null,
-      jurisdiction: rep.state || null,
+      state: rep.state || null,
+      zipCodes: [],
+      electedDate: rep.electedDate ? new Date(rep.electedDate) : null,
       termStart: rep.termStart ? new Date(rep.termStart) : null,
       termEnd: rep.termEnd ? new Date(rep.termEnd) : null,
+      termLength: rep.termLength || null,
+      isCurrentlyServing: true,
+      lastVerified: new Date(),
+      verificationSource: "chatgpt",
       photoUrl: null,
-      active: true,
     }));
 
   } catch (error) {

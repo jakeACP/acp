@@ -2079,10 +2079,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             type: 'candidate_found', 
             representative: savedRep,
             name: savedRep.name, 
-            office: savedRep.officeTitle,
-            level: savedRep.officeLevel,
+            office: savedRep.office,
+            level: savedRep.level,
             party: savedRep.party,
-            message: `Found: ${savedRep.name} - ${savedRep.officeTitle}`,
+            message: `Found: ${savedRep.name} - ${savedRep.office}`,
             progress: 85 + ((i + 1) * progressStep)
           });
           

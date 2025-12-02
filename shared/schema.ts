@@ -1206,26 +1206,29 @@ export const insertCharityDonationSchema = createInsertSchema(charityDonations).
 export const representatives = pgTable("representatives", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  officeTitle: text("office_title").notNull(), // e.g., "President", "Senator", "Representative"
-  officeLevel: text("office_level").notNull(), // federal, state, local
+  office: text("office").notNull(), // e.g., "President", "Senator", "Representative"
+  level: text("level").notNull(), // federal, state, local
   party: text("party"),
-  email: text("email"),
   phone: text("phone"),
+  email: text("email"),
   website: text("website"),
+  address: text("address"),
+  photoUrl: text("photo_url"),
   district: text("district"), // congressional district, state district, etc.
-  jurisdiction: text("jurisdiction"), // geographic area of representation
+  state: text("state"), // state abbreviation
+  zipCodes: text("zip_codes").array().default([]), // zip codes this representative serves
+  electedDate: timestamp("elected_date"),
   termStart: timestamp("term_start"), // When current term started
   termEnd: timestamp("term_end"), // When current term ends
-  photoUrl: text("photo_url"),
-  socials: json("socials"), // JSON object for social media links
-  notes: text("notes"), // Admin notes about the representative
-  active: boolean("active").default(true), // Whether the representative is currently active
+  termLength: text("term_length"), // e.g., "2 years", "4 years"
+  isCurrentlyServing: boolean("is_currently_serving").default(true),
+  lastVerified: timestamp("last_verified").defaultNow(),
+  verificationSource: text("verification_source"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   nameIndex: index("representatives_name_idx").on(table.name),
-  officeLevelIndex: index("representatives_office_level_idx").on(table.officeLevel),
-  activeIndex: index("representatives_active_idx").on(table.active),
+  levelIndex: index("representatives_level_idx").on(table.level),
 }));
 
 export const zipCodeLookups = pgTable("zip_code_lookups", {

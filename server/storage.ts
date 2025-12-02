@@ -2653,7 +2653,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(representatives)
       .where(inArray(representatives.id, representativeIds))
-      .orderBy(representatives.officeLevel, representatives.officeTitle);
+      .orderBy(representatives.level, representatives.office);
   }
 
   async saveRepresentatives(repData: InsertRepresentative[]): Promise<Representative[]> {
@@ -2804,44 +2804,42 @@ export class DatabaseStorage implements IStorage {
 
   // Admin Representatives Management Implementation
   async listRepresentatives(
-    filters?: { officeLevel?: string; active?: boolean; search?: string }, 
+    filters?: { level?: string; isCurrentlyServing?: boolean; search?: string }, 
     pagination?: { limit: number; offset: number }
   ): Promise<{ representatives: Representative[]; total: number }> {
     const limit = pagination?.limit || 50;
     const offset = pagination?.offset || 0;
 
-    let query = db.select().from(representatives);
-    let countQuery = db.select({ count: count() }).from(representatives);
-
     const conditions = [];
     if (filters) {
-      if (filters.officeLevel) {
-        conditions.push(eq(representatives.officeLevel, filters.officeLevel));
+      if (filters.level) {
+        conditions.push(eq(representatives.level, filters.level));
       }
-      if (filters.active !== undefined) {
-        conditions.push(eq(representatives.active, filters.active));
+      if (filters.isCurrentlyServing !== undefined) {
+        conditions.push(eq(representatives.isCurrentlyServing, filters.isCurrentlyServing));
       }
       if (filters.search) {
         conditions.push(
           or(
             sql`${representatives.name} ILIKE ${`%${filters.search}%`}`,
-            sql`${representatives.officeTitle} ILIKE ${`%${filters.search}%`}`,
+            sql`${representatives.office} ILIKE ${`%${filters.search}%`}`,
             sql`${representatives.party} ILIKE ${`%${filters.search}%`}`,
             sql`${representatives.district} ILIKE ${`%${filters.search}%`}`,
-            sql`${representatives.jurisdiction} ILIKE ${`%${filters.search}%`}`
+            sql`${representatives.state} ILIKE ${`%${filters.search}%`}`
           )
         );
       }
     }
 
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-      countQuery = countQuery.where(and(...conditions));
-    }
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [reps, totalResult] = await Promise.all([
-      query.orderBy(representatives.name).limit(limit).offset(offset),
-      countQuery
+      whereClause 
+        ? db.select().from(representatives).where(whereClause).orderBy(representatives.name).limit(limit).offset(offset)
+        : db.select().from(representatives).orderBy(representatives.name).limit(limit).offset(offset),
+      whereClause
+        ? db.select({ count: count() }).from(representatives).where(whereClause)
+        : db.select({ count: count() }).from(representatives)
     ]);
 
     return {
@@ -2921,48 +2919,37 @@ export class DatabaseStorage implements IStorage {
 
   // Admin Zip Code Mappings Management Implementation
   async listZipMappings(zipCode?: string): Promise<ZipCodeLookup[]> {
-    let query = db
-      .select({
-        id: zipCodeLookups.id,
-        zipCode: zipCodeLookups.zipCode,
-        representativeId: zipCodeLookups.representativeId,
-        officeLevel: zipCodeLookups.officeLevel,
-        district: zipCodeLookups.district,
-        jurisdiction: zipCodeLookups.jurisdiction,
-        priority: zipCodeLookups.priority,
-        createdAt: zipCodeLookups.createdAt,
-        updatedAt: zipCodeLookups.updatedAt,
-        representativeName: representatives.name,
-        representativeOfficeTitle: representatives.officeTitle
-      })
-      .from(zipCodeLookups)
-      .innerJoin(representatives, eq(zipCodeLookups.representativeId, representatives.id));
-
     if (zipCode) {
-      query = query.where(eq(zipCodeLookups.zipCode, zipCode));
+      return await db
+        .select()
+        .from(zipCodeLookups)
+        .where(eq(zipCodeLookups.zipCode, zipCode))
+        .orderBy(zipCodeLookups.zipCode);
     }
-
-    return await query.orderBy(zipCodeLookups.zipCode, zipCodeLookups.priority);
+    return await db
+      .select()
+      .from(zipCodeLookups)
+      .orderBy(zipCodeLookups.zipCode);
   }
 
   async upsertZipMapping(data: InsertZipCodeLookup): Promise<ZipCodeLookup> {
-    // Check for existing mapping with same zipCode + officeLevel + representativeId
+    // Check for existing mapping with same zipCode
     const existing = await db
       .select()
       .from(zipCodeLookups)
-      .where(and(
-        eq(zipCodeLookups.zipCode, data.zipCode),
-        eq(zipCodeLookups.officeLevel, data.officeLevel),
-        eq(zipCodeLookups.representativeId, data.representativeId)
-      ));
+      .where(eq(zipCodeLookups.zipCode, data.zipCode));
 
     if (existing.length > 0) {
-      // Update existing
+      // Update existing - merge representative IDs
+      const existingIds = existing[0].representativeIds || [];
+      const newIds = data.representativeIds || [];
+      const mergedIds = [...new Set([...existingIds, ...newIds])];
+      
       const [updated] = await db
         .update(zipCodeLookups)
         .set({
-          ...data,
-          updatedAt: new Date()
+          representativeIds: mergedIds,
+          searchedAt: new Date()
         })
         .where(eq(zipCodeLookups.id, existing[0].id))
         .returning();
@@ -2979,7 +2966,10 @@ export class DatabaseStorage implements IStorage {
       // Create new
       const [newMapping] = await db
         .insert(zipCodeLookups)
-        .values(data)
+        .values({
+          zipCode: data.zipCode,
+          representativeIds: data.representativeIds || [],
+        })
         .returning();
 
       await this.createAuditLog({
