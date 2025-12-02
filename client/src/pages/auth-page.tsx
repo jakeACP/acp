@@ -17,10 +17,20 @@ import { ErrorMessage } from "@/components/error-message";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const loginSchema = insertUserSchema.pick({ username: true, password: true });
+
+const phoneNumberRegex = /^[\d\s\-\(\)\+]+$/;
+
 const registerSchema = insertUserSchema.extend({
   email: z.string().email("Please enter a valid email"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
+  phoneNumber: z.string()
+    .max(20, "Phone number is too long")
+    .regex(phoneNumberRegex, "Please enter a valid phone number")
+    .refine(
+      (val) => val.replace(/\D/g, '').length >= 10,
+      "Phone number must contain at least 10 digits"
+    ),
   invitationToken: z.string().optional(),
 });
 
@@ -42,6 +52,7 @@ export default function AuthPage() {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       invitationToken: "",
+      phoneNumber: "",
     },
   });
 
@@ -245,10 +256,28 @@ export default function AuthPage() {
                         {...registerForm.register("email")}
                         placeholder="Enter your email"
                         disabled={registerMutation.isPending}
+                        data-testid="input-email"
                       />
                       {registerForm.formState.errors.email && (
                         <p className="text-sm text-destructive mt-1">
                           {registerForm.formState.errors.email.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="phoneNumber">Phone Number</Label>
+                      <Input
+                        id="phoneNumber"
+                        type="tel"
+                        {...registerForm.register("phoneNumber")}
+                        placeholder="(555) 123-4567"
+                        disabled={registerMutation.isPending}
+                        data-testid="input-phone-number"
+                      />
+                      {registerForm.formState.errors.phoneNumber && (
+                        <p className="text-sm text-destructive mt-1">
+                          {registerForm.formState.errors.phoneNumber.message}
                         </p>
                       )}
                     </div>

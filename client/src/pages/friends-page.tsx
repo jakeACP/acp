@@ -274,7 +274,7 @@ export default function FriendsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {/* Search by email/username */}
+                {/* Search by email/username/phone */}
                 <Dialog open={showUserSearch} onOpenChange={setShowUserSearch}>
                   <DialogTrigger asChild>
                     <Button 
@@ -283,7 +283,7 @@ export default function FriendsPage() {
                       data-testid="button-search-by-email"
                     >
                       <Search className="h-4 w-4 mr-2 text-primary" />
-                      Search by Email/Username
+                      Search by Email/Phone/Username
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-lg">
@@ -292,13 +292,13 @@ export default function FriendsPage() {
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor="userSearch">Search by email, username, or name</Label>
+                        <Label htmlFor="userSearch">Search by email, phone number, username, or name</Label>
                         <div className="relative">
                           <Input
                             id="userSearch"
                             value={userSearchTerm}
                             onChange={(e) => setUserSearchTerm(e.target.value)}
-                            placeholder="Enter email or username..."
+                            placeholder="Enter email, phone, or username..."
                             className="mt-1"
                             data-testid="input-user-search"
                           />
@@ -308,6 +308,9 @@ export default function FriendsPage() {
                             </div>
                           )}
                         </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Phone numbers must have privacy settings enabled to appear in search
+                        </p>
                       </div>
                       
                       {userSearchTerm.length >= 2 && (

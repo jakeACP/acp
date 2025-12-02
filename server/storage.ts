@@ -4840,24 +4840,50 @@ export class DatabaseStorage implements IStorage {
 
   async searchUsersByEmailOrUsername(query: string, excludeUserId?: string): Promise<User[]> {
     const searchTerm = `%${query.toLowerCase()}%`;
+    // Normalize phone number for search (remove non-digits)
+    const normalizedPhone = query.replace(/\D/g, '');
+    const phoneSearchTerm = normalizedPhone.length >= 4 ? `%${normalizedPhone}%` : null;
+    
+    // Build search conditions
+    const searchConditions = [
+      sql`LOWER(${users.username}) LIKE ${searchTerm}`,
+      sql`LOWER(${users.email}) LIKE ${searchTerm}`,
+      sql`LOWER(${users.firstName}) LIKE ${searchTerm}`,
+      sql`LOWER(${users.lastName}) LIKE ${searchTerm}`
+    ];
+    
+    // Add phone number search if query looks like a phone number
+    if (phoneSearchTerm) {
+      searchConditions.push(
+        sql`REPLACE(REPLACE(REPLACE(REPLACE(${users.phoneNumber}, '-', ''), ' ', ''), '(', ''), ')', '') LIKE ${phoneSearchTerm}`
+      );
+    }
     
     let searchQuery = db.select()
       .from(users)
-      .where(
-        or(
-          sql`LOWER(${users.username}) LIKE ${searchTerm}`,
-          sql`LOWER(${users.email}) LIKE ${searchTerm}`,
-          sql`LOWER(${users.firstName}) LIKE ${searchTerm}`,
-          sql`LOWER(${users.lastName}) LIKE ${searchTerm}`
-        )
-      )
+      .where(or(...searchConditions))
       .limit(20);
     
     const results = await searchQuery;
     
     // Filter out the current user if excludeUserId is provided
+    // Also filter out users who don't have discoverableByPhone=true when searching by phone
     if (excludeUserId) {
-      return results.filter(u => u.id !== excludeUserId);
+      return results.filter(u => {
+        if (u.id === excludeUserId) return false;
+        // If searching by phone, respect privacy settings (must be explicitly true to be discoverable)
+        if (phoneSearchTerm && u.phoneNumber) {
+          // Only exclude if the match was via phone number AND user has not opted in
+          const userPhoneNormalized = u.phoneNumber.replace(/\D/g, '');
+          if (userPhoneNormalized.includes(normalizedPhone)) {
+            // Treat null/undefined/false as non-discoverable (opt-out by default)
+            if (u.discoverableByPhone !== true) {
+              return false;
+            }
+          }
+        }
+        return true;
+      });
     }
     
     return results;
