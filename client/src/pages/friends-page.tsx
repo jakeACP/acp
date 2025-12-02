@@ -26,6 +26,7 @@ import {
   Filter
 } from "lucide-react";
 import { useState } from "react";
+import { Link } from "wouter";
 import { Navigation } from "@/components/navigation";
 
 interface Friend {
@@ -525,7 +526,11 @@ export default function FriendsPage() {
                       <Card key={friend.id} className="hover:shadow-md transition-shadow">
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
+                            <Link 
+                              href={`/profile/${friend.userId || friend.id}`}
+                              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                              data-testid={`link-friend-profile-${friend.id}`}
+                            >
                               <Avatar>
                                 <AvatarImage src={friend.avatar} />
                                 <AvatarFallback>
@@ -533,12 +538,12 @@ export default function FriendsPage() {
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <p className="font-medium text-slate-900">
+                                <p className="font-medium text-slate-900 hover:underline">
                                   {friend.firstName ? `${friend.firstName} ${friend.lastName}` : friend.username}
                                 </p>
                                 <p className="text-sm text-slate-600">@{friend.username}</p>
                               </div>
-                            </div>
+                            </Link>
                             <Button variant="ghost" size="sm">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
@@ -587,7 +592,11 @@ export default function FriendsPage() {
                       <Card key={request.id}>
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
+                            <Link 
+                              href={`/profile/${request.userId || request.id}`}
+                              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                              data-testid={`link-request-profile-${request.id}`}
+                            >
                               <Avatar>
                                 <AvatarImage src={request.avatar} />
                                 <AvatarFallback>
@@ -595,7 +604,7 @@ export default function FriendsPage() {
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <p className="font-medium text-slate-900">
+                                <p className="font-medium text-slate-900 hover:underline">
                                   {request.firstName ? `${request.firstName} ${request.lastName}` : request.username}
                                 </p>
                                 <p className="text-sm text-slate-600">@{request.username}</p>
@@ -605,7 +614,7 @@ export default function FriendsPage() {
                                   </p>
                                 )}
                               </div>
-                            </div>
+                            </Link>
                             <div className="flex gap-2">
                               <Button 
                                 onClick={() => acceptFriendMutation.mutate(request.id)}
@@ -649,7 +658,11 @@ export default function FriendsPage() {
                       <Card key={request.id}>
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
+                            <Link 
+                              href={`/profile/${request.userId || request.id}`}
+                              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                              data-testid={`link-sent-profile-${request.id}`}
+                            >
                               <Avatar>
                                 <AvatarImage src={request.avatar} />
                                 <AvatarFallback>
@@ -657,13 +670,13 @@ export default function FriendsPage() {
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <p className="font-medium text-slate-900">
+                                <p className="font-medium text-slate-900 hover:underline">
                                   {request.firstName ? `${request.firstName} ${request.lastName}` : request.username}
                                 </p>
                                 <p className="text-sm text-slate-600">@{request.username}</p>
                                 <p className="text-xs text-amber-600">Request pending</p>
                               </div>
-                            </div>
+                            </Link>
                             <Button 
                               variant="outline"
                               onClick={() => cancelRequestMutation.mutate(request.id)}
