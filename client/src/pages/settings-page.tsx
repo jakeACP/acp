@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -116,6 +116,11 @@ export default function SettingsPage() {
     },
   });
 
+  // Refs to cache presigned URLs for each upload type (AWS S3 PUT returns no body)
+  const profilePictureUrlRef = useRef<string>("");
+  const stateIdUrlRef = useRef<string>("");
+  const selfieUrlRef = useRef<string>("");
+
   // Voter Verification Form and State
   const [stateIdUrl, setStateIdUrl] = useState("");
   const [selfieUrl, setSelfieUrl] = useState("");
@@ -203,9 +208,10 @@ export default function SettingsPage() {
     updatePrivacyMutation.mutate(privacySettings);
   };
 
+  // Profile picture upload handlers
   const handleGetUploadParameters = async () => {
     const response = await apiRequest("/api/objects/upload", "POST") as any;
-    console.log("Upload parameters response:", response);
+    profilePictureUrlRef.current = response.uploadURL;
     return {
       method: "PUT" as const,
       url: response.uploadURL,
@@ -214,16 +220,34 @@ export default function SettingsPage() {
 
   const handleUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
+      // Use cached URL since AWS S3 PUT returns no body for Uppy to extract
+      const uploadURL = result.successful[0].uploadURL || profilePictureUrlRef.current;
+      
       if (uploadURL) {
         updateProfilePictureMutation.mutate(uploadURL);
+      } else {
+        toast({
+          title: "Upload Error",
+          description: "File uploaded but URL extraction failed. Please try again.",
+          variant: "destructive",
+        });
       }
     }
   };
 
+  // State ID upload handlers
+  const handleGetStateIdUploadParameters = async () => {
+    const response = await apiRequest("/api/objects/upload", "POST") as any;
+    stateIdUrlRef.current = response.uploadURL;
+    return {
+      method: "PUT" as const,
+      url: response.uploadURL,
+    };
+  };
+
   const handleStateIdUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
+      const uploadURL = result.successful[0].uploadURL || stateIdUrlRef.current;
       if (uploadURL) {
         setStateIdUrl(uploadURL);
         voterForm.setValue("stateIdPhotoUrl", uploadURL);
@@ -231,9 +255,19 @@ export default function SettingsPage() {
     }
   };
 
+  // Selfie upload handlers
+  const handleGetSelfieUploadParameters = async () => {
+    const response = await apiRequest("/api/objects/upload", "POST") as any;
+    selfieUrlRef.current = response.uploadURL;
+    return {
+      method: "PUT" as const,
+      url: response.uploadURL,
+    };
+  };
+
   const handleSelfieUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
+      const uploadURL = result.successful[0].uploadURL || selfieUrlRef.current;
       if (uploadURL) {
         setSelfieUrl(uploadURL);
         voterForm.setValue("selfiePhotoUrl", uploadURL);
@@ -704,7 +738,7 @@ export default function SettingsPage() {
                         <ObjectUploader
                           maxNumberOfFiles={1}
                           maxFileSize={10 * 1024 * 1024}
-                          onGetUploadParameters={handleGetUploadParameters}
+                          onGetUploadParameters={handleGetStateIdUploadParameters}
                           onComplete={handleStateIdUploadComplete}
                           buttonClassName="flex items-center gap-2"
                         >
@@ -726,7 +760,7 @@ export default function SettingsPage() {
                         <ObjectUploader
                           maxNumberOfFiles={1}
                           maxFileSize={10 * 1024 * 1024}
-                          onGetUploadParameters={handleGetUploadParameters}
+                          onGetUploadParameters={handleGetSelfieUploadParameters}
                           onComplete={handleSelfieUploadComplete}
                           buttonClassName="flex items-center gap-2"
                         >
