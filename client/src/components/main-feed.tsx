@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -582,6 +582,8 @@ function VotesView() {
   );
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export function MainFeed() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -589,6 +591,8 @@ export function MainFeed() {
   const [showBlockchain, setShowBlockchain] = useState(false);
   const [activeFeed, setActiveFeed] = useState<FeedType>('all');
   const [showMobileCreatePost, setShowMobileCreatePost] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Three-tier feed system queries
   // NOTE: All hooks must be called BEFORE any conditional returns to maintain React's Rules of Hooks
@@ -744,6 +748,33 @@ export function MainFeed() {
   };
 
   const feedItems = getFeedItems();
+  
+  // Reset visible count when feed type changes
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [activeFeed]);
+  
+  // Infinite scroll with IntersectionObserver
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && visibleCount < feedItems.length) {
+          setVisibleCount(prev => Math.min(prev + ITEMS_PER_PAGE, feedItems.length));
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+    
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+    
+    return () => observer.disconnect();
+  }, [visibleCount, feedItems.length]);
+  
+  // Get visible items for display
+  const visibleItems = feedItems.slice(0, visibleCount);
+  const hasMoreItems = visibleCount < feedItems.length;
 
   return (
     <div className="page-background md:space-y-6">
@@ -870,17 +901,9 @@ export function MainFeed() {
       {/* Feed Items */}
       {feedItems.length > 0 ? (
         <>
-          {/* Feed stats - Desktop Only */}
-          <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground px-1">
-            <Badge variant="outline" className="bg-card/80 border-border">{feedItems.length} items</Badge>
-            {activeFeed !== 'all' && (
-              <span className="text-muted-foreground">Filtered by: {activeFeed.charAt(0).toUpperCase() + activeFeed.slice(1)}</span>
-            )}
-          </div>
-          
           {/* Feed Content */}
           <div className="md:space-y-6 space-y-0">
-            {feedItems.map((item, index) => (
+            {visibleItems.map((item, index) => (
               <div 
                 key={`${item.type}-${item.data.id || index}`}
                 className="md:mb-0 mb-4 md:rounded-lg rounded-none md:mx-0 mx-0"
@@ -914,6 +937,13 @@ export function MainFeed() {
                 ) : null}
               </div>
             ))}
+            
+            {/* Infinite scroll sentinel */}
+            <div ref={loadMoreRef} className="py-4 flex justify-center">
+              {hasMoreItems && (
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              )}
+            </div>
           </div>
         </>
       ) : (
