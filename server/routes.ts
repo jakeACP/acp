@@ -4384,6 +4384,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Representative Flags APIs
+  app.get("/api/admin/representative-flags", ensureAdmin, async (req, res) => {
+    try {
+      const repFlags = await storage.getRepresentativeFlags();
+      res.json(repFlags);
+    } catch (error: any) {
+      console.error("Admin get representative flags error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/representative-flags/:id/dismiss", ensureAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.dismissRepresentativeFlag(id, req.user!.id);
+      res.json({ message: "Flag dismissed successfully" });
+    } catch (error: any) {
+      console.error("Admin dismiss representative flag error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // User Ban Management APIs
   app.get("/api/admin/banned-users", ensureAdmin, async (req, res) => {
     try {

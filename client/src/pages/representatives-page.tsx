@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { MapPin, Phone, Mail, Globe, Heart, Building2, Zap } from "lucide-react";
+import { MapPin, Phone, Mail, Globe, Heart, Building2, Zap, Flag } from "lucide-react";
 import { RepresentativesLoading } from "@/components/representatives-loading.tsx";
 
 export default function RepresentativesPage() {
@@ -21,6 +23,11 @@ export default function RepresentativesPage() {
   const [showZipLoading, setShowZipLoading] = useState(false);
   const [zipRepresentatives, setZipRepresentatives] = useState<any[]>([]);
   const [searchedZip, setSearchedZip] = useState("");
+  
+  // Flag dialog state
+  const [flagDialogOpen, setFlagDialogOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
+  const [selectedRepForFlag, setSelectedRepForFlag] = useState<any>(null);
 
   // ChatGPT zip code search functions
   const searchByZipCode = () => {
@@ -91,6 +98,56 @@ export default function RepresentativesPage() {
       });
     },
   });
+
+  const flagRepresentative = useMutation({
+    mutationFn: async (data: { repId: string; repName: string; reason: string }) => {
+      return await apiRequest("/api/flags", "POST", {
+        targetId: data.repId,
+        targetType: "representative",
+        reason: `inaccurate_info: ${data.repName} - ${data.reason}`,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Report Submitted",
+        description: "Thank you for reporting inaccurate information. An admin will review it.",
+      });
+      setFlagDialogOpen(false);
+      setFlagReason("");
+      setSelectedRepForFlag(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit report",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleOpenFlagDialog = (rep: any) => {
+    setSelectedRepForFlag(rep);
+    setFlagDialogOpen(true);
+  };
+
+  const handleSubmitFlag = () => {
+    if (!flagReason.trim()) {
+      toast({
+        title: "Reason Required",
+        description: "Please describe what information is inaccurate",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (selectedRepForFlag) {
+      flagRepresentative.mutate({
+        repId: selectedRepForFlag.id || `${selectedRepForFlag.name}-${selectedRepForFlag.office}`,
+        repName: selectedRepForFlag.name,
+        reason: flagReason,
+      });
+    }
+  };
 
   return (
     <div className="bg-slate-50 min-h-screen">
@@ -237,9 +294,23 @@ export default function RepresentativesPage() {
                           party: rep.party
                         })}
                         disabled={followRepresentative.isPending}
+                        data-testid={`button-follow-${index}`}
                       >
                         <Heart className="h-4 w-4 mr-1" />
                         Follow
+                      </Button>
+                    </div>
+                    
+                    <div className="mt-4 pt-4 border-t border-green-200">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-slate-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => handleOpenFlagDialog(rep)}
+                        data-testid={`button-flag-${index}`}
+                      >
+                        <Flag className="h-4 w-4 mr-1" />
+                        Report Inaccurate Information
                       </Button>
                     </div>
                   </CardContent>
@@ -248,6 +319,54 @@ export default function RepresentativesPage() {
             </div>
           </div>
         )}
+
+        {/* Flag Dialog */}
+        <Dialog open={flagDialogOpen} onOpenChange={setFlagDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Report Inaccurate Information</DialogTitle>
+              <DialogDescription>
+                {selectedRepForFlag && (
+                  <>Help us keep representative data accurate. Describe what information about <strong>{selectedRepForFlag.name}</strong> is incorrect.</>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="flag-reason">What is inaccurate?</Label>
+              <Textarea
+                id="flag-reason"
+                placeholder="e.g., The phone number is outdated, the party affiliation is wrong, this person no longer holds this office..."
+                value={flagReason}
+                onChange={(e) => setFlagReason(e.target.value)}
+                className="mt-2"
+                rows={4}
+                data-testid="textarea-flag-reason"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFlagDialogOpen(false);
+                  setFlagReason("");
+                  setSelectedRepForFlag(null);
+                }}
+                data-testid="button-cancel-flag"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmitFlag}
+                disabled={flagRepresentative.isPending}
+                className="bg-red-600 hover:bg-red-700"
+                data-testid="button-submit-flag"
+              >
+                <Flag className="h-4 w-4 mr-1" />
+                {flagRepresentative.isPending ? "Submitting..." : "Submit Report"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Empty State */}
         {zipRepresentatives.length === 0 && !showZipLoading && (

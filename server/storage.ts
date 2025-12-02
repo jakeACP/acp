@@ -435,6 +435,8 @@ export interface IStorage {
 
   // Content Moderation
   getFlaggedContent(status?: string): Promise<any[]>;
+  getRepresentativeFlags(): Promise<any[]>;
+  dismissRepresentativeFlag(flagId: string, reviewedBy: string): Promise<void>;
   createFlaggedContent(data: any): Promise<any>;
   reviewFlaggedContent(id: string, reviewedBy: string, status: string, actionTaken?: string, reviewNote?: string): Promise<void>;
   dismissPostFlags(postId: string, reviewedBy: string): Promise<void>;
@@ -5508,6 +5510,41 @@ export class DatabaseStorage implements IStorage {
     return flaggedPostsWithDetails
       .filter((item) => item !== null)
       .sort((a, b) => b!.totalUrgency - a!.totalUrgency);
+  }
+
+  async getRepresentativeFlags(): Promise<any[]> {
+    const repFlags = await db
+      .select({
+        id: flags.id,
+        targetId: flags.targetId,
+        reason: flags.reason,
+        status: flags.status,
+        createdAt: flags.createdAt,
+        userId: flags.userId,
+        reporterUsername: users.username,
+        reporterFirstName: users.firstName,
+        reporterLastName: users.lastName,
+      })
+      .from(flags)
+      .leftJoin(users, eq(flags.userId, users.id))
+      .where(
+        and(
+          eq(flags.targetType, 'representative'),
+          eq(flags.status, 'pending')
+        )
+      )
+      .orderBy(desc(flags.createdAt));
+
+    return repFlags;
+  }
+
+  async dismissRepresentativeFlag(flagId: string, reviewedBy: string): Promise<void> {
+    await db
+      .update(flags)
+      .set({
+        status: 'dismissed',
+      })
+      .where(eq(flags.id, flagId));
   }
 
   async createFlaggedContent(data: any): Promise<any> {
