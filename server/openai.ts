@@ -279,3 +279,100 @@ Please respond with JSON in this exact format:
     throw new Error(`Failed to find representatives for zip code ${zipCode}: ${errorMessage}`);
   }
 }
+
+// Step 1: Generate a political seat based on user search query
+export async function generatePoliticalSeat(query: string): Promise<{ seat: string; level: string; jurisdiction: string }> {
+  try {
+    const openai = getOpenAIClient();
+    
+    const prompt = `Based on the user's search query: "${query}", determine what political seat or office they're asking about.
+
+Examples:
+- "mayor of chicago" → seat: "Mayor", level: "local", jurisdiction: "Chicago"
+- "california senator" → seat: "U.S. Senator", level: "state", jurisdiction: "California"
+- "ny governor" → seat: "Governor", level: "state", jurisdiction: "New York"
+- "house representative district 5" → seat: "U.S. Representative", level: "federal", jurisdiction: "District 5"
+
+Respond with JSON in this exact format:
+{
+  "seat": "The political office title (e.g., Mayor, Governor, U.S. Senator)",
+  "level": "federal|state|local",
+  "jurisdiction": "The geographic jurisdiction or district"
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that identifies political seats and offices. Respond only with valid JSON."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    return {
+      seat: result.seat || "",
+      level: result.level || "local",
+      jurisdiction: result.jurisdiction || ""
+    };
+  } catch (error) {
+    console.error("Error generating political seat:", error);
+    throw error;
+  }
+}
+
+// Step 2: Generate candidate profiles for a specific seat
+export async function generateCandidateProfiles(seat: string, level: string, jurisdiction: string): Promise<Array<{ name: string; party: string; bio: string; position: string; experience: string }>> {
+  try {
+    const openai = getOpenAIClient();
+    
+    const prompt = `Generate 3-5 realistic candidate profiles for the ${level} ${seat} position in ${jurisdiction} as of January 2025.
+
+For each candidate, provide:
+- Full name (realistic name)
+- Political party
+- Brief biography (2-3 sentences)
+- Main position/platform (1-2 sentences)
+- Relevant experience (education, prior offices, career)
+
+Respond with JSON in this exact format:
+{
+  "candidates": [
+    {
+      "name": "Full Name",
+      "party": "Party Name",
+      "bio": "Brief biography...",
+      "position": "Main platform/position...",
+      "experience": "Relevant experience..."
+    }
+  ]
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: "You are a political analyst generating realistic candidate profiles. Respond only with valid JSON. Create diverse, plausible candidates."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    return result.candidates || [];
+  } catch (error) {
+    console.error("Error generating candidate profiles:", error);
+    throw error;
+  }
+}

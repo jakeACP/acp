@@ -9,7 +9,7 @@ import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSch
 import { eq } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
-import { findRepresentativesByZipCode } from "./openai";
+import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles } from "./openai";
 import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
 import multer from "multer";
