@@ -154,9 +154,16 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
             {article.title}
           </h3>
           
-          <p className={`text-slate-300 mb-6 leading-relaxed ${isExpanded ? '' : isHero ? 'text-lg line-clamp-4' : 'text-base line-clamp-3'}`}>
-            {isExpanded ? plainText : excerpt}
-          </p>
+          {isExpanded ? (
+            <div 
+              className="text-slate-300 mb-6 leading-relaxed text-base prose prose-invert prose-p:text-slate-300 prose-headings:text-white max-w-none"
+              dangerouslySetInnerHTML={{ __html: rawContent || `<p>${plainText}</p>` }}
+            />
+          ) : (
+            <p className={`text-slate-300 mb-6 leading-relaxed ${isHero ? 'text-lg line-clamp-4' : 'text-base line-clamp-3'}`}>
+              {excerpt}
+            </p>
+          )}
           
           <div className="flex items-center gap-4 mb-6 text-sm text-slate-400 flex-wrap">
             <div className="flex items-center gap-3">
