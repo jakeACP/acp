@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useQuery } from "@tanstack/react-query";
-import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield, Flag, PenSquare, Palette } from "lucide-react";
+import { Vote, Bell, ChevronDown, Menu, Sun, Moon, Monitor, Shield, Flag, PenSquare, Palette, Globe } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { cn } from "@/lib/utils";
 
@@ -145,6 +145,12 @@ export function Navigation() {
                   <DropdownMenuSeparator />
                   <Link href="/settings">
                     <DropdownMenuItem className="cursor-pointer">Settings</DropdownMenuItem>
+                  </Link>
+                  <Link href="/articles">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Globe className="mr-2 h-4 w-4" />
+                      Front End
+                    </DropdownMenuItem>
                   </Link>
                   {canAccessAdmin && (
                     <>
@@ -317,6 +323,16 @@ export function Navigation() {
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Settings
+                </Button>
+              </Link>
+              <Link href="/articles">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <Globe className="mr-2 h-4 w-4" />
+                  Front End
                 </Button>
               </Link>
               <Button 
