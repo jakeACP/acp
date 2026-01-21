@@ -1,8 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
-import { Eye, Clock, User } from "lucide-react";
+import { Heart, Clock, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 
 interface PublicArticle {
@@ -10,10 +11,12 @@ interface PublicArticle {
   title: string;
   content: string;
   excerpt?: string;
+  articleBody?: string;
   featuredImage?: string;
   category?: string;
   tags?: string[];
   createdAt: string;
+  likesCount?: number;
   author?: {
     id: string;
     username: string;
@@ -21,60 +24,69 @@ interface PublicArticle {
     lastName?: string;
     avatar?: string;
   };
-  viewCount?: number;
 }
 
 interface PublicArticleCardProps {
   article: PublicArticle;
+  variant?: 'default' | 'hero';
 }
 
-export function PublicArticleCard({ article }: PublicArticleCardProps) {
-  const excerpt = article.excerpt || article.content?.slice(0, 200).replace(/<[^>]*>/g, '') + '...';
+export function PublicArticleCard({ article, variant = 'default' }: PublicArticleCardProps) {
+  const rawContent = article.articleBody || article.content || '';
+  const plainText = rawContent.replace(/<[^>]*>/g, '').trim();
+  const excerpt = article.excerpt || (plainText.length > 300 ? plainText.slice(0, 300) + '...' : plainText);
+  
   const authorName = article.author?.firstName 
     ? `${article.author.firstName} ${article.author.lastName || ''}`
-    : article.author?.username || 'Anonymous';
+    : article.author?.username || 'ACP Staff';
+
+  const articleType = article.tags?.find(tag => 
+    ['current-events', 'politicians', 'proposals', 'issues', 'donors', 'propaganda', 'conspiracies', 'legal-cases', 'leaks'].includes(tag)
+  );
+
+  const isHero = variant === 'hero';
 
   return (
-    <Link href={`/read/${article.id}`}>
-      <Card className="group cursor-pointer overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+    <Card className={`group overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-lg transition-all duration-300 ${isHero ? '' : ''}`}>
+      <div className={`${isHero ? 'md:flex' : ''}`}>
         {article.featuredImage && (
-          <div className="relative h-48 overflow-hidden">
+          <div className={`relative overflow-hidden ${isHero ? 'md:w-2/5 h-64 md:h-auto' : 'h-56'}`}>
             <img 
               src={article.featuredImage} 
               alt={article.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-            {article.category && (
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+            {articleType && (
               <Badge 
-                className="absolute top-3 left-3 bg-[#B22234] text-white border-0 capitalize"
+                className="absolute top-4 left-4 bg-[#B22234] text-white border-0 capitalize text-sm px-3 py-1"
               >
-                {article.category.replace('-', ' ')}
+                {articleType.replace('-', ' ')}
               </Badge>
             )}
           </div>
         )}
         
-        <CardContent className={article.featuredImage ? "p-4" : "p-5"}>
-          {!article.featuredImage && article.category && (
+        <CardContent className={`${isHero ? 'md:w-3/5 p-6 md:p-8' : 'p-6'}`}>
+          {!article.featuredImage && articleType && (
             <Badge 
-              className="mb-3 bg-[#B22234]/10 text-[#B22234] border-[#B22234]/20 capitalize"
+              className="mb-4 bg-[#B22234]/10 text-[#B22234] border-[#B22234]/20 capitalize"
             >
-              {article.category.replace('-', ' ')}
+              {articleType.replace('-', ' ')}
             </Badge>
           )}
           
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 line-clamp-2 group-hover:text-[#B22234] transition-colors">
+          <h3 className={`font-bold text-slate-900 dark:text-white mb-3 leading-tight ${isHero ? 'text-2xl md:text-3xl' : 'text-xl'}`}>
             {article.title}
           </h3>
           
-          <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-3 mb-4">
+          <p className={`text-slate-600 dark:text-slate-300 mb-5 leading-relaxed ${isHero ? 'text-base md:text-lg line-clamp-4' : 'text-sm line-clamp-3'}`}>
             {excerpt}
           </p>
           
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-4 mb-5 text-sm text-slate-500 dark:text-slate-400">
             <div className="flex items-center gap-2">
-              <Avatar className="h-6 w-6">
+              <Avatar className="h-8 w-8">
                 <AvatarImage src={article.author?.avatar || ''} />
                 <AvatarFallback className="text-xs bg-[#3C3B6E] text-white">
                   {authorName.charAt(0).toUpperCase()}
@@ -83,34 +95,29 @@ export function PublicArticleCard({ article }: PublicArticleCardProps) {
               <span className="font-medium">{authorName}</span>
             </div>
             
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {format(new Date(article.createdAt), 'MMM d')}
+            <span className="flex items-center gap-1">
+              <Clock className="h-4 w-4" />
+              {format(new Date(article.createdAt), 'MMM d, yyyy')}
+            </span>
+            
+            {article.likesCount !== undefined && article.likesCount > 0 && (
+              <span className="flex items-center gap-1 text-[#B22234]">
+                <Heart className="h-4 w-4 fill-current" />
+                {article.likesCount}
               </span>
-              {article.viewCount !== undefined && (
-                <span className="flex items-center gap-1">
-                  <Eye className="h-3 w-3" />
-                  {article.viewCount}
-                </span>
-              )}
-            </div>
+            )}
           </div>
           
-          {article.tags && article.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-3">
-              {article.tags.slice(0, 3).map((tag, index) => (
-                <span 
-                  key={index}
-                  className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
+          <Link href={`/read/${article.id}`}>
+            <Button 
+              className="bg-[#3C3B6E] hover:bg-[#2a2a4a] text-white font-semibold group/btn"
+            >
+              Read More
+              <ArrowRight className="h-4 w-4 ml-2 group-hover/btn:translate-x-1 transition-transform" />
+            </Button>
+          </Link>
         </CardContent>
-      </Card>
-    </Link>
+      </div>
+    </Card>
   );
 }

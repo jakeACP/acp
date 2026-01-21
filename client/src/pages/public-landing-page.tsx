@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
-const ITEMS_PER_PAGE = 12;
+const ITEMS_PER_PAGE = 10;
 
 export default function PublicLandingPage() {
   const [activeCategory, setActiveCategory] = useState<ArticleCategory>('all');
@@ -28,6 +28,13 @@ export default function PublicLandingPage() {
     },
   });
 
+  // Sort articles by likes (most popular first)
+  const sortedArticles = [...articles].sort((a, b) => {
+    const likesA = a.likesCount || 0;
+    const likesB = b.likesCount || 0;
+    return likesB - likesA;
+  });
+
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
   }, [activeCategory]);
@@ -35,8 +42,8 @@ export default function PublicLandingPage() {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && visibleCount < articles.length) {
-          setVisibleCount(prev => Math.min(prev + ITEMS_PER_PAGE, articles.length));
+        if (entries[0].isIntersecting && visibleCount < sortedArticles.length) {
+          setVisibleCount(prev => Math.min(prev + ITEMS_PER_PAGE, sortedArticles.length));
         }
       },
       { threshold: 0.1, rootMargin: '100px' }
@@ -47,10 +54,12 @@ export default function PublicLandingPage() {
     }
     
     return () => observer.disconnect();
-  }, [visibleCount, articles.length]);
+  }, [visibleCount, sortedArticles.length]);
 
-  const visibleArticles = articles.slice(0, visibleCount);
-  const hasMoreArticles = visibleCount < articles.length;
+  const visibleArticles = sortedArticles.slice(0, visibleCount);
+  const hasMoreArticles = visibleCount < sortedArticles.length;
+  const heroArticle = visibleArticles[0];
+  const remainingArticles = visibleArticles.slice(1);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
@@ -62,27 +71,36 @@ export default function PublicLandingPage() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex gap-6">
-          <PublicAdSidebarLeft />
+          {/* Left Sidebar - Hidden on mobile and tablet */}
+          <div className="hidden xl:block">
+            <PublicAdSidebarLeft />
+          </div>
           
+          {/* Main Content - Full width on mobile/tablet */}
           <main className="flex-1 min-w-0">
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-10 w-10 animate-spin text-[#B22234]" />
               </div>
-            ) : articles.length > 0 ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {visibleArticles.map((article) => (
-                    <PublicArticleCard key={article.id} article={article} />
-                  ))}
-                </div>
+            ) : sortedArticles.length > 0 ? (
+              <div className="space-y-6">
+                {/* Hero Article - Most liked */}
+                {heroArticle && (
+                  <PublicArticleCard article={heroArticle} variant="hero" />
+                )}
                 
+                {/* Remaining Articles */}
+                {remainingArticles.map((article) => (
+                  <PublicArticleCard key={article.id} article={article} />
+                ))}
+                
+                {/* Load more trigger */}
                 <div ref={loadMoreRef} className="py-8 flex justify-center">
                   {hasMoreArticles && (
                     <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                   )}
                 </div>
-              </>
+              </div>
             ) : (
               <Card className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <CardContent className="text-center py-16">
@@ -108,7 +126,10 @@ export default function PublicLandingPage() {
             )}
           </main>
           
-          <PublicAdSidebarRight />
+          {/* Right Sidebar - Hidden on mobile and tablet */}
+          <div className="hidden xl:block">
+            <PublicAdSidebarRight />
+          </div>
         </div>
       </div>
       
