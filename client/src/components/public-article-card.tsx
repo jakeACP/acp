@@ -1,10 +1,10 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
-import { Heart, Clock, ArrowRight } from "lucide-react";
-import { Link } from "wouter";
+import { Heart, Clock, ChevronDown, ChevronUp } from "lucide-react";
 
 interface PublicArticle {
   id: number;
@@ -32,6 +32,8 @@ interface PublicArticleCardProps {
 }
 
 export function PublicArticleCard({ article, variant = 'default' }: PublicArticleCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   const rawContent = article.articleBody || article.content || '';
   const plainText = rawContent.replace(/<[^>]*>/g, '').trim();
   const excerpt = article.excerpt || (plainText.length > 300 ? plainText.slice(0, 300) + '...' : plainText);
@@ -47,15 +49,15 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
   const isHero = variant === 'hero';
 
   return (
-    <Card className={`group overflow-hidden bg-[#1a1a2e]/90 backdrop-blur-xl border border-white/20 shadow-2xl hover:shadow-[0_0_40px_rgba(178,34,52,0.3)] transition-all duration-500 ${isHero ? 'ring-2 ring-[#B22234]/40' : ''}`}>
+    <Card className={`group overflow-hidden bg-[#1a1a2e]/90 backdrop-blur-xl border border-white/20 shadow-2xl transition-all duration-500 ${isHero ? 'ring-2 ring-[#B22234]/40' : ''} ${isExpanded ? 'ring-2 ring-[#3C3B6E]/60' : 'hover:shadow-[0_0_40px_rgba(178,34,52,0.3)]'}`}>
       <div className="absolute inset-0 bg-gradient-to-br from-[#B22234]/10 via-transparent to-[#3C3B6E]/10 pointer-events-none" />
-      <div className={`relative ${isHero ? 'md:flex' : ''}`}>
+      <div className={`relative ${isHero && !isExpanded ? 'md:flex' : ''}`}>
         {article.featuredImage && (
-          <div className={`relative overflow-hidden ${isHero ? 'md:w-2/5 h-72 md:h-auto' : 'h-60'}`}>
+          <div className={`relative overflow-hidden ${isHero && !isExpanded ? 'md:w-2/5 h-72 md:h-auto' : isExpanded ? 'h-80' : 'h-60'}`}>
             <img 
               src={article.featuredImage} 
               alt={article.title}
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
             {articleType && (
@@ -65,7 +67,7 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
                 {articleType.replace('-', ' ')}
               </Badge>
             )}
-            {isHero && (
+            {isHero && !isExpanded && (
               <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md rounded-full px-3 py-1 text-white text-xs font-bold border border-white/30">
                 Featured
               </div>
@@ -73,7 +75,7 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
           </div>
         )}
         
-        <CardContent className={`relative ${isHero ? 'md:w-3/5 p-8 md:p-10' : 'p-7'}`}>
+        <CardContent className={`relative ${isHero && !isExpanded ? 'md:w-3/5 p-8 md:p-10' : 'p-7'}`}>
           {!article.featuredImage && articleType && (
             <Badge 
               className="mb-4 bg-gradient-to-r from-[#B22234]/20 to-[#B22234]/10 text-[#B22234] border-[#B22234]/30 capitalize font-bold"
@@ -86,11 +88,18 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
             {article.title}
           </h3>
           
-          <p className={`text-slate-300 mb-6 leading-relaxed ${isHero ? 'text-lg line-clamp-4' : 'text-base line-clamp-3'}`}>
-            {excerpt}
-          </p>
+          {isExpanded ? (
+            <div 
+              className="text-slate-300 mb-6 leading-relaxed text-base prose prose-invert max-w-none"
+              dangerouslySetInnerHTML={{ __html: rawContent || `<p>${plainText}</p>` }}
+            />
+          ) : (
+            <p className={`text-slate-300 mb-6 leading-relaxed ${isHero ? 'text-lg line-clamp-4' : 'text-base line-clamp-3'}`}>
+              {excerpt}
+            </p>
+          )}
           
-          <div className="flex items-center gap-4 mb-6 text-sm text-slate-400">
+          <div className="flex items-center gap-4 mb-6 text-sm text-slate-400 flex-wrap">
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute inset-0 bg-[#3C3B6E]/20 rounded-full blur-sm" />
@@ -117,17 +126,20 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
             )}
           </div>
           
-          <Link href={`/read/${article.id}`}>
-            <Button 
-              className="relative bg-gradient-to-r from-[#3C3B6E] to-[#2a2a4a] hover:from-[#2a2a4a] hover:to-[#1a1a3a] text-white font-bold text-base px-8 py-3 rounded-xl shadow-lg border border-white/20 group/btn overflow-hidden transition-all hover:scale-105 hover:shadow-xl"
-            >
-              <span className="absolute inset-0 bg-gradient-to-t from-transparent to-white/10 pointer-events-none" />
-              <span className="relative flex items-center gap-2">
-                Read More
-                <ArrowRight className="h-5 w-5 group-hover/btn:translate-x-1 transition-transform" />
-              </span>
-            </Button>
-          </Link>
+          <Button 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="relative bg-gradient-to-r from-[#3C3B6E] to-[#2a2a4a] hover:from-[#2a2a4a] hover:to-[#1a1a3a] text-white font-bold text-base px-8 py-3 rounded-xl shadow-lg border border-white/20 group/btn overflow-hidden transition-all hover:scale-105 hover:shadow-xl"
+          >
+            <span className="absolute inset-0 bg-gradient-to-t from-transparent to-white/10 pointer-events-none" />
+            <span className="relative flex items-center gap-2">
+              {isExpanded ? 'Show Less' : 'Read More'}
+              {isExpanded ? (
+                <ChevronUp className="h-5 w-5" />
+              ) : (
+                <ChevronDown className="h-5 w-5 group-hover/btn:translate-y-0.5 transition-transform" />
+              )}
+            </span>
+          </Button>
         </CardContent>
       </div>
     </Card>

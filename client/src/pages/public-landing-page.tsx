@@ -93,7 +93,7 @@ export default function PublicLandingPage() {
             <PublicAdSidebarLeft />
           </div>
           
-          <main className="flex-1 min-w-0 max-w-4xl mx-auto">
+          <main className="flex-1 min-w-0">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24">
                 <div className="relative">
