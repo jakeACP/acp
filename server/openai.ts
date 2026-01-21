@@ -437,7 +437,7 @@ export async function generateArticleBodyFromTitle(title: string, params: AiArti
       long: "Write an in-depth article of 8-12 paragraphs (about 1000-1500 words)."
     };
 
-    let instructions = `Create an Article Titled: "${title}"
+    let instructions = `Write an article with this title: "${title}"
 
 Writing Style: ${params.writingStyle}
 Tone: ${params.toneGuidelines}
@@ -447,19 +447,19 @@ ${params.includeQuotes ? "Include relevant quotes where appropriate." : "Do not 
 ${params.includeSources ? "Reference sources and provide context for claims." : ""}
 ${params.additionalInstructions ? `Additional Instructions: ${params.additionalInstructions}` : ""}
 
-Generate the article body content in HTML format using <p>, <h2>, <h3>, <blockquote>, <ul>, <li> tags as needed.
+Write the article body content formatted with HTML tags: <p> for paragraphs, <h2> and <h3> for subheadings, <blockquote> for quotes, <ul>/<li> for lists.
 
-Respond with JSON in this exact format:
-{
-  "articleBody": "The full article content in HTML format"
-}`;
+Return a JSON object with this structure:
+{"articleBody": "<p>Your article content here...</p>"}`;
 
+    console.log("Generating article for title:", title);
+    
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: params.systemPrompt
+          content: params.systemPrompt || "You are a professional journalist writing for a political reform organization."
         },
         {
           role: "user",
@@ -467,13 +467,25 @@ Respond with JSON in this exact format:
         }
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 4096,
+      max_tokens: 4096,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const content = response.choices[0].message.content;
+    console.log("OpenAI response received, length:", content?.length);
+    
+    if (!content) {
+      throw new Error("No content returned from OpenAI");
+    }
+    
+    const result = JSON.parse(content);
+    
+    if (!result.articleBody) {
+      console.error("No articleBody in response:", JSON.stringify(result).substring(0, 200));
+      throw new Error("OpenAI response missing articleBody field");
+    }
     
     return {
-      articleBody: result.articleBody || "<p>Article content goes here.</p>"
+      articleBody: result.articleBody
     };
   } catch (error) {
     console.error("Error generating article body:", error);
