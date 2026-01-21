@@ -302,80 +302,30 @@ export default function CreateArticlePage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
-              <DialogTrigger asChild>
-                <Button 
-                  type="button"
-                  variant="outline" 
-                  className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:from-purple-600 hover:to-blue-600"
-                  disabled={!form.watch("title")?.trim()}
-                >
+            <Button 
+              type="button"
+              variant="outline" 
+              className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:from-purple-600 hover:to-blue-600"
+              disabled={!form.watch("title")?.trim() || generateWithAiMutation.isPending}
+              onClick={() => {
+                const title = form.watch("title");
+                if (title?.trim()) {
+                  generateWithAiMutation.mutate(title);
+                }
+              }}
+            >
+              {generateWithAiMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
                   <Sparkles className="w-4 h-4 mr-2" />
                   Generate Content
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                {generateWithAiMutation.isPending ? (
-                  <div className="py-12 flex flex-col items-center justify-center space-y-6">
-                    <div className="relative">
-                      <div className="w-20 h-20 rounded-full border-4 border-purple-200 border-t-purple-500 animate-spin" />
-                      <Sparkles className="w-8 h-8 text-purple-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-                    </div>
-                    <div className="text-center space-y-2">
-                      <p className="text-xl font-semibold text-purple-700 dark:text-purple-300">
-                        AI is writing your article...
-                      </p>
-                      <p className="text-sm text-slate-500 px-4">
-                        Creating content for: "{form.watch("title")}"
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        This typically takes 15-30 seconds
-                      </p>
-                    </div>
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-purple-500" />
-                        Generate Article Content
-                      </DialogTitle>
-                      <DialogDescription>
-                        AI will generate the article body content based on your title using the configured AI parameters.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4 border">
-                        <p className="text-xs text-slate-500 uppercase font-medium mb-1">Article Title</p>
-                        <p className="text-lg font-semibold">{form.watch("title") || "No title entered"}</p>
-                      </div>
-                      <p className="text-sm text-slate-500 mt-3">
-                        The AI will write content for this title using the global AI Article Parameters configured in the admin panel.
-                      </p>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsAiDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button 
-                        type="button"
-                        onClick={() => generateWithAiMutation.mutate(form.watch("title"))}
-                        disabled={!form.watch("title")?.trim()}
-                        className="bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600"
-                      >
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        Generate Content
-                      </Button>
-                    </DialogFooter>
-                  </>
-                )}
-              </DialogContent>
-            </Dialog>
+                </>
+              )}
+            </Button>
             <Button
               variant="outline"
               onClick={() => setIsPreview(!isPreview)}
