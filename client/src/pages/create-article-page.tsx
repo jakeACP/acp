@@ -28,7 +28,7 @@ import { RichTextEditor } from "@/components/rich-text-editor";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowLeft, FileText, Image, Eye, Save, Send, Pencil, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, FileText, Image, Eye, Save, Send, Pencil, Sparkles, Loader2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +60,7 @@ const articleFormSchema = z.object({
   privacy: z.enum(["public", "friends"]),
   articleType: z.enum(["current-events", "politicians", "proposals", "issues", "donors", "propaganda", "conspiracies", "legal-cases", "leaks"]),
   tags: z.string().optional(),
+  tagInput: z.string().optional(),
 });
 
 type ArticleFormData = z.infer<typeof articleFormSchema>;
@@ -94,6 +95,7 @@ export default function CreateArticlePage() {
       privacy: "public",
       articleType: "current-events",
       tags: "",
+      tagInput: "",
     },
   });
 
@@ -535,22 +537,70 @@ export default function CreateArticlePage() {
                       <FormItem>
                         <FormLabel>Tags</FormLabel>
                         <FormControl>
-                          <div className="relative">
-                            <Input 
-                              placeholder="politics, democracy, reform"
-                              {...field}
-                              data-testid="input-tags"
-                              disabled={generateWithAiMutation.isPending}
-                              className={generateWithAiMutation.isPending ? "pr-10" : ""}
-                            />
-                            {generateWithAiMutation.isPending && (
-                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
-                              </div>
-                            )}
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap gap-2 mb-2 min-h-[32px]">
+                              {field.value?.split(",").map(tag => tag.trim()).filter(Boolean).map((tag, idx) => (
+                                <Badge 
+                                  key={idx} 
+                                  variant="secondary" 
+                                  className="flex items-center gap-1 bg-primary/10 text-primary border-primary/20"
+                                >
+                                  #{tag.replace(/^#/, "")}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const tags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
+                                      const newTags = tags.filter((_, i) => i !== idx);
+                                      field.onChange(newTags.join(", "));
+                                    }}
+                                    className="hover:text-destructive"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                            <div className="relative">
+                              <Input 
+                                placeholder="Add a tag and press comma..."
+                                value={form.watch("tagInput") || ""}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value.endsWith(",")) {
+                                    const newTag = value.slice(0, -1).trim().replace(/^#/, "");
+                                    const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
+                                    if (newTag && currentTags.length < 8 && !currentTags.includes(newTag)) {
+                                      field.onChange([...currentTags, newTag].join(", "));
+                                    }
+                                    form.setValue("tagInput", "");
+                                  } else {
+                                    form.setValue("tagInput", value);
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const value = (e.target as HTMLInputElement).value.trim().replace(/^#/, "");
+                                    const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
+                                    if (value && currentTags.length < 8 && !currentTags.includes(value)) {
+                                      field.onChange([...currentTags, value].join(", "));
+                                    }
+                                    form.setValue("tagInput", "");
+                                  }
+                                }}
+                                data-testid="input-tags"
+                                disabled={generateWithAiMutation.isPending || (field.value?.split(",").filter(Boolean).length || 0) >= 8}
+                                className={generateWithAiMutation.isPending ? "pr-10" : ""}
+                              />
+                              {generateWithAiMutation.isPending && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                  <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </FormControl>
-                        <FormDescription>Comma-separated</FormDescription>
+                        <FormDescription>Type a tag and press comma or enter (Limit 8)</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
