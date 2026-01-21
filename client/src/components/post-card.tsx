@@ -539,7 +539,7 @@ export function PostCard({ post }: PostCardProps) {
             src={post.image}
             alt="Post content"
             onClick={() => setExpandedImage(post.image)}
-            className="w-full h-auto max-h-96 object-contain rounded-lg mb-4 cursor-pointer hover:opacity-90 transition-opacity bg-muted"
+            className="w-full h-auto max-h-96 object-contain rounded-lg mb-4 cursor-pointer hover:opacity-90 transition-opacity"
             data-testid={`image-post-${post.id}`}
           />
         )}
