@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { PublicHeader } from "@/components/public-header";
 import { PublicCategoryMenu, ArticleCategory } from "@/components/public-category-menu";
 import { PublicArticleCard } from "@/components/public-article-card";
-import { PublicAdSidebarLeft, PublicAdSidebarRight } from "@/components/public-ad-sidebar";
 import { Loader2, Newspaper, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -87,13 +86,8 @@ export default function PublicLandingPage() {
         onCategoryChange={setActiveCategory} 
       />
       
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-8">
-          <div className="hidden xl:block">
-            <PublicAdSidebarLeft />
-          </div>
-          
-          <main className="flex-1 min-w-0">
+      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <main className="w-full">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24">
                 <div className="relative">
@@ -162,11 +156,6 @@ export default function PublicLandingPage() {
               </Card>
             )}
           </main>
-          
-          <div className="hidden xl:block">
-            <PublicAdSidebarRight />
-          </div>
-        </div>
       </div>
     </div>
   );
