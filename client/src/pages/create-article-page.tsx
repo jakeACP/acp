@@ -31,12 +31,25 @@ import { useAuth } from "@/hooks/use-auth";
 import { ArrowLeft, FileText, Image, Eye, Save, Send, Pencil } from "lucide-react";
 import type { User, Post } from "@shared/schema";
 
+const ARTICLE_TYPES = [
+  { value: "current-events", label: "Current Events" },
+  { value: "politicians", label: "Politicians" },
+  { value: "proposals", label: "Proposals" },
+  { value: "issues", label: "Issues" },
+  { value: "donors", label: "Donors" },
+  { value: "propaganda", label: "Propaganda" },
+  { value: "conspiracies", label: "Conspiracies" },
+  { value: "legal-cases", label: "Legal Cases" },
+  { value: "leaks", label: "Leaks" },
+] as const;
+
 const articleFormSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(200, "Title must be less than 200 characters"),
   excerpt: z.string().min(10, "Description must be at least 10 characters").max(500, "Description must be less than 500 characters"),
   articleBody: z.string().min(50, "Article content must be at least 50 characters"),
   featuredImage: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   privacy: z.enum(["public", "friends"]),
+  articleType: z.enum(["current-events", "politicians", "proposals", "issues", "donors", "propaganda", "conspiracies", "legal-cases", "leaks"]),
   tags: z.string().optional(),
 });
 
@@ -68,19 +81,25 @@ export default function CreateArticlePage() {
       articleBody: "",
       featuredImage: "",
       privacy: "public",
+      articleType: "current-events",
       tags: "",
     },
   });
 
   useEffect(() => {
     if (existingArticle && isEditMode) {
+      const existingType = existingArticle.tags?.find(tag => 
+        ARTICLE_TYPES.some(t => t.value === tag)
+      ) as ArticleFormData["articleType"] | undefined;
+      
       form.reset({
         title: existingArticle.title || "",
         excerpt: existingArticle.excerpt || "",
         articleBody: existingArticle.articleBody || "",
         featuredImage: existingArticle.featuredImage || "",
         privacy: (existingArticle.privacy as "public" | "friends") || "public",
-        tags: existingArticle.tags?.join(", ") || "",
+        articleType: existingType || "current-events",
+        tags: existingArticle.tags?.filter(tag => !ARTICLE_TYPES.some(t => t.value === tag)).join(", ") || "",
       });
       setArticleContent(existingArticle.articleBody || "");
     }
@@ -88,9 +107,10 @@ export default function CreateArticlePage() {
 
   const createArticleMutation = useMutation({
     mutationFn: async (data: ArticleFormData) => {
-      const tagsArray = data.tags
+      const userTags = data.tags
         ? data.tags.split(",").map(tag => tag.trim().toLowerCase().replace(/^#/, "")).filter(Boolean)
         : [];
+      const tagsArray = [data.articleType, ...userTags];
 
       const wordCount = data.articleBody.replace(/<[^>]*>/g, "").split(/\s+/).length;
       const readingTime = Math.ceil(wordCount / 200);
@@ -128,9 +148,10 @@ export default function CreateArticlePage() {
 
   const updateArticleMutation = useMutation({
     mutationFn: async (data: ArticleFormData) => {
-      const tagsArray = data.tags
+      const userTags = data.tags
         ? data.tags.split(",").map(tag => tag.trim().toLowerCase().replace(/^#/, "")).filter(Boolean)
         : [];
+      const tagsArray = [data.articleType, ...userTags];
 
       const wordCount = data.articleBody.replace(/<[^>]*>/g, "").split(/\s+/).length;
       const readingTime = Math.ceil(wordCount / 200);
@@ -295,6 +316,34 @@ export default function CreateArticlePage() {
                           data-testid="input-article-title"
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="articleType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Article Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-article-type">
+                            <SelectValue placeholder="Select article type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ARTICLE_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Choose the category that best fits your article
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
