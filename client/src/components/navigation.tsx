@@ -146,7 +146,7 @@ export function Navigation() {
                   <Link href="/settings">
                     <DropdownMenuItem className="cursor-pointer">Settings</DropdownMenuItem>
                   </Link>
-                  <Link href="/articles">
+                  <Link href="/news">
                     <DropdownMenuItem className="cursor-pointer">
                       <Globe className="mr-2 h-4 w-4" />
                       Front End
@@ -325,7 +325,7 @@ export function Navigation() {
                   Settings
                 </Button>
               </Link>
-              <Link href="/articles">
+              <Link href="/news">
                 <Button 
                   variant="ghost" 
                   className="w-full justify-start"
