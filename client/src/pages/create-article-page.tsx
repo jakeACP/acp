@@ -161,6 +161,13 @@ export default function CreateArticlePage() {
   const generateWithAiMutation = useMutation({
     mutationFn: async (topic: string) => {
       const response = await apiRequest("/api/articles/generate", "POST", { topic });
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Please log in to use AI generation");
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to generate article");
+      }
       return response.json();
     },
     onSuccess: (data) => {
@@ -179,6 +186,7 @@ export default function CreateArticlePage() {
       });
     },
     onError: (error: Error) => {
+      setIsAiDialogOpen(false);
       toast({
         title: "Generation Failed",
         description: error.message || "Failed to generate article. Please try again.",
@@ -308,49 +316,67 @@ export default function CreateArticlePage() {
                   Generate With AI
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-purple-500" />
-                    Generate Article with AI
-                  </DialogTitle>
-                  <DialogDescription>
-                    Enter a topic, headline, or URL and AI will generate a complete article including title, content, type, and tags.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                  <Input
-                    placeholder="e.g., 'Congressional insider trading scandal' or paste a news URL..."
-                    value={aiTopic}
-                    onChange={(e) => setAiTopic(e.target.value)}
-                    className="w-full"
-                  />
-                  <p className="text-sm text-slate-500 mt-2">
-                    Tip: Be specific for better results. Include names, events, or issues you want covered.
-                  </p>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAiDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={() => generateWithAiMutation.mutate(aiTopic)}
-                    disabled={!aiTopic.trim() || generateWithAiMutation.isPending}
-                    className="bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600"
-                  >
-                    {generateWithAiMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
+              <DialogContent className="sm:max-w-[500px]">
+                {generateWithAiMutation.isPending ? (
+                  <div className="py-12 flex flex-col items-center justify-center space-y-6">
+                    <div className="relative">
+                      <div className="w-20 h-20 rounded-full border-4 border-purple-200 border-t-purple-500 animate-spin" />
+                      <Sparkles className="w-8 h-8 text-purple-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <p className="text-xl font-semibold text-purple-700 dark:text-purple-300">
+                        AI is writing your article...
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        Researching topic: "{aiTopic}"
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        This typically takes 15-30 seconds
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-purple-500" />
+                        Generate Article with AI
+                      </DialogTitle>
+                      <DialogDescription>
+                        Enter a topic, headline, or URL and AI will generate a complete article including title, content, type, and tags.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                      <Input
+                        placeholder="e.g., 'Congressional insider trading scandal' or paste a news URL..."
+                        value={aiTopic}
+                        onChange={(e) => setAiTopic(e.target.value)}
+                        className="w-full"
+                      />
+                      <p className="text-sm text-slate-500 mt-2">
+                        Tip: Be specific for better results. Include names, events, or issues you want covered.
+                      </p>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsAiDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={() => generateWithAiMutation.mutate(aiTopic)}
+                        disabled={!aiTopic.trim()}
+                        className="bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600"
+                      >
                         <Sparkles className="w-4 h-4 mr-2" />
                         Generate
-                      </>
-                    )}
-                  </Button>
-                </DialogFooter>
+                      </Button>
+                    </DialogFooter>
+                  </>
+                )}
               </DialogContent>
             </Dialog>
             <Button
