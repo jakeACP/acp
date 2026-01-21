@@ -1768,6 +1768,32 @@ export const algorithmSettings = pgTable("algorithm_settings", {
   updatedAtIndex: index("algorithm_settings_updated_at_idx").on(table.updatedAt),
 }));
 
+export const aiArticleParameters = pgTable("ai_article_parameters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().default("Default"),
+  systemPrompt: text("system_prompt").notNull().default("You are an investigative journalist writing for the Anti-Corruption Party, a political transparency organization. Your articles should be factual, well-researched, and focused on accountability and democratic reform."),
+  writingStyle: text("writing_style").notNull().default("Professional journalistic style with clear, accessible language"),
+  toneGuidelines: text("tone_guidelines").notNull().default("Objective but engaged. Expose corruption and hold politicians accountable while maintaining journalistic integrity."),
+  focusAreas: text("focus_areas").notNull().default("Government transparency, political accountability, campaign finance, lobbying, conflicts of interest"),
+  contentLength: text("content_length").notNull().default("medium"),
+  includeQuotes: boolean("include_quotes").notNull().default(true),
+  includeSources: boolean("include_sources").notNull().default(true),
+  additionalInstructions: text("additional_instructions"),
+  isActive: boolean("is_active").notNull().default(true),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAiArticleParametersSchema = createInsertSchema(aiArticleParameters).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AiArticleParameters = typeof aiArticleParameters.$inferSelect;
+export type InsertAiArticleParameters = z.infer<typeof insertAiArticleParametersSchema>;
+
 export const insertRepresentativeSchema = createInsertSchema(representatives).omit({
   id: true,
   createdAt: true,
