@@ -4,7 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
-import { Heart, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Heart, Clock, ChevronDown, ChevronUp, Link2, Check } from "lucide-react";
+import { SiFacebook, SiX, SiBluesky } from "react-icons/si";
+import { useToast } from "@/hooks/use-toast";
 
 interface PublicArticle {
   id: number;
@@ -33,8 +35,30 @@ interface PublicArticleCardProps {
 
 export function PublicArticleCard({ article, variant = 'default' }: PublicArticleCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
   
   const rawContent = article.articleBody || article.content || '';
+  const articleUrl = typeof window !== 'undefined' ? `${window.location.origin}/read/${article.id}` : '';
+  const encodedUrl = encodeURIComponent(articleUrl);
+  const encodedTitle = encodeURIComponent(article.title);
+  
+  const shareLinks = {
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    twitter: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
+    bluesky: `https://bsky.app/intent/compose?text=${encodedTitle}%20${encodedUrl}`,
+  };
+  
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(articleUrl);
+      setCopied(true);
+      toast({ title: "Link copied!", description: "Article link copied to clipboard" });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast({ title: "Failed to copy", variant: "destructive" });
+    }
+  };
   const plainText = rawContent.replace(/<[^>]*>/g, '').trim();
   const excerpt = article.excerpt || (plainText.length > 300 ? plainText.slice(0, 300) + '...' : plainText);
   
@@ -76,6 +100,47 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
         )}
         
         <CardContent className={`relative ${isHero && !isExpanded ? 'md:w-3/5 p-8 md:p-10' : 'p-7'}`}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <a
+                href={shareLinks.facebook}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-lg bg-white/10 hover:bg-[#1877F2]/20 text-white/70 hover:text-[#1877F2] transition-all hover:scale-110"
+                title="Share on Facebook"
+              >
+                <SiFacebook className="h-4 w-4" />
+              </a>
+              <a
+                href={shareLinks.twitter}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all hover:scale-110"
+                title="Share on X"
+              >
+                <SiX className="h-4 w-4" />
+              </a>
+              <a
+                href={shareLinks.bluesky}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-lg bg-white/10 hover:bg-[#0085FF]/20 text-white/70 hover:text-[#0085FF] transition-all hover:scale-110"
+                title="Share on Bluesky"
+              >
+                <SiBluesky className="h-4 w-4" />
+              </a>
+            </div>
+            
+            <button
+              onClick={copyLink}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all text-sm font-medium"
+              title="Copy link"
+            >
+              {copied ? <Check className="h-4 w-4 text-green-400" /> : <Link2 className="h-4 w-4" />}
+              <span className="hidden sm:inline">{copied ? 'Copied!' : 'Copy Link'}</span>
+            </button>
+          </div>
+          
           {!article.featuredImage && articleType && (
             <Badge 
               className="mb-4 bg-gradient-to-r from-[#B22234]/20 to-[#B22234]/10 text-[#B22234] border-[#B22234]/30 capitalize font-bold"
