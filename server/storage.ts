@@ -31,6 +31,8 @@ export interface IStorage {
   deletePost(postId: string): Promise<void>;
   getPostsByUser(userId: string, viewerId?: string): Promise<Post[]>;
   getPostsByTag(tag: string, userId?: string): Promise<Post[]>;
+  getPublicArticles(category?: string, limit?: number, offset?: number): Promise<PostWithAuthor[]>;
+  getPublicArticle(id: string): Promise<PostWithAuthor | undefined>;
   incrementPostShares(postId: string): Promise<void>;
   sharePost(originalPostId: string, userId: string): Promise<Post>;
   getTrendingHashtags(limit?: number, hoursAgo?: number): Promise<Array<{ tag: string; count: number }>>;
@@ -983,6 +985,73 @@ export class DatabaseStorage implements IStorage {
         privacyFilter
       ))
       .orderBy(desc(posts.createdAt));
+  }
+
+  async getPublicArticles(category?: string, limit = 50, offset = 0): Promise<PostWithAuthor[]> {
+    const categoryMapping: Record<string, string[]> = {
+      'current-events': ['news', 'current events', 'breaking'],
+      'politicians': ['politician', 'politicians', 'congress', 'senator', 'representative'],
+      'proposals': ['proposal', 'proposals', 'bill', 'legislation'],
+      'issues': ['issue', 'issues', 'policy', 'policies'],
+      'donors': ['donor', 'donors', 'donation', 'campaign finance', 'pac'],
+      'propaganda': ['propaganda', 'misinformation', 'disinformation'],
+      'conspiracies': ['conspiracy', 'conspiracies', 'cover-up'],
+      'legal-cases': ['legal', 'lawsuit', 'court', 'trial', 'indictment'],
+      'leaks': ['leak', 'leaks', 'whistleblower', 'exposed', 'documents'],
+    };
+
+    let whereConditions = and(
+      eq(posts.type, 'blog'),
+      eq(posts.privacy, 'public')
+    );
+
+    if (category && category !== 'all' && categoryMapping[category]) {
+      const tags = categoryMapping[category];
+      whereConditions = and(
+        whereConditions,
+        sql`(${posts.tags} && ARRAY[${sql.join(tags.map(t => sql`${t}`), sql`, `)}]::text[] OR LOWER(${posts.title}) LIKE ANY(ARRAY[${sql.join(tags.map(t => sql`${'%' + t + '%'}`), sql`, `)}]))`
+      );
+    }
+
+    const results = await db
+      .select({
+        post: posts,
+        author: users,
+      })
+      .from(posts)
+      .innerJoin(users, eq(posts.authorId, users.id))
+      .where(whereConditions)
+      .orderBy(desc(posts.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return results.map(row => ({
+      ...row.post,
+      author: row.author,
+    }));
+  }
+
+  async getPublicArticle(id: string): Promise<PostWithAuthor | undefined> {
+    const results = await db
+      .select({
+        post: posts,
+        author: users,
+      })
+      .from(posts)
+      .innerJoin(users, eq(posts.authorId, users.id))
+      .where(and(
+        eq(posts.id, id),
+        eq(posts.type, 'blog'),
+        eq(posts.privacy, 'public')
+      ))
+      .limit(1);
+
+    if (results.length === 0) return undefined;
+
+    return {
+      ...results[0].post,
+      author: results[0].author,
+    };
   }
 
   async incrementPostShares(postId: string): Promise<void> {

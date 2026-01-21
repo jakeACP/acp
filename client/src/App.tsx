@@ -55,14 +55,37 @@ import AdminSigsPage from "@/pages/admin-sigs-page";
 import WhistleblowingPage from "@/pages/whistleblowing-page";
 import CreateArticlePage from "@/pages/create-article-page";
 import ArticlePage from "@/pages/article-page";
+import PublicLandingPage from "@/pages/public-landing-page";
+import PublicArticlePage from "@/pages/public-article-page";
 import NotFound from "@/pages/not-found";
 import { AlertTriangle } from "lucide-react";
 import { useScrollLight } from "./hooks/useScrollLight";
+import { useAuth } from "./hooks/use-auth";
+import { Loader2 } from "lucide-react";
+
+function HomeRoute() {
+  const { user, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-border" />
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <PublicLandingPage />;
+  }
+  
+  return <HomePage />;
+}
 
 function Router() {
   return (
     <Switch>
-      <ProtectedRoute path="/" component={HomePage} />
+      <Route path="/" component={HomeRoute} />
+      <Route path="/read/:id" component={PublicArticlePage} />
       <ProtectedRoute path="/groups" component={GroupsPage} />
       <ProtectedRoute path="/polls" component={PollsPage} />
       <ProtectedRoute path="/polls/:id" component={PollDetailPage} />

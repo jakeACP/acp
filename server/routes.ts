@@ -41,6 +41,32 @@ const objectStorageService = new ObjectStorageService();
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
+  // Public Articles API (no auth required)
+  app.get("/api/public/articles", async (req, res) => {
+    try {
+      const category = req.query.category as string | undefined;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      const articles = await storage.getPublicArticles(category, limit, offset);
+      res.json(articles);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/public/articles/:id", async (req, res) => {
+    try {
+      const article = await storage.getPublicArticle(req.params.id);
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+      res.json(article);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // File Upload API
   app.post("/api/upload", upload.single('file'), async (req, res) => {
     if (!req.isAuthenticated()) {
