@@ -40,6 +40,8 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
   const { toast } = useToast();
   
   const rawContent = article.articleBody || article.content || '';
+  
+  const cleanedContent = rawContent.replace(/^<h[12][^>]*>.*?<\/h[12]>\s*/i, '');
   const articleUrl = typeof window !== 'undefined' ? `${window.location.origin}/read/${article.id}` : '';
   const encodedUrl = encodeURIComponent(articleUrl);
   const encodedTitle = encodeURIComponent(article.title);
@@ -157,7 +159,7 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
           {isExpanded ? (
             <div 
               className="text-slate-300 mb-6 leading-relaxed text-base prose prose-invert prose-p:text-slate-300 prose-headings:text-white max-w-none"
-              dangerouslySetInnerHTML={{ __html: rawContent || `<p>${plainText}</p>` }}
+              dangerouslySetInnerHTML={{ __html: cleanedContent || `<p>${plainText}</p>` }}
             />
           ) : (
             <p className={`text-slate-300 mb-6 leading-relaxed ${isHero ? 'text-lg line-clamp-4' : 'text-base line-clamp-3'}`}>

@@ -244,7 +244,7 @@ export default function PublicArticlePage() {
                     prose-strong:text-white
                     prose-img:rounded-lg prose-img:shadow-md
                     prose-blockquote:border-[#B22234] prose-blockquote:text-slate-400"
-                  dangerouslySetInnerHTML={{ __html: article.articleBody || article.content }}
+                  dangerouslySetInnerHTML={{ __html: (article.articleBody || article.content || '').replace(/^<h[12][^>]*>.*?<\/h[12]>\s*/i, '') }}
                 />
               </div>
             </article>
