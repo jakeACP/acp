@@ -654,27 +654,6 @@ export function MainFeed() {
 
   const isLoading = isLoadingAll || isLoadingFollowing || isLoadingNews;
 
-  // Check if we should show special views (AFTER all hooks to maintain hook order consistency)
-  if (activeView === "friends") {
-    return <FriendsView />;
-  }
-
-  if (activeView === "groups") {
-    return <GroupsView />;
-  }
-
-  if (activeView === "votes") {
-    return <VotesView />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   // Get current feed posts based on active feed
   const getCurrentFeedPosts = () => {
     switch (activeFeed) {
@@ -749,32 +728,53 @@ export function MainFeed() {
 
   const feedItems = getFeedItems();
   
-  // Reset visible count when feed type changes
+  // Get visible items for display
+  const visibleItems = feedItems.slice(0, visibleCount);
+  const hasMoreItems = visibleCount < feedItems.length;
+  
+  // Reset visible count when feed type changes (must be before conditional returns)
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
   }, [activeFeed]);
   
-  // Infinite scroll with IntersectionObserver
+  // Infinite scroll effect
   useEffect(() => {
+    const currentRef = loadMoreRef.current;
+    if (!currentRef) return;
+    
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && visibleCount < feedItems.length) {
+        if (entries[0].isIntersecting && hasMoreItems) {
           setVisibleCount(prev => Math.min(prev + ITEMS_PER_PAGE, feedItems.length));
         }
       },
       { threshold: 0.1, rootMargin: '100px' }
     );
     
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
-    
+    observer.observe(currentRef);
     return () => observer.disconnect();
-  }, [visibleCount, feedItems.length]);
-  
-  // Get visible items for display
-  const visibleItems = feedItems.slice(0, visibleCount);
-  const hasMoreItems = visibleCount < feedItems.length;
+  }, [hasMoreItems, feedItems.length]);
+
+  // Check if we should show special views (AFTER all hooks to maintain hook order consistency)
+  if (activeView === "friends") {
+    return <FriendsView />;
+  }
+
+  if (activeView === "groups") {
+    return <GroupsView />;
+  }
+
+  if (activeView === "votes") {
+    return <VotesView />;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="page-background md:space-y-6">
