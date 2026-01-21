@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
-import { Heart, Clock, ChevronDown, ChevronUp, Link2, Check } from "lucide-react";
+import { Heart, Clock, ChevronDown, ChevronUp, Link2, Check, ExternalLink } from "lucide-react";
 import { SiFacebook, SiX, SiBluesky } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 interface PublicArticle {
   id: number;
@@ -153,16 +154,9 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
             {article.title}
           </h3>
           
-          {isExpanded ? (
-            <div 
-              className="text-slate-300 mb-6 leading-relaxed text-base prose prose-invert max-w-none"
-              dangerouslySetInnerHTML={{ __html: rawContent || `<p>${plainText}</p>` }}
-            />
-          ) : (
-            <p className={`text-slate-300 mb-6 leading-relaxed ${isHero ? 'text-lg line-clamp-4' : 'text-base line-clamp-3'}`}>
-              {excerpt}
-            </p>
-          )}
+          <p className={`text-slate-300 mb-6 leading-relaxed ${isExpanded ? '' : isHero ? 'text-lg line-clamp-4' : 'text-base line-clamp-3'}`}>
+            {isExpanded ? plainText : excerpt}
+          </p>
           
           <div className="flex items-center gap-4 mb-6 text-sm text-slate-400 flex-wrap">
             <div className="flex items-center gap-3">
@@ -191,20 +185,34 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
             )}
           </div>
           
-          <Button 
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="relative bg-gradient-to-r from-[#3C3B6E] to-[#2a2a4a] hover:from-[#2a2a4a] hover:to-[#1a1a3a] text-white font-bold text-base px-8 py-3 rounded-xl shadow-lg border border-white/20 group/btn overflow-hidden transition-all hover:scale-105 hover:shadow-xl"
-          >
-            <span className="absolute inset-0 bg-gradient-to-t from-transparent to-white/10 pointer-events-none" />
-            <span className="relative flex items-center gap-2">
-              {isExpanded ? 'Show Less' : 'Read More'}
-              {isExpanded ? (
-                <ChevronUp className="h-5 w-5" />
-              ) : (
-                <ChevronDown className="h-5 w-5 group-hover/btn:translate-y-0.5 transition-transform" />
-              )}
-            </span>
-          </Button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button 
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="relative bg-gradient-to-r from-[#3C3B6E] to-[#2a2a4a] hover:from-[#2a2a4a] hover:to-[#1a1a3a] text-white font-bold text-base px-6 py-3 rounded-xl shadow-lg border border-white/20 group/btn overflow-hidden transition-all hover:scale-105 hover:shadow-xl"
+            >
+              <span className="absolute inset-0 bg-gradient-to-t from-transparent to-white/10 pointer-events-none" />
+              <span className="relative flex items-center gap-2">
+                {isExpanded ? 'Show Less' : 'Read More'}
+                {isExpanded ? (
+                  <ChevronUp className="h-5 w-5" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 group-hover/btn:translate-y-0.5 transition-transform" />
+                )}
+              </span>
+            </Button>
+            
+            <Link href={`/read/${article.id}`}>
+              <Button 
+                className="relative bg-gradient-to-r from-[#B22234] to-[#8B1A28] hover:from-[#8B1A28] hover:to-[#6B1420] text-white font-bold text-base px-6 py-3 rounded-xl shadow-lg border border-white/20 group/btn overflow-hidden transition-all hover:scale-105 hover:shadow-xl"
+              >
+                <span className="absolute inset-0 bg-gradient-to-t from-transparent to-white/10 pointer-events-none" />
+                <span className="relative flex items-center gap-2">
+                  Read Full Article
+                  <ExternalLink className="h-4 w-4" />
+                </span>
+              </Button>
+            </Link>
+          </div>
         </CardContent>
       </div>
     </Card>
