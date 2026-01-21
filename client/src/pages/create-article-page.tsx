@@ -76,8 +76,7 @@ export default function CreateArticlePage() {
   const { user } = useAuth();
   const [isPreview, setIsPreview] = useState(false);
   const [articleContent, setArticleContent] = useState("");
-  const [aiTopic, setAiTopic] = useState("");
-  const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
+    const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const [suggestedImages, setSuggestedImages] = useState<string[]>([]);
 
   const { data: existingArticle, isLoading: isLoadingArticle } = useQuery<PostWithAuthor>({
@@ -159,8 +158,8 @@ export default function CreateArticlePage() {
   });
 
   const generateWithAiMutation = useMutation({
-    mutationFn: async (topic: string) => {
-      const response = await apiRequest("/api/articles/generate", "POST", { topic });
+    mutationFn: async (title: string) => {
+      const response = await apiRequest("/api/articles/generate", "POST", { title });
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error("Please log in to use AI generation");
@@ -171,25 +170,19 @@ export default function CreateArticlePage() {
       return response.json();
     },
     onSuccess: (data) => {
-      form.setValue("title", data.title);
-      form.setValue("excerpt", data.excerpt);
       form.setValue("articleBody", data.articleBody);
-      form.setValue("articleType", data.articleType);
-      form.setValue("tags", data.tags.join(", "));
       setArticleContent(data.articleBody);
-      setSuggestedImages(data.suggestedImages || []);
       setIsAiDialogOpen(false);
-      setAiTopic("");
       toast({
-        title: "Article Generated",
-        description: "AI has filled in the article fields. Review and edit as needed.",
+        title: "Content Generated",
+        description: "AI has generated the article content based on your title. Review and edit as needed.",
       });
     },
     onError: (error: Error) => {
       setIsAiDialogOpen(false);
       toast({
         title: "Generation Failed",
-        description: error.message || "Failed to generate article. Please try again.",
+        description: error.message || "Failed to generate content. Please try again.",
         variant: "destructive",
       });
     },
@@ -311,9 +304,13 @@ export default function CreateArticlePage() {
           <div className="flex gap-2">
             <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:from-purple-600 hover:to-blue-600">
+                <Button 
+                  variant="outline" 
+                  className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:from-purple-600 hover:to-blue-600"
+                  disabled={!form.watch("title")?.trim()}
+                >
                   <Sparkles className="w-4 h-4 mr-2" />
-                  Generate With AI
+                  Generate Content
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[500px]">
@@ -327,8 +324,8 @@ export default function CreateArticlePage() {
                       <p className="text-xl font-semibold text-purple-700 dark:text-purple-300">
                         AI is writing your article...
                       </p>
-                      <p className="text-sm text-slate-500">
-                        Researching topic: "{aiTopic}"
+                      <p className="text-sm text-slate-500 px-4">
+                        Creating content for: "{form.watch("title")}"
                       </p>
                       <p className="text-xs text-slate-400">
                         This typically takes 15-30 seconds
@@ -345,21 +342,19 @@ export default function CreateArticlePage() {
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
                         <Sparkles className="w-5 h-5 text-purple-500" />
-                        Generate Article with AI
+                        Generate Article Content
                       </DialogTitle>
                       <DialogDescription>
-                        Enter a topic, headline, or URL and AI will generate a complete article including title, content, type, and tags.
+                        AI will generate the article body content based on your title using the configured AI parameters.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
-                      <Input
-                        placeholder="e.g., 'Congressional insider trading scandal' or paste a news URL..."
-                        value={aiTopic}
-                        onChange={(e) => setAiTopic(e.target.value)}
-                        className="w-full"
-                      />
-                      <p className="text-sm text-slate-500 mt-2">
-                        Tip: Be specific for better results. Include names, events, or issues you want covered.
+                      <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4 border">
+                        <p className="text-xs text-slate-500 uppercase font-medium mb-1">Article Title</p>
+                        <p className="text-lg font-semibold">{form.watch("title") || "No title entered"}</p>
+                      </div>
+                      <p className="text-sm text-slate-500 mt-3">
+                        The AI will write content for this title using the global AI Article Parameters configured in the admin panel.
                       </p>
                     </div>
                     <DialogFooter>
@@ -367,12 +362,12 @@ export default function CreateArticlePage() {
                         Cancel
                       </Button>
                       <Button 
-                        onClick={() => generateWithAiMutation.mutate(aiTopic)}
-                        disabled={!aiTopic.trim()}
+                        onClick={() => generateWithAiMutation.mutate(form.watch("title"))}
+                        disabled={!form.watch("title")?.trim()}
                         className="bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600"
                       >
                         <Sparkles className="w-4 h-4 mr-2" />
-                        Generate
+                        Generate Content
                       </Button>
                     </DialogFooter>
                   </>
