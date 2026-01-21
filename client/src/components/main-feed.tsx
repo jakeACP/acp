@@ -785,47 +785,47 @@ export function MainFeed() {
             <Tabs value={activeFeed} onValueChange={(value) => setActiveFeed(value as FeedType)} className="w-full">
               <TabsList className="grid w-full grid-cols-5 lg:grid-cols-11 h-12 bg-muted/50 mb-4 rounded-xl overflow-x-auto">
                 <TabsTrigger value="all" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Globe className="h-4 w-4" />
+                  <Globe className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">All</span>
                 </TabsTrigger>
                 <TabsTrigger value="news" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Newspaper className="h-4 w-4" />
+                  <Newspaper className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">News</span>
                 </TabsTrigger>
                 <TabsTrigger value="following" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Users className="h-4 w-4" />
+                  <Users className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">Following</span>
                 </TabsTrigger>
                 <TabsTrigger value="polls" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <BarChart3 className="h-4 w-4" />
+                  <BarChart3 className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">Polls</span>
                 </TabsTrigger>
                 <TabsTrigger value="events" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Calendar className="h-4 w-4" />
+                  <Calendar className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">Events</span>
                 </TabsTrigger>
                 <TabsTrigger value="charities" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Heart className="h-4 w-4" />
+                  <Heart className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">Charities</span>
                 </TabsTrigger>
                 <TabsTrigger value="boycotts" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Ban className="h-4 w-4" />
+                  <Ban className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">Boycotts</span>
                 </TabsTrigger>
                 <TabsTrigger value="initiatives" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <FileText className="h-4 w-4" />
+                  <FileText className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">Initiatives</span>
                 </TabsTrigger>
                 <TabsTrigger value="petitions" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <ScrollText className="h-4 w-4" />
+                  <ScrollText className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">Petitions</span>
                 </TabsTrigger>
                 <TabsTrigger value="unions" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Building2 className="h-4 w-4" />
+                  <Building2 className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">Unions</span>
                 </TabsTrigger>
                 <TabsTrigger value="debates" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <MessageCircleReply className="h-4 w-4" />
+                  <MessageCircleReply className="h-5 w-5 flex-shrink-0" />
                   <span className="hidden lg:inline font-medium">Debates</span>
                 </TabsTrigger>
               </TabsList>
