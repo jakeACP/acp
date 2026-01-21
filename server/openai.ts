@@ -388,3 +388,91 @@ Respond with JSON in this exact format:
     throw error;
   }
 }
+
+// Article type options for AI generation
+const ARTICLE_TYPES = [
+  "current-events",
+  "politicians", 
+  "proposals",
+  "issues",
+  "donors",
+  "propaganda",
+  "conspiracies",
+  "legal-cases",
+  "leaks"
+] as const;
+
+interface GeneratedArticle {
+  title: string;
+  excerpt: string;
+  articleBody: string;
+  articleType: typeof ARTICLE_TYPES[number];
+  tags: string[];
+  suggestedImages: string[];
+}
+
+// Generate article content using AI based on a topic or URL
+export async function generateArticleContent(topic: string): Promise<GeneratedArticle> {
+  try {
+    const openai = getOpenAIClient();
+    // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+    
+    const prompt = `You are a journalist for the Anti-Corruption Party (ACP), a grassroots political movement focused on transparency, accountability, and democratic reform. 
+
+Generate a complete news article about the following topic: "${topic}"
+
+The article should be well-researched, factual, and written in a professional journalistic style. Focus on exposing corruption, holding politicians accountable, and promoting transparency in government.
+
+IMPORTANT: Choose the most appropriate article type from these options:
+- current-events: Breaking news and recent developments
+- politicians: Coverage of political figures and their actions
+- proposals: Policy proposals and legislative initiatives
+- issues: Important social and political issues
+- donors: Campaign finance and political donations
+- propaganda: Analysis of political messaging and spin
+- conspiracies: Investigation of alleged cover-ups or hidden activities
+- legal-cases: Court cases and legal proceedings
+- leaks: Whistleblower information and leaked documents
+
+Generate the response as JSON with this exact structure:
+{
+  "title": "Compelling headline that captures the story",
+  "excerpt": "2-3 sentence summary that hooks readers (max 300 chars)",
+  "articleBody": "Full article content in HTML format with <p>, <h2>, <h3>, <blockquote>, <ul>, <li> tags. Include at least 4-5 paragraphs with proper structure.",
+  "articleType": "one of the type options above",
+  "tags": ["array", "of", "relevant", "tags"],
+  "suggestedImages": ["description of image 1 that would fit this article", "description of image 2"]
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: "You are an investigative journalist writing for a political transparency organization. Your articles should be factual, well-sourced, and focused on accountability and democratic reform."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 4096,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    // Validate and sanitize the response
+    return {
+      title: result.title || "Untitled Article",
+      excerpt: result.excerpt?.slice(0, 500) || "",
+      articleBody: result.articleBody || "<p>Article content goes here.</p>",
+      articleType: ARTICLE_TYPES.includes(result.articleType) ? result.articleType : "current-events",
+      tags: Array.isArray(result.tags) ? result.tags.slice(0, 10) : [],
+      suggestedImages: Array.isArray(result.suggestedImages) ? result.suggestedImages : []
+    };
+  } catch (error) {
+    console.error("Error generating article content:", error);
+    throw error;
+  }
+}

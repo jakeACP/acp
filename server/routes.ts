@@ -9,7 +9,7 @@ import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSch
 import { eq } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
-import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles } from "./openai";
+import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent } from "./openai";
 import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
 import multer from "multer";
@@ -169,6 +169,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(post);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  // AI Article Generation endpoint
+  app.post("/api/articles/generate", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { topic } = req.body;
+      if (!topic || typeof topic !== 'string' || topic.trim().length < 3) {
+        return res.status(400).json({ message: "Please provide a topic with at least 3 characters" });
+      }
+
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(500).json({ message: "AI generation is not configured" });
+      }
+
+      const generatedArticle = await generateArticleContent(topic.trim());
+      res.json(generatedArticle);
+    } catch (error: any) {
+      console.error("Error generating article:", error);
+      res.status(500).json({ message: "Failed to generate article. Please try again." });
     }
   });
 

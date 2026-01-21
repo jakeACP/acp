@@ -28,7 +28,16 @@ import { RichTextEditor } from "@/components/rich-text-editor";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowLeft, FileText, Image, Eye, Save, Send, Pencil } from "lucide-react";
+import { ArrowLeft, FileText, Image, Eye, Save, Send, Pencil, Sparkles, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import type { User, Post } from "@shared/schema";
 
 const ARTICLE_TYPES = [
@@ -67,6 +76,9 @@ export default function CreateArticlePage() {
   const { user } = useAuth();
   const [isPreview, setIsPreview] = useState(false);
   const [articleContent, setArticleContent] = useState("");
+  const [aiTopic, setAiTopic] = useState("");
+  const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
+  const [suggestedImages, setSuggestedImages] = useState<string[]>([]);
 
   const { data: existingArticle, isLoading: isLoadingArticle } = useQuery<PostWithAuthor>({
     queryKey: ["/api/posts", articleId],
@@ -141,6 +153,35 @@ export default function CreateArticlePage() {
       toast({
         title: "Error",
         description: error.message || "Failed to publish article",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const generateWithAiMutation = useMutation({
+    mutationFn: async (topic: string) => {
+      const response = await apiRequest("/api/articles/generate", "POST", { topic });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      form.setValue("title", data.title);
+      form.setValue("excerpt", data.excerpt);
+      form.setValue("articleBody", data.articleBody);
+      form.setValue("articleType", data.articleType);
+      form.setValue("tags", data.tags.join(", "));
+      setArticleContent(data.articleBody);
+      setSuggestedImages(data.suggestedImages || []);
+      setIsAiDialogOpen(false);
+      setAiTopic("");
+      toast({
+        title: "Article Generated",
+        description: "AI has filled in the article fields. Review and edit as needed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Generation Failed",
+        description: error.message || "Failed to generate article. Please try again.",
         variant: "destructive",
       });
     },
@@ -260,6 +301,58 @@ export default function CreateArticlePage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:from-purple-600 hover:to-blue-600">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate With AI
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-purple-500" />
+                    Generate Article with AI
+                  </DialogTitle>
+                  <DialogDescription>
+                    Enter a topic, headline, or URL and AI will generate a complete article including title, content, type, and tags.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                  <Input
+                    placeholder="e.g., 'Congressional insider trading scandal' or paste a news URL..."
+                    value={aiTopic}
+                    onChange={(e) => setAiTopic(e.target.value)}
+                    className="w-full"
+                  />
+                  <p className="text-sm text-slate-500 mt-2">
+                    Tip: Be specific for better results. Include names, events, or issues you want covered.
+                  </p>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsAiDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => generateWithAiMutation.mutate(aiTopic)}
+                    disabled={!aiTopic.trim() || generateWithAiMutation.isPending}
+                    className="bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600"
+                  >
+                    {generateWithAiMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Generate
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             <Button
               variant="outline"
               onClick={() => setIsPreview(!isPreview)}
@@ -393,6 +486,26 @@ export default function CreateArticlePage() {
                     </FormItem>
                   )}
                 />
+
+                {suggestedImages.length > 0 && (
+                  <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-2 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      AI Suggested Image Ideas:
+                    </p>
+                    <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                      {suggestedImages.map((img, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-purple-500">•</span>
+                          {img}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Search for these images online and paste the URL above.
+                    </p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField

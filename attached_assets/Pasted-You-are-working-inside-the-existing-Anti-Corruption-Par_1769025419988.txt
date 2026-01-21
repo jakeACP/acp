@@ -1,0 +1,125 @@
+You are working inside the existing Anti-Corruption Party (ACP) project. Build a shareable front-end news site (ACP News) that renders public article pages with strong SEO + social previews (Open Graph/Twitter Cards). The layout should functionally match a classic newspaper homepage like the provided reference image: top masthead, horizontal category menu, a breaking banner, a slim “In the News” row, and a main hero story with supporting side-rail cards and more coverage below.
+
+PRIMARY GOAL
+Create a front-end news experience where each article has a permanent public URL that looks great when shared to Facebook/X/LinkedIn, and readers can filter by ACP article types.
+
+ARTICLE TYPES (one-word, required, exactly one per article)
+- Current
+- Politicians
+- Proposals
+- Issues
+- Donors
+- Propaganda
+- Conspiracies
+- Cases
+- Leaks
+
+PAGES & ROUTES
+1) Homepage: /news
+   - Header bar (left: search icon + date; center: ACP News masthead; right: Subscribe + Sign Up buttons)
+   - Category navbar with the 9 types above (click filters feed)
+   - Breaking banner strip (admin-configurable text; if none, hide)
+   - “IN THE NEWS” slim row: 4 compact headlines with small thumbnails + time
+   - Main content grid:
+     - Left column: one featured “secondary” story card
+     - Center: MAIN HERO story (large image, headline, deck)
+     - Right column: 2 stacked story cards (headline + image)
+   - Below: “More Coverage” list/grid with pagination or infinite scroll
+
+2) Type Filter Page: /news/type/[type]
+   - Same layout style, but feed filtered by the selected type
+   - Highlight active type in navbar
+
+3) Article Page: /news/[slug]
+   - Standard article page with:
+     - Title, author, date/time, type chip, tags
+     - Cover image
+     - Body content
+     - Sources section (optional list of URLs + citations)
+   - RIGHT SIDEBAR: “Related Articles” module (very important)
+     - Shows 6 related articles:
+       - Priority 1: same type
+       - Priority 2: shared tags
+       - Fallback: most recent
+     - Exclude the current article
+   - BELOW ARTICLE: “More Like This” row (3 cards) using the same related logic
+
+4) Tag Page (optional but preferred): /news/tag/[tag]
+   - Feed filtered by tag
+
+DATA MODEL (MVP)
+Implement an Article model that supports:
+- id
+- title
+- slug (unique)
+- type (enum of the 9 one-word types)
+- excerpt (for cards + OG description)
+- content (markdown or rich text)
+- coverImageUrl (for hero + OG image)
+- thumbnailUrl (optional)
+- authorName
+- publishedAt (date)
+- tags (string array)
+- isFeatured (boolean)
+- isBreaking (boolean)
+- isInTheNews (boolean)
+- sources (array of { label, url })
+- status (draft/published) — only published visible publicly
+
+STORAGE (choose best for our ACP setup)
+If ACP already has a DB, add an articles table/collection. If not, implement a simple JSON/markdown storage in-repo as an MVP but structure it so we can migrate to DB later without rewriting the UI.
+
+ADMIN (lightweight)
+Create a minimal internal route (can be protected later) for adding/editing articles OR at least seed with sample data + a clear place to add future articles. The key requirement is that public pages work now.
+
+RELATED ARTICLES ALGORITHM
+Write a helper:
+getRelatedArticles(currentArticle, allArticles, limit=6):
+- filter published only
+- exclude current slug
+- score:
+  +3 if same type
+  +2 if shares any tag (per shared tag, cap at +6)
+  +1 if published within last 7 days
+- sort by score desc then publishedAt desc
+- return top limit
+
+UI/COMPONENTS
+- Build reusable components:
+  - NewsHeader (date + masthead + actions)
+  - CategoryNav (types)
+  - BreakingBanner
+  - InTheNewsRow
+  - StoryCard (variants: compact, standard, rail, hero)
+  - RelatedArticles (sidebar + below-article)
+- Make it responsive:
+  - Desktop: 3-column newspaper layout
+  - Tablet: 2 columns
+  - Mobile: stacked cards, hero first, nav collapses to a dropdown or horizontal scroll
+
+SEO & SOCIAL SHARING (critical)
+For each article page:
+- Set <title> and meta description
+- Open Graph tags:
+  og:title, og:description, og:image, og:type=article, og:url
+- Twitter card: summary_large_image
+- Ensure OG image uses absolute URL (use site base URL env var)
+
+TECH STACK
+Use Next.js (App Router) or the ACP project’s existing front-end framework if already present. Prefer server-side rendering for SEO. Use TypeScript. Styling can be Tailwind or existing design system. Keep it clean, fast, and minimal.
+
+ACCEPTANCE CRITERIA
+- /news loads with the newspaper layout: breaking banner, in-the-news row, hero story, side rail, more coverage
+- Navbar filters by the 9 ACP types (Current, Politicians, Proposals, Issues, Donors, Propaganda, Conspiracies, Cases, Leaks)
+- /news/[slug] loads a public article with OG/Twitter metadata
+- Article page shows “Related Articles” in the sidebar and “More Like This” below using the scoring algorithm
+- Articles are shareable: when a URL is pasted into social platforms, it should render a rich preview (title, image, excerpt)
+- Provide seeded sample articles covering each type so the layout is populated
+
+DELIVERABLES
+- Implement routes, components, and data model
+- Seed data (9–15 articles minimum)
+- Clear README instructions for:
+  - adding a new article
+  - setting NEXT_PUBLIC_SITE_URL (or equivalent) so OG images work
+  - deploying on Replit with a public URL
