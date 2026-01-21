@@ -78,6 +78,12 @@ const adminMenuItems = [
     category: "system",
   },
   {
+    name: "AI Writer",
+    href: "/admin/ai-parameters",
+    icon: Cpu,
+    category: "content",
+  },
+  {
     name: "ACP+",
     href: "/admin/acp-plus",
     icon: Coins,
