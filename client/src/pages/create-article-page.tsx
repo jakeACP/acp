@@ -175,10 +175,13 @@ export default function CreateArticlePage() {
     onSuccess: (data) => {
       form.setValue("articleBody", data.articleBody);
       setArticleContent(data.articleBody);
+      if (data.excerpt) {
+        form.setValue("excerpt", data.excerpt);
+      }
       setIsAiDialogOpen(false);
       toast({
         title: "Content Generated",
-        description: "AI has generated the article content based on your title. Review and edit as needed.",
+        description: "AI has generated the article content and description based on your title. Review and edit as needed.",
       });
     },
     onError: (error: Error) => {

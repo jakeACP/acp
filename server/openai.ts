@@ -413,6 +413,7 @@ interface GeneratedArticle {
 
 interface GeneratedArticleBody {
   articleBody: string;
+  excerpt: string;
 }
 
 interface AiArticleParams {
@@ -449,8 +450,10 @@ ${params.additionalInstructions ? `Additional Instructions: ${params.additionalI
 
 Write the article body content formatted with HTML tags: <p> for paragraphs, <h2> and <h3> for subheadings, <blockquote> for quotes, <ul>/<li> for lists.
 
+Also generate a compelling short description/excerpt (2-3 sentences, max 300 characters) that summarizes the article and hooks readers.
+
 Return a JSON object with this structure:
-{"articleBody": "<p>Your article content here...</p>"}`;
+{"articleBody": "<p>Your article content here...</p>", "excerpt": "Short engaging description..."}`;
 
     console.log("Generating article for title:", title);
     
@@ -485,7 +488,8 @@ Return a JSON object with this structure:
     }
     
     return {
-      articleBody: result.articleBody
+      articleBody: result.articleBody,
+      excerpt: result.excerpt || ""
     };
   } catch (error) {
     console.error("Error generating article body:", error);
