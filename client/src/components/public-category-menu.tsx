@@ -42,8 +42,8 @@ const categories: { id: ArticleCategory; label: string; icon: typeof Newspaper }
 
 export function PublicCategoryMenu({ activeCategory, onCategoryChange }: PublicCategoryMenuProps) {
   return (
-    <nav className="sticky top-[72px] z-40 w-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 shadow-lg">
-      <div className="absolute inset-0 bg-gradient-to-r from-[#B22234]/5 via-white/50 to-[#3C3B6E]/5 dark:from-[#B22234]/10 dark:via-slate-900/50 dark:to-[#3C3B6E]/10 pointer-events-none" />
+    <nav className="sticky top-[72px] z-40 w-full bg-[#1a1a2e]/95 backdrop-blur-xl border-b border-white/10 shadow-lg">
+      <div className="absolute inset-0 bg-gradient-to-r from-[#B22234]/10 via-transparent to-[#3C3B6E]/10 pointer-events-none" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="flex items-center gap-2 py-3 overflow-x-auto scrollbar-hide">
           <button
@@ -52,7 +52,7 @@ export function PublicCategoryMenu({ activeCategory, onCategoryChange }: PublicC
               "flex-shrink-0 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 border",
               activeCategory === 'all'
                 ? "bg-gradient-to-r from-[#B22234] to-[#D4343F] text-white shadow-lg border-white/30 scale-105"
-                : "text-slate-700 dark:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-800/60 border-transparent hover:border-slate-200/50 dark:hover:border-slate-600/50 hover:shadow-md"
+                : "text-white/80 hover:bg-white/10 border-transparent hover:border-white/20 hover:shadow-md"
             )}
           >
             All Articles
@@ -68,7 +68,7 @@ export function PublicCategoryMenu({ activeCategory, onCategoryChange }: PublicC
                   "flex-shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 border",
                   activeCategory === category.id
                     ? "bg-gradient-to-r from-[#B22234] to-[#D4343F] text-white shadow-lg border-white/30 scale-105"
-                    : "text-slate-700 dark:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-800/60 border-transparent hover:border-slate-200/50 dark:hover:border-slate-600/50 hover:shadow-md"
+                    : "text-white/80 hover:bg-white/10 border-transparent hover:border-white/20 hover:shadow-md"
                 )}
               >
                 <Icon className="h-4 w-4" />

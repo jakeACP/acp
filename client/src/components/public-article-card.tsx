@@ -47,8 +47,8 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
   const isHero = variant === 'hero';
 
   return (
-    <Card className={`group overflow-hidden bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl border border-white/40 dark:border-slate-600/40 shadow-xl hover:shadow-2xl transition-all duration-500 ${isHero ? 'ring-2 ring-[#B22234]/20' : ''}`}>
-      <div className="absolute inset-0 bg-gradient-to-br from-[#B22234]/5 via-transparent to-[#3C3B6E]/5 pointer-events-none" />
+    <Card className={`group overflow-hidden bg-[#1a1a2e]/90 backdrop-blur-xl border border-white/20 shadow-2xl hover:shadow-[0_0_40px_rgba(178,34,52,0.3)] transition-all duration-500 ${isHero ? 'ring-2 ring-[#B22234]/40' : ''}`}>
+      <div className="absolute inset-0 bg-gradient-to-br from-[#B22234]/10 via-transparent to-[#3C3B6E]/10 pointer-events-none" />
       <div className={`relative ${isHero ? 'md:flex' : ''}`}>
         {article.featuredImage && (
           <div className={`relative overflow-hidden ${isHero ? 'md:w-2/5 h-72 md:h-auto' : 'h-60'}`}>
@@ -82,15 +82,15 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
             </Badge>
           )}
           
-          <h3 className={`font-bold text-slate-900 dark:text-white mb-4 leading-tight ${isHero ? 'text-3xl md:text-4xl' : 'text-2xl'}`}>
+          <h3 className={`font-bold text-white mb-4 leading-tight ${isHero ? 'text-3xl md:text-4xl' : 'text-2xl'}`}>
             {article.title}
           </h3>
           
-          <p className={`text-slate-600 dark:text-slate-300 mb-6 leading-relaxed ${isHero ? 'text-lg line-clamp-4' : 'text-base line-clamp-3'}`}>
+          <p className={`text-slate-300 mb-6 leading-relaxed ${isHero ? 'text-lg line-clamp-4' : 'text-base line-clamp-3'}`}>
             {excerpt}
           </p>
           
-          <div className="flex items-center gap-4 mb-6 text-sm text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-4 mb-6 text-sm text-slate-400">
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute inset-0 bg-[#3C3B6E]/20 rounded-full blur-sm" />
@@ -101,10 +101,10 @@ export function PublicArticleCard({ article, variant = 'default' }: PublicArticl
                   </AvatarFallback>
                 </Avatar>
               </div>
-              <span className="font-semibold text-slate-700 dark:text-slate-200">{authorName}</span>
+              <span className="font-semibold text-white">{authorName}</span>
             </div>
             
-            <span className="flex items-center gap-1.5 bg-slate-100/80 dark:bg-slate-700/80 rounded-full px-3 py-1">
+            <span className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1">
               <Clock className="h-4 w-4" />
               {format(new Date(article.createdAt), 'MMM d, yyyy')}
             </span>

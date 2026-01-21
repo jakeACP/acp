@@ -61,8 +61,25 @@ export default function PublicLandingPage() {
   const remainingArticles = visibleArticles.slice(1);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-slate-100 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#B22234]/5 via-transparent to-[#3C3B6E]/5 pointer-events-none" />
+    <div className="min-h-screen bg-[#1a1a2e] relative">
+      <div 
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          background: `repeating-linear-gradient(
+            -45deg,
+            #8B1A28 0px,
+            #8B1A28 40px,
+            rgba(255,255,255,0.15) 40px,
+            rgba(255,255,255,0.15) 44px,
+            #6B1420 44px,
+            #6B1420 84px,
+            rgba(255,255,255,0.15) 84px,
+            rgba(255,255,255,0.15) 88px
+          )`,
+          opacity: 0.3
+        }}
+      />
+      <div className="fixed inset-0 bg-gradient-to-b from-[#1a1a2e]/80 via-[#1a1a2e]/60 to-[#1a1a2e]/80 pointer-events-none" />
       
       <PublicHeader />
       <PublicCategoryMenu 
@@ -100,13 +117,13 @@ export default function PublicLandingPage() {
                 
                 <div ref={loadMoreRef} className="py-10 flex justify-center">
                   {hasMoreArticles ? (
-                    <div className="flex items-center gap-3 text-slate-400">
+                    <div className="flex items-center gap-3 text-white/60">
                       <Loader2 className="h-5 w-5 animate-spin" />
                       <span className="text-sm font-medium">Loading more articles...</span>
                     </div>
                   ) : sortedArticles.length > 0 ? (
                     <div className="text-center py-8">
-                      <p className="text-slate-400 dark:text-slate-500 text-sm font-medium">
+                      <p className="text-white/40 text-sm font-medium">
                         You've reached the end
                       </p>
                     </div>
@@ -114,19 +131,19 @@ export default function PublicLandingPage() {
                 </div>
               </div>
             ) : (
-              <Card className="relative overflow-hidden bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl border border-white/40 dark:border-slate-600/40 shadow-2xl">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#B22234]/5 via-transparent to-[#3C3B6E]/5 pointer-events-none" />
+              <Card className="relative overflow-hidden bg-[#1a1a2e]/90 backdrop-blur-xl border border-white/20 shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#B22234]/10 via-transparent to-[#3C3B6E]/10 pointer-events-none" />
                 <CardContent className="relative text-center py-20">
                   <div className="relative w-20 h-20 mx-auto mb-6">
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#B22234]/20 to-[#3C3B6E]/20 rounded-full blur-xl" />
-                    <div className="relative w-full h-full rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center border border-white/50 shadow-lg">
-                      <Newspaper className="h-10 w-10 text-slate-400" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#B22234]/30 to-[#3C3B6E]/30 rounded-full blur-xl" />
+                    <div className="relative w-full h-full rounded-full bg-gradient-to-br from-[#2a2a4a] to-[#1a1a2e] flex items-center justify-center border border-white/20 shadow-lg">
+                      <Newspaper className="h-10 w-10 text-white/60" />
                     </div>
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
+                  <h3 className="text-2xl font-bold text-white mb-3">
                     No Articles Yet
                   </h3>
-                  <p className="text-slate-600 dark:text-slate-300 mb-8 max-w-md mx-auto text-lg leading-relaxed">
+                  <p className="text-slate-300 mb-8 max-w-md mx-auto text-lg leading-relaxed">
                     {activeCategory === 'all' 
                       ? "Be the first to share breaking news and exposés. Join the Anti-Corruption Party today."
                       : `No articles found in this category yet. Check back soon or explore other topics.`
