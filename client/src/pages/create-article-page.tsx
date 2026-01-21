@@ -305,6 +305,7 @@ export default function CreateArticlePage() {
             <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
               <DialogTrigger asChild>
                 <Button 
+                  type="button"
                   variant="outline" 
                   className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:from-purple-600 hover:to-blue-600"
                   disabled={!form.watch("title")?.trim()}
@@ -362,6 +363,7 @@ export default function CreateArticlePage() {
                         Cancel
                       </Button>
                       <Button 
+                        type="button"
                         onClick={() => generateWithAiMutation.mutate(form.watch("title"))}
                         disabled={!form.watch("title")?.trim()}
                         className="bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600"
