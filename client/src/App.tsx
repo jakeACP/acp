@@ -85,6 +85,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={HomeRoute} />
+      <Route path="/news" component={PublicLandingPage} />
       <Route path="/read/:id" component={PublicArticlePage} />
       <ProtectedRoute path="/groups" component={GroupsPage} />
       <ProtectedRoute path="/polls" component={PollsPage} />

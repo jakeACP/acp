@@ -92,7 +92,7 @@ export default function PublicArticlePage() {
           <p className="text-slate-300 mb-8">
             This article may have been removed or is not publicly available.
           </p>
-          <Link href="/news">
+          <Link href="/">
             <Button className="bg-[#B22234] hover:bg-[#8B1A28] text-white">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to News
@@ -124,7 +124,7 @@ export default function PublicArticlePage() {
           </div>
           
           <main className="flex-1 min-w-0">
-            <Link href="/news">
+            <Link href="/">
               <Button variant="ghost" className="mb-4 text-white/70 hover:text-white hover:bg-white/10">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to News
