@@ -403,11 +403,20 @@ export default function CreateArticlePage() {
                     <FormItem>
                       <FormLabel>Title</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="Enter your article title..." 
-                          {...field}
-                          data-testid="input-article-title"
-                        />
+                        <div className="relative">
+                          <Input 
+                            placeholder="Enter your article title..." 
+                            {...field}
+                            data-testid="input-article-title"
+                            disabled={generateWithAiMutation.isPending}
+                            className={generateWithAiMutation.isPending ? "pr-10" : ""}
+                          />
+                          {generateWithAiMutation.isPending && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -420,20 +429,27 @@ export default function CreateArticlePage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Article Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-article-type">
-                            <SelectValue placeholder="Select article type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {ARTICLE_TYPES.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="relative">
+                        <Select onValueChange={field.onChange} value={field.value} disabled={generateWithAiMutation.isPending}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-article-type">
+                              <SelectValue placeholder="Select article type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {ARTICLE_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {generateWithAiMutation.isPending && (
+                          <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                            <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                          </div>
+                        )}
+                      </div>
                       <FormDescription>
                         Choose the category that best fits your article
                       </FormDescription>
@@ -449,12 +465,21 @@ export default function CreateArticlePage() {
                     <FormItem>
                       <FormLabel>Short Description</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Write a brief description that will appear in the feed..."
-                          rows={3}
-                          {...field}
-                          data-testid="input-article-excerpt"
-                        />
+                        <div className="relative">
+                          <Textarea 
+                            placeholder="Write a brief description that will appear in the feed..."
+                            rows={3}
+                            {...field}
+                            data-testid="input-article-excerpt"
+                            disabled={generateWithAiMutation.isPending}
+                            className={generateWithAiMutation.isPending ? "pr-10" : ""}
+                          />
+                          {generateWithAiMutation.isPending && (
+                            <div className="absolute right-3 top-3">
+                              <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
                       <FormDescription>
                         This appears in the feed. Keep it engaging to attract readers.
@@ -537,11 +562,20 @@ export default function CreateArticlePage() {
                       <FormItem>
                         <FormLabel>Tags</FormLabel>
                         <FormControl>
-                          <Input 
-                            placeholder="politics, democracy, reform"
-                            {...field}
-                            data-testid="input-tags"
-                          />
+                          <div className="relative">
+                            <Input 
+                              placeholder="politics, democracy, reform"
+                              {...field}
+                              data-testid="input-tags"
+                              disabled={generateWithAiMutation.isPending}
+                              className={generateWithAiMutation.isPending ? "pr-10" : ""}
+                            />
+                            {generateWithAiMutation.isPending && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                              </div>
+                            )}
+                          </div>
                         </FormControl>
                         <FormDescription>Comma-separated</FormDescription>
                         <FormMessage />
@@ -554,32 +588,54 @@ export default function CreateArticlePage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Article Content</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  Article Content
+                  {generateWithAiMutation.isPending && (
+                    <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
+                  )}
+                </CardTitle>
                 <CardDescription>
                   Write your full article using the rich text editor. You can add headings, format text, include images, and more.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <FormField
-                  control={form.control}
-                  name="articleBody"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <RichTextEditor
-                          content={field.value}
-                          onChange={(html) => {
-                            field.onChange(html);
-                            setArticleContent(html);
-                          }}
-                          placeholder="Start writing your article..."
-                          minHeight="500px"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {generateWithAiMutation.isPending ? (
+                  <div className="flex flex-col items-center justify-center py-20 space-y-4 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg border-2 border-dashed border-purple-200 dark:border-purple-800">
+                    <div className="relative">
+                      <Loader2 className="w-12 h-12 animate-spin text-purple-500" />
+                      <Sparkles className="w-6 h-6 text-purple-400 absolute -top-1 -right-1 animate-pulse" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-lg font-medium text-purple-700 dark:text-purple-300">
+                        AI is writing your article...
+                      </p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        This may take 15-30 seconds
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="articleBody"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <RichTextEditor
+                            content={field.value}
+                            onChange={(html) => {
+                              field.onChange(html);
+                              setArticleContent(html);
+                            }}
+                            placeholder="Start writing your article..."
+                            minHeight="500px"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </CardContent>
             </Card>
 
