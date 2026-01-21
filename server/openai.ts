@@ -411,7 +411,77 @@ interface GeneratedArticle {
   suggestedImages: string[];
 }
 
-// Generate article content using AI based on a topic or URL
+interface GeneratedArticleBody {
+  articleBody: string;
+}
+
+interface AiArticleParams {
+  systemPrompt: string;
+  writingStyle: string;
+  toneGuidelines: string;
+  focusAreas: string;
+  contentLength: string;
+  includeQuotes: boolean;
+  includeSources: boolean;
+  additionalInstructions: string | null;
+}
+
+// Generate only article body content using title and AI parameters
+export async function generateArticleBodyFromTitle(title: string, params: AiArticleParams): Promise<GeneratedArticleBody> {
+  try {
+    const openai = getOpenAIClient();
+    
+    const lengthGuidance = {
+      short: "Write a concise article of 3-4 paragraphs (about 300-400 words).",
+      medium: "Write a comprehensive article of 5-7 paragraphs (about 600-800 words).",
+      long: "Write an in-depth article of 8-12 paragraphs (about 1000-1500 words)."
+    };
+
+    let instructions = `Create an Article Titled: "${title}"
+
+Writing Style: ${params.writingStyle}
+Tone: ${params.toneGuidelines}
+Focus Areas: ${params.focusAreas}
+${lengthGuidance[params.contentLength as keyof typeof lengthGuidance] || lengthGuidance.medium}
+${params.includeQuotes ? "Include relevant quotes where appropriate." : "Do not include quotes."}
+${params.includeSources ? "Reference sources and provide context for claims." : ""}
+${params.additionalInstructions ? `Additional Instructions: ${params.additionalInstructions}` : ""}
+
+Generate the article body content in HTML format using <p>, <h2>, <h3>, <blockquote>, <ul>, <li> tags as needed.
+
+Respond with JSON in this exact format:
+{
+  "articleBody": "The full article content in HTML format"
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: params.systemPrompt
+        },
+        {
+          role: "user",
+          content: instructions
+        }
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 4096,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    return {
+      articleBody: result.articleBody || "<p>Article content goes here.</p>"
+    };
+  } catch (error) {
+    console.error("Error generating article body:", error);
+    throw error;
+  }
+}
+
+// Generate article content using AI based on a topic or URL (legacy function)
 export async function generateArticleContent(topic: string): Promise<GeneratedArticle> {
   try {
     const openai = getOpenAIClient();
