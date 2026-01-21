@@ -4,20 +4,24 @@ import acpLogo from "@assets/logo-tpb_1763998990798.png";
 
 export function PublicHeader() {
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-gradient-to-r from-[#3C3B6E] via-[#1a1a4a] to-[#3C3B6E] backdrop-blur-xl shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
-            <img 
-              src={acpLogo} 
-              alt="Anti-Corruption Party" 
-              className="h-10 w-10 rounded-full border-2 border-white/20"
-            />
+    <header className="sticky top-0 z-50 w-full border-b border-white/20 bg-gradient-to-r from-[#3C3B6E]/90 via-[#1a1a4a]/95 to-[#3C3B6E]/90 backdrop-blur-2xl shadow-2xl">
+      <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+        <div className="flex h-18 py-3 items-center justify-between">
+          <Link href="/" className="flex items-center gap-4 hover:opacity-90 transition-opacity group">
+            <div className="relative">
+              <div className="absolute inset-0 bg-white/20 rounded-full blur-md group-hover:blur-lg transition-all" />
+              <img 
+                src={acpLogo} 
+                alt="Anti-Corruption Party" 
+                className="relative h-12 w-12 rounded-full border-2 border-white/40 shadow-lg"
+              />
+            </div>
             <div className="flex flex-col">
-              <span className="text-xl font-bold text-white tracking-tight">
+              <span className="text-2xl font-bold text-white tracking-tight drop-shadow-lg">
                 Anti-Corruption Party
               </span>
-              <span className="text-xs text-white/60 -mt-1">
+              <span className="text-sm text-white/70 font-medium tracking-wide">
                 Truth. Transparency. Accountability.
               </span>
             </div>
@@ -25,9 +29,10 @@ export function PublicHeader() {
 
           <Link href="/auth">
             <Button 
-              className="bg-[#B22234] hover:bg-[#8B1A28] text-white font-semibold px-6 py-2 rounded-lg shadow-lg border border-white/20 transition-all hover:scale-105"
+              className="relative bg-gradient-to-r from-[#B22234] to-[#D4343F] hover:from-[#8B1A28] hover:to-[#B22234] text-white font-bold px-8 py-3 rounded-xl shadow-xl border border-white/30 transition-all hover:scale-105 hover:shadow-2xl overflow-hidden"
             >
-              Log In to ACP
+              <span className="absolute inset-0 bg-gradient-to-t from-transparent to-white/20 pointer-events-none" />
+              <span className="relative">Log In to ACP</span>
             </Button>
           </Link>
         </div>

@@ -42,19 +42,20 @@ const categories: { id: ArticleCategory; label: string; icon: typeof Newspaper }
 
 export function PublicCategoryMenu({ activeCategory, onCategoryChange }: PublicCategoryMenuProps) {
   return (
-    <nav className="sticky top-16 z-40 w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-1 py-2 overflow-x-auto scrollbar-hide">
+    <nav className="sticky top-[72px] z-40 w-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 shadow-lg">
+      <div className="absolute inset-0 bg-gradient-to-r from-[#B22234]/5 via-white/50 to-[#3C3B6E]/5 dark:from-[#B22234]/10 dark:via-slate-900/50 dark:to-[#3C3B6E]/10 pointer-events-none" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+        <div className="flex items-center gap-2 py-3 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => onCategoryChange('all')}
             className={cn(
-              "flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+              "flex-shrink-0 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 border",
               activeCategory === 'all'
-                ? "bg-[#B22234] text-white shadow-md"
-                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                ? "bg-gradient-to-r from-[#B22234] to-[#D4343F] text-white shadow-lg border-white/30 scale-105"
+                : "text-slate-700 dark:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-800/60 border-transparent hover:border-slate-200/50 dark:hover:border-slate-600/50 hover:shadow-md"
             )}
           >
-            All
+            All Articles
           </button>
           
           {categories.map((category) => {
@@ -64,10 +65,10 @@ export function PublicCategoryMenu({ activeCategory, onCategoryChange }: PublicC
                 key={category.id}
                 onClick={() => onCategoryChange(category.id)}
                 className={cn(
-                  "flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  "flex-shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 border",
                   activeCategory === category.id
-                    ? "bg-[#B22234] text-white shadow-md"
-                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    ? "bg-gradient-to-r from-[#B22234] to-[#D4343F] text-white shadow-lg border-white/30 scale-105"
+                    : "text-slate-700 dark:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-800/60 border-transparent hover:border-slate-200/50 dark:hover:border-slate-600/50 hover:shadow-md"
                 )}
               >
                 <Icon className="h-4 w-4" />
