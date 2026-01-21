@@ -70,13 +70,15 @@ export function PublicAdSidebarLeft() {
         variant="accent"
       />
       
-      <Card className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-        <CardContent className="p-4 text-center">
-          <p className="text-xs text-slate-500 dark:text-slate-400 italic">
-            Advertisement Space
-          </p>
-        </CardContent>
-      </Card>
+      <Link href="/auth">
+        <Card className="bg-gradient-to-br from-[#B22234] to-[#8B1A28] border border-white/20 hover:scale-105 transition-transform cursor-pointer">
+          <CardContent className="p-4 text-center">
+            <p className="text-white font-bold text-lg">
+              Join ACP +
+            </p>
+          </CardContent>
+        </Card>
+      </Link>
     </aside>
   );
 }
@@ -108,13 +110,15 @@ export function PublicAdSidebarRight() {
         variant="primary"
       />
       
-      <Card className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-        <CardContent className="p-4 text-center">
-          <p className="text-xs text-slate-500 dark:text-slate-400 italic">
-            Advertisement Space
-          </p>
-        </CardContent>
-      </Card>
+      <Link href="/auth">
+        <Card className="bg-gradient-to-br from-[#B22234] to-[#8B1A28] border border-white/20 hover:scale-105 transition-transform cursor-pointer">
+          <CardContent className="p-4 text-center">
+            <p className="text-white font-bold text-lg">
+              Join ACP +
+            </p>
+          </CardContent>
+        </Card>
+      </Link>
     </aside>
   );
 }
