@@ -198,10 +198,13 @@ export function SignalRecorderPage() {
         graphics: [],
       }));
 
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const token = getCsrfToken();
       const response = await fetch('/api/mobile/signals', {
         method: 'POST',
         body: formData,
         credentials: 'include',
+        headers: token ? { 'x-csrf-token': token } : {},
       });
 
       if (!response.ok) {

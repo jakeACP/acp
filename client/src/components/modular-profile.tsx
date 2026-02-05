@@ -280,9 +280,11 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
 
   const saveBioMutation = useMutation({
     mutationFn: async (bio: string) => {
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const csrfToken = getCsrfToken();
       const response = await fetch("/api/profile/bio", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(csrfToken ? { "x-csrf-token": csrfToken } : {}) },
         credentials: "include",
         body: JSON.stringify({ bio }),
       });
@@ -314,9 +316,11 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
 
   const saveCustomizationMutation = useMutation({
     mutationFn: async (data: any) => {
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const csrfToken = getCsrfToken();
       const response = await fetch("/api/profile/customize", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(csrfToken ? { "x-csrf-token": csrfToken } : {}) },
         credentials: "include",
         body: JSON.stringify({
           profileTheme: data.theme,
@@ -508,9 +512,12 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
     setUploadingAvatar(true);
     try {
       // Get upload URL from object storage
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const token = getCsrfToken();
       const uploadResponse = await fetch('/api/objects/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'x-csrf-token': token } : {}) },
+        credentials: 'include',
       });
 
       if (!uploadResponse.ok) {
@@ -535,7 +542,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       // Update user avatar with the uploaded file URL
       const updateResponse = await fetch('/api/profile-picture', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'x-csrf-token': token } : {}) },
+        credentials: 'include',
         body: JSON.stringify({
           profilePictureURL: uploadURL,
         }),

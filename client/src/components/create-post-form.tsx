@@ -192,10 +192,13 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
       formData.append('file', file);
       formData.append('type', 'post-image');
 
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const token = getCsrfToken();
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
         credentials: 'include',
+        headers: token ? { 'x-csrf-token': token } : {},
       });
 
       if (!response.ok) {

@@ -2,6 +2,8 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
+import cookieParser from "cookie-parser";
+import { doubleCsrf } from "csrf-csrf";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
@@ -25,6 +27,12 @@ import {
   delete2FAChallenge
 } from "./two-factor";
 import { RateLimiterMemory } from "rate-limiter-flexible";
+
+declare module "express-session" {
+  interface SessionData {
+    csrfInitialized?: boolean;
+  }
+}
 
 declare global {
   namespace Express {
@@ -83,17 +91,64 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  const isProduction = process.env.NODE_ENV === "production";
+  const csrfSecret = process.env.CSRF_SECRET || process.env.SESSION_SECRET!;
+
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
+    cookie: {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000,
+    },
   };
 
   app.set("trust proxy", 1);
+  app.use(cookieParser(csrfSecret));
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
+
+  const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
+    getSecret: () => csrfSecret,
+    getSessionIdentifier: (req) => req.session?.id || "",
+    cookieName: "__csrf",
+    cookieOptions: {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: isProduction,
+      path: "/",
+    },
+    getCsrfTokenFromRequest: (req) => req.headers["x-csrf-token"] as string,
+  });
+
+  app.get("/api/csrf-token", (req, res) => {
+    if (req.session && !req.session.csrfInitialized) {
+      req.session.csrfInitialized = true;
+      req.session.save((err) => {
+        if (err) {
+          console.error("Failed to save session for CSRF:", err);
+        }
+        const token = generateCsrfToken(req, res);
+        res.json({ csrfToken: token });
+      });
+      return;
+    }
+    const token = generateCsrfToken(req, res);
+    res.json({ csrfToken: token });
+  });
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const safeMethods = ["GET", "HEAD", "OPTIONS"];
+    if (safeMethods.includes(req.method)) {
+      return next();
+    }
+    doubleCsrfProtection(req, res, next);
+  });
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {

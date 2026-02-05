@@ -26,11 +26,7 @@ export default function AdminUserBansPage() {
 
   const banMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest('/api/admin/ban-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+      return await apiRequest('/api/admin/ban-user', 'POST', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/banned-users'] });
@@ -52,9 +48,7 @@ export default function AdminUserBansPage() {
 
   const unbanMutation = useMutation({
     mutationFn: async (banId: string) => {
-      return await apiRequest(`/api/admin/unban-user/${banId}`, {
-        method: 'POST',
-      });
+      return await apiRequest(`/api/admin/unban-user/${banId}`, 'POST');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/banned-users'] });

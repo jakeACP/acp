@@ -20,9 +20,11 @@ export default function SubscriptionPage() {
 
   const subscriptionMutation = useMutation({
     mutationFn: async (planData: { plan: string; amount: number; tipAmount: number }) => {
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const token = getCsrfToken();
       const response = await fetch("/api/subscription/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { "x-csrf-token": token } : {}) },
         credentials: "include",
         body: JSON.stringify(planData),
       });

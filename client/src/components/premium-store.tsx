@@ -85,9 +85,12 @@ export function PremiumStore() {
 
   const purchaseMutation = useMutation({
     mutationFn: async (itemId: string) => {
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const token = getCsrfToken();
       const response = await fetch(`/api/store/purchase/${itemId}`, {
         method: "POST",
         credentials: "include",
+        headers: token ? { "x-csrf-token": token } : {},
       });
       
       if (!response.ok) {
@@ -115,9 +118,11 @@ export function PremiumStore() {
 
   const createItemMutation = useMutation({
     mutationFn: async (itemData: any) => {
+      const { getCsrfToken: getToken } = await import("@/lib/queryClient");
+      const csrfToken = getToken();
       const response = await fetch("/api/store/items", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(csrfToken ? { "x-csrf-token": csrfToken } : {}) },
         credentials: "include",
         body: JSON.stringify(itemData),
       });

@@ -38,7 +38,7 @@ Preferred communication style: Simple, everyday language.
 - **Candidate Portal**: Profile management, proposal sharing, community integration, and self-service registration, including detailed politician profiles with corruption grading and claimable pages.
 - **Data Flow**: Client-server communication via RESTful JSON APIs, centralized error handling, and caching.
 - **Data Validation**: Client-side (Zod, React Hook Form) and server-side (Drizzle schema) validation with end-to-end TypeScript.
-- **Security & Account Management**: Secure password updates and enhanced registration.
+- **Security & Account Management**: Secure password updates, enhanced registration, CSRF protection (double-submit cookie via csrf-csrf), session cookies with SameSite=Strict, and 2FA (TOTP/SMS with challenge tokens).
 - **Scalability**: Designed for scalability with serverless PostgreSQL and optimized static assets.
 - **Content Systems**: WYSIWYG editor for articles and long-form content, integrated into the feed.
 - **Real-time Features**: Live trending topics based on hashtags and inline display of event details in posts.

@@ -23,11 +23,7 @@ export default function AdminIpBlocksPage() {
 
   const blockMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest('/api/admin/block-ip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+      return await apiRequest('/api/admin/block-ip', 'POST', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/blocked-ips'] });
@@ -47,9 +43,7 @@ export default function AdminIpBlocksPage() {
 
   const unblockMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/admin/unblock-ip/${id}`, {
-        method: 'POST',
-      });
+      return await apiRequest(`/api/admin/unblock-ip/${id}`, 'POST');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/blocked-ips'] });

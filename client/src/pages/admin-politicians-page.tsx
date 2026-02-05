@@ -1219,9 +1219,12 @@ export default function AdminPoliticiansPage() {
                     maxNumberOfFiles={1}
                     maxFileSize={10485760}
                     onGetUploadParameters={async () => {
+                      const { getCsrfToken } = await import("@/lib/queryClient");
+                      const token = getCsrfToken();
                       const response = await fetch("/api/upload", {
                         method: "POST",
                         credentials: "include",
+                        headers: token ? { "x-csrf-token": token } : {},
                       });
                       const data = await response.json();
                       return { method: "PUT", url: data.uploadURL };
