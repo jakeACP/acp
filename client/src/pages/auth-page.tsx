@@ -451,6 +451,25 @@ export default function AuthPage() {
                       )}
                     </div>
 
+                    <div>
+                      <Label htmlFor="invitationToken">Invitation Code (Optional)</Label>
+                      <Input
+                        id="invitationToken"
+                        type="text"
+                        {...registerForm.register("invitationToken")}
+                        placeholder="Enter your invite code"
+                        disabled={registerMutation.isPending || !!invitationToken}
+                      />
+                      {invitationError && (
+                        <p className="text-sm text-destructive mt-1">
+                          {invitationError}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        If you were invited by a member, enter their code to become friends automatically
+                      </p>
+                    </div>
+
                     <Button
                       type="submit"
                       className="w-full"
