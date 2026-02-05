@@ -23,7 +23,9 @@ import {
   Linkedin, 
   Globe,
   Settings,
-  Filter
+  Filter,
+  MessageCircle,
+  Eye
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -231,8 +233,11 @@ export default function FriendsPage() {
   });
 
   const filteredFriends = friends.filter(friend => {
-    const matchesSearch = friend.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      `${friend.firstName} ${friend.lastName}`.toLowerCase().includes(searchTerm.toLowerCase());
+    const username = friend.username || '';
+    const fullName = `${friend.firstName || ''} ${friend.lastName || ''}`.trim();
+    const matchesSearch = !searchTerm || 
+      username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      fullName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesGroup = selectedGroup === "all" || selectedGroup === friend.status;
     return matchesSearch && matchesGroup;
   });
@@ -553,25 +558,30 @@ export default function FriendsPage() {
                           </div>
                           
                           {friend.mutualFriends && (
-                            <p className="text-xs text-slate-500 mb-2">
+                            <p className="text-xs text-slate-500 mb-3">
                               {friend.mutualFriends} mutual friends
                             </p>
                           )}
                           
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm" className="flex-1">
-                              Message
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => unfriendMutation.mutate(friend.userId || friend.id)}
-                              disabled={unfriendMutation.isPending}
-                              className="text-red-600 hover:text-red-700"
-                              data-testid={`button-unfriend-${friend.id}`}
+                            <Link 
+                              href={`/profile/${friend.userId || friend.id}`}
+                              className="flex-1"
                             >
-                              <UserX className="h-4 w-4" />
-                            </Button>
+                              <Button variant="outline" size="sm" className="w-full">
+                                <Eye className="h-4 w-4 mr-1" />
+                                View Profile
+                              </Button>
+                            </Link>
+                            <Link 
+                              href={`/messages?user=${friend.userId || friend.id}`}
+                              className="flex-1"
+                            >
+                              <Button variant="default" size="sm" className="w-full">
+                                <MessageCircle className="h-4 w-4 mr-1" />
+                                Send Message
+                              </Button>
+                            </Link>
                           </div>
                         </CardContent>
                       </Card>
