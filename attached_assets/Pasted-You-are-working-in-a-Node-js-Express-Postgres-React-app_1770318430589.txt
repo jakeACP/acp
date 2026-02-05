@@ -1,0 +1,31 @@
+You are working in a Node.js + Express + Postgres + React app. Implement a complete authentication upgrade with:
+
+1) Password login:
+- Store passwords using bcrypt.
+- Enforce password rules: min 12 chars, uppercase+lowercase+number, and either symbol OR length >=16.
+- Add rate limiting to login and 2FA endpoints.
+
+2) 2FA:
+- Support SMS OTP and Google Authenticator TOTP.
+- SMS OTP: send a 6-digit code via Twilio, store only a SHA-256 hash of the code in DB, expires in 5 minutes, max 6 attempts.
+- TOTP: use speakeasy. Create setup endpoints that generate a secret, encrypt it at rest using AES-256-GCM with env key, return an otpauth URL and QR code (qrcode). Confirm setup by verifying a code, then set totpEnabled=true.
+
+3) Remember device (trusted devices):
+- After a successful 2FA verification, if user checked “Remember this device”, generate a random device token, store only SHA-256 hash in DB with expiresAt=60 days.
+- Set an HttpOnly Secure cookie “trusted_device” for 60 days containing the raw token.
+- On future login: if cookie matches a trusted device record and not expired, skip 2FA and login normally.
+- Maintain access token 15 min and refresh token 60 days with refresh token rotation stored hashed in DB.
+
+4) Invites + credits + auto-friends:
+- Each user can create invite codes and invite links (slug).
+- Signup form has an “Invite Code” box. Also allow invite links like /invite/:slug.
+- On signup with a valid invite (code or slug): increment invite usage, set inviteeId, automatically create friend relationship between inviter and invitee, and add 10 credits to inviter.
+- Prevent reuse of single-use invites (or implement maxUses).
+- Add endpoints to create invites and to resolve invite slug.
+
+Deliverables:
+- Prisma schema models: User, RefreshToken, TrustedDevice, SmsOtp, Invite, Friend.
+- Express routes and middleware (helmet, cors, cookie-parser, rate limit).
+- Frontend minimal UI changes: Invite Code field on signup; 2FA step UI supports SMS or Google Authenticator; “Remember this device” checkbox; “Enable Google Authenticator” setup screen that displays QR.
+- Include env var list and local run instructions.
+Do not use any Replit-hosted auth; make it portable for any host.
