@@ -63,6 +63,7 @@ import { AlertTriangle } from "lucide-react";
 import { useScrollLight } from "./hooks/useScrollLight";
 import { useAuth } from "./hooks/use-auth";
 import { Loader2 } from "lucide-react";
+import { TwoFactorReminder } from "./components/two-factor-reminder";
 
 function HomeRoute() {
   const { user, isLoading } = useAuth();
@@ -175,6 +176,7 @@ function AppContent() {
     <>
       <BetaBanner />
       <Toaster />
+      <TwoFactorReminder />
       <Router />
     </>
   );
