@@ -688,14 +688,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const followers = await storage.getFollowers(req.user.id);
-      const following = await storage.getFollowing(req.user.id);
-      // Combine and deduplicate to get unique connections
-      const uniqueConnections = new Set([
-        ...followers.map(u => u.id),
-        ...following.map(u => u.id)
-      ]);
-      res.json({ friendCount: uniqueConnections.size });
+      // Use the friendships system (accepted friend requests) for accurate count
+      const friends = await storage.getFriends(req.user.id);
+      res.json({ friendCount: friends.length });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
