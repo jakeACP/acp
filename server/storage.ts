@@ -5367,6 +5367,44 @@ export class DatabaseStorage implements IStorage {
     `);
   }
 
+  async create2FAChallenge(userId: string, challengeToken: string, expiresAt: Date): Promise<void> {
+    await db.execute(sql`
+      DELETE FROM two_factor_challenges WHERE user_id = ${userId}
+    `);
+    await db.execute(sql`
+      INSERT INTO two_factor_challenges (user_id, challenge_token, expires_at)
+      VALUES (${userId}, ${challengeToken}, ${expiresAt})
+    `);
+  }
+
+  async verify2FAChallenge(challengeToken: string): Promise<{ valid: boolean; userId?: string }> {
+    const result = await db.execute(sql`
+      SELECT user_id, expires_at FROM two_factor_challenges
+      WHERE challenge_token = ${challengeToken}
+      LIMIT 1
+    `);
+
+    if (result.rows.length === 0) {
+      return { valid: false };
+    }
+
+    const row = result.rows[0] as any;
+    if (new Date(row.expires_at) < new Date()) {
+      await db.execute(sql`
+        DELETE FROM two_factor_challenges WHERE challenge_token = ${challengeToken}
+      `);
+      return { valid: false };
+    }
+
+    return { valid: true, userId: row.user_id };
+  }
+
+  async delete2FAChallenge(challengeToken: string): Promise<void> {
+    await db.execute(sql`
+      DELETE FROM two_factor_challenges WHERE challenge_token = ${challengeToken}
+    `);
+  }
+
   // Social Petitions (for feeds - different from initiative petitions)
   async getSocialPetitions(limit: number = 50, offset: number = 0): Promise<any[]> {
     const result = await db.execute(sql`

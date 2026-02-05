@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
@@ -19,8 +19,12 @@ import {
   createTrustedDevice,
   verifyTrustedDevice,
   validatePasswordStrength,
-  hashCode
+  hashCode,
+  create2FAChallenge,
+  verify2FAChallenge,
+  delete2FAChallenge
 } from "./two-factor";
+import { RateLimiterMemory } from "rate-limiter-flexible";
 
 declare global {
   namespace Express {
@@ -29,6 +33,41 @@ declare global {
 }
 
 const scryptAsync = promisify(scrypt);
+
+// Rate limiters for security - prevents brute force attacks
+const loginLimiter = new RateLimiterMemory({
+  points: 5, // 5 attempts
+  duration: 60 * 15, // per 15 minutes
+  blockDuration: 60 * 15, // block for 15 minutes if exceeded
+});
+
+const twoFactorLimiter = new RateLimiterMemory({
+  points: 5, // 5 attempts
+  duration: 60 * 5, // per 5 minutes
+  blockDuration: 60 * 5, // block for 5 minutes if exceeded
+});
+
+const registrationLimiter = new RateLimiterMemory({
+  points: 3, // 3 registrations
+  duration: 60 * 60, // per hour
+  blockDuration: 60 * 60, // block for 1 hour if exceeded
+});
+
+// Rate limiting middleware
+const rateLimitMiddleware = (limiter: RateLimiterMemory) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ip = getClientIp(req);
+      await limiter.consume(ip);
+      next();
+    } catch (rejRes) {
+      res.status(429).json({ 
+        message: "Too many attempts. Please try again later.",
+        retryAfter: Math.round((rejRes as any).msBeforeNext / 1000) || 60
+      });
+    }
+  };
+};
 
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -73,7 +112,7 @@ export function setupAuth(app: Express) {
     done(null, user);
   });
 
-  app.post("/api/register", async (req, res, next) => {
+  app.post("/api/register", rateLimitMiddleware(registrationLimiter), async (req, res, next) => {
     try {
       const { invitationToken, ...userData } = req.body;
       
@@ -179,7 +218,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", async (req, res, next) => {
+  app.post("/api/login", rateLimitMiddleware(loginLimiter), async (req, res, next) => {
     passport.authenticate("local", async (err: any, user: SelectUser | false, info: any) => {
       if (err) {
         return next(err);
@@ -214,10 +253,13 @@ export function setupAuth(app: Express) {
             }
           }
           
-          // 2FA required - don't log in yet, send back 2FA requirement
+          // Create a short-lived challenge token for secure 2FA flow
+          const challengeToken = await create2FAChallenge(user.id);
+          
+          // 2FA required - don't log in yet, send back challenge token (not userId)
           return res.status(200).json({
             requiresTwoFactor: true,
-            userId: user.id,
+            challengeToken,
             twoFactorMethod: user.twoFactorMethod,
             phone: user.twoFactorPhone ? `***${user.twoFactorPhone.slice(-4)}` : null,
           });
@@ -475,19 +517,30 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Verify TOTP during login
-  app.post("/api/2fa/totp/verify", async (req, res) => {
+  // Verify TOTP during login (uses challenge token for security)
+  app.post("/api/2fa/totp/verify", rateLimitMiddleware(twoFactorLimiter), async (req, res) => {
     try {
-      const { userId, token, rememberDevice } = req.body;
+      const { challengeToken, token, rememberDevice } = req.body;
       
-      if (!userId || !token) {
-        return res.status(400).json({ message: "userId and token are required" });
+      if (!challengeToken || !token) {
+        return res.status(400).json({ message: "challengeToken and token are required" });
       }
+      
+      // Verify the challenge token and get the userId
+      const challenge = await verify2FAChallenge(challengeToken);
+      if (!challenge.valid || !challenge.userId) {
+        return res.status(400).json({ message: "Invalid or expired challenge. Please log in again." });
+      }
+      
+      const userId = challenge.userId;
       
       const verified = await verifyTotp(userId, token);
       if (!verified) {
         return res.status(400).json({ message: "Invalid token" });
       }
+      
+      // Delete the used challenge token
+      await delete2FAChallenge(challengeToken);
       
       const user = await storage.getUser(userId);
       if (!user) {
@@ -535,24 +588,36 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Send SMS OTP
+  // Send SMS OTP (uses challenge token for login flow, or auth for settings)
   app.post("/api/2fa/sms/send", async (req, res) => {
     try {
-      const { userId, phoneNumber } = req.body;
+      const { challengeToken, phoneNumber } = req.body;
       
-      // Allow either authenticated user or userId in body (for login flow)
-      const targetUserId = req.isAuthenticated() ? req.user.id : userId;
+      let targetUserId: string | undefined;
+      let targetPhone: string | undefined;
+      
+      // For login flow: use challenge token
+      if (challengeToken) {
+        const challenge = await verify2FAChallenge(challengeToken);
+        if (!challenge.valid || !challenge.userId) {
+          return res.status(400).json({ message: "Invalid or expired challenge. Please log in again." });
+        }
+        targetUserId = challenge.userId;
+        const user = await storage.getUser(targetUserId);
+        targetPhone = user?.twoFactorPhone || undefined;
+      } 
+      // For settings: use authenticated user
+      else if (req.isAuthenticated()) {
+        targetUserId = req.user.id;
+        targetPhone = phoneNumber || req.user.twoFactorPhone || undefined;
+      } else {
+        return res.status(401).json({ message: "Authentication required" });
+      }
       
       if (!targetUserId) {
-        return res.status(400).json({ message: "User ID is required" });
+        return res.status(400).json({ message: "User ID could not be determined" });
       }
       
-      const user = await storage.getUser(targetUserId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      const targetPhone = phoneNumber || user.twoFactorPhone;
       if (!targetPhone) {
         return res.status(400).json({ message: "Phone number is required" });
       }
@@ -569,19 +634,30 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Verify SMS OTP during login
-  app.post("/api/2fa/sms/verify", async (req, res) => {
+  // Verify SMS OTP during login (uses challenge token for security)
+  app.post("/api/2fa/sms/verify", rateLimitMiddleware(twoFactorLimiter), async (req, res) => {
     try {
-      const { userId, code, rememberDevice } = req.body;
+      const { challengeToken, code, rememberDevice } = req.body;
       
-      if (!userId || !code) {
-        return res.status(400).json({ message: "userId and code are required" });
+      if (!challengeToken || !code) {
+        return res.status(400).json({ message: "challengeToken and code are required" });
       }
+      
+      // Verify the challenge token and get the userId
+      const challenge = await verify2FAChallenge(challengeToken);
+      if (!challenge.valid || !challenge.userId) {
+        return res.status(400).json({ message: "Invalid or expired challenge. Please log in again." });
+      }
+      
+      const userId = challenge.userId;
       
       const result = await verifySms2FA(userId, code);
       if (!result.success) {
         return res.status(400).json({ message: result.reason || "Invalid code" });
       }
+      
+      // Delete the used challenge token
+      await delete2FAChallenge(challengeToken);
       
       const user = await storage.getUser(userId);
       if (!user) {

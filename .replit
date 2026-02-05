@@ -44,3 +44,4 @@ integrations = ["javascript_log_in_with_replit:1.0.0", "javascript_database:1.0.
 [userenv]
 
 [userenv.shared]
+TOTP_ENCRYPTION_KEY = "fb1403145769587248024cffe982a0fc57e9dfc89e736612c306d0ff090f90ed"

@@ -4,17 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, TwoFactorRequirement } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { Vote, Users, Shield, Megaphone, AlertCircle } from "lucide-react";
+import { Vote, Users, Shield, Megaphone, AlertCircle, Smartphone, Key } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { Redirect, Link, useLocation } from "wouter";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { ErrorMessage } from "@/components/error-message";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
+import { apiRequest } from "@/lib/queryClient";
 
 const loginSchema = insertUserSchema.pick({ username: true, password: true });
 
@@ -38,11 +40,16 @@ type LoginData = z.infer<typeof loginSchema>;
 type RegisterData = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
-  const { user, loginMutation, registerMutation } = useAuth();
+  const { user, loginMutation, registerMutation, verify2FAMutation } = useAuth();
   const [activeTab, setActiveTab] = useState("login");
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
   const [location] = useLocation();
+  
+  const [twoFactorData, setTwoFactorData] = useState<TwoFactorRequirement | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [rememberDevice, setRememberDevice] = useState(false);
+  const [smsSending, setSmsSending] = useState(false);
 
   const loginForm = useForm<LoginData>({
     resolver: zodResolver(loginSchema),
@@ -91,7 +98,49 @@ export default function AuthPage() {
   }
 
   const onLogin = (data: LoginData) => {
-    loginMutation.mutate(data);
+    loginMutation.mutate(data, {
+      onSuccess: (response) => {
+        if ('requiresTwoFactor' in response && response.requiresTwoFactor) {
+          setTwoFactorData(response);
+          if (response.twoFactorMethod === 'sms') {
+            sendSmsCode(response.challengeToken);
+          }
+        }
+      },
+    });
+  };
+
+  const sendSmsCode = async (challengeToken: string) => {
+    setSmsSending(true);
+    try {
+      await apiRequest('/api/2fa/sms/send', 'POST', { challengeToken });
+    } catch (error) {
+      console.error('Failed to send SMS:', error);
+    } finally {
+      setSmsSending(false);
+    }
+  };
+
+  const onVerify2FA = () => {
+    if (!twoFactorData) return;
+    
+    verify2FAMutation.mutate({
+      challengeToken: twoFactorData.challengeToken,
+      method: twoFactorData.twoFactorMethod || 'totp',
+      code: twoFactorCode,
+      rememberDevice,
+    }, {
+      onSuccess: () => {
+        setTwoFactorData(null);
+        setTwoFactorCode("");
+      },
+    });
+  };
+
+  const cancelTwoFactor = () => {
+    setTwoFactorData(null);
+    setTwoFactorCode("");
+    setRememberDevice(false);
   };
 
   const onRegister = (data: RegisterData) => {
@@ -123,77 +172,166 @@ export default function AuthPage() {
             <TabsContent value="login">
               <Card>
                 <CardHeader>
-                  <CardTitle>Welcome Back</CardTitle>
+                  <CardTitle>{twoFactorData ? "Two-Factor Authentication" : "Welcome Back"}</CardTitle>
                   <CardDescription>
-                    Sign in to your account to continue participating in democracy
+                    {twoFactorData 
+                      ? twoFactorData.twoFactorMethod === 'sms'
+                        ? `Enter the code sent to ${twoFactorData.phone}`
+                        : "Enter the code from your authenticator app"
+                      : "Sign in to your account to continue participating in democracy"
+                    }
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
-                    <div>
-                      <Label htmlFor="username">Username</Label>
-                      <Input
-                        id="username"
-                        {...loginForm.register("username")}
-                        placeholder="Enter your username"
-                        disabled={loginMutation.isPending}
-                      />
-                      {loginForm.formState.errors.username && (
-                        <p className="text-sm text-destructive mt-1">
-                          {loginForm.formState.errors.username.message}
-                        </p>
+                  {twoFactorData ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-center mb-4">
+                        {twoFactorData.twoFactorMethod === 'sms' ? (
+                          <Smartphone className="h-12 w-12 text-primary" />
+                        ) : (
+                          <Key className="h-12 w-12 text-primary" />
+                        )}
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="twoFactorCode">Verification Code</Label>
+                        <Input
+                          id="twoFactorCode"
+                          value={twoFactorCode}
+                          onChange={(e) => setTwoFactorCode(e.target.value)}
+                          placeholder="Enter 6-digit code"
+                          maxLength={6}
+                          className="text-center text-2xl tracking-widest"
+                          disabled={verify2FAMutation.isPending}
+                        />
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="rememberDevice" 
+                          checked={rememberDevice}
+                          onCheckedChange={(checked) => setRememberDevice(checked === true)}
+                        />
+                        <Label htmlFor="rememberDevice" className="text-sm text-slate-600">
+                          Trust this device for 60 days
+                        </Label>
+                      </div>
+
+                      {verify2FAMutation.error && (
+                        <ErrorMessage
+                          message={verify2FAMutation.error.message || "Verification failed. Please try again."}
+                          variant="error"
+                        />
                       )}
+
+                      <div className="space-y-2">
+                        <Button
+                          type="button"
+                          className="w-full"
+                          onClick={onVerify2FA}
+                          disabled={verify2FAMutation.isPending || twoFactorCode.length < 6}
+                        >
+                          {verify2FAMutation.isPending ? (
+                            <>
+                              <LoadingSpinner size="sm" className="mr-2" />
+                              Verifying...
+                            </>
+                          ) : (
+                            "Verify"
+                          )}
+                        </Button>
+
+                        {twoFactorData.twoFactorMethod === 'sms' && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => sendSmsCode(twoFactorData.challengeToken)}
+                            disabled={smsSending}
+                          >
+                            {smsSending ? "Sending..." : "Resend Code"}
+                          </Button>
+                        )}
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="w-full"
+                          onClick={cancelTwoFactor}
+                        >
+                          Back to Login
+                        </Button>
+                      </div>
                     </div>
+                  ) : (
+                    <>
+                      <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
+                        <div>
+                          <Label htmlFor="username">Username</Label>
+                          <Input
+                            id="username"
+                            {...loginForm.register("username")}
+                            placeholder="Enter your username"
+                            disabled={loginMutation.isPending}
+                          />
+                          {loginForm.formState.errors.username && (
+                            <p className="text-sm text-destructive mt-1">
+                              {loginForm.formState.errors.username.message}
+                            </p>
+                          )}
+                        </div>
 
-                    <div>
-                      <Label htmlFor="password">Password</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        {...loginForm.register("password")}
-                        placeholder="Enter your password"
-                        disabled={loginMutation.isPending}
-                      />
-                      {loginForm.formState.errors.password && (
-                        <p className="text-sm text-destructive mt-1">
-                          {loginForm.formState.errors.password.message}
-                        </p>
-                      )}
-                    </div>
+                        <div>
+                          <Label htmlFor="password">Password</Label>
+                          <Input
+                            id="password"
+                            type="password"
+                            {...loginForm.register("password")}
+                            placeholder="Enter your password"
+                            disabled={loginMutation.isPending}
+                          />
+                          {loginForm.formState.errors.password && (
+                            <p className="text-sm text-destructive mt-1">
+                              {loginForm.formState.errors.password.message}
+                            </p>
+                          )}
+                        </div>
 
-                    {loginMutation.error && (
-                      <ErrorMessage
-                        message={loginMutation.error.message || "Login failed. Please check your credentials and try again."}
-                        variant="error"
-                        className="mb-4"
-                        data-testid="login-error-alert"
-                      />
-                    )}
+                        {loginMutation.error && (
+                          <ErrorMessage
+                            message={loginMutation.error.message || "Login failed. Please check your credentials and try again."}
+                            variant="error"
+                            className="mb-4"
+                            data-testid="login-error-alert"
+                          />
+                        )}
 
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={loginMutation.isPending}
-                      data-testid="button-login-submit"
-                    >
-                      {loginMutation.isPending ? (
-                        <>
-                          <LoadingSpinner size="sm" className="mr-2" />
-                          Signing In...
-                        </>
-                      ) : (
-                        "Sign In"
-                      )}
-                    </Button>
-                  </form>
-                  
-                  <div className="mt-4 text-center">
-                    <Link href="/forgot-password">
-                      <Button variant="link" className="text-sm text-slate-600 hover:text-slate-900">
-                        Forgot your password?
-                      </Button>
-                    </Link>
-                  </div>
+                        <Button
+                          type="submit"
+                          className="w-full"
+                          disabled={loginMutation.isPending}
+                          data-testid="button-login-submit"
+                        >
+                          {loginMutation.isPending ? (
+                            <>
+                              <LoadingSpinner size="sm" className="mr-2" />
+                              Signing In...
+                            </>
+                          ) : (
+                            "Sign In"
+                          )}
+                        </Button>
+                      </form>
+                      
+                      <div className="mt-4 text-center">
+                        <Link href="/forgot-password">
+                          <Button variant="link" className="text-sm text-slate-600 hover:text-slate-900">
+                            Forgot your password?
+                          </Button>
+                        </Link>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

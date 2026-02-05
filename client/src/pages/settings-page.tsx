@@ -17,6 +17,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { ArrowLeft, Lock, User, Mail, Camera, Shield, Settings as SettingsIcon, CheckCircle2, AlertCircle, BadgeCheck } from "lucide-react";
+import { TwoFactorSettings } from "@/components/two-factor-settings";
 import { Link } from "wouter";
 import type { UploadResult } from "@uppy/core";
 
@@ -540,6 +541,8 @@ export default function SettingsPage() {
                 </Form>
               </CardContent>
             </Card>
+
+            <TwoFactorSettings />
           </TabsContent>
 
           <TabsContent value="privacy">

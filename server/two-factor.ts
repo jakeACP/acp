@@ -4,7 +4,16 @@ import QRCode from 'qrcode';
 import { storage } from './storage';
 import { sendSmsOtp } from './twilio';
 
-const ENCRYPTION_KEY = process.env.TOTP_ENCRYPTION_KEY || randomBytes(32).toString('hex');
+// CRITICAL: TOTP encryption key must be stable across restarts
+const ENCRYPTION_KEY_HEX = process.env.TOTP_ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY_HEX) {
+  console.warn('WARNING: TOTP_ENCRYPTION_KEY not set. 2FA TOTP will not persist across restarts!');
+  console.warn('Generate a stable key: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('TOTP_ENCRYPTION_KEY must be set in production');
+  }
+}
+const ENCRYPTION_KEY = ENCRYPTION_KEY_HEX || randomBytes(32).toString('hex');
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
@@ -203,4 +212,23 @@ export function validatePasswordStrength(password: string): { valid: boolean; er
     valid: errors.length === 0,
     errors
   };
+}
+
+// Challenge token for secure 2FA flow
+const CHALLENGE_EXPIRY_MINUTES = 5;
+
+export async function create2FAChallenge(userId: string): Promise<string> {
+  const challengeToken = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + CHALLENGE_EXPIRY_MINUTES * 60 * 1000);
+  
+  await storage.create2FAChallenge(userId, challengeToken, expiresAt);
+  return challengeToken;
+}
+
+export async function verify2FAChallenge(challengeToken: string): Promise<{ valid: boolean; userId?: string }> {
+  return storage.verify2FAChallenge(challengeToken);
+}
+
+export async function delete2FAChallenge(challengeToken: string): Promise<void> {
+  await storage.delete2FAChallenge(challengeToken);
 }
