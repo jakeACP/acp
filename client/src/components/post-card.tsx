@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { sanitizeUrl } from "@/lib/utils";
 import { Post, PostWithAuthor, Comment, Event } from "@shared/schema";
 import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown, MapPin, Calendar, Users, ExternalLink, FileText, Clock, HandHeart, Briefcase, Mail, Phone, AlertCircle, CheckCircle } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
@@ -508,7 +509,7 @@ export function PostCard({ post }: PostCardProps) {
         
         {post.linkPreview && (
           <div className="mb-4 border border-border rounded-lg overflow-hidden bg-card hover:bg-accent/10 transition-colors">
-            <a href={post.linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
+            <a href={sanitizeUrl(post.linkPreview.url)} target="_blank" rel="noopener noreferrer" className="block">
               {post.linkPreview.image && (
                 <div className="w-full h-48 bg-muted">
                   <img 
@@ -676,7 +677,7 @@ export function PostCard({ post }: PostCardProps) {
                             <div className="font-medium text-foreground">Virtual Event</div>
                             {eventData.virtualLink && (
                               <a 
-                                href={eventData.virtualLink} 
+                                href={sanitizeUrl(eventData.virtualLink)} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="text-xs text-primary hover:underline flex items-center gap-1"

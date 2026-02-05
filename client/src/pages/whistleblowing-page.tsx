@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { sanitizeUrl } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -254,7 +255,7 @@ export default function WhistleblowingPage() {
                   {/* Supporting Link */}
                   {post.link && (
                     <a
-                      href={post.link}
+                      href={sanitizeUrl(post.link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 text-primary hover:underline mb-4"
@@ -271,7 +272,7 @@ export default function WhistleblowingPage() {
                       {post.documents.map((doc, idx) => (
                         <a
                           key={idx}
-                          href={doc.url}
+                          href={sanitizeUrl(doc.url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-2 text-sm text-primary hover:underline"

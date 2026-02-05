@@ -1,5 +1,6 @@
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import DOMPurify from "dompurify";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -198,7 +199,7 @@ export default function ArticlePage() {
                        prose-blockquote:border-l-4 prose-blockquote:border-blue-500 prose-blockquote:bg-white/10 prose-blockquote:py-2 prose-blockquote:px-4
                        prose-code:bg-white/10 prose-code:px-1 prose-code:py-0.5 prose-code:rounded"
             dangerouslySetInnerHTML={{ 
-              __html: article.articleBody || article.content || "<p>No content available.</p>" 
+              __html: DOMPurify.sanitize(article.articleBody || article.content || "<p>No content available.</p>") 
             }}
             data-testid="article-body"
           />

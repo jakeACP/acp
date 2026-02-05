@@ -11,6 +11,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { sanitizeUrl } from "@/lib/utils";
 import { MapPin, Phone, Mail, Globe, Heart, Building2, Zap, Flag } from "lucide-react";
 import { RepresentativesLoading } from "@/components/representatives-loading.tsx";
 
@@ -266,7 +267,7 @@ export default function RepresentativesPage() {
                             <div className="flex items-center gap-2">
                               <Globe className="h-4 w-4 text-slate-500" />
                               <a 
-                                href={rep.website} 
+                                href={sanitizeUrl(rep.website)} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:underline"

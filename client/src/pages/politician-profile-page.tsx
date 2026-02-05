@@ -12,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { sanitizeUrl } from "@/lib/utils";
 import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
@@ -407,7 +408,7 @@ export default function PoliticianProfilePage() {
             {profile.website && (
               <div className="flex items-center gap-2" data-testid="text-website">
                 <Globe className="w-4 h-4 text-gray-500" />
-                <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline">
+                <a href={sanitizeUrl(profile.website)} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline">
                   {profile.website}
                 </a>
               </div>
@@ -537,7 +538,7 @@ export default function PoliticianProfilePage() {
                       )}
                       {sponsor.sig?.website && (
                         <a 
-                          href={sponsor.sig.website} 
+                          href={sanitizeUrl(sponsor.sig.website)} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1"

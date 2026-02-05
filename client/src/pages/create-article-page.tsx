@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import DOMPurify from "dompurify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -360,7 +361,7 @@ export default function CreateArticlePage() {
           <CardContent>
             <div 
               className="prose prose-lg dark:prose-invert max-w-none"
-              dangerouslySetInnerHTML={{ __html: articleContent || "<p>Start writing your article...</p>" }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(articleContent || "<p>Start writing your article...</p>") }}
             />
           </CardContent>
         </Card>

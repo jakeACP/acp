@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Megaphone, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { sanitizeUrl } from "@/lib/utils";
 
 interface AnnouncementCardProps {
   post: {
@@ -50,7 +51,7 @@ export function AnnouncementCard({ post }: AnnouncementCardProps) {
           
           {post.url && (
             <a 
-              href={post.url} 
+              href={sanitizeUrl(post.url)} 
               target="_blank" 
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-blue-400 text-xs hover:underline"

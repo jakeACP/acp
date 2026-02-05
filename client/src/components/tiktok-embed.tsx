@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, memo } from "react";
 import { ExternalLink, Play, Loader2 } from "lucide-react";
+import DOMPurify from "dompurify";
 
 interface TikTokEmbedProps {
   videoId: string;
@@ -144,7 +145,7 @@ export const TikTokEmbed = memo(function TikTokEmbed({
         <div 
           ref={embedContainerRef}
           className="w-full flex justify-center [&>blockquote]:!max-w-full [&>blockquote]:!min-w-0"
-          dangerouslySetInnerHTML={{ __html: embedHtml }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(embedHtml, { ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] }) }}
         />
       </div>
     );

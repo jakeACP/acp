@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, memo } from "react";
 import { Play, X } from "lucide-react";
+import DOMPurify from "dompurify";
 import { getYouTubeThumbnail, getTikTokEmbedUrl } from "../utils/youtube";
 
 interface LazyYouTubeThumbnailProps {
@@ -341,7 +342,7 @@ export const LazyTikTokThumbnail = memo(function LazyTikTokThumbnail({
                 ref={embedContainerRef}
                 className="w-full max-w-md mx-auto"
                 style={{ maxHeight: 'calc(100vh - 120px)' }}
-                dangerouslySetInnerHTML={{ __html: embedHtml }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(embedHtml, { ADD_TAGS: ['iframe', 'blockquote'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] }) }}
               />
             )}
           </div>
@@ -460,7 +461,7 @@ export const LazyTikTokPlayer = memo(function LazyTikTokPlayer({
         <div 
           ref={embedContainerRef}
           className="w-full flex justify-center"
-          dangerouslySetInnerHTML={{ __html: embedHtml }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(embedHtml, { ADD_TAGS: ['iframe', 'blockquote'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] }) }}
         />
       </div>
     );

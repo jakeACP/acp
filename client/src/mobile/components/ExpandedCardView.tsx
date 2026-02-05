@@ -4,6 +4,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import DOMPurify from "dompurify";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { sanitizeUrl } from "@/lib/utils";
 import { LazyYouTubePlayer, LazyTikTokPlayer } from "./LazyYouTubeThumbnail";
 import { findVideoInPost } from "../utils/youtube";
 import { useToast } from "@/hooks/use-toast";
@@ -295,7 +296,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
             
             {data.url && !newsVideo && (
               <a 
-                href={data.url} 
+                href={sanitizeUrl(data.url)} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="glass-button primary w-full text-center"

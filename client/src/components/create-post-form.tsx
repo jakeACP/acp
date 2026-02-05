@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { sanitizeUrl } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { 
@@ -723,7 +724,7 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
 
             {linkPreview && !loadingPreview && (
               <div className="border border-border rounded-lg overflow-hidden bg-card hover:bg-accent/10 transition-colors">
-                <a href={linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
+                <a href={sanitizeUrl(linkPreview.url)} target="_blank" rel="noopener noreferrer" className="block">
                   {linkPreview.image && (
                     <div className="w-full h-48 bg-muted">
                       <img 

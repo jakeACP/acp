@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DonationModal } from "@/components/donation-modal";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeUrl } from "@/lib/utils";
 import { Heart, Globe, GraduationCap, Shield, Stethoscope, Users, Leaf, Calendar, ExternalLink, MapPin, Loader2, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
 import type { Charity, CharityDonation } from "@shared/schema";
@@ -238,7 +239,7 @@ export default function CharityDetailPage() {
                 <div>
                   <p className="font-medium">Website</p>
                   <a
-                    href={charity.website}
+                    href={sanitizeUrl(charity.website)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-primary hover:underline"
