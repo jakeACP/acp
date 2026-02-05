@@ -14,7 +14,7 @@ import { CheckCircle, ArrowLeft, Lock } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 
 const resetPasswordSchema = z.object({
-  newPassword: z.string().min(6, "Password must be at least 6 characters"),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string().min(1, "Please confirm your password"),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "Passwords don't match",

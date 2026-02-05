@@ -59,7 +59,7 @@ export function TwoFactorReminder() {
 
   const handleSetupNow = () => {
     setShowReminder(false);
-    setLocation("/settings");
+    setLocation("/settings?tab=security");
   };
 
   if (!user || user.twoFactorEnabled) {
