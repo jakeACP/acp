@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Heart, MessageCircle, Share2, ChevronDown, Check } from "lucide-react";
+import { X, Heart, MessageCircle, Share2, ChevronDown, Check, Flag, Send, Trash2, Copy, CheckCircle } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import DOMPurify from "dompurify";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -8,6 +8,20 @@ import { sanitizeUrl } from "@/lib/utils";
 import { LazyYouTubePlayer, LazyTikTokPlayer } from "./LazyYouTubeThumbnail";
 import { findVideoInPost } from "../utils/youtube";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+
+interface Comment {
+  id: string;
+  content: string;
+  authorId: string;
+  createdAt?: string | Date | null;
+  author?: {
+    username: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatar?: string | null;
+  };
+}
 
 interface ExpandedCardViewProps {
   item: {
@@ -16,6 +30,225 @@ interface ExpandedCardViewProps {
     event?: any;
   };
   onClose: () => void;
+}
+
+function PostActionBar({ postId, postType, likesCount, commentsCount, sharesCount }: {
+  postId: string;
+  postType: string;
+  likesCount: number;
+  commentsCount: number;
+  sharesCount: number;
+}) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [showComments, setShowComments] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [showReported, setShowReported] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const isSignal = postType === 'signal';
+
+  const { data: likeStatus } = useQuery<{ liked: boolean }>({
+    queryKey: ["/api/likes", postId, "post"],
+    enabled: !!user && !!postId && !isSignal,
+  });
+
+  const { data: comments = [], isLoading: commentsLoading } = useQuery<Comment[]>({
+    queryKey: [`/api/posts/${postId}/comments`],
+    enabled: showComments && !!postId && !isSignal,
+  });
+
+  const likeMutation = useMutation({
+    mutationFn: async () => {
+      if (isSignal) {
+        return apiRequest("POST", `/api/mobile/signals/${postId}/like`, {});
+      }
+      return apiRequest("/api/likes", "POST", {
+        targetId: postId,
+        targetType: "post",
+      });
+    },
+    onMutate: async () => {
+      if (isSignal) return;
+      await queryClient.cancelQueries({ queryKey: ["/api/likes", postId, "post"] });
+      const prev = queryClient.getQueryData(["/api/likes", postId, "post"]);
+      const currentLiked = likeStatus?.liked ?? false;
+      queryClient.setQueryData(["/api/likes", postId, "post"], { liked: !currentLiked });
+      return { prev };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.prev) {
+        queryClient.setQueryData(["/api/likes", postId, "post"], context.prev);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/likes", postId, "post"] });
+      queryClient.invalidateQueries({ queryKey: ['/api/feeds/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/mobile/signals'] });
+    },
+  });
+
+  const createCommentMutation = useMutation({
+    mutationFn: async (content: string) => {
+      return apiRequest("/api/comments", "POST", {
+        postId,
+        content,
+      });
+    },
+    onSuccess: () => {
+      setNewComment("");
+      queryClient.invalidateQueries({ queryKey: [`/api/posts/${postId}/comments`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/feeds/all'] });
+      toast({ title: "Comment posted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to post comment", variant: "destructive" });
+    },
+  });
+
+  const flagMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("/api/flags", "POST", {
+        postId,
+        reason: "inappropriate",
+      });
+    },
+    onSuccess: () => {
+      setShowReported(true);
+      toast({ title: "Post reported", description: "Thank you for helping keep the community safe." });
+    },
+    onError: () => {
+      toast({ title: "Could not report post", variant: "destructive" });
+    },
+  });
+
+  const handleShare = async () => {
+    const isMobile = window.location.pathname.startsWith('/mobile');
+    const url = `${window.location.origin}${isMobile ? `/mobile/posts/${postId}` : `/posts/${postId}`}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      toast({ title: "Link copied!" });
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      toast({ title: "Could not copy link", variant: "destructive" });
+    }
+  };
+
+  const handleSubmitComment = () => {
+    if (!newComment.trim()) return;
+    createCommentMutation.mutate(newComment.trim());
+  };
+
+  const liked = likeStatus?.liked ?? false;
+
+  return (
+    <div className="space-y-3 pt-4 border-t border-white/10">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-5">
+          <button
+            onClick={() => likeMutation.mutate()}
+            disabled={likeMutation.isPending}
+            className={`flex items-center gap-2 transition-colors ${liked ? "text-red-400" : "text-white/70 hover:text-red-400"}`}
+          >
+            <Heart className={`w-6 h-6 ${liked ? "fill-current" : ""}`} />
+            <span className="text-sm">{likesCount || 0}</span>
+          </button>
+
+          {!isSignal && (
+            <button
+              onClick={() => setShowComments(!showComments)}
+              className={`flex items-center gap-2 transition-colors ${showComments ? "text-blue-400" : "text-white/70 hover:text-blue-400"}`}
+            >
+              <MessageCircle className="w-6 h-6" />
+              <span className="text-sm">{commentsCount || 0}</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-2 text-white/70 hover:text-green-400 transition-colors"
+          >
+            {linkCopied ? <CheckCircle className="w-6 h-6 text-green-400" /> : <Share2 className="w-6 h-6" />}
+            <span className="text-sm">{sharesCount || 0}</span>
+          </button>
+        </div>
+
+        {user && !isSignal && (
+          <button
+            onClick={() => flagMutation.mutate()}
+            disabled={flagMutation.isPending || showReported}
+            className={`p-2 transition-colors ${showReported ? "text-red-400" : "text-white/40 hover:text-red-400"}`}
+            title="Report"
+          >
+            <Flag className={`w-5 h-5 ${showReported ? "fill-current" : ""}`} />
+          </button>
+        )}
+      </div>
+
+      {showComments && !isSignal && (
+        <div className="space-y-3">
+          {user && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSubmitComment()}
+                placeholder="Write a comment..."
+                className="flex-1 bg-white/10 rounded-full px-4 py-2 text-white text-sm placeholder-white/40 outline-none focus:ring-1 focus:ring-white/30"
+              />
+              <button
+                onClick={handleSubmitComment}
+                disabled={createCommentMutation.isPending || !newComment.trim()}
+                className="p-2 text-white/70 hover:text-blue-400 disabled:opacity-40 transition-colors"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {commentsLoading ? (
+              <div className="text-white/50 text-sm text-center py-3">Loading comments...</div>
+            ) : comments.length === 0 ? (
+              <div className="text-white/50 text-sm text-center py-3">No comments yet. Be the first!</div>
+            ) : (
+              comments.map((comment) => {
+                const commentAuthor = comment.author;
+                const cName = commentAuthor?.firstName && commentAuthor?.lastName
+                  ? `${commentAuthor.firstName} ${commentAuthor.lastName}`
+                  : commentAuthor?.username || 'Anonymous';
+                const cTime = comment.createdAt
+                  ? formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })
+                  : '';
+                return (
+                  <div key={comment.id} className="flex gap-2 p-2 rounded-lg bg-white/5">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-red-500 to-blue-500 overflow-hidden flex-shrink-0">
+                      {commentAuthor?.avatar ? (
+                        <img src={commentAuthor.avatar} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white text-[10px] font-bold">
+                          {cName.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-white text-xs font-semibold">{cName}</span>
+                        <span className="text-white/40 text-[10px]">{cTime}</span>
+                      </div>
+                      <p className="text-white/80 text-sm">{comment.content}</p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
@@ -104,19 +337,6 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
     };
   }, [onClose]);
 
-  const likeMutation = useMutation({
-    mutationFn: async () => {
-      if (item.type === 'signal') {
-        return apiRequest("POST", `/api/mobile/signals/${item.data.id}/like`, {});
-      }
-      return apiRequest("POST", `/api/posts/${item.data.id}/like`, {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/feeds/all'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/mobile/signals'] });
-    },
-  });
-
   const renderExpandedContent = () => {
     const { type, data, event } = item;
     
@@ -165,23 +385,13 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               <p className="text-white/80">{data.description}</p>
             </div>
             
-            <div className="flex items-center gap-6 pt-4 border-t border-white/10">
-              <button 
-                onClick={() => likeMutation.mutate()}
-                className="flex items-center gap-2 text-white/70 hover:text-red-400"
-              >
-                <Heart className="w-6 h-6" />
-                <span>{data.likesCount || 0}</span>
-              </button>
-              <button className="flex items-center gap-2 text-white/70 hover:text-blue-400">
-                <MessageCircle className="w-6 h-6" />
-                <span>{data.commentsCount || 0}</span>
-              </button>
-              <button className="flex items-center gap-2 text-white/70 hover:text-green-400">
-                <Share2 className="w-6 h-6" />
-                <span>{data.sharesCount || 0}</span>
-              </button>
-            </div>
+            <PostActionBar
+              postId={data.id}
+              postType="signal"
+              likesCount={data.likesCount || 0}
+              commentsCount={data.commentsCount || 0}
+              sharesCount={data.sharesCount || 0}
+            />
           </div>
         );
 
@@ -231,23 +441,13 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               </div>
             )}
             
-            <div className="flex items-center gap-6 pt-4 border-t border-white/10">
-              <button 
-                onClick={() => likeMutation.mutate()}
-                className="flex items-center gap-2 text-white/70 hover:text-red-400"
-              >
-                <Heart className="w-6 h-6" />
-                <span>{data.likesCount || 0}</span>
-              </button>
-              <button className="flex items-center gap-2 text-white/70 hover:text-blue-400">
-                <MessageCircle className="w-6 h-6" />
-                <span>{data.commentsCount || 0}</span>
-              </button>
-              <button className="flex items-center gap-2 text-white/70 hover:text-green-400">
-                <Share2 className="w-6 h-6" />
-                <span>{data.sharesCount || 0}</span>
-              </button>
-            </div>
+            <PostActionBar
+              postId={data.id}
+              postType="post"
+              likesCount={data.likesCount || 0}
+              commentsCount={data.commentsCount || 0}
+              sharesCount={data.sharesCount || 0}
+            />
           </div>
         );
 
@@ -289,7 +489,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               <p className="text-white/60 text-sm italic">{data.linkPreview.description}</p>
             )}
             
-            <div className="flex items-center justify-between text-white/50 text-sm pt-4 border-t border-white/10">
+            <div className="flex items-center justify-between text-white/50 text-sm">
               <span>{data.newsSourceName || author.username || 'ACP News'}</span>
               <span>{timeAgo}</span>
             </div>
@@ -304,6 +504,14 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
                 Read Full Article
               </a>
             )}
+
+            <PostActionBar
+              postId={data.id}
+              postType="news"
+              likesCount={data.likesCount || 0}
+              commentsCount={data.commentsCount || 0}
+              sharesCount={data.sharesCount || 0}
+            />
           </div>
         );
 
@@ -433,6 +641,14 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
             <p className="text-white/50 text-sm">
               ACP Official • {timeAgo}
             </p>
+
+            <PostActionBar
+              postId={data.id}
+              postType="announcement"
+              likesCount={data.likesCount || 0}
+              commentsCount={data.commentsCount || 0}
+              sharesCount={data.sharesCount || 0}
+            />
           </div>
         );
 
@@ -474,6 +690,14 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
             <button className="glass-button primary w-full">
               RSVP to Event
             </button>
+
+            <PostActionBar
+              postId={data.id}
+              postType="event"
+              likesCount={data.likesCount || 0}
+              commentsCount={data.commentsCount || 0}
+              sharesCount={data.sharesCount || 0}
+            />
           </div>
         );
 
@@ -595,23 +819,13 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               </div>
             )}
             
-            <div className="flex items-center gap-6 pt-4 border-t border-white/10">
-              <button 
-                onClick={() => likeMutation.mutate()}
-                className="flex items-center gap-2 text-white/70 hover:text-red-400"
-              >
-                <Heart className="w-6 h-6" />
-                <span>{data.likesCount || 0}</span>
-              </button>
-              <button className="flex items-center gap-2 text-white/70 hover:text-blue-400">
-                <MessageCircle className="w-6 h-6" />
-                <span>{data.commentsCount || 0}</span>
-              </button>
-              <button className="flex items-center gap-2 text-white/70 hover:text-green-400">
-                <Share2 className="w-6 h-6" />
-                <span>{data.sharesCount || 0}</span>
-              </button>
-            </div>
+            <PostActionBar
+              postId={data.id}
+              postType="blog"
+              likesCount={data.likesCount || 0}
+              commentsCount={data.commentsCount || 0}
+              sharesCount={data.sharesCount || 0}
+            />
           </div>
         );
 
