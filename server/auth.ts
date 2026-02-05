@@ -2,11 +2,25 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import { getClientIp, getCountryFromIp } from "./ip-utils";
+import { 
+  setupTotp, 
+  verifyTotp, 
+  confirmTotpSetup, 
+  disableTotp,
+  sendSms2FA,
+  verifySms2FA,
+  enableSms2FA,
+  disableSms2FA,
+  createTrustedDevice,
+  verifyTrustedDevice,
+  validatePasswordStrength,
+  hashCode
+} from "./two-factor";
 
 declare global {
   namespace Express {
@@ -72,6 +86,15 @@ export function setupAuth(app: Express) {
         }
       }
 
+      // Validate password strength
+      const passwordValidation = validatePasswordStrength(userData.password);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({ 
+          message: "Password does not meet security requirements",
+          errors: passwordValidation.errors 
+        });
+      }
+
       const existingUser = await storage.getUserByUsername(userData.username);
       if (existingUser) {
         return res.status(400).json({ message: "Username already exists" });
@@ -133,6 +156,10 @@ export function setupAuth(app: Express) {
             user.id, 
             validation.invitation.id
           );
+          
+          // 4. Award 10 credits to the inviter
+          console.log(`Awarding 10 credits to inviter: ${validation.invitation.invitedBy}`);
+          await storage.addUserCredits(validation.invitation.invitedBy, 10);
         } else {
           console.log(`No inviter to friend. validation:`, validation ? 'exists' : 'null', 
                      `invitedBy:`, validation?.invitation?.invitedBy);
@@ -152,27 +179,60 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), async (req, res) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Authentication failed" });
-    }
-    
-    try {
-      // Update last login IP and country
-      const lastLoginIp = getClientIp(req);
-      const lastLoginCountry = await getCountryFromIp(lastLoginIp);
+  app.post("/api/login", async (req, res, next) => {
+    passport.authenticate("local", async (err: any, user: SelectUser | false, info: any) => {
+      if (err) {
+        return next(err);
+      }
       
-      await storage.updateUser(req.user.id, {
-        lastLoginIp,
-        lastLoginCountry,
-      });
+      if (!user) {
+        return res.status(401).json({ message: "Invalid username or password" });
+      }
       
-      res.status(200).json(req.user);
-    } catch (error) {
-      console.error("Error updating login IP:", error);
-      // Still send user data even if IP update fails
-      res.status(200).json(req.user);
-    }
+      try {
+        // Update last login IP and country
+        const lastLoginIp = getClientIp(req);
+        const lastLoginCountry = await getCountryFromIp(lastLoginIp);
+        
+        await storage.updateUser(user.id, {
+          lastLoginIp,
+          lastLoginCountry,
+        });
+        
+        // Check if 2FA is enabled
+        if (user.twoFactorEnabled) {
+          // Check if device is trusted
+          const trustedDeviceToken = req.cookies?.trusted_device;
+          if (trustedDeviceToken) {
+            const isTrusted = await verifyTrustedDevice(user.id, trustedDeviceToken);
+            if (isTrusted) {
+              // Skip 2FA for trusted device
+              return req.login(user, (loginErr) => {
+                if (loginErr) return next(loginErr);
+                res.status(200).json(user);
+              });
+            }
+          }
+          
+          // 2FA required - don't log in yet, send back 2FA requirement
+          return res.status(200).json({
+            requiresTwoFactor: true,
+            userId: user.id,
+            twoFactorMethod: user.twoFactorMethod,
+            phone: user.twoFactorPhone ? `***${user.twoFactorPhone.slice(-4)}` : null,
+          });
+        }
+        
+        // No 2FA - proceed with normal login
+        req.login(user, (loginErr) => {
+          if (loginErr) return next(loginErr);
+          res.status(200).json(user);
+        });
+      } catch (error) {
+        console.error("Error during login:", error);
+        res.status(500).json({ message: "Login failed" });
+      }
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
@@ -375,6 +435,290 @@ export function setupAuth(app: Express) {
     } catch (error: any) {
       console.error("Delete invitation error:", error);
       res.status(500).json({ message: "Failed to delete invitation" });
+    }
+  });
+
+  // ==================== Two-Factor Authentication Routes ====================
+
+  // Setup TOTP (Google Authenticator)
+  app.post("/api/2fa/totp/setup", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const result = await setupTotp(req.user.id, req.user.username);
+      res.json(result);
+    } catch (error: any) {
+      console.error("TOTP setup error:", error);
+      res.status(500).json({ message: "Failed to setup TOTP" });
+    }
+  });
+
+  // Confirm TOTP setup
+  app.post("/api/2fa/totp/confirm", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { token } = req.body;
+      if (!token) {
+        return res.status(400).json({ message: "Token is required" });
+      }
+      
+      const success = await confirmTotpSetup(req.user.id, token);
+      if (success) {
+        res.json({ message: "TOTP enabled successfully" });
+      } else {
+        res.status(400).json({ message: "Invalid token" });
+      }
+    } catch (error: any) {
+      console.error("TOTP confirm error:", error);
+      res.status(500).json({ message: "Failed to confirm TOTP" });
+    }
+  });
+
+  // Verify TOTP during login
+  app.post("/api/2fa/totp/verify", async (req, res) => {
+    try {
+      const { userId, token, rememberDevice } = req.body;
+      
+      if (!userId || !token) {
+        return res.status(400).json({ message: "userId and token are required" });
+      }
+      
+      const verified = await verifyTotp(userId, token);
+      if (!verified) {
+        return res.status(400).json({ message: "Invalid token" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Create trusted device if requested
+      if (rememberDevice) {
+        const deviceToken = await createTrustedDevice(
+          userId, 
+          req.headers['user-agent'] || 'Unknown',
+          getClientIp(req)
+        );
+        res.cookie('trusted_device', deviceToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 60 * 24 * 60 * 60 * 1000,
+          sameSite: 'lax'
+        });
+      }
+      
+      // Log the user in
+      req.login(user, (err) => {
+        if (err) {
+          return res.status(500).json({ message: "Login failed" });
+        }
+        res.json(user);
+      });
+    } catch (error: any) {
+      console.error("TOTP verify error:", error);
+      res.status(500).json({ message: "Failed to verify TOTP" });
+    }
+  });
+
+  // Disable TOTP
+  app.post("/api/2fa/totp/disable", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      await disableTotp(req.user.id);
+      res.json({ message: "TOTP disabled successfully" });
+    } catch (error: any) {
+      console.error("TOTP disable error:", error);
+      res.status(500).json({ message: "Failed to disable TOTP" });
+    }
+  });
+
+  // Send SMS OTP
+  app.post("/api/2fa/sms/send", async (req, res) => {
+    try {
+      const { userId, phoneNumber } = req.body;
+      
+      // Allow either authenticated user or userId in body (for login flow)
+      const targetUserId = req.isAuthenticated() ? req.user.id : userId;
+      
+      if (!targetUserId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+      
+      const user = await storage.getUser(targetUserId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const targetPhone = phoneNumber || user.twoFactorPhone;
+      if (!targetPhone) {
+        return res.status(400).json({ message: "Phone number is required" });
+      }
+      
+      const sent = await sendSms2FA(targetUserId, targetPhone);
+      if (sent) {
+        res.json({ message: "OTP sent successfully" });
+      } else {
+        res.status(500).json({ message: "Failed to send OTP" });
+      }
+    } catch (error: any) {
+      console.error("SMS send error:", error);
+      res.status(500).json({ message: "Failed to send OTP" });
+    }
+  });
+
+  // Verify SMS OTP during login
+  app.post("/api/2fa/sms/verify", async (req, res) => {
+    try {
+      const { userId, code, rememberDevice } = req.body;
+      
+      if (!userId || !code) {
+        return res.status(400).json({ message: "userId and code are required" });
+      }
+      
+      const result = await verifySms2FA(userId, code);
+      if (!result.success) {
+        return res.status(400).json({ message: result.reason || "Invalid code" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Create trusted device if requested
+      if (rememberDevice) {
+        const deviceToken = await createTrustedDevice(
+          userId, 
+          req.headers['user-agent'] || 'Unknown',
+          getClientIp(req)
+        );
+        res.cookie('trusted_device', deviceToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 60 * 24 * 60 * 60 * 1000,
+          sameSite: 'lax'
+        });
+      }
+      
+      // Log the user in
+      req.login(user, (err) => {
+        if (err) {
+          return res.status(500).json({ message: "Login failed" });
+        }
+        res.json(user);
+      });
+    } catch (error: any) {
+      console.error("SMS verify error:", error);
+      res.status(500).json({ message: "Failed to verify OTP" });
+    }
+  });
+
+  // Enable SMS 2FA
+  app.post("/api/2fa/sms/enable", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { phoneNumber, code } = req.body;
+      
+      if (!phoneNumber || !code) {
+        return res.status(400).json({ message: "Phone number and verification code are required" });
+      }
+      
+      // Verify the code first
+      const result = await verifySms2FA(req.user.id, code);
+      if (!result.success) {
+        return res.status(400).json({ message: result.reason || "Invalid code" });
+      }
+      
+      await enableSms2FA(req.user.id, phoneNumber);
+      res.json({ message: "SMS 2FA enabled successfully" });
+    } catch (error: any) {
+      console.error("SMS enable error:", error);
+      res.status(500).json({ message: "Failed to enable SMS 2FA" });
+    }
+  });
+
+  // Disable SMS 2FA
+  app.post("/api/2fa/sms/disable", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      await disableSms2FA(req.user.id);
+      res.json({ message: "SMS 2FA disabled successfully" });
+    } catch (error: any) {
+      console.error("SMS disable error:", error);
+      res.status(500).json({ message: "Failed to disable SMS 2FA" });
+    }
+  });
+
+  // Get 2FA status
+  app.get("/api/2fa/status", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const user = await storage.getUser(req.user.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json({
+        twoFactorEnabled: user.twoFactorEnabled || false,
+        twoFactorMethod: user.twoFactorMethod || null,
+        totpEnabled: user.totpEnabled || false,
+        smsEnabled: user.smsEnabled || false,
+        phone: user.twoFactorPhone ? `***${user.twoFactorPhone.slice(-4)}` : null,
+      });
+    } catch (error: any) {
+      console.error("2FA status error:", error);
+      res.status(500).json({ message: "Failed to get 2FA status" });
+    }
+  });
+
+  // Get trusted devices
+  app.get("/api/2fa/devices", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const devices = await storage.getTrustedDevices(req.user.id);
+      res.json(devices);
+    } catch (error: any) {
+      console.error("Get devices error:", error);
+      res.status(500).json({ message: "Failed to get devices" });
+    }
+  });
+
+  // Remove trusted device
+  app.delete("/api/2fa/devices/:deviceId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { deviceId } = req.params;
+      await storage.removeTrustedDevice(req.user.id, deviceId);
+      res.json({ message: "Device removed successfully" });
+    } catch (error: any) {
+      console.error("Remove device error:", error);
+      res.status(500).json({ message: "Failed to remove device" });
+    }
+  });
+
+  // Check if device is trusted (used during login)
+  app.post("/api/2fa/check-device", async (req, res) => {
+    try {
+      const { userId } = req.body;
+      const trustedDeviceToken = req.cookies?.trusted_device;
+      
+      if (!userId || !trustedDeviceToken) {
+        return res.json({ trusted: false });
+      }
+      
+      const isTrusted = await verifyTrustedDevice(userId, trustedDeviceToken);
+      res.json({ trusted: isTrusted });
+    } catch (error: any) {
+      console.error("Check device error:", error);
+      res.json({ trusted: false });
     }
   });
 }

@@ -53,6 +53,15 @@ export const users = pgTable("users", {
   hideRealNameInSearch: boolean("hide_real_name_in_search").default(false),
   userHandle: text("user_handle"), // Username/handle for display
   nameChangeCount: integer("name_change_count").default(0), // Track name changes for ACP charges
+  // Two-Factor Authentication
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  twoFactorMethod: text("two_factor_method"), // 'totp' | 'sms' | null
+  totpSecret: text("totp_secret"), // Encrypted TOTP secret for Google Authenticator
+  totpEnabled: boolean("totp_enabled").default(false),
+  smsEnabled: boolean("sms_enabled").default(false),
+  twoFactorPhone: text("two_factor_phone"), // Phone number for SMS 2FA
+  // Credits system
+  credits: integer("credits").default(0), // User credits for referrals
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,
@@ -191,6 +200,52 @@ export const contactUploads = pgTable("contact_uploads", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   userIndex: index("contact_uploads_user_idx").on(table.userId),
+}));
+
+// Trusted devices for 2FA "Remember this device" feature
+export const trustedDevices = pgTable("trusted_devices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(), // SHA-256 hash of the device token
+  deviceName: text("device_name"), // User-friendly device identifier
+  userAgent: text("user_agent"), // Browser/device info
+  ipAddress: text("ip_address"),
+  lastUsedAt: timestamp("last_used_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("trusted_devices_user_idx").on(table.userId),
+  tokenIndex: index("trusted_devices_token_idx").on(table.tokenHash),
+  expiresIndex: index("trusted_devices_expires_idx").on(table.expiresAt),
+}));
+
+// SMS OTP codes for 2FA verification
+export const smsOtpCodes = pgTable("sms_otp_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(), // SHA-256 hash of the 6-digit code
+  phoneNumber: text("phone_number").notNull(), // Phone number the code was sent to
+  attempts: integer("attempts").notNull().default(0), // Number of verification attempts (max 6)
+  isUsed: boolean("is_used").default(false),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("sms_otp_user_idx").on(table.userId),
+  expiresIndex: index("sms_otp_expires_idx").on(table.expiresAt),
+}));
+
+// Login rate limiting tracker
+export const loginAttempts = pgTable("login_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  identifier: text("identifier").notNull(), // Username, email, or IP address
+  identifierType: text("identifier_type").notNull(), // 'username', 'email', 'ip'
+  attempts: integer("attempts").notNull().default(1),
+  lastAttemptAt: timestamp("last_attempt_at").defaultNow(),
+  blockedUntil: timestamp("blocked_until"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  identifierIndex: index("login_attempts_identifier_idx").on(table.identifier),
+  blockedIndex: index("login_attempts_blocked_idx").on(table.blockedUntil),
 }));
 
 // Referral tracking and credits system

@@ -398,6 +398,15 @@ export interface IStorage {
   getMutualFriendsCount(userId1: string, userId2: string): Promise<number>;
   getUsersInSameLocation(userId: string, limit?: number): Promise<any[]>;
 
+  // Two-Factor Authentication
+  createSmsOtp(userId: string, codeHash: string, phoneNumber: string, expiresAt: Date): Promise<void>;
+  verifySmsOtp(userId: string, codeHash: string): Promise<{ success: boolean; reason?: string }>;
+  createTrustedDevice(userId: string, tokenHash: string, userAgent: string, ipAddress: string, expiresAt: Date): Promise<void>;
+  verifyTrustedDevice(userId: string, tokenHash: string): Promise<boolean>;
+  removeTrustedDevice(userId: string, deviceId: string): Promise<void>;
+  getTrustedDevices(userId: string): Promise<any[]>;
+  addUserCredits(userId: string, credits: number): Promise<void>;
+
   // Social Petitions (for feeds - different from initiative petitions)
   getSocialPetitions(limit?: number, offset?: number): Promise<any[]>;
   createSocialPetition(petition: any): Promise<any>;
@@ -5249,6 +5258,113 @@ export class DatabaseStorage implements IStorage {
       location: row.location,
       sameCity: row.same_city,
     }));
+  }
+
+  // Two-Factor Authentication
+  async createSmsOtp(userId: string, codeHash: string, phoneNumber: string, expiresAt: Date): Promise<void> {
+    await db.execute(sql`
+      INSERT INTO sms_otp_codes (user_id, code_hash, phone_number, expires_at)
+      VALUES (${userId}, ${codeHash}, ${phoneNumber}, ${expiresAt})
+    `);
+  }
+
+  async verifySmsOtp(userId: string, codeHash: string): Promise<{ success: boolean; reason?: string }> {
+    const result = await db.execute(sql`
+      SELECT id, attempts, is_used, expires_at FROM sms_otp_codes
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    if (result.rows.length === 0) {
+      return { success: false, reason: 'No OTP found' };
+    }
+
+    const otp = result.rows[0] as any;
+    
+    if (otp.is_used) {
+      return { success: false, reason: 'OTP already used' };
+    }
+    
+    if (new Date(otp.expires_at) < new Date()) {
+      return { success: false, reason: 'OTP expired' };
+    }
+    
+    if (otp.attempts >= 6) {
+      return { success: false, reason: 'Too many attempts' };
+    }
+
+    await db.execute(sql`
+      UPDATE sms_otp_codes SET attempts = attempts + 1 WHERE id = ${otp.id}
+    `);
+
+    const verifyResult = await db.execute(sql`
+      SELECT id FROM sms_otp_codes
+      WHERE id = ${otp.id} AND code_hash = ${codeHash}
+    `);
+
+    if (verifyResult.rows.length > 0) {
+      await db.execute(sql`
+        UPDATE sms_otp_codes SET is_used = true WHERE id = ${otp.id}
+      `);
+      return { success: true };
+    }
+
+    return { success: false, reason: 'Invalid code' };
+  }
+
+  async createTrustedDevice(userId: string, tokenHash: string, userAgent: string, ipAddress: string, expiresAt: Date): Promise<void> {
+    await db.execute(sql`
+      INSERT INTO trusted_devices (user_id, token_hash, user_agent, ip_address, expires_at)
+      VALUES (${userId}, ${tokenHash}, ${userAgent}, ${ipAddress}, ${expiresAt})
+    `);
+  }
+
+  async verifyTrustedDevice(userId: string, tokenHash: string): Promise<boolean> {
+    const result = await db.execute(sql`
+      SELECT id FROM trusted_devices
+      WHERE user_id = ${userId}
+        AND token_hash = ${tokenHash}
+        AND expires_at > NOW()
+    `);
+    
+    if (result.rows.length > 0) {
+      const deviceId = (result.rows[0] as any).id;
+      await db.execute(sql`
+        UPDATE trusted_devices SET last_used_at = NOW() WHERE id = ${deviceId}
+      `);
+      return true;
+    }
+    return false;
+  }
+
+  async removeTrustedDevice(userId: string, deviceId: string): Promise<void> {
+    await db.execute(sql`
+      DELETE FROM trusted_devices WHERE id = ${deviceId} AND user_id = ${userId}
+    `);
+  }
+
+  async getTrustedDevices(userId: string): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT id, device_name, user_agent, ip_address, last_used_at, created_at
+      FROM trusted_devices
+      WHERE user_id = ${userId} AND expires_at > NOW()
+      ORDER BY last_used_at DESC
+    `);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      deviceName: row.device_name,
+      userAgent: row.user_agent,
+      ipAddress: row.ip_address,
+      lastUsedAt: row.last_used_at,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async addUserCredits(userId: string, credits: number): Promise<void> {
+    await db.execute(sql`
+      UPDATE users SET credits = COALESCE(credits, 0) + ${credits} WHERE id = ${userId}
+    `);
   }
 
   // Social Petitions (for feeds - different from initiative petitions)
