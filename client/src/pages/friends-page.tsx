@@ -563,22 +563,16 @@ export default function FriendsPage() {
                             </p>
                           )}
                           
-                          <div className="flex gap-2">
-                            <Link 
-                              href={`/profile/${friend.userId || friend.id}`}
-                              className="flex-1"
-                            >
-                              <Button variant="outline" size="sm" className="w-full">
-                                <Eye className="h-4 w-4 mr-1" />
+                          <div className="flex flex-col gap-2 mt-3">
+                            <Link href={`/profile/${friend.userId || friend.id}`}>
+                              <Button variant="outline" size="sm" className="w-full justify-center">
+                                <Eye className="h-4 w-4 mr-2" />
                                 View Profile
                               </Button>
                             </Link>
-                            <Link 
-                              href={`/messages?user=${friend.userId || friend.id}`}
-                              className="flex-1"
-                            >
-                              <Button variant="default" size="sm" className="w-full">
-                                <MessageCircle className="h-4 w-4 mr-1" />
+                            <Link href={`/messages?user=${friend.userId || friend.id}`}>
+                              <Button size="sm" className="w-full justify-center bg-primary hover:bg-primary/90 text-primary-foreground">
+                                <MessageCircle className="h-4 w-4 mr-2" />
                                 Send Message
                               </Button>
                             </Link>

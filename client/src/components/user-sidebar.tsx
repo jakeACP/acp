@@ -124,18 +124,14 @@ export function UserSidebar() {
               <p className="text-xl font-bold text-foreground">{voteData?.voteCount || 0}</p>
               <p className="text-xs text-muted-foreground">Votes</p>
             </button>
-            <button 
-              onClick={() => setActiveView("friends")}
-              className={`p-2 rounded-lg transition-colors ${
-                activeView === "friends" 
-                  ? "bg-primary/10 border-2 border-primary" 
-                  : "hover:bg-muted"
-              }`}
+            <Link 
+              href="/friends"
+              className="p-2 rounded-lg transition-colors hover:bg-muted block text-center"
               data-testid="sidebar-stat-friends"
             >
               <p className="text-xl font-bold text-foreground">{friendData?.friendCount || 0}</p>
               <p className="text-xs text-muted-foreground">Friends</p>
-            </button>
+            </Link>
             <button 
               onClick={() => setActiveView("groups")}
               className={`p-2 rounded-lg transition-colors ${
