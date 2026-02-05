@@ -148,7 +148,6 @@ export function Navigation() {
                   </Link>
                   <Link href="/news">
                     <DropdownMenuItem className="cursor-pointer">
-                      <Globe className="mr-2 h-4 w-4" />
                       Front End
                     </DropdownMenuItem>
                   </Link>
@@ -157,7 +156,6 @@ export function Navigation() {
                       <DropdownMenuSeparator />
                       <Link href="/admin/dashboard">
                         <DropdownMenuItem className="cursor-pointer" data-testid="link-admin-panel">
-                          <Shield className="mr-2 h-4 w-4" />
                           Admin Panel
                         </DropdownMenuItem>
                       </Link>
@@ -166,7 +164,6 @@ export function Navigation() {
                   {isOwnerAdmin && (
                     <Link href="/admin/representatives">
                       <DropdownMenuItem className="cursor-pointer" data-testid="link-admin-representatives">
-                        <Shield className="mr-2 h-4 w-4" />
                         Representatives Admin
                       </DropdownMenuItem>
                     </Link>
