@@ -1002,15 +1002,15 @@ export class DatabaseStorage implements IStorage {
 
   async getPublicArticles(category?: string, limit = 50, offset = 0): Promise<PostWithAuthor[]> {
     const categoryMapping: Record<string, string[]> = {
-      'current-events': ['news', 'current events', 'breaking'],
-      'politicians': ['politician', 'politicians', 'congress', 'senator', 'representative'],
-      'proposals': ['proposal', 'proposals', 'bill', 'legislation'],
-      'issues': ['issue', 'issues', 'policy', 'policies'],
-      'donors': ['donor', 'donors', 'donation', 'campaign finance', 'pac'],
+      'current-events': ['current-events', 'news', 'current events', 'breaking'],
+      'politicians': ['politicians', 'politician', 'congress', 'senator', 'representative'],
+      'proposals': ['proposals', 'proposal', 'bill', 'legislation'],
+      'issues': ['issues', 'issue', 'policy', 'policies'],
+      'donors': ['donors', 'donor', 'donation', 'campaign finance', 'pac'],
       'propaganda': ['propaganda', 'misinformation', 'disinformation'],
-      'conspiracies': ['conspiracy', 'conspiracies', 'cover-up'],
-      'legal-cases': ['legal', 'lawsuit', 'court', 'trial', 'indictment'],
-      'leaks': ['leak', 'leaks', 'whistleblower', 'exposed', 'documents'],
+      'conspiracies': ['conspiracies', 'conspiracy', 'cover-up'],
+      'legal-cases': ['legal-cases', 'legal', 'lawsuit', 'court', 'trial', 'indictment'],
+      'leaks': ['leaks', 'leak', 'whistleblower', 'exposed', 'documents'],
     };
 
     let whereConditions = and(
