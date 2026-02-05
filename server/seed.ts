@@ -1,15 +1,21 @@
 import { storage } from "./storage";
+import { hashPassword } from "./auth";
 import type { InsertUser, InsertPost, InsertPoll, InsertGroup, InsertCandidate } from "@shared/schema";
+
+const SEED_PASSWORD = process.env.SEED_USER_PASSWORD || "changeme_" + Math.random().toString(36).slice(2);
 
 export async function seedDatabase() {
   console.log("🌱 Starting database seeding...");
 
   try {
+    const hashedPassword = await hashPassword(SEED_PASSWORD);
+    console.log(`📝 Seed users will use password from SEED_USER_PASSWORD env var (or random if not set)`);
+
     // Create sample users with different roles
     const adminUser = await storage.createUser({
       username: "admin",
       email: "admin@acp.org",
-      password: "$2b$10$K7L/8QXnHZ.7VGrKOGo3LOXVwbNFWQjRgMgOkDu5QFgYpDVp6K7Ka", // password: admin123
+      password: hashedPassword,
       role: "admin",
       firstName: "ACP",
       lastName: "Administrator",
@@ -19,7 +25,7 @@ export async function seedDatabase() {
     const candidateUser = await storage.createUser({
       username: "sarah_martinez",
       email: "sarah@example.com", 
-      password: "$2b$10$K7L/8QXnHZ.7VGrKOGo3LOXVwbNFWQjRgMgOkDu5QFgYpDVp6K7Ka", // password: admin123
+      password: hashedPassword,
       role: "candidate",
       firstName: "Sarah",
       lastName: "Martinez",
@@ -29,7 +35,7 @@ export async function seedDatabase() {
     const citizenUser = await storage.createUser({
       username: "alex_chen",
       email: "alex@example.com",
-      password: "$2b$10$K7L/8QXnHZ.7VGrKOGo3LOXVwbNFWQjRgMgOkDu5QFgYpDVp6K7Ka", // password: admin123
+      password: hashedPassword,
       role: "citizen", 
       firstName: "Alex",
       lastName: "Chen",
@@ -39,7 +45,7 @@ export async function seedDatabase() {
     const moderatorUser = await storage.createUser({
       username: "jordan_kim",
       email: "jordan@example.com",
-      password: "$2b$10$K7L/8QXnHZ.7VGrKOGo3LOXVwbNFWQjRgMgOkDu5QFgYpDVp6K7Ka", // password: admin123
+      password: hashedPassword,
       role: "moderator",
       firstName: "Jordan",
       lastName: "Kim", 
