@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { X, Heart, MessageCircle, Share2, ChevronDown, Check } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
+import DOMPurify from "dompurify";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { LazyYouTubePlayer, LazyTikTokPlayer } from "./LazyYouTubeThumbnail";
@@ -555,7 +556,7 @@ export function ExpandedCardView({ item, onClose }: ExpandedCardViewProps) {
               {data.articleBody ? (
                 <div 
                   className="text-white/90 leading-relaxed whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: data.articleBody }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.articleBody) }}
                 />
               ) : (
                 <p className="text-white/90 leading-relaxed">{data.content}</p>
