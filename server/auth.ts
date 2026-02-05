@@ -196,9 +196,9 @@ export function setupAuth(app: Express) {
             validation.invitation.id
           );
           
-          // 4. Award 10 credits to the inviter
-          console.log(`Awarding 10 credits to inviter: ${validation.invitation.invitedBy}`);
-          await storage.addUserCredits(validation.invitation.invitedBy, 10);
+          // 4. Award 20 ACP Credits to the inviter
+          console.log(`Awarding 20 ACP Credits to inviter: ${validation.invitation.invitedBy}`);
+          await storage.addUserCredits(validation.invitation.invitedBy, 20);
         } else {
           console.log(`No inviter to friend. validation:`, validation ? 'exists' : 'null', 
                      `invitedBy:`, validation?.invitation?.invitedBy);
