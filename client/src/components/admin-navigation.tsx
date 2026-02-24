@@ -12,7 +12,8 @@ import {
   Settings,
   BarChart3,
   Sliders,
-  Building2
+  Building2,
+  Newspaper
 } from "lucide-react";
 
 // Organized by category for better navigation
@@ -81,6 +82,12 @@ const adminMenuItems = [
     name: "AI Writer",
     href: "/admin/ai-parameters",
     icon: Cpu,
+    category: "content",
+  },
+  {
+    name: "Auto News",
+    href: "/admin/auto-news",
+    icon: Newspaper,
     category: "content",
   },
   {

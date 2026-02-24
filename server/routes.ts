@@ -207,6 +207,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Auto-News System API (Admin)
+  app.get("/api/admin/auto-news/status", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user.role !== 'admin') return res.status(403).json({ message: "Admin access required" });
+
+    try {
+      const { getAutoNewsStatus, getSocialMediaStatus } = await import("./auto-news");
+      res.json({
+        ...getAutoNewsStatus(),
+        socialMedia: getSocialMediaStatus(),
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/auto-news/trigger", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user.role !== 'admin') return res.status(403).json({ message: "Admin access required" });
+
+    try {
+      const { title } = req.body;
+      const { generateAndPostArticle } = await import("./auto-news");
+      const result = await generateAndPostArticle(title || undefined);
+      if (result) {
+        res.json({ success: true, ...result });
+      } else {
+        res.status(400).json({ message: "Could not generate article. Check NEWS_API_KEY or provide a title." });
+      }
+    } catch (error: any) {
+      console.error("Manual auto-news trigger failed:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // AI Article Generation endpoint - now uses title + parameters
   app.post("/api/articles/generate", async (req, res) => {
     if (!req.isAuthenticated()) {

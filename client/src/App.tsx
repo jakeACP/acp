@@ -53,6 +53,7 @@ import AdminAcpPlusPage from "@/pages/admin-acp-plus-page";
 import AdminSettingsPage from "@/pages/admin-settings-page";
 import AdminVoterVerificationPage from "@/pages/admin-voter-verification-page";
 import AdminSigsPage from "@/pages/admin-sigs-page";
+import AdminAutoNewsPage from "@/pages/admin-auto-news-page";
 import WhistleblowingPage from "@/pages/whistleblowing-page";
 import CreateArticlePage from "@/pages/create-article-page";
 import ArticlePage from "@/pages/article-page";
@@ -135,6 +136,7 @@ function Router() {
       <ProtectedRoute path="/admin/ai-parameters" component={AdminAiParametersPage} />
       <ProtectedRoute path="/admin/acp-plus" component={AdminAcpPlusPage} />
       <ProtectedRoute path="/admin/voter-verification" component={AdminVoterVerificationPage} />
+      <ProtectedRoute path="/admin/auto-news" component={AdminAutoNewsPage} />
       <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />  

@@ -90,8 +90,17 @@ async function startServer() {
       port,
       host: "0.0.0.0",
       reusePort: true,
-    }, () => {
+    }, async () => {
       log(`serving on port ${port}`);
+      
+      try {
+        const { ensureSystemAccount, startAutoNewsJob } = await import("./auto-news");
+        await ensureSystemAccount();
+        startAutoNewsJob();
+        log("Auto-news system initialized");
+      } catch (err: any) {
+        log(`Auto-news init warning: ${err.message}`);
+      }
     });
 
     // Handle server errors gracefully
