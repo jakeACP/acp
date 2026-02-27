@@ -8,7 +8,7 @@ import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choic
 import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertLiveStreamSchema, insertNotificationSchema, comments } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
-import { db, withRetry } from "./db";
+import { db } from "./db";
 import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle } from "./openai";
 import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
@@ -135,7 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
       const userId = req.isAuthenticated() ? req.user.id : undefined;
-      const posts = await withRetry(() => storage.getPosts(limit, offset, userId));
+      const posts = await storage.getPosts(limit, offset, userId);
       res.json(posts);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -145,7 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/posts/:id", async (req, res) => {
     try {
       const userId = req.isAuthenticated() ? req.user.id : undefined;
-      const post = await withRetry(() => storage.getPostById(req.params.id, userId));
+      const post = await storage.getPostById(req.params.id, userId);
       if (!post) {
         return res.status(404).json({ message: "Post not found" });
       }
@@ -508,7 +508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
       const userId = req.isAuthenticated() ? req.user.id : undefined;
-      const posts = await withRetry(() => storage.getAllFeed(limit, offset, userId));
+      const posts = await storage.getAllFeed(limit, offset, userId);
       res.json(posts);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -523,7 +523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
-      const posts = await withRetry(() => storage.getFollowingFeed(req.user.id, limit, offset));
+      const posts = await storage.getFollowingFeed(req.user.id, limit, offset);
       res.json(posts);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -535,7 +535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
       const userId = req.isAuthenticated() ? req.user.id : undefined;
-      const posts = await withRetry(() => storage.getNewsFeed(limit, offset, userId));
+      const posts = await storage.getNewsFeed(limit, offset, userId);
       res.json(posts);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -689,7 +689,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       // Use the friendships system (accepted friend requests) for accurate count
-      const friends = await withRetry(() => storage.getFriends(req.user.id));
+      const friends = await storage.getFriends(req.user.id);
       res.json({ friendCount: friends.length });
     } catch (error: any) {
       res.status(500).json({ message: error.message });

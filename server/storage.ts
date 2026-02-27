@@ -516,10 +516,7 @@ export class DatabaseStorage implements IStorage {
   constructor() {
     this.sessionStore = new PostgresSessionStore({ 
       pool, 
-      createTableIfMissing: true,
-      errorLog: (err: Error) => {
-        console.error('Session store error:', err.message);
-      },
+      createTableIfMissing: true 
     });
   }
 
