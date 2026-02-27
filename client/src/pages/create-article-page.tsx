@@ -30,7 +30,16 @@ import { RichTextEditor } from "@/components/rich-text-editor";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowLeft, FileText, Image, Eye, Save, Send, Pencil, X } from "lucide-react";
+import { ArrowLeft, FileText, Image, Eye, Save, Send, Pencil, Sparkles, Loader2, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import type { User, Post } from "@shared/schema";
 
 const ARTICLE_TYPES = [
@@ -70,6 +79,8 @@ export default function CreateArticlePage() {
   const { user } = useAuth();
   const [isPreview, setIsPreview] = useState(false);
   const [articleContent, setArticleContent] = useState("");
+    const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
+  const [suggestedImages, setSuggestedImages] = useState<string[]>([]);
 
   const { data: existingArticle, isLoading: isLoadingArticle } = useQuery<PostWithAuthor>({
     queryKey: ["/api/posts", articleId],
@@ -145,6 +156,40 @@ export default function CreateArticlePage() {
       toast({
         title: "Error",
         description: error.message || "Failed to publish article",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const generateWithAiMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const response = await apiRequest("/api/articles/generate", "POST", { title });
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Please log in to use AI generation");
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to generate article");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      form.setValue("articleBody", data.articleBody);
+      setArticleContent(data.articleBody);
+      if (data.excerpt) {
+        form.setValue("excerpt", data.excerpt);
+      }
+      setIsAiDialogOpen(false);
+      toast({
+        title: "Content Generated",
+        description: "AI has generated the article content and description based on your title. Review and edit as needed.",
+      });
+    },
+    onError: (error: Error) => {
+      setIsAiDialogOpen(false);
+      toast({
+        title: "Generation Failed",
+        description: error.message || "Failed to generate content. Please try again.",
         variant: "destructive",
       });
     },
@@ -263,14 +308,40 @@ export default function CreateArticlePage() {
               {isEditMode ? "Update your published article" : "Create a long-form article with rich formatting"}
             </p>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setIsPreview(!isPreview)}
-            data-testid="button-toggle-preview"
-          >
-            <Eye className="w-4 h-4 mr-2" />
-            {isPreview ? "Edit" : "Preview"}
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              type="button"
+              variant="outline" 
+              className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:from-purple-600 hover:to-blue-600"
+              disabled={!form.watch("title")?.trim() || generateWithAiMutation.isPending}
+              onClick={() => {
+                const title = form.watch("title");
+                if (title?.trim()) {
+                  generateWithAiMutation.mutate(title);
+                }
+              }}
+            >
+              {generateWithAiMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate Content
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsPreview(!isPreview)}
+              data-testid="button-toggle-preview"
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              {isPreview ? "Edit" : "Preview"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -312,11 +383,20 @@ export default function CreateArticlePage() {
                     <FormItem>
                       <FormLabel>Title</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="Enter your article title..." 
-                          {...field}
-                          data-testid="input-article-title"
-                        />
+                        <div className="relative">
+                          <Input 
+                            placeholder="Enter your article title..." 
+                            {...field}
+                            data-testid="input-article-title"
+                            disabled={generateWithAiMutation.isPending}
+                            className={generateWithAiMutation.isPending ? "pr-10" : ""}
+                          />
+                          {generateWithAiMutation.isPending && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -329,20 +409,27 @@ export default function CreateArticlePage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Article Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-article-type">
-                            <SelectValue placeholder="Select article type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {ARTICLE_TYPES.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="relative">
+                        <Select onValueChange={field.onChange} value={field.value} disabled={generateWithAiMutation.isPending}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-article-type">
+                              <SelectValue placeholder="Select article type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {ARTICLE_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {generateWithAiMutation.isPending && (
+                          <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                            <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                          </div>
+                        )}
+                      </div>
                       <FormDescription>
                         Choose the category that best fits your article
                       </FormDescription>
@@ -358,12 +445,21 @@ export default function CreateArticlePage() {
                     <FormItem>
                       <FormLabel>Short Description</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Write a brief description that will appear in the feed..."
-                          rows={3}
-                          {...field}
-                          data-testid="input-article-excerpt"
-                        />
+                        <div className="relative">
+                          <Textarea 
+                            placeholder="Write a brief description that will appear in the feed..."
+                            rows={3}
+                            {...field}
+                            data-testid="input-article-excerpt"
+                            disabled={generateWithAiMutation.isPending}
+                            className={generateWithAiMutation.isPending ? "pr-10" : ""}
+                          />
+                          {generateWithAiMutation.isPending && (
+                            <div className="absolute right-3 top-3">
+                              <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
                       <FormDescription>
                         This appears in the feed. Keep it engaging to attract readers.
@@ -395,6 +491,26 @@ export default function CreateArticlePage() {
                     </FormItem>
                   )}
                 />
+
+                {suggestedImages.length > 0 && (
+                  <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-2 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      AI Suggested Image Ideas:
+                    </p>
+                    <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                      {suggestedImages.map((img, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-purple-500">•</span>
+                          {img}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Search for these images online and paste the URL above.
+                    </p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
@@ -449,36 +565,44 @@ export default function CreateArticlePage() {
                                 </Badge>
                               ))}
                             </div>
-                            <Input 
-                              placeholder="Add a tag and press comma..."
-                              value={form.watch("tagInput") || ""}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                if (value.endsWith(",")) {
-                                  const newTag = value.slice(0, -1).trim().replace(/^#/, "");
-                                  const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
-                                  if (newTag && currentTags.length < 8 && !currentTags.includes(newTag)) {
-                                    field.onChange([...currentTags, newTag].join(", "));
+                            <div className="relative">
+                              <Input 
+                                placeholder="Add a tag and press comma..."
+                                value={form.watch("tagInput") || ""}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value.endsWith(",")) {
+                                    const newTag = value.slice(0, -1).trim().replace(/^#/, "");
+                                    const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
+                                    if (newTag && currentTags.length < 8 && !currentTags.includes(newTag)) {
+                                      field.onChange([...currentTags, newTag].join(", "));
+                                    }
+                                    form.setValue("tagInput", "");
+                                  } else {
+                                    form.setValue("tagInput", value);
                                   }
-                                  form.setValue("tagInput", "");
-                                } else {
-                                  form.setValue("tagInput", value);
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  const value = (e.target as HTMLInputElement).value.trim().replace(/^#/, "");
-                                  const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
-                                  if (value && currentTags.length < 8 && !currentTags.includes(value)) {
-                                    field.onChange([...currentTags, value].join(", "));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const value = (e.target as HTMLInputElement).value.trim().replace(/^#/, "");
+                                    const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
+                                    if (value && currentTags.length < 8 && !currentTags.includes(value)) {
+                                      field.onChange([...currentTags, value].join(", "));
+                                    }
+                                    form.setValue("tagInput", "");
                                   }
-                                  form.setValue("tagInput", "");
-                                }
-                              }}
-                              data-testid="input-tags"
-                              disabled={(field.value?.split(",").filter(Boolean).length || 0) >= 8}
-                            />
+                                }}
+                                data-testid="input-tags"
+                                disabled={generateWithAiMutation.isPending || (field.value?.split(",").filter(Boolean).length || 0) >= 8}
+                                className={generateWithAiMutation.isPending ? "pr-10" : ""}
+                              />
+                              {generateWithAiMutation.isPending && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                  <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </FormControl>
                         <FormDescription>Type a tag and press comma or enter (Limit 8)</FormDescription>
@@ -492,32 +616,54 @@ export default function CreateArticlePage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Article Content</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  Article Content
+                  {generateWithAiMutation.isPending && (
+                    <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
+                  )}
+                </CardTitle>
                 <CardDescription>
                   Write your full article using the rich text editor. You can add headings, format text, include images, and more.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <FormField
-                  control={form.control}
-                  name="articleBody"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <RichTextEditor
-                          content={field.value}
-                          onChange={(html) => {
-                            field.onChange(html);
-                            setArticleContent(html);
-                          }}
-                          placeholder="Start writing your article..."
-                          minHeight="500px"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {generateWithAiMutation.isPending ? (
+                  <div className="flex flex-col items-center justify-center py-20 space-y-4 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg border-2 border-dashed border-purple-200 dark:border-purple-800">
+                    <div className="relative">
+                      <Loader2 className="w-12 h-12 animate-spin text-purple-500" />
+                      <Sparkles className="w-6 h-6 text-purple-400 absolute -top-1 -right-1 animate-pulse" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-lg font-medium text-purple-700 dark:text-purple-300">
+                        AI is writing your article...
+                      </p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        This may take 15-30 seconds
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="articleBody"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <RichTextEditor
+                            content={field.value}
+                            onChange={(html) => {
+                              field.onChange(html);
+                              setArticleContent(html);
+                            }}
+                            placeholder="Start writing your article..."
+                            minHeight="500px"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </CardContent>
             </Card>
 
