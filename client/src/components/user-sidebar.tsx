@@ -28,7 +28,7 @@ export function UserSidebar() {
     enabled: !!user?.id,
   });
 
-  const { data: friendData } = useQuery<{ friendCount: number }>({
+  const { data: friendData, isLoading: isFriendCountLoading } = useQuery<{ friendCount: number }>({
     queryKey: ["/api/user/friends/count"],
     enabled: !!user?.id,
   });
@@ -129,7 +129,7 @@ export function UserSidebar() {
               className="p-2 rounded-lg transition-colors hover:bg-muted block text-center"
               data-testid="sidebar-stat-friends"
             >
-              <p className="text-xl font-bold text-foreground">{friendData?.friendCount || 0}</p>
+              <p className="text-xl font-bold text-foreground">{isFriendCountLoading ? "—" : (friendData?.friendCount ?? 0)}</p>
               <p className="text-xs text-muted-foreground">Friends</p>
             </Link>
             <button 
