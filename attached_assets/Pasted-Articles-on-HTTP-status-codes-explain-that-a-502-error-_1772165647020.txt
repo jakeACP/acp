@@ -1,0 +1,33 @@
+Articles on HTTP‑status codes explain that a 502 error appears when a gateway or proxy (e.g. Nginx, Cloudflare or a load‑balancer) cannot get a valid response from the upstream server. In Okta’s identity‑101 guide, a 502 error is described as follows: a bad‑gateway message indicates that “one server got an invalid response from another”; it typically appears when your request is routed through a proxy server that fails to connect to the origin. The article notes that 502 errors often stem from incorrect or recently changed domain records, high traffic that overwhelms the server, or firewall/connectivity problems. FreeCodeCamp’s troubleshooting guide echoes this—502 errors occur when there’s a problem on the server you’re trying to connect to (overloaded servers, coding errors or DNS misconfiguration) and refreshing or retrying won’t fix it if the origin server is misconfigured.
+
+When only parts of a page load (e.g. you see text but no styling), it’s often because requests for CSS or JavaScript assets are failing. If those static files return 502 errors (or 403 “Forbidden”), the page will render without proper styling, making the formatting look broken. Because your domain currently produces a generic error page, the browser can’t fetch any of your assets.
+
+Likely causes for your app
+
+Based on the above and my attempts to access your site, common root causes include:
+
+Origin server down or unreachable. If your app is hosted behind a proxy (e.g. Nginx, Apache, Cloudflare), make sure the actual application server (Node.js, Python, PHP, etc.) is running and listening on the correct port. A crashed or stopped process will cause the proxy to return 502.
+
+Wrong upstream configuration. In the proxy configuration, verify that the proxy_pass (for Nginx) or similar directive points to the right address/port. A typo or missing port will produce a 502 bad gateway. If you recently changed the app’s port or moved it to a different server, update the config.
+
+DNS or SSL misconfiguration. Okta notes that problems with domain names (e.g. switching providers or incomplete DNS propagation) can lead to bad‑gateway errors. Ensure your A/AAAA or CNAME records point to the correct IP and that your SSL certificates (if using HTTPS) are valid and recognized by your proxy.
+
+Firewall or connectivity issues. Firewalls on your host may be blocking communication between the proxy and the application. Check security group rules (if on a cloud provider) and local firewall settings.
+
+Missing assets causing broken formatting. If only some static files are returning 502, verify the file‑paths and permissions. Deploying frameworks like React or Angular behind a reverse proxy requires proper routing of “static” directories. A misconfigured root or location block in Nginx can cause CSS/JS files to return 404/502, leading to pages without styling.
+
+Steps to troubleshoot
+
+Check server logs. Review logs for your web server (Nginx/Apache) and your application. They will usually show upstream connection errors, permission problems or crashes.
+
+Test the application directly. If you’re using a reverse proxy, bypass it temporarily by connecting directly to the application’s port (e.g. http://localhost:3000). If it loads correctly there, the problem is with the proxy configuration.
+
+Verify DNS and SSL. Ensure your domain points to the correct IP address and that SSL certificates haven’t expired. Tools like dig and openssl s_client can help, or you can use your hosting provider’s dashboard.
+
+Ensure the app is running. For Node.js/Express apps, confirm that the process manager (e.g. pm2, systemd) is running the app. Restart if necessary.
+
+Inspect missing assets. Use the browser’s developer tools (Network tab) when the page is partially loaded to see which resources are failing. If CSS/JS requests return 502 or 403, adjust your server configuration to serve them from the correct path.
+
+By inspecting logs and verifying your proxy and DNS configurations, you should be able to identify why your app is returning 502 errors and why the page formatting is off. Once the origin server is reachable and all static assets are served correctly, the application should load normally.
+
+Sources
