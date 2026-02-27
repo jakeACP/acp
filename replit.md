@@ -43,8 +43,6 @@ Preferred communication style: Simple, everyday language.
 - **Content Systems**: WYSIWYG editor for articles and long-form content, integrated into the feed.
 - **Real-time Features**: Live trending topics based on hashtags and inline display of event details in posts.
 - **Admin Tools**: IP tracking for user registration/login and comprehensive user management.
-- **Auto News System**: Daily automated article generation using a system account (ACP News Desk), with node-cron scheduling, NewsAPI integration, and OpenAI article generation. Admin panel for manual breaking news triggers. Social media cross-posting framework for X, Bluesky, Facebook, and Threads.
-- **Database Resilience**: Connection pool with retry logic (withRetry helper), periodic health checks, and graceful reconnection for production stability.
 
 ## External Dependencies
 

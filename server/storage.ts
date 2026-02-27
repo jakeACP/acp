@@ -1017,7 +1017,7 @@ export class DatabaseStorage implements IStorage {
     };
 
     let whereConditions = and(
-      or(eq(posts.type, 'blog'), eq(posts.type, 'news')),
+      eq(posts.type, 'blog'),
       eq(posts.privacy, 'public')
     );
 
@@ -1057,7 +1057,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(users, eq(posts.authorId, users.id))
       .where(and(
         eq(posts.id, id),
-        or(eq(posts.type, 'blog'), eq(posts.type, 'news')),
+        eq(posts.type, 'blog'),
         eq(posts.privacy, 'public')
       ))
       .limit(1);
