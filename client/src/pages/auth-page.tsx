@@ -65,6 +65,8 @@ export default function AuthPage() {
 
   // Extract invitation token from URL parameters
   useEffect(() => {
+    const controller = new AbortController();
+
     const urlParams = new URLSearchParams(location.split('?')[1] || '');
     const token = urlParams.get('invitation');
     
@@ -74,7 +76,7 @@ export default function AuthPage() {
       setActiveTab('register'); // Switch to register tab if invitation link is used
       
       // Validate invitation token
-      fetch(`/api/invitations/${token}/validate`)
+      fetch(`/api/invitations/${token}/validate`, { signal: controller.signal })
         .then(res => res.json())
         .then(data => {
           if (!data.valid) {
@@ -83,13 +85,17 @@ export default function AuthPage() {
             setInvitationError(null);
           }
         })
-        .catch(() => {
-          setInvitationError('Failed to validate invitation token');
+        .catch((err) => {
+          if (err.name !== 'AbortError') {
+            setInvitationError('Failed to validate invitation token');
+          }
         });
     } else {
       // No invitation token - allow open registration
       setInvitationError(null);
     }
+
+    return () => controller.abort();
   }, [location, registerForm]);
 
   // Redirect if already logged in

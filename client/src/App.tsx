@@ -64,6 +64,7 @@ import { useScrollLight } from "./hooks/useScrollLight";
 import { useAuth } from "./hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { TwoFactorReminder } from "./components/two-factor-reminder";
+import { ErrorBoundary } from "./components/error-boundary";
 
 function HomeRoute() {
   const { user, isLoading } = useAuth();
@@ -177,7 +178,9 @@ function AppContent() {
       <BetaBanner />
       <Toaster />
       <TwoFactorReminder />
-      <Router />
+      <ErrorBoundary>
+        <Router />
+      </ErrorBoundary>
     </>
   );
 }
