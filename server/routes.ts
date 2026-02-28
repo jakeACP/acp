@@ -38,7 +38,7 @@ const upload = multer({
 
 const objectStorageService = new ObjectStorageService();
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   setupAuth(app);
 
   // Public Articles API (no auth required)
@@ -4818,7 +4818,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const httpServer = createServer(app);
+  const httpServer = existingServer ?? createServer(app);
   
   // WebSocket setup for real-time messaging
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });

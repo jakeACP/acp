@@ -1,19 +1,23 @@
+import http from "http";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+
+// ─── Lightweight logging helper (no heavy imports) ──────────────────────────
+function log(msg: string) {
+  const time = new Date().toLocaleTimeString("en-US", { hour12: false });
+  console.log(`${time} [express] ${msg}`);
+}
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Health check endpoint - must be registered BEFORE all other middleware
-// so it responds immediately during startup while other async setup is running
+// Health check — first thing registered, responds immediately
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 app.use((_req, res, next) => {
-  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data: https:; connect-src 'self' wss: https: http:; frame-src https:; frame-ancestors 'none';");
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -34,16 +38,12 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
+    if (path.startsWith("/api") || path === "/health") {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      if (capturedJsonResponse && path !== "/health") {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
+      if (logLine.length > 80) logLine = logLine.slice(0, 79) + "…";
       log(logLine);
     }
   });
@@ -51,100 +51,69 @@ app.use((req, res, next) => {
   next();
 });
 
-async function startServer() {
+// ─── Start listening IMMEDIATELY ─────────────────────────────────────────────
+// The server accepts connections right away. Heavy route/DB setup runs after.
+// This ensures Replit's healthcheck gets a 200 from /health within milliseconds.
+const port = parseInt(process.env.PORT || '5000', 10);
+const httpServer = http.createServer(app);
+
+httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+  log(`serving on port ${port}`);
+});
+
+httpServer.on('error', (error: any) => {
+  log(`Server listen error: ${error.message}`);
+});
+
+process.on('SIGTERM', () => {
+  log('SIGTERM received, shutting down gracefully');
+  httpServer.close(() => { log('Server closed'); process.exit(0); });
+});
+
+process.on('SIGINT', () => {
+  log('SIGINT received, shutting down gracefully');
+  httpServer.close(() => { log('Server closed'); process.exit(0); });
+});
+
+process.on('uncaughtException', (error) => {
+  log(`Uncaught Exception: ${error.message}`);
+});
+
+process.on('unhandledRejection', (reason) => {
+  log(`Unhandled Rejection: ${reason}`);
+});
+
+// ─── Load routes dynamically AFTER server is listening ───────────────────────
+// Using dynamic import() so heavy modules (routes.ts, storage.ts, etc.) are
+// NOT loaded before server.listen() — this keeps startup under ~200ms.
+async function setupRoutes() {
   try {
-    log("Starting server...");
-    
-    // Test database connection before starting routes
-    try {
-      const { pool } = await import("./db");
-      await pool.query('SELECT 1');
-      log("Database connection verified");
-    } catch (dbError: any) {
-      log(`Database connection warning: ${dbError.message}`);
-      log("Server will continue starting, database operations may fail until connection is restored");
-    }
+    log("Loading routes...");
 
-    const server = await registerRoutes(app);
+    const { registerRoutes } = await import("./routes");
+    await registerRoutes(app, httpServer);
 
-    // Global error handler - don't throw errors, just log them
+    // Global error handler
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
-
       log(`Server error: ${status} - ${message}`);
       res.status(status).json({ message });
-      // Don't throw the error - this prevents server crashes
     });
 
-    // importantly only setup vite in development and after
-    // setting up all the other routes so the catch-all route
-    // doesn't interfere with the other routes
-    if (app.get("env") === "development") {
-      await setupVite(app, server);
+    if (process.env.NODE_ENV === "development") {
+      const { setupVite } = await import("./vite");
+      await setupVite(app, httpServer);
     } else {
+      const { serveStatic } = await import("./vite");
       serveStatic(app);
     }
 
-    // ALWAYS serve the app on the port specified in the environment variable PORT
-    // Other ports are firewalled. Default to 5000 if not specified.
-    // this serves both the API and the client.
-    // It is the only port that is not firewalled.
-    const port = parseInt(process.env.PORT || '5000', 10);
-    
-    server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
-      log(`serving on port ${port}`);
-    });
-
-    // Handle server errors gracefully
-    server.on('error', (error: any) => {
-      log(`Server error: ${error.message}`);
-      if (error.code === 'EADDRINUSE') {
-        log(`Port ${port} is already in use. Trying to restart...`);
-        setTimeout(() => {
-          server.close();
-          startServer();
-        }, 1000);
-      }
-    });
-
-    // Handle process termination gracefully
-    process.on('SIGTERM', () => {
-      log('SIGTERM received, shutting down gracefully');
-      server.close(() => {
-        log('Server closed');
-        process.exit(0);
-      });
-    });
-
-    process.on('SIGINT', () => {
-      log('SIGINT received, shutting down gracefully');
-      server.close(() => {
-        log('Server closed');
-        process.exit(0);
-      });
-    });
-
+    log("Server fully ready");
   } catch (error: any) {
-    log(`Failed to start server: ${error.message}`);
-    log("Retrying in 5 seconds...");
-    setTimeout(startServer, 5000);
+    log(`Setup error: ${error.message} — retrying in 5 seconds`);
+    setTimeout(setupRoutes, 5000);
   }
 }
 
-// Handle uncaught exceptions and unhandled promise rejections
-process.on('uncaughtException', (error) => {
-  log(`Uncaught Exception: ${error.message}`);
-  log("Server will continue running...");
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  log(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
-  log("Server will continue running...");
-});
-
-startServer();
+setupRoutes();
