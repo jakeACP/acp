@@ -9,6 +9,7 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import { getClientIp, getCountryFromIp } from "./ip-utils";
+import { sendPasswordResetEmail } from "./email";
 import { 
   setupTotp, 
   verifyTotp, 
@@ -393,11 +394,14 @@ export function setupAuth(app: Express) {
       // Save token to database
       await storage.createPasswordResetToken(email, resetToken, expiresAt);
       
-      // In a real app, you would send an email here
-      // For now, we'll just log it to the console
       const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
-      console.log(`Password reset link for ${email}: ${resetUrl}`);
-      
+
+      try {
+        await sendPasswordResetEmail(email, resetUrl);
+      } catch (emailError: any) {
+        console.error('[email] Failed to send password reset email:', emailError?.message || emailError);
+      }
+
       res.json({ message: "If an account with that email exists, a password reset link has been sent." });
     } catch (error: any) {
       console.error("Forgot password error:", error);
