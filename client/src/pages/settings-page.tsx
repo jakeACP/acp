@@ -87,8 +87,8 @@ export default function SettingsPage() {
       form.reset();
     },
     onError: (error: any) => {
-      const message = error.message === "Current password is incorrect" 
-        ? "Current password is incorrect" 
+      const message = error.message?.includes("Current password is incorrect")
+        ? "Current password is incorrect. Please double-check and try again."
         : "Failed to update password. Please try again.";
       toast({
         title: "Error",
