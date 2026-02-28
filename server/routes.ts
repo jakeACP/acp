@@ -2766,6 +2766,47 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.get("/api/user/volunteer-signups", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const signups = await storage.getUserVolunteerSignups(req.user.id);
+      res.json(signups);
+    } catch (error) {
+      console.error("Error fetching user volunteer signups:", error);
+      res.status(500).json({ message: "Failed to fetch volunteer signups" });
+    }
+  });
+
+  app.get("/api/user/vote-count", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const voteCount = await storage.getUserVoteCount(req.user.id);
+      res.json({ voteCount });
+    } catch (error) {
+      console.error("Error getting user vote count:", error);
+      res.status(500).json({ message: "Failed to get vote count" });
+    }
+  });
+
+  app.get("/api/user/donations", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const donations = await storage.getUserDonations(req.user.id);
+      res.json(donations);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Get user profile by ID
   app.get("/api/user/:id", async (req, res) => {
     try {
@@ -3016,19 +3057,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  app.get("/api/user/volunteer-signups", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
-
-    try {
-      const signups = await storage.getUserVolunteerSignups(req.user.id);
-      res.json(signups);
-    } catch (error) {
-      console.error("Error fetching user volunteer signups:", error);
-      res.status(500).json({ message: "Failed to fetch volunteer signups" });
-    }
-  });
 
   app.patch("/api/volunteer/signups/:signupId/status", async (req, res) => {
     if (!req.isAuthenticated()) {
@@ -3063,19 +3091,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  app.get("/api/user/vote-count", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
-
-    try {
-      const voteCount = await storage.getUserVoteCount(req.user.id);
-      res.json({ voteCount });
-    } catch (error) {
-      console.error("Error getting user vote count:", error);
-      res.status(500).json({ message: "Failed to get vote count" });
-    }
-  });
 
   app.get("/api/transactions/history", async (req, res) => {
     if (!req.isAuthenticated()) {
@@ -3504,18 +3519,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  app.get("/api/user/donations", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
-
-    try {
-      const donations = await storage.getUserDonations(req.user.id);
-      res.json(donations);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
 
   // Admin Security Middleware - for admin and moderator access
   function ensureAdmin(req: any, res: any, next: any) {
