@@ -460,101 +460,175 @@ export default function PoliticianProfilePage() {
         </Card>
       )}
 
-      {/* Campaign Sponsors Section */}
-      {sponsors.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="w-5 h-5" />
-              Campaign Sponsors & Donors
-            </CardTitle>
-            <CardDescription>
-              Organizations and groups that have contributed to {profile.fullName}'s campaigns
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2">
-              {sponsors
-                .filter(sponsor => sponsor.sig) // Only show sponsors with valid SIG data
-                .map((sponsor) => (
-                <div 
-                  key={sponsor.id} 
-                  className="border rounded-lg p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                  data-testid={`sponsor-${sponsor.id}`}
+      {/* Campaign Sponsors & Israel Lobby Section */}
+      {sponsors.length > 0 && (() => {
+        const validSponsors = sponsors.filter(s => s.sig);
+        const pledgedAgainst = validSponsors.filter(s => s.relationshipType === 'pledged_against');
+        const donorSponsors = validSponsors.filter(s => s.relationshipType !== 'pledged_against');
+        const totalLobbyAmount = validSponsors.reduce((sum, s) => sum + (s.reportedAmount ?? 0), 0);
+        const hasIsraelLobby = validSponsors.some(s => s.sig?.industry === 'foreign policy');
+
+        return (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5" />
+                Campaign Sponsors & Special Interests
+              </CardTitle>
+              <CardDescription>
+                Organizations and groups linked to {profile.fullName}'s campaigns
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+
+              {/* Pledged Against banners */}
+              {pledgedAgainst.map(sponsor => (
+                <div
+                  key={sponsor.id}
+                  className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40 px-4 py-3"
                 >
-                  <div className="flex items-start gap-3">
-                    {sponsor.sig?.logoUrl ? (
-                      <img 
-                        src={sponsor.sig.logoUrl} 
-                        alt={sponsor.sig?.name ?? "Organization"} 
-                        className="w-10 h-10 rounded object-cover"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                        <Building2 className="w-5 h-5 text-slate-400" />
-                      </div>
+                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-green-800 dark:text-green-200">
+                      Pledged Against {sponsor.sig?.acronym ?? sponsor.sig?.name}
+                    </p>
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      {profile.fullName} has publicly rejected funding from {sponsor.sig?.name ?? sponsor.sig?.acronym}.
+                    </p>
+                    {sponsor.disclosureUrl && (
+                      <a
+                        href={sanitizeUrl(sponsor.disclosureUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-green-600 hover:underline mt-1"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Source: {sponsor.disclosureSource ?? 'Disclosure'}
+                      </a>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium truncate">
-                          {sponsor.sig?.name ?? "Unknown Organization"}
-                        </h4>
-                        {sponsor.sig?.acronym && (
-                          <span className="text-sm text-slate-500">({sponsor.sig.acronym})</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {sponsor.sig?.category && (
-                          <Badge variant="outline" className="text-xs capitalize">
-                            {sponsor.sig.category.replace(/_/g, " ")}
-                          </Badge>
-                        )}
-                        <Badge 
-                          variant={sponsor.relationshipType === "primary_sponsor" ? "default" : "secondary"}
-                          className="text-xs capitalize"
-                        >
-                          {(sponsor.relationshipType ?? "donor").replace(/_/g, " ")}
-                        </Badge>
-                        {sponsor.isVerified && (
-                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                            Verified
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-4 mt-2 text-sm text-slate-600 dark:text-slate-400">
-                        {typeof sponsor.reportedAmount === 'number' && sponsor.reportedAmount > 0 && (
-                          <span className="font-medium text-green-600 dark:text-green-400">
-                            ${(sponsor.reportedAmount / 100).toLocaleString()}
-                          </span>
-                        )}
-                        {sponsor.contributionPeriod && (
-                          <span>{sponsor.contributionPeriod}</span>
-                        )}
-                      </div>
-                      {sponsor.disclosureSource && (
-                        <p className="text-xs text-slate-500 mt-1 truncate">
-                          Source: {sponsor.disclosureSource}
-                        </p>
-                      )}
-                      {sponsor.sig?.website && (
-                        <a 
-                          href={sanitizeUrl(sponsor.sig.website)} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          Website
-                        </a>
-                      )}
-                    </div>
                   </div>
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+
+              {/* Total Israel lobby amount summary */}
+              {hasIsraelLobby && totalLobbyAmount > 0 && (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40 px-4 py-3">
+                  <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                    Total Israel Lobby Contributions
+                  </p>
+                  <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">
+                    ${(totalLobbyAmount / 100).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                    Combined reported amount from linked lobby groups
+                  </p>
+                </div>
+              )}
+
+              {/* Donor SIG badges grid */}
+              {donorSponsors.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                    Linked Special Interest Groups
+                  </p>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {donorSponsors.map(sponsor => (
+                      <Badge
+                        key={sponsor.id}
+                        variant="outline"
+                        className={
+                          sponsor.sig?.industry === 'foreign policy'
+                            ? 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-700 dark:bg-orange-950/40 dark:text-orange-300 font-semibold'
+                            : 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                        }
+                      >
+                        {sponsor.sig?.acronym ?? sponsor.sig?.name}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {donorSponsors.map((sponsor) => (
+                      <div
+                        key={sponsor.id}
+                        className="border rounded-lg p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                        data-testid={`sponsor-${sponsor.id}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {sponsor.sig?.logoUrl ? (
+                            <img
+                              src={sponsor.sig.logoUrl}
+                              alt={sponsor.sig?.name ?? "Organization"}
+                              className="w-10 h-10 rounded object-cover"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                              <Building2 className="w-5 h-5 text-slate-400" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-medium truncate">
+                                {sponsor.sig?.name ?? "Unknown Organization"}
+                              </h4>
+                              {sponsor.sig?.acronym && sponsor.sig.acronym !== sponsor.sig.name && (
+                                <span className="text-sm text-slate-500">({sponsor.sig.acronym})</span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {sponsor.sig?.industry && (
+                                <Badge variant="outline" className="text-xs capitalize">
+                                  {sponsor.sig.industry.replace(/_/g, " ")}
+                                </Badge>
+                              )}
+                              {sponsor.isVerified && (
+                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
+                                  Verified
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-2 text-sm text-slate-600 dark:text-slate-400">
+                              {typeof sponsor.reportedAmount === 'number' && sponsor.reportedAmount > 0 && (
+                                <span className="font-medium text-orange-600 dark:text-orange-400">
+                                  ${(sponsor.reportedAmount / 100).toLocaleString()}
+                                </span>
+                              )}
+                              {sponsor.contributionPeriod && (
+                                <span>{sponsor.contributionPeriod}</span>
+                              )}
+                            </div>
+                            {sponsor.disclosureUrl ? (
+                              <a
+                                href={sanitizeUrl(sponsor.disclosureUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                {sponsor.disclosureSource ?? 'Source'}
+                              </a>
+                            ) : sponsor.sig?.website ? (
+                              <a
+                                href={sanitizeUrl(sponsor.sig.website)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                Website
+                              </a>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* News Feed Section */}
       <Card>

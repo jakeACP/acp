@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link, Unlink } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link, Unlink, Download, Loader2 } from "lucide-react";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
 type SpecialInterestGroup = {
@@ -313,6 +313,23 @@ export default function AdminPoliticiansPage() {
     },
   });
 
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const importCongressMutation = useMutation({
+    mutationFn: async () => apiRequest("/api/admin/politicians/import-congress", "POST"),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/political-positions"] });
+      setImportDialogOpen(false);
+      toast({
+        title: "Congress import complete",
+        description: `${data.profiles_created} created, ${data.profiles_updated} updated, ${data.positions_created} positions, ${data.sigs_created} lobby groups, ${data.sponsorships_created} sponsorships.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handlePositionSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -405,12 +422,66 @@ export default function AdminPoliticiansPage() {
       <AdminNavigation />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Politicians Management</h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-2">
-            Manage political positions and politician profiles
-          </p>
+        <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Politicians Management</h1>
+            <p className="text-slate-600 dark:text-slate-400 mt-2">
+              Manage political positions and politician profiles
+            </p>
+          </div>
+          <Button
+            onClick={() => setImportDialogOpen(true)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <Download className="w-4 h-4" />
+            Import All Congress Members
+          </Button>
         </div>
+
+        {/* Congress Import Confirmation Dialog */}
+        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Import All Congress Members</DialogTitle>
+              <DialogDescription>
+                This will import 535 members of Congress from the TrackAIPAC dataset, including:
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300 py-2">
+              <p>• <strong>535 politician profiles</strong> (100 senators + 435 House members)</p>
+              <p>• <strong>535 congressional positions</strong> (one per district seat)</p>
+              <p>• <strong>53 lobby group records</strong> (AIPAC, DMFI, RJC, and more)</p>
+              <p>• <strong>SIG sponsorships</strong> linking each politician to their lobby groups</p>
+              <p>• <strong>Corruption grades</strong> based on total Israel lobby funding received</p>
+              <p>• <strong>"Rejects AIPAC" badges</strong> for 16 politicians who publicly rejected funding</p>
+              <p className="text-slate-500 dark:text-slate-400 mt-3">
+                This is safe to run multiple times — it will update existing records and skip duplicates.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setImportDialogOpen(false)} disabled={importCongressMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => importCongressMutation.mutate()}
+                disabled={importCongressMutation.isPending}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {importCongressMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Importing... (this may take a minute)
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Start Import
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>

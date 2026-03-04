@@ -222,6 +222,8 @@ export interface IStorage {
   getSigCategories(): Promise<string[]>;
   getSigIndustries(): Promise<string[]>;
   
+  importCongress(): Promise<{ profiles_created: number; profiles_updated: number; positions_created: number; sigs_created: number; sponsorships_created: number }>;
+
   // Politician SIG Sponsorships
   listPoliticianSponsors(politicianId: string): Promise<any[]>;
   linkSponsorToPolitician(data: InsertPoliticianSigSponsorship): Promise<PoliticianSigSponsorship>;
@@ -3530,6 +3532,264 @@ export class DatabaseStorage implements IStorage {
       .where(eq(politicianSigSponsorships.id, id))
       .returning();
     return sponsorship;
+  }
+
+  async importCongress(): Promise<{
+    profiles_created: number;
+    profiles_updated: number;
+    positions_created: number;
+    sigs_created: number;
+    sponsorships_created: number;
+  }> {
+    const pathMod = await import('path');
+    const XLSXMod = await import('xlsx');
+
+    const filePath = pathMod.default.join(process.cwd(), 'attached_assets/ALL-CONGRESS-AIPAC_1772667997732.xlsx');
+    const workbook = XLSXMod.default.readFile(filePath);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: any[] = XLSXMod.default.utils.sheet_to_json(sheet);
+
+    const STATE_NAMES: Record<string, string> = {
+      AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+      CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+      HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+      KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+      MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+      MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+      NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+      OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+      SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+      VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+      DC: "Washington D.C.", AS: "American Samoa", GU: "Guam", MP: "Northern Mariana Islands",
+      PR: "Puerto Rico", VI: "U.S. Virgin Islands",
+    };
+
+    function toOrdinal(n: number): string {
+      const s = ["th", "st", "nd", "rd"];
+      const v = n % 100;
+      return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+
+    function makePositionInfo(district: string): { title: string; termLength: number; districtLabel?: string; stateName: string } {
+      const [stateCode, districtCode] = district.split('-');
+      const stateName = STATE_NAMES[stateCode] || stateCode;
+      if (districtCode === 'SEN') {
+        return { title: `U.S. Senator from ${stateName}`, termLength: 6, stateName };
+      } else if (districtCode === 'AL') {
+        return { title: `U.S. Representative from ${stateName} (At-Large)`, termLength: 2, districtLabel: 'At-Large', stateName };
+      } else {
+        const num = parseInt(districtCode, 10);
+        const ordinal = toOrdinal(num);
+        return {
+          title: `U.S. Representative, ${stateName}'s ${ordinal} Congressional District`,
+          termLength: 2,
+          districtLabel: `${ordinal} Congressional District`,
+          stateName,
+        };
+      }
+    }
+
+    function calcGrade(totalLobby: number, rejectsAIPAC: boolean): string {
+      if (rejectsAIPAC) return 'A';
+      if (totalLobby > 1_000_000) return 'F';
+      if (totalLobby >= 100_000) return 'D';
+      return 'C';
+    }
+
+    const SKIP_GROUPS = new Set(['Data Not Provided', '', 'N/A', 'n/a']);
+
+    function cleanAcronym(raw: string): string {
+      return raw.replace(/\s*\(.*?\)/g, '').trim();
+    }
+
+    // Step 1: Collect all unique lobby group acronyms
+    const allAcronyms = new Set<string>();
+    for (const row of rows) {
+      const lg = String(row['Lobby Groups'] || '').trim();
+      if (lg) {
+        for (const a of lg.split(',').map((s: string) => cleanAcronym(s)).filter(Boolean)) {
+          if (!SKIP_GROUPS.has(a)) allAcronyms.add(a);
+        }
+      }
+    }
+
+    // Step 2: Upsert SIGs
+    const existingSigs = await db.select().from(specialInterestGroups);
+    const sigByAcronym = new Map<string, string>();
+    for (const sig of existingSigs) {
+      if (sig.acronym) sigByAcronym.set(sig.acronym, sig.id);
+    }
+
+    let sigs_created = 0;
+    for (const acronym of allAcronyms) {
+      if (!sigByAcronym.has(acronym)) {
+        const isAIPAC = acronym === 'AIPAC';
+        const [newSig] = await db.insert(specialInterestGroups).values({
+          name: isAIPAC ? 'American Israel Public Affairs Committee' : acronym,
+          acronym,
+          description: isAIPAC
+            ? 'AIPAC is a powerful pro-Israel lobbying organization that advocates for strong U.S.-Israel relations and influences U.S. foreign policy in the Middle East.'
+            : 'Israel lobby group tracked by TrackAIPAC.com. Source: https://www.trackaipac.com/endorsements',
+          category: 'pac',
+          industry: 'foreign policy',
+          website: isAIPAC ? 'https://www.aipac.org' : undefined,
+          isActive: true,
+        }).returning();
+        sigByAcronym.set(acronym, newSig.id);
+        sigs_created++;
+      }
+    }
+
+    // Step 3: Upsert positions
+    const existingPositions = await db.select().from(politicalPositions);
+    const positionByTitle = new Map<string, string>();
+    for (const pos of existingPositions) {
+      positionByTitle.set(pos.title, pos.id);
+    }
+
+    let positions_created = 0;
+    const uniqueDistricts = [...new Set(rows.map((r: any) => String(r['District'] || '').trim()).filter(Boolean))];
+    for (const district of uniqueDistricts) {
+      const { title, termLength, districtLabel, stateName } = makePositionInfo(district);
+      if (!positionByTitle.has(title)) {
+        const [newPos] = await db.insert(politicalPositions).values({
+          title,
+          officeType: 'Legislative',
+          level: 'federal',
+          jurisdiction: stateName,
+          district: districtLabel,
+          termLength,
+          isElected: true,
+          isActive: true,
+        }).returning();
+        positionByTitle.set(title, newPos.id);
+        positions_created++;
+      }
+    }
+
+    // Step 4 & 5: Upsert profiles and sponsorships
+    const existingProfiles = await db.select().from(politicianProfiles);
+    const profileByName = new Map<string, string>();
+    for (const p of existingProfiles) {
+      profileByName.set(p.fullName.toLowerCase(), p.id);
+    }
+
+    let profiles_created = 0;
+    let profiles_updated = 0;
+    let sponsorships_created = 0;
+
+    for (const row of rows) {
+      const fullName = String(row['Name'] || '').trim();
+      if (!fullName) continue;
+
+      const district = String(row['District'] || '').trim();
+      const partyCode = String(row['Party'] || '').trim();
+      const party = partyCode === 'R' ? 'Republican' : partyCode === 'D' ? 'Democrat' : partyCode;
+      const rawAmount = row['Israel Lobby Total'];
+      const totalAmount = typeof rawAmount === 'number'
+        ? rawAmount
+        : parseFloat(String(rawAmount || '0').replace(/[$,]/g, '')) || 0;
+      const notesRaw = String(row['Notes'] || '').trim();
+      const notes = notesRaw || undefined;
+      const lobbyGroupsRaw = String(row['Lobby Groups'] || '').trim();
+      const lobbyGroupList = lobbyGroupsRaw
+        ? lobbyGroupsRaw.split(',').map((s: string) => cleanAcronym(s)).filter((a: string) => a && !SKIP_GROUPS.has(a))
+        : [];
+      const rejectsAIPAC = notesRaw.toLowerCase().includes('rejects aipac');
+
+      const { title } = makePositionInfo(district);
+      const positionId = positionByTitle.get(title) || null;
+      const grade = calcGrade(totalAmount, rejectsAIPAC);
+
+      const scorecardLines = [
+        `Total Israel Lobby Contributions: $${totalAmount.toLocaleString()}`,
+        `Lobby Groups: ${lobbyGroupList.join(', ') || 'None listed'}`,
+        rejectsAIPAC
+          ? 'Status: Has publicly pledged to reject AIPAC funding.'
+          : 'Status: Has accepted Israel lobby funding.',
+        `Source: TrackAIPAC.com — https://www.trackaipac.com/endorsements`,
+      ];
+      const corruptionScorecard = scorecardLines.join('\n');
+
+      let politicianId: string;
+      const existingId = profileByName.get(fullName.toLowerCase());
+
+      if (existingId) {
+        await db.update(politicianProfiles).set({
+          party,
+          positionId,
+          corruptionGrade: grade,
+          notes: notes || null,
+          corruptionScorecard,
+          isCurrent: true,
+          updatedAt: new Date(),
+        }).where(eq(politicianProfiles.id, existingId));
+        politicianId = existingId;
+        profiles_updated++;
+      } else {
+        const [newProfile] = await db.insert(politicianProfiles).values({
+          fullName,
+          party,
+          positionId,
+          corruptionGrade: grade,
+          notes: notes || null,
+          corruptionScorecard,
+          isCurrent: true,
+        }).returning();
+        politicianId = newProfile.id;
+        profileByName.set(fullName.toLowerCase(), politicianId);
+        profiles_created++;
+      }
+
+      // SIG sponsorships
+      for (const acronym of lobbyGroupList) {
+        const sigId = sigByAcronym.get(acronym);
+        if (!sigId) continue;
+        const isAIPAC = acronym === 'AIPAC';
+        const relType = (rejectsAIPAC && isAIPAC) ? 'pledged_against' : 'donor';
+        const reportedAmount = (isAIPAC && !rejectsAIPAC && totalAmount > 0)
+          ? Math.round(totalAmount * 100)
+          : undefined;
+        try {
+          await db.insert(politicianSigSponsorships).values({
+            politicianId,
+            sigId,
+            relationshipType: relType,
+            reportedAmount,
+            contributionPeriod: '2024 election cycle',
+            disclosureSource: 'TrackAIPAC',
+            disclosureUrl: 'https://www.trackaipac.com/endorsements',
+            isVerified: false,
+          });
+          sponsorships_created++;
+        } catch {
+          // UNIQUE conflict — already exists, skip
+        }
+      }
+
+      // If rejects AIPAC but AIPAC not in their groups list, still add pledged_against entry
+      if (rejectsAIPAC && !lobbyGroupList.includes('AIPAC')) {
+        const aipacId = sigByAcronym.get('AIPAC');
+        if (aipacId) {
+          try {
+            await db.insert(politicianSigSponsorships).values({
+              politicianId,
+              sigId: aipacId,
+              relationshipType: 'pledged_against',
+              contributionPeriod: '2024 election cycle',
+              disclosureSource: 'TrackAIPAC',
+              disclosureUrl: 'https://www.trackaipac.com/endorsements',
+              isVerified: false,
+            });
+            sponsorships_created++;
+          } catch {
+            // Already exists
+          }
+        }
+      }
+    }
+
+    return { profiles_created, profiles_updated, positions_created, sigs_created, sponsorships_created };
   }
 
   async unlinkSponsorFromPolitician(politicianId: string, sigId: string): Promise<void> {

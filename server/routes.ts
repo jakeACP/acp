@@ -3951,6 +3951,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Bulk import all Congress members from the XLSX file
+  app.post("/api/admin/politicians/import-congress", ensureAdmin, async (req, res) => {
+    try {
+      const result = await storage.importCongress();
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("Congress import error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Public politician profile page route
   app.get("/api/politician-profiles/:id", async (req, res) => {
     try {
