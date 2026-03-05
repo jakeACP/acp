@@ -4231,6 +4231,48 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.post("/api/admin/politicians/import-candidates", ensureAdmin, async (req, res) => {
+    try {
+      const { candidates } = req.body;
+      if (!Array.isArray(candidates) || candidates.length === 0) {
+        return res.status(400).json({ message: "candidates array is required" });
+      }
+      const result = await storage.importCandidates(candidates);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("Candidate import error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/politicians/import-profiles-csv", ensureAdmin, async (req, res) => {
+    try {
+      const { profiles } = req.body;
+      if (!Array.isArray(profiles) || profiles.length === 0) {
+        return res.status(400).json({ message: "profiles array is required" });
+      }
+      const result = await storage.importProfilesCsv(profiles);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("Profile CSV import error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/politicians/import-positions-csv", ensureAdmin, async (req, res) => {
+    try {
+      const { positions } = req.body;
+      if (!Array.isArray(positions) || positions.length === 0) {
+        return res.status(400).json({ message: "positions array is required" });
+      }
+      const result = await storage.importPositionsCsv(positions);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("Positions CSV import error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/admin/politicians/fetch-photos", ensureAdmin, async (req, res) => {
     try {
       const allProfiles = await storage.listPoliticianProfiles();

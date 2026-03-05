@@ -227,6 +227,9 @@ export interface IStorage {
   seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number>;
   
   importCongress(): Promise<{ profiles_created: number; profiles_updated: number; positions_created: number; sigs_created: number; sponsorships_created: number }>;
+  importCandidates(candidates: Array<{ fullName: string; office: string; officeLevel: string; district: string; party: string; isIncumbent: string; status: string; primaryDate: string; generalDate: string; ballotpediaUrl: string; notes: string }>): Promise<{ created: number; updated: number; positions_created: number }>;
+  importProfilesCsv(profiles: Array<{ fullName: string; party: string; email: string; phone: string; website: string; biography: string; termStart: string; termEnd: string; isCurrent: string; officeAddress: string }>): Promise<{ created: number; updated: number }>;
+  importPositionsCsv(positions: Array<{ title: string; officeType: string; level: string; jurisdiction: string; district: string; termLength: string; isElected: string; isActive: string }>): Promise<{ created: number; updated: number }>;
 
   // Politician SIG Sponsorships
   listPoliticianSponsors(politicianId: string): Promise<any[]>;
@@ -4052,6 +4055,182 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { profiles_created, profiles_updated, positions_created, sigs_created, sponsorships_created };
+  }
+
+  async importCandidates(candidates: Array<{
+    fullName: string; office: string; officeLevel: string; district: string;
+    party: string; isIncumbent: string; status: string; primaryDate: string;
+    generalDate: string; ballotpediaUrl: string; notes: string;
+  }>): Promise<{ created: number; updated: number; positions_created: number }> {
+    let created = 0;
+    let updated = 0;
+    let positions_created = 0;
+
+    const positionCache = new Map<string, string>();
+
+    for (const row of candidates) {
+      const office = (row.office || "").trim();
+      const district = (row.district || "").trim();
+      const level = (row.officeLevel || "State").trim();
+
+      let positionTitle: string;
+      if (district && district !== "Statewide") {
+        positionTitle = `${office} – ${district}`;
+      } else {
+        positionTitle = office;
+      }
+
+      let positionId: string | null = null;
+      const cacheKey = positionTitle.toLowerCase();
+
+      if (positionCache.has(cacheKey)) {
+        positionId = positionCache.get(cacheKey)!;
+      } else {
+        const existingPositions = await db.select().from(politicalPositions);
+        const existing = existingPositions.find(
+          p => p.title.toLowerCase() === positionTitle.toLowerCase()
+        );
+        if (existing) {
+          positionId = existing.id;
+          positionCache.set(cacheKey, positionId);
+        } else {
+          const officeType = ["Governor", "Lieutenant Governor", "Attorney General", "Secretary of State", "State Auditor", "President", "Vice President"].includes(office)
+            ? "Executive"
+            : "Legislative";
+          const [newPos] = await db.insert(politicalPositions).values({
+            title: positionTitle,
+            officeType,
+            level: level.toLowerCase() === "federal" ? "federal" : "state",
+            jurisdiction: district || "Statewide",
+            district: district !== "Statewide" ? district : undefined,
+            isElected: true,
+            isActive: true,
+          }).returning();
+          positionId = newPos.id;
+          positionCache.set(cacheKey, positionId);
+          positions_created++;
+        }
+      }
+
+      const fullName = (row.fullName || "").trim();
+      if (!fullName) continue;
+
+      const notesText = [row.status, row.notes].filter(Boolean).join(" | ") || null;
+
+      const existingProfiles = await db.select().from(politicianProfiles)
+        .where(sql`lower(full_name) = lower(${fullName})`);
+
+      if (existingProfiles.length > 0) {
+        await db.update(politicianProfiles).set({
+          party: row.party || undefined,
+          isCurrent: row.isIncumbent === "Yes",
+          website: row.ballotpediaUrl || undefined,
+          termStart: row.primaryDate || undefined,
+          termEnd: row.generalDate || undefined,
+          notes: notesText,
+          positionId: positionId || undefined,
+          updatedAt: new Date(),
+        }).where(eq(politicianProfiles.id, existingProfiles[0].id));
+        updated++;
+      } else {
+        await db.insert(politicianProfiles).values({
+          fullName,
+          party: row.party || null,
+          isCurrent: row.isIncumbent === "Yes",
+          website: row.ballotpediaUrl || null,
+          termStart: row.primaryDate || null,
+          termEnd: row.generalDate || null,
+          notes: notesText,
+          positionId: positionId || null,
+        });
+        created++;
+      }
+    }
+
+    return { created, updated, positions_created };
+  }
+
+  async importProfilesCsv(profiles: Array<{
+    fullName: string; party: string; email: string; phone: string;
+    website: string; biography: string; termStart: string; termEnd: string;
+    isCurrent: string; officeAddress: string;
+  }>): Promise<{ created: number; updated: number }> {
+    let created = 0;
+    let updated = 0;
+
+    for (const row of profiles) {
+      const fullName = (row.fullName || "").trim();
+      if (!fullName) continue;
+
+      const existing = await db.select().from(politicianProfiles)
+        .where(sql`lower(full_name) = lower(${fullName})`);
+
+      const patch = {
+        party: row.party || undefined,
+        email: row.email || undefined,
+        phone: row.phone || undefined,
+        website: row.website || undefined,
+        biography: row.biography || undefined,
+        termStart: row.termStart || undefined,
+        termEnd: row.termEnd || undefined,
+        isCurrent: row.isCurrent ? row.isCurrent.toLowerCase() === "yes" || row.isCurrent === "true" : false,
+        officeAddress: row.officeAddress || undefined,
+      };
+
+      if (existing.length > 0) {
+        await db.update(politicianProfiles).set({ ...patch, updatedAt: new Date() })
+          .where(eq(politicianProfiles.id, existing[0].id));
+        updated++;
+      } else {
+        await db.insert(politicianProfiles).values({ fullName, ...patch });
+        created++;
+      }
+    }
+
+    return { created, updated };
+  }
+
+  async importPositionsCsv(positions: Array<{
+    title: string; officeType: string; level: string; jurisdiction: string;
+    district: string; termLength: string; isElected: string; isActive: string;
+  }>): Promise<{ created: number; updated: number }> {
+    let created = 0;
+    let updated = 0;
+
+    for (const row of positions) {
+      const title = (row.title || "").trim();
+      const jurisdiction = (row.jurisdiction || "").trim();
+      if (!title) continue;
+
+      const existing = await db.select().from(politicalPositions)
+        .where(
+          and(
+            sql`lower(title) = lower(${title})`,
+            jurisdiction ? sql`lower(jurisdiction) = lower(${jurisdiction})` : sql`true`
+          )
+        );
+
+      const patch = {
+        officeType: row.officeType || "Legislative",
+        level: row.level || "state",
+        jurisdiction: jurisdiction || undefined,
+        district: row.district || undefined,
+        termLength: row.termLength ? parseInt(row.termLength) : undefined,
+        isElected: row.isElected ? row.isElected.toLowerCase() === "yes" || row.isElected === "true" : true,
+        isActive: row.isActive ? row.isActive.toLowerCase() !== "no" && row.isActive !== "false" : true,
+      };
+
+      if (existing.length > 0) {
+        await db.update(politicalPositions).set({ ...patch, updatedAt: new Date() })
+          .where(eq(politicalPositions.id, existing[0].id));
+        updated++;
+      } else {
+        await db.insert(politicalPositions).values({ title, ...patch });
+        created++;
+      }
+    }
+
+    return { created, updated };
   }
 
   async unlinkSponsorFromPolitician(politicianId: string, sigId: string): Promise<void> {

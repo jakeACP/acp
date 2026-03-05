@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import * as XLSX from "xlsx";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminNavigation } from "@/components/admin-navigation";
@@ -345,6 +346,22 @@ export default function AdminPoliticiansPage() {
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
   const [handleDialogOpen, setHandleDialogOpen] = useState(false);
 
+  // Candidate XLSX import
+  const [candidateImportOpen, setCandidateImportOpen] = useState(false);
+  const [candidateImportRows, setCandidateImportRows] = useState<any[]>([]);
+  const [candidateImportPreview, setCandidateImportPreview] = useState<Record<string, number>>({});
+  const candidateFileRef = useRef<HTMLInputElement>(null);
+
+  // Profiles CSV import
+  const [profileImportOpen, setProfileImportOpen] = useState(false);
+  const [profileImportRows, setProfileImportRows] = useState<any[]>([]);
+  const profileFileRef = useRef<HTMLInputElement>(null);
+
+  // Positions CSV import
+  const [positionImportOpen, setPositionImportOpen] = useState(false);
+  const [positionImportRows, setPositionImportRows] = useState<any[]>([]);
+  const positionFileRef = useRef<HTMLInputElement>(null);
+
   const generateHandlesMutation = useMutation({
     mutationFn: async () => apiRequest("/api/admin/politicians/generate-handles", "POST"),
     onSuccess: (data: any) => {
@@ -384,6 +401,60 @@ export default function AdminPoliticiansPage() {
       toast({
         title: "Congress import complete",
         description: `${data.profiles_created} created, ${data.profiles_updated} updated, ${data.positions_created} positions, ${data.sigs_created} lobby groups, ${data.sponsorships_created} sponsorships.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const importCandidatesMutation = useMutation({
+    mutationFn: async (candidates: any[]) =>
+      apiRequest("/api/admin/politicians/import-candidates", "POST", { candidates }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/political-positions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+      setCandidateImportOpen(false);
+      setCandidateImportRows([]);
+      setCandidateImportPreview({});
+      toast({
+        title: "Candidates imported",
+        description: `${data.created + data.updated} total — ${data.created} created, ${data.updated} updated, ${data.positions_created} positions added.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const importProfilesCsvMutation = useMutation({
+    mutationFn: async (profiles: any[]) =>
+      apiRequest("/api/admin/politicians/import-profiles-csv", "POST", { profiles }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      setProfileImportOpen(false);
+      setProfileImportRows([]);
+      toast({
+        title: "Profiles imported",
+        description: `${data.created} created, ${data.updated} updated.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const importPositionsCsvMutation = useMutation({
+    mutationFn: async (positions: any[]) =>
+      apiRequest("/api/admin/politicians/import-positions-csv", "POST", { positions }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/political-positions"] });
+      setPositionImportOpen(false);
+      setPositionImportRows([]);
+      toast({
+        title: "Positions imported",
+        description: `${data.created} created, ${data.updated} updated.`,
       });
     },
     onError: (error: any) => {
@@ -554,6 +625,78 @@ export default function AdminPoliticiansPage() {
     moderator: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   };
 
+  function parseFileToRows(file: File): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = e.target?.result;
+          const wb = XLSX.read(data, { type: "binary" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          resolve(rows);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsBinaryString(file);
+    });
+  }
+
+  async function handleCandidateFileSelect(file: File) {
+    const raw = await parseFileToRows(file);
+    const rows = raw.map(r => ({
+      fullName: String(r["FULL_NAME"] || r["Full Name"] || r["fullName"] || "").trim(),
+      office: String(r["OFFICE"] || r["Office"] || r["office"] || "").trim(),
+      officeLevel: String(r["OFFICE_LEVEL"] || r["Office Level"] || r["officeLevel"] || "State").trim(),
+      district: String(r["DISTRICT"] || r["District"] || r["district"] || "").trim(),
+      party: String(r["PARTY"] || r["Party"] || r["party"] || "").trim(),
+      isIncumbent: String(r["INCUMBENT"] || r["Incumbent"] || r["isIncumbent"] || "No").trim(),
+      status: String(r["STATUS"] || r["Status"] || r["status"] || "").trim(),
+      primaryDate: String(r["PRIMARY_DATE"] || r["Primary Date"] || r["primaryDate"] || "").trim(),
+      generalDate: String(r["GENERAL_DATE"] || r["General Date"] || r["generalDate"] || "").trim(),
+      ballotpediaUrl: String(r["BALLOTPEDIA_URL"] || r["Ballotpedia URL"] || r["ballotpediaUrl"] || "").trim(),
+      notes: String(r["NOTES"] || r["Notes"] || r["notes"] || "").trim(),
+    })).filter(r => r.fullName);
+    const preview: Record<string, number> = {};
+    rows.forEach(r => { preview[r.office] = (preview[r.office] || 0) + 1; });
+    setCandidateImportRows(rows);
+    setCandidateImportPreview(preview);
+  }
+
+  async function handleProfileFileSelect(file: File) {
+    const raw = await parseFileToRows(file);
+    const rows = raw.map(r => ({
+      fullName: String(r["FULL_NAME"] || r["Full Name"] || r["fullName"] || "").trim(),
+      party: String(r["PARTY"] || r["Party"] || r["party"] || "").trim(),
+      email: String(r["EMAIL"] || r["Email"] || r["email"] || "").trim(),
+      phone: String(r["PHONE"] || r["Phone"] || r["phone"] || "").trim(),
+      website: String(r["WEBSITE"] || r["Website"] || r["website"] || "").trim(),
+      biography: String(r["BIOGRAPHY"] || r["Biography"] || r["biography"] || "").trim(),
+      termStart: String(r["TERM_START"] || r["Term Start"] || r["termStart"] || "").trim(),
+      termEnd: String(r["TERM_END"] || r["Term End"] || r["termEnd"] || "").trim(),
+      isCurrent: String(r["IS_CURRENT"] || r["Is Current"] || r["isCurrent"] || "").trim(),
+      officeAddress: String(r["OFFICE_ADDRESS"] || r["Office Address"] || r["officeAddress"] || "").trim(),
+    })).filter(r => r.fullName);
+    setProfileImportRows(rows);
+  }
+
+  async function handlePositionFileSelect(file: File) {
+    const raw = await parseFileToRows(file);
+    const rows = raw.map(r => ({
+      title: String(r["POSITION_TITLE"] || r["Position Title"] || r["title"] || "").trim(),
+      officeType: String(r["OFFICE_TYPE"] || r["Office Type"] || r["officeType"] || "Legislative").trim(),
+      level: String(r["LEVEL"] || r["Level"] || r["level"] || "state").trim(),
+      jurisdiction: String(r["JURISDICTION"] || r["Jurisdiction"] || r["jurisdiction"] || "").trim(),
+      district: String(r["DISTRICT"] || r["District"] || r["district"] || "").trim(),
+      termLength: String(r["TERM_LENGTH"] || r["Term Length"] || r["termLength"] || "").trim(),
+      isElected: String(r["IS_ELECTED"] || r["Is Elected"] || r["isElected"] || "Yes").trim(),
+      isActive: String(r["IS_ACTIVE"] || r["Is Active"] || r["isActive"] || "Yes").trim(),
+    })).filter(r => r.title);
+    setPositionImportRows(rows);
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <AdminNavigation />
@@ -597,7 +740,7 @@ export default function AdminPoliticiansPage() {
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Download className="w-4 h-4" />
-              Import Candidates
+              Import Congress (TrackAIPAC)
             </Button>
           </div>
         </div>
@@ -687,9 +830,9 @@ export default function AdminPoliticiansPage() {
         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Import All Congress Members</DialogTitle>
+              <DialogTitle>Import Congress (TrackAIPAC Dataset)</DialogTitle>
               <DialogDescription>
-                This will import 535 members of Congress from the TrackAIPAC dataset, including:
+                Bulk-imports all 535 current Congress members from the hardcoded TrackAIPAC AIPAC funding dataset, including:
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300 py-2">
@@ -722,6 +865,182 @@ export default function AdminPoliticiansPage() {
                     <Download className="w-4 h-4 mr-2" />
                     Start Import
                   </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Candidate XLSX Import Dialog ── */}
+        <Dialog open={candidateImportOpen} onOpenChange={(open) => {
+          setCandidateImportOpen(open);
+          if (!open) { setCandidateImportRows([]); setCandidateImportPreview({}); }
+        }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Import Election Candidates</DialogTitle>
+              <DialogDescription>
+                Upload an XLSX or CSV file with candidate data. Required columns: FULL_NAME, OFFICE, OFFICE_LEVEL, DISTRICT, PARTY, INCUMBENT, BALLOTPEDIA_URL
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <Label className="text-sm font-medium">Select file (.xlsx or .csv)</Label>
+                <input
+                  ref={candidateFileRef}
+                  type="file"
+                  accept=".xlsx,.csv"
+                  className="mt-1 block w-full text-sm text-slate-600 dark:text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) await handleCandidateFileSelect(file);
+                  }}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Template columns: FULL_NAME, OFFICE, OFFICE_LEVEL, DISTRICT, PARTY, INCUMBENT (Yes/No), STATUS, PRIMARY_DATE, GENERAL_DATE, BALLOTPEDIA_URL, NOTES
+                </p>
+              </div>
+
+              {candidateImportRows.length > 0 && (
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800 p-3 space-y-2">
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                    Found {candidateImportRows.length} candidates ready to import
+                  </p>
+                  <div className="space-y-0.5">
+                    {Object.entries(candidateImportPreview).map(([office, count]) => (
+                      <p key={office} className="text-xs text-green-700 dark:text-green-300">
+                        • {office}: {count}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCandidateImportOpen(false)} disabled={importCandidatesMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => importCandidatesMutation.mutate(candidateImportRows)}
+                disabled={candidateImportRows.length === 0 || importCandidatesMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {importCandidatesMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Importing...</>
+                ) : (
+                  <><Upload className="w-4 h-4 mr-2" />Import {candidateImportRows.length > 0 ? `${candidateImportRows.length} Candidates` : "Candidates"}</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Profiles CSV Import Dialog ── */}
+        <Dialog open={profileImportOpen} onOpenChange={(open) => {
+          setProfileImportOpen(open);
+          if (!open) setProfileImportRows([]);
+        }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Import Politician Profiles</DialogTitle>
+              <DialogDescription>
+                Upload an XLSX or CSV file with politician profile data.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <Label className="text-sm font-medium">Select file (.xlsx or .csv)</Label>
+                <input
+                  ref={profileFileRef}
+                  type="file"
+                  accept=".xlsx,.csv"
+                  className="mt-1 block w-full text-sm text-slate-600 dark:text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) await handleProfileFileSelect(file);
+                  }}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Template columns: FULL_NAME, PARTY, EMAIL, PHONE, WEBSITE, BIOGRAPHY, TERM_START, TERM_END, IS_CURRENT (Yes/No), OFFICE_ADDRESS
+                </p>
+              </div>
+              {profileImportRows.length > 0 && (
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800 p-3">
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                    Found {profileImportRows.length} profiles ready to import
+                  </p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setProfileImportOpen(false)} disabled={importProfilesCsvMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => importProfilesCsvMutation.mutate(profileImportRows)}
+                disabled={profileImportRows.length === 0 || importProfilesCsvMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {importProfilesCsvMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Importing...</>
+                ) : (
+                  <><Upload className="w-4 h-4 mr-2" />Import {profileImportRows.length > 0 ? `${profileImportRows.length} Profiles` : "Profiles"}</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Positions CSV Import Dialog ── */}
+        <Dialog open={positionImportOpen} onOpenChange={(open) => {
+          setPositionImportOpen(open);
+          if (!open) setPositionImportRows([]);
+        }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Import Political Positions</DialogTitle>
+              <DialogDescription>
+                Upload an XLSX or CSV file with political position data.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <Label className="text-sm font-medium">Select file (.xlsx or .csv)</Label>
+                <input
+                  ref={positionFileRef}
+                  type="file"
+                  accept=".xlsx,.csv"
+                  className="mt-1 block w-full text-sm text-slate-600 dark:text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) await handlePositionFileSelect(file);
+                  }}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Template columns: POSITION_TITLE, OFFICE_TYPE, LEVEL, JURISDICTION, DISTRICT, TERM_LENGTH, IS_ELECTED (Yes/No), IS_ACTIVE (Yes/No)
+                </p>
+              </div>
+              {positionImportRows.length > 0 && (
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800 p-3">
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                    Found {positionImportRows.length} positions ready to import
+                  </p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPositionImportOpen(false)} disabled={importPositionsCsvMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => importPositionsCsvMutation.mutate(positionImportRows)}
+                disabled={positionImportRows.length === 0 || importPositionsCsvMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {importPositionsCsvMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Importing...</>
+                ) : (
+                  <><Upload className="w-4 h-4 mr-2" />Import {positionImportRows.length > 0 ? `${positionImportRows.length} Positions` : "Positions"}</>
                 )}
               </Button>
             </DialogFooter>
@@ -808,16 +1127,26 @@ export default function AdminPoliticiansPage() {
                   <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
                     Political positions are permanent entities (e.g., "President of the United States", "Senator from California")
                   </p>
-                  <Button
-                    onClick={() => {
-                      setEditingPosition(null);
-                      setPositionDialogOpen(true);
-                    }}
-                    data-testid="button-create-position"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Position
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setPositionImportOpen(true)}
+                      className="flex items-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Import from File
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setEditingPosition(null);
+                        setPositionDialogOpen(true);
+                      }}
+                      data-testid="button-create-position"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Position
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Search + filters */}
@@ -945,17 +1274,27 @@ export default function AdminPoliticiansPage() {
                   <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
                     Politician profiles represent the actual people who hold or have held political positions
                   </p>
-                  <Button
-                    onClick={() => {
-                      setEditingProfile(null);
-                      setUploadedPhotoUrl(undefined);
-                      setProfileDialogOpen(true);
-                    }}
-                    data-testid="button-create-profile"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Profile
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setProfileImportOpen(true)}
+                      className="flex items-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Import from CSV
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setEditingProfile(null);
+                        setUploadedPhotoUrl(undefined);
+                        setProfileDialogOpen(true);
+                      }}
+                      data-testid="button-create-profile"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Profile
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Search + filters */}
@@ -1168,8 +1507,15 @@ export default function AdminPoliticiansPage() {
               <TabsContent value="candidates" className="space-y-4">
                 <div className="flex justify-between items-start gap-4 flex-wrap">
                   <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
-                    Platform users who have registered as election candidates. Use the Import Candidates button above to bulk-import from CSV.
+                    Election candidates from any XLSX/CSV file (e.g. state candidate lists). Platform users who self-registered are also shown here.
                   </p>
+                  <Button
+                    onClick={() => setCandidateImportOpen(true)}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Import from XLSX/CSV
+                  </Button>
                 </div>
 
                 {/* Search + filters */}
