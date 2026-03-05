@@ -535,11 +535,10 @@ export default function PoliticianProfilePage() {
                     {donorSponsors.map(sponsor => (
                       <Badge
                         key={sponsor.id}
-                        variant="outline"
                         className={
                           sponsor.sig?.industry === 'foreign policy'
-                            ? 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-700 dark:bg-orange-950/40 dark:text-orange-300 font-semibold'
-                            : 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                            ? 'bg-orange-500 text-white border-orange-600 font-semibold hover:bg-orange-600'
+                            : 'bg-slate-500 text-white border-slate-600 hover:bg-slate-600'
                         }
                       >
                         {sponsor.sig?.acronym ?? sponsor.sig?.name}

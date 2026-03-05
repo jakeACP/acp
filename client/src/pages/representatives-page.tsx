@@ -216,17 +216,43 @@ export default function RepresentativesPage() {
           </>
         )}
 
-        {/* Empty / initial state */}
+        {/* Empty / initial state — map placeholder */}
         {!data && !isFetching && !error && (
-          <Card>
-            <CardContent className="text-center py-12">
-              <MapPin className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-              <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-2">Enter Your Zip Code</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                We'll look up your congressional district and show your current federal representatives
-                from the ACP politician database, including corruption grades and special interest group data.
-              </p>
-            </CardContent>
+          <Card className="overflow-hidden">
+            <div className="relative">
+              <iframe
+                title="US Congressional Districts Map"
+                src="https://maps.google.com/maps?q=United+States+congressional+districts&output=embed&z=4"
+                className="w-full h-64 border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+              <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none">
+                <div className="p-4 text-white">
+                  <p className="font-semibold text-sm">Enter your zip code above</p>
+                  <p className="text-xs text-white/80">We'll zoom in to your specific congressional district</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* District map after search */}
+        {data && !isFetching && (
+          <Card className="mt-2 overflow-hidden">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-blue-500" />
+                {data.state} — {data.districtLabel}
+              </CardTitle>
+            </CardHeader>
+            <iframe
+              title={`${data.state} ${data.districtLabel} Map`}
+              src={`https://maps.google.com/maps?q=${encodeURIComponent(`${data.state} ${data.districtLabel} congressional district`)}&output=embed&z=7`}
+              className="w-full h-72 border-0"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
           </Card>
         )}
       </div>
