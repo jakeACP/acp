@@ -186,7 +186,8 @@ export default function AdminPoliticiansPage() {
     queryFn: async () => {
       const response = await fetch("/api/admin/users", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch users");
-      return response.json();
+      const data = await response.json();
+      return Array.isArray(data) ? data : (data.users || []);
     },
   });
 
