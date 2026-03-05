@@ -1378,14 +1378,18 @@ export const specialInterestGroups = pgTable("special_interest_groups", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   acronym: text("acronym"), // e.g., "NRA", "AIPAC", "AFL-CIO"
+  tag: text("tag"), // unique URL-safe slug, e.g. "AIPAC", "MAGA_PAC", "PLEDGE_GND"
   description: text("description"),
   category: text("category").notNull(), // e.g., "corporate", "union", "pac", "lobby", "nonprofit"
+  sentiment: text("sentiment"), // "positive" | "negative" | "neutral"
   website: text("website"),
   logoUrl: text("logo_url"),
   contactEmail: text("contact_email"),
   headquarters: text("headquarters"), // City, State
   foundedYear: integer("founded_year"),
   industry: text("industry"), // e.g., "defense", "healthcare", "energy", "finance"
+  dataSourceName: text("data_source_name"), // Primary data source name (e.g. "OpenSecrets")
+  dataSourceUrl: text("data_source_url"), // Link to data source
   disclosureNotes: text("disclosure_notes"), // Admin notes about the organization
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1395,6 +1399,7 @@ export const specialInterestGroups = pgTable("special_interest_groups", {
   categoryIndex: index("sig_category_idx").on(table.category),
   industryIndex: index("sig_industry_idx").on(table.industry),
   activeIndex: index("sig_active_idx").on(table.isActive),
+  tagIndex: index("sig_tag_idx").on(table.tag),
 }));
 
 // Politician SIG Sponsorships - Links between politicians and their sponsors

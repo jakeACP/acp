@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Users } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Users, Database, Loader2 } from "lucide-react";
 
 type SpecialInterestGroup = {
   id: string;
@@ -113,6 +113,19 @@ export default function AdminSigsPage() {
     },
   });
 
+  const seedXlsxMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("/api/admin/sigs/seed-xlsx", "POST");
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+      toast({ title: `${data?.count ?? 62} SIGs seeded successfully`, description: "All organizations from the XLSX have been added to the database." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error seeding SIGs", description: error.message, variant: "destructive" });
+    },
+  });
+
   const deleteSigMutation = useMutation({
     mutationFn: async (id: string) => {
       return await apiRequest(`/api/admin/sigs/${id}`, "DELETE");
@@ -184,10 +197,25 @@ export default function AdminSigsPage() {
               Manage organizations that sponsor politicians for corruption scorecard tracking
             </p>
           </div>
-          <Button onClick={openCreateDialog} data-testid="btn-create-sig">
-            <Plus className="h-4 w-4 mr-2" />
-            Add SIG
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => seedXlsxMutation.mutate()}
+              disabled={seedXlsxMutation.isPending}
+              title="Seed all 62 SIGs from the XLSX database"
+            >
+              {seedXlsxMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Database className="h-4 w-4 mr-2" />
+              )}
+              Seed 62 SIGs
+            </Button>
+            <Button onClick={openCreateDialog} data-testid="btn-create-sig">
+              <Plus className="h-4 w-4 mr-2" />
+              Add SIG
+            </Button>
+          </div>
         </div>
 
         <Card className="mb-6">

@@ -1,4 +1,4 @@
-import { useParams } from "wouter";
+import { useParams, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -545,18 +545,22 @@ export default function PoliticianProfilePage() {
                     Linked Special Interest Groups
                   </p>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {donorSponsors.map(sponsor => (
-                      <Badge
-                        key={sponsor.id}
-                        className={
-                          sponsor.sig?.industry === 'foreign policy'
-                            ? 'bg-orange-500 text-white border-orange-600 font-semibold hover:bg-orange-600'
-                            : 'bg-slate-500 text-white border-slate-600 hover:bg-slate-600'
-                        }
-                      >
-                        {sponsor.sig?.acronym ?? sponsor.sig?.name}
-                      </Badge>
-                    ))}
+                    {donorSponsors.map(sponsor => {
+                      const sigTag = (sponsor.sig as any)?.tag || sponsor.sig?.acronym || encodeURIComponent(sponsor.sig?.name || "");
+                      return (
+                        <Link key={sponsor.id} href={`/sigs/${sigTag}`}>
+                          <Badge
+                            className={
+                              sponsor.sig?.industry === 'foreign policy'
+                                ? 'bg-orange-500 text-white border-orange-600 font-semibold hover:bg-orange-600 cursor-pointer'
+                                : 'bg-slate-500 text-white border-slate-600 hover:bg-slate-600 cursor-pointer'
+                            }
+                          >
+                            {sponsor.sig?.acronym ?? sponsor.sig?.name}
+                          </Badge>
+                        </Link>
+                      );
+                    })}
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2">

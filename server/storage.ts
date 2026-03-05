@@ -222,6 +222,9 @@ export interface IStorage {
   deleteSpecialInterestGroup(id: string): Promise<void>;
   getSigCategories(): Promise<string[]>;
   getSigIndustries(): Promise<string[]>;
+  getPublicSigs(filters?: { category?: string; sentiment?: string }): Promise<SpecialInterestGroup[]>;
+  getPublicSigByTag(tag: string): Promise<{ sig: SpecialInterestGroup; politicians: any[] } | null>;
+  seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number>;
   
   importCongress(): Promise<{ profiles_created: number; profiles_updated: number; positions_created: number; sigs_created: number; sponsorships_created: number }>;
 
@@ -3697,6 +3700,65 @@ export class DatabaseStorage implements IStorage {
       .from(specialInterestGroups)
       .where(sql`${specialInterestGroups.industry} IS NOT NULL`);
     return results.map(r => r.industry).filter(Boolean) as string[];
+  }
+
+  async getPublicSigs(filters?: { category?: string; sentiment?: string }): Promise<SpecialInterestGroup[]> {
+    const conditions: any[] = [eq(specialInterestGroups.isActive, true)];
+    if (filters?.category) conditions.push(eq(specialInterestGroups.category, filters.category));
+    if (filters?.sentiment) conditions.push(eq(specialInterestGroups.sentiment as any, filters.sentiment));
+    return await db
+      .select()
+      .from(specialInterestGroups)
+      .where(and(...conditions))
+      .orderBy(specialInterestGroups.name);
+  }
+
+  async getPublicSigByTag(tag: string): Promise<{ sig: SpecialInterestGroup; politicians: any[] } | null> {
+    const [sig] = await db
+      .select()
+      .from(specialInterestGroups)
+      .where(eq(specialInterestGroups.tag as any, tag));
+    if (!sig) return null;
+
+    const sponsorships = await db
+      .select({
+        sponsorship: politicianSigSponsorships,
+        politician: politicianProfiles,
+      })
+      .from(politicianSigSponsorships)
+      .innerJoin(politicianProfiles, eq(politicianSigSponsorships.politicianId, politicianProfiles.id))
+      .where(eq(politicianSigSponsorships.sigId, sig.id));
+
+    const politicians = sponsorships.map(r => ({
+      ...r.politician,
+      relationshipType: r.sponsorship.relationshipType,
+      reportedAmount: r.sponsorship.reportedAmount,
+      disclosureUrl: r.sponsorship.disclosureUrl,
+      disclosureSource: r.sponsorship.disclosureSource,
+    }));
+
+    return { sig, politicians };
+  }
+
+  async seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number> {
+    let upserted = 0;
+    for (const s of sigs) {
+      await db.execute(sql`
+        INSERT INTO special_interest_groups (id, name, tag, description, category, sentiment, data_source_name, data_source_url, disclosure_notes, is_active, created_at, updated_at)
+        VALUES (gen_random_uuid(), ${s.name}, ${s.tag}, ${s.description}, ${s.category}, ${s.sentiment}, ${s.dataSourceName}, ${s.dataSourceUrl}, ${s.disclosureNotes || null}, true, NOW(), NOW())
+        ON CONFLICT (tag) DO UPDATE SET
+          name = EXCLUDED.name,
+          description = EXCLUDED.description,
+          category = EXCLUDED.category,
+          sentiment = EXCLUDED.sentiment,
+          data_source_name = EXCLUDED.data_source_name,
+          data_source_url = EXCLUDED.data_source_url,
+          disclosure_notes = EXCLUDED.disclosure_notes,
+          updated_at = NOW()
+      `);
+      upserted++;
+    }
+    return upserted;
   }
 
   // Politician SIG Sponsorships

@@ -45,6 +45,7 @@ Preferred communication style: Simple, everyday language.
 - **Content Systems**: WYSIWYG editor for articles and long-form content, integrated into the feed.
 - **Real-time Features**: Live trending topics based on hashtags and inline display of event details in posts.
 - **Admin Tools**: IP tracking for user registration/login and comprehensive user management.
+- **Influence Map (SIG Directory)**: Public `/sigs` directory and `/sigs/:tag` profile pages for 62 special interest groups (Super PACs, Dark Money, Industry PACs, Pledges, Labor Unions, Endorsement Orgs). Schema extended with `tag`, `sentiment`, `dataSourceName`, `dataSourceUrl` columns. Admin "Seed 62 SIGs" button upserts all 62 from XLSX data. SIG badges on politician profiles are clickable links. "Influence Map" added to main navigation. Public APIs: `GET /api/sigs`, `GET /api/sigs/:tag`.
 
 ## External Dependencies
 
