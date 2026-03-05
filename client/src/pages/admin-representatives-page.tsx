@@ -18,7 +18,8 @@ import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertRepresentativeSchema, insertZipCodeLookupSchema, type Representative, type ZipCodeLookup } from "@shared/schema";
-import { Plus, Search, Download, Upload, Edit, Trash2, MapPin, User, Calendar, FileText, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { Plus, Search, Download, Upload, Edit, Trash2, MapPin, User, Calendar, FileText, AlertCircle, CheckCircle, Loader2, FileDown } from "lucide-react";
+import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { Redirect } from "wouter";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -1066,6 +1067,41 @@ export default function AdminRepresentativesPage() {
 
               {/* Import/Export Tab */}
               <TabsContent value="import-export" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileDown className="h-5 w-5" />
+                      Download CSV Templates
+                    </CardTitle>
+                    <CardDescription>
+                      Download blank CSV templates to share with State Admins for data entry
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => downloadCsv(TEMPLATES.representatives.filename, TEMPLATES.representatives.headers, TEMPLATES.representatives.sample)}
+                    >
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Representatives Template
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => downloadCsv(TEMPLATES.candidates.filename, TEMPLATES.candidates.headers, TEMPLATES.candidates.sample)}
+                    >
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Candidates Template
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => downloadCsv(TEMPLATES.sigs.filename, TEMPLATES.sigs.headers, TEMPLATES.sigs.sample)}
+                    >
+                      <FileDown className="h-4 w-4 mr-2" />
+                      SIGs Template
+                    </Button>
+                  </CardContent>
+                </Card>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Card>
                     <CardHeader>

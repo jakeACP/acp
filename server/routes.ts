@@ -3698,6 +3698,18 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     next();
   }
 
+  // State Admin Middleware - allows admin, state_admin, or moderator
+  function ensureStateAdmin(req: any, res: any, next: any) {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    const role = req.user.role;
+    if (role !== "admin" && role !== "state_admin" && role !== "moderator") {
+      return res.status(403).json({ message: "State admin access required" });
+    }
+    next();
+  }
+
   // Owner Admin Security Middleware - only for the original admin user
   function ensureOwnerAdmin(req: any, res: any, next: any) {
     if (!req.isAuthenticated()) {
@@ -4428,7 +4440,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // Seed 62 SIGs from XLSX data (admin only)
-  app.post("/api/admin/sigs/seed-xlsx", ensureAdmin, async (req, res) => {
+  app.post("/api/admin/sigs/seed-xlsx", ensureStateAdmin, async (req, res) => {
     const SIG_SEED_DATA = [
       { name: "AIPAC", tag: "AIPAC", description: "American Israel Public Affairs Committee — major pro-Israel lobbying group with a super PAC arm (United Democracy Project) that spends heavily in primaries.", category: "Special Interest", sentiment: "negative", dataSourceName: "TrackAIPAC / OpenSecrets", dataSourceUrl: "https://trackaipac.com", disclosureNotes: "FEC committee ID: C00797878 (United Democracy Project)" },
       { name: "Make America Great Again Inc.", tag: "MAGA_PAC", description: "Trump-aligned super PAC, the largest single pro-Republican presidential super PAC of the 2024 cycle. Top donor: Timothy Mellon ($151.5M).", category: "Super PAC", sentiment: "negative", dataSourceName: "OpenSecrets / FEC", dataSourceUrl: "https://www.opensecrets.org/outside-spending/super_pacs", disclosureNotes: "FEC ID: C00618371" },
@@ -4927,6 +4939,26 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       });
     } catch (error: any) {
       console.error("Admin users list error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Update user role and managed state (owner admin only)
+  app.patch("/api/admin/users/:id/role", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { role, managedState } = req.body;
+      const validRoles = ["admin", "state_admin", "moderator", "citizen", "candidate"];
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      const updatedUser = await storage.updateUser(id, {
+        role,
+        managedState: role === "state_admin" ? (managedState || null) : null,
+      });
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Update user role error:", error);
       res.status(500).json({ message: error.message });
     }
   });

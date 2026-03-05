@@ -12,7 +12,8 @@ import {
   Settings,
   BarChart3,
   Sliders,
-  Building2
+  Building2,
+  MapPin
 } from "lucide-react";
 
 // Organized by category for better navigation
@@ -51,6 +52,12 @@ const adminMenuItems = [
     name: "SIGs",
     href: "/admin/sigs",
     icon: Building2,
+    category: "people",
+  },
+  {
+    name: "State Data",
+    href: "/admin/state-data",
+    icon: MapPin,
     category: "people",
   },
   {

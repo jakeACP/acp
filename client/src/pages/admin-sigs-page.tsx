@@ -13,7 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Users, Database, Loader2 } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Users, Database, Loader2, FileDown } from "lucide-react";
+import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 
 type SpecialInterestGroup = {
   id: string;
@@ -197,7 +198,15 @@ export default function AdminSigsPage() {
               Manage organizations that sponsor politicians for corruption scorecard tracking
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => downloadCsv(TEMPLATES.sigs.filename, TEMPLATES.sigs.headers, TEMPLATES.sigs.sample)}
+              title="Download blank CSV template for SIG data entry"
+            >
+              <FileDown className="h-4 w-4 mr-2" />
+              Download Template
+            </Button>
             <Button
               variant="outline"
               onClick={() => seedXlsxMutation.mutate()}

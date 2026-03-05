@@ -9,7 +9,8 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role").notNull().default("citizen"), // admin, moderator, citizen, candidate
+  role: text("role").notNull().default("citizen"), // admin, state_admin, moderator, citizen, candidate
+  managedState: text("managed_state"), // For state_admin role: 2-letter state code e.g. "MN", "CA"
   firstName: text("first_name"),
   lastName: text("last_name"),
   location: text("location"),

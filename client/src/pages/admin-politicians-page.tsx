@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link, Unlink, Download, Loader2, Image } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link, Unlink, Download, Loader2, Image, FileDown } from "lucide-react";
+import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
 type SpecialInterestGroup = {
@@ -478,6 +479,15 @@ export default function AdminPoliticiansPage() {
             >
               <Image className="w-4 h-4" />
               Fetch Wikipedia Photos
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => downloadCsv(TEMPLATES.politicians.filename, TEMPLATES.politicians.headers, TEMPLATES.politicians.sample)}
+              className="flex items-center gap-2"
+              title="Download blank CSV template for politician data"
+            >
+              <FileDown className="w-4 h-4" />
+              Download Template
             </Button>
             <Button
               onClick={() => setImportDialogOpen(true)}

@@ -53,6 +53,7 @@ import AdminAcpPlusPage from "@/pages/admin-acp-plus-page";
 import AdminSettingsPage from "@/pages/admin-settings-page";
 import AdminVoterVerificationPage from "@/pages/admin-voter-verification-page";
 import AdminSigsPage from "@/pages/admin-sigs-page";
+import AdminStateDataPage from "@/pages/admin-state-data-page";
 import SigsDirectoryPage from "@/pages/sigs-directory-page";
 import SigProfilePage from "@/pages/sig-profile-page";
 import WhistleblowingPage from "@/pages/whistleblowing-page";
@@ -167,6 +168,7 @@ function Router() {
       <Route path="/sigs" component={SigsDirectoryPage} />
       <Route path="/sigs/:tag" component={SigProfilePage} />
       <ProtectedRoute path="/admin/sigs" component={AdminSigsPage} />
+      <ProtectedRoute path="/admin/state-data" component={AdminStateDataPage} />
       <ProtectedRoute path="/admin/polls" component={AdminPollsPage} />
       <ProtectedRoute path="/admin/security" component={AdminSecurityPage} />
       <ProtectedRoute path="/admin/database" component={AdminDatabasePage} />

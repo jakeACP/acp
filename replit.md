@@ -46,6 +46,7 @@ Preferred communication style: Simple, everyday language.
 - **Real-time Features**: Live trending topics based on hashtags and inline display of event details in posts.
 - **Admin Tools**: IP tracking for user registration/login and comprehensive user management.
 - **Influence Map (SIG Directory)**: Public `/sigs` directory and `/sigs/:tag` profile pages for 62 special interest groups (Super PACs, Dark Money, Industry PACs, Pledges, Labor Unions, Endorsement Orgs). Schema extended with `tag`, `sentiment`, `dataSourceName`, `dataSourceUrl` columns. Admin "Seed 62 SIGs" button upserts all 62 from XLSX data. SIG badges on politician profiles are clickable links. "Influence Map" added to main navigation. Public APIs: `GET /api/sigs`, `GET /api/sigs/:tag`.
+- **State Admin System**: New `state_admin` role (between admin and moderator) with `managedState` field (2-letter state code e.g. "MN"). Admins assign via User Management → "Manage Role" dialog. State admins access the **State Data Portal** (`/admin/state-data`) with downloadable CSV templates for Candidates, Representatives, and SIGs. `ensureStateAdmin` middleware guards data-import routes. Download template buttons added to SIGs, Politicians, and Representatives admin pages. Template utility in `client/src/lib/download-template.ts`.
 
 ## External Dependencies
 
