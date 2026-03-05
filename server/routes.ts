@@ -6,7 +6,7 @@ import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
 import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertLiveStreamSchema, insertNotificationSchema, comments } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
 import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle } from "./openai";
@@ -2110,6 +2110,133 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       res.json(followed);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  // DB-backed zip code → congressional district → politician profiles lookup
+  app.get("/api/representatives/by-zip/:zipCode", async (req, res) => {
+    const { zipCode } = req.params;
+    const zipRegex = /^\d{5}$/;
+    if (!zipRegex.test(zipCode)) {
+      return res.status(400).json({ message: "Please enter a valid 5-digit zip code." });
+    }
+
+    const STATE_FIPS: Record<string, string> = {
+      "01": "Alabama", "02": "Alaska", "04": "Arizona", "05": "Arkansas",
+      "06": "California", "08": "Colorado", "09": "Connecticut", "10": "Delaware",
+      "11": "Washington D.C.", "12": "Florida", "13": "Georgia", "15": "Hawaii",
+      "16": "Idaho", "17": "Illinois", "18": "Indiana", "19": "Iowa",
+      "20": "Kansas", "21": "Kentucky", "22": "Louisiana", "23": "Maine",
+      "24": "Maryland", "25": "Massachusetts", "26": "Michigan", "27": "Minnesota",
+      "28": "Mississippi", "29": "Missouri", "30": "Montana", "31": "Nebraska",
+      "32": "Nevada", "33": "New Hampshire", "34": "New Jersey", "35": "New Mexico",
+      "36": "New York", "37": "North Carolina", "38": "North Dakota", "39": "Ohio",
+      "40": "Oklahoma", "41": "Oregon", "42": "Pennsylvania", "44": "Rhode Island",
+      "45": "South Carolina", "46": "South Dakota", "47": "Tennessee", "48": "Texas",
+      "49": "Utah", "50": "Vermont", "51": "Virginia", "53": "Washington",
+      "54": "West Virginia", "55": "Wisconsin", "56": "Wyoming", "72": "Puerto Rico",
+    };
+
+    function toOrdinal(n: number): string {
+      const s = ["th", "st", "nd", "rd"];
+      const v = n % 100;
+      return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+
+    try {
+      const censusUrl = `https://geocoding.geo.census.gov/geocoder/geographies/address?benchmark=Public_AR_Current&vintage=Current_Current&layers=54&format=json&address=&zip=${zipCode}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      let censusData: any;
+      try {
+        const censusRes = await fetch(censusUrl, { signal: controller.signal });
+        censusData = await censusRes.json();
+      } catch {
+        return res.status(503).json({ message: "Unable to reach the district lookup service. Please try again in a moment." });
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const matches = censusData?.result?.addressMatches ?? [];
+      if (matches.length === 0) {
+        return res.status(404).json({ message: `No district found for zip code ${zipCode}. Please check the zip code and try again.` });
+      }
+
+      const districts: any[] = matches[0]?.geographies?.["Congressional Districts"] ?? [];
+      if (districts.length === 0) {
+        return res.status(404).json({ message: `Congressional district not found for zip code ${zipCode}.` });
+      }
+
+      // Collect all unique (stateName, districtLabel) pairs for this zip
+      const locationSet = new Set<string>();
+      const locations: Array<{ stateName: string; districtNum: number; isAtLarge: boolean }> = [];
+      for (const d of districts) {
+        const geoid: string = d.GEOID ?? "";
+        const stateFips = geoid.slice(0, 2);
+        const districtCode = geoid.slice(2);
+        const stateName = STATE_FIPS[stateFips];
+        if (!stateName) continue;
+        const districtNum = parseInt(districtCode, 10);
+        const isAtLarge = districtNum === 0;
+        const key = `${stateName}|${districtNum}`;
+        if (!locationSet.has(key)) {
+          locationSet.add(key);
+          locations.push({ stateName, districtNum, isAtLarge });
+        }
+      }
+
+      if (locations.length === 0) {
+        return res.status(404).json({ message: `Could not determine state for zip code ${zipCode}.` });
+      }
+
+      // Build position titles to query
+      const primaryState = locations[0].stateName;
+      const positionTitles: string[] = [];
+
+      // Both senators for each unique state
+      const statesFound = [...new Set(locations.map(l => l.stateName))];
+      for (const state of statesFound) {
+        positionTitles.push(`U.S. Senator from ${state}`);
+      }
+
+      // House rep(s) for each district
+      for (const { stateName, districtNum, isAtLarge } of locations) {
+        if (isAtLarge) {
+          positionTitles.push(`U.S. Representative from ${stateName} (At-Large)`);
+        } else {
+          const ordinal = toOrdinal(districtNum);
+          positionTitles.push(`U.S. Representative, ${stateName}'s ${ordinal} Congressional District`);
+        }
+      }
+
+      const politicians = await storage.getPoliticiansByPositionTitles(positionTitles);
+
+      // Attach SIG sponsor summary to each politician
+      const politiciansWithSponsors = await Promise.all(politicians.map(async (p) => {
+        const sponsors = await storage.listPoliticianSponsors(p.id);
+        const totalAmount = sponsors.reduce((sum: number, s: any) => sum + (s.reportedAmount ?? 0), 0);
+        const sigAcronyms = sponsors
+          .filter((s: any) => s.sig?.acronym && s.relationshipType !== 'pledged_against')
+          .map((s: any) => s.sig.acronym as string);
+        const rejectsAIPAC = sponsors.some((s: any) => s.relationshipType === 'pledged_against');
+        return { ...p, totalLobbyAmount: totalAmount, sigAcronyms, rejectsAIPAC };
+      }));
+
+      const primaryDistrict = locations[0];
+      const districtLabel = primaryDistrict.isAtLarge
+        ? "At-Large"
+        : `${toOrdinal(primaryDistrict.districtNum)} Congressional District`;
+
+      res.json({
+        state: primaryState,
+        districtLabel,
+        zipCode,
+        politicians: politiciansWithSponsors,
+      });
+    } catch (error: any) {
+      console.error("ZIP district lookup error:", error);
+      res.status(500).json({ message: error.message || "Lookup failed" });
     }
   });
 

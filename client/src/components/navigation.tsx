@@ -35,7 +35,7 @@ export function Navigation() {
     { href: "/live", label: "Live" },
     { href: "/friends", label: "Friends" },
     { href: "/messages", label: "Messages" },
-    { href: "/representatives", label: "Your Reps" },
+    { href: "/representatives", label: "Current Reps" },
     { href: "/candidates", label: "Candidates" },
   ];
 

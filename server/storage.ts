@@ -197,6 +197,7 @@ export interface IStorage {
   
   // Politician Profiles Management
   listPoliticianProfiles(filters?: { positionId?: string; isCurrent?: boolean }): Promise<any[]>;
+  getPoliticiansByPositionTitles(titles: string[]): Promise<any[]>;
   getPoliticianProfile(id: string): Promise<any>;
   createPoliticianProfile(data: InsertPoliticianProfile): Promise<PoliticianProfile>;
   updatePoliticianProfile(id: string, patch: Partial<PoliticianProfile>): Promise<PoliticianProfile>;
@@ -3231,6 +3232,25 @@ export class DatabaseStorage implements IStorage {
     }
     
     const results = await query.orderBy(politicianProfiles.fullName);
+    return results.map(r => ({ ...r.politician, position: r.position }));
+  }
+
+  async getPoliticiansByPositionTitles(titles: string[]): Promise<any[]> {
+    if (titles.length === 0) return [];
+    const results = await db
+      .select({
+        politician: politicianProfiles,
+        position: politicalPositions,
+      })
+      .from(politicianProfiles)
+      .innerJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .where(
+        and(
+          eq(politicianProfiles.isCurrent, true),
+          inArray(politicalPositions.title, titles)
+        )
+      )
+      .orderBy(politicalPositions.title);
     return results.map(r => ({ ...r.politician, position: r.position }));
   }
 

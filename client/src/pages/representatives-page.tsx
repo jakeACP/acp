@@ -1,387 +1,304 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { sanitizeUrl } from "@/lib/utils";
-import { MapPin, Phone, Mail, Globe, Heart, Building2, Zap, Flag } from "lucide-react";
-import { RepresentativesLoading } from "@/components/representatives-loading.tsx";
+import { MapPin, Search, ExternalLink, DollarSign, ShieldCheck, AlertTriangle, Info, Loader2 } from "lucide-react";
+
+type PoliticianResult = {
+  id: string;
+  fullName: string;
+  party?: string;
+  corruptionGrade?: string;
+  corruptionScorecard?: string;
+  totalLobbyAmount: number;
+  sigAcronyms: string[];
+  rejectsAIPAC: boolean;
+  position?: {
+    title: string;
+    officeType: string;
+    level: string;
+    jurisdiction: string;
+    district?: string;
+    termLength?: number;
+  };
+};
+
+type ZipLookupResult = {
+  state: string;
+  districtLabel: string;
+  zipCode: string;
+  politicians: PoliticianResult[];
+};
+
+function gradeColor(grade?: string): string {
+  switch (grade) {
+    case "A": return "bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-300 dark:border-green-700";
+    case "B": return "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700";
+    case "C": return "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-700";
+    case "D": return "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700";
+    case "F": return "bg-red-100 text-red-800 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-700";
+    default: return "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600";
+  }
+}
+
+function partyColor(party?: string): string {
+  if (!party) return "secondary";
+  const p = party.toLowerCase();
+  if (p.includes("republican") || p === "r") return "destructive";
+  if (p.includes("democrat") || p === "d") return "default";
+  return "secondary";
+}
+
+function isSenator(position?: PoliticianResult["position"]): boolean {
+  return !!position?.title?.includes("Senator");
+}
 
 export default function RepresentativesPage() {
-  const { user } = useAuth();
   const { toast } = useToast();
-  
-  // ChatGPT zip code search state
-  const [zipCode, setZipCode] = useState("");
-  const [showZipLoading, setShowZipLoading] = useState(false);
-  const [zipRepresentatives, setZipRepresentatives] = useState<any[]>([]);
-  const [searchedZip, setSearchedZip] = useState("");
-  
-  // Flag dialog state
-  const [flagDialogOpen, setFlagDialogOpen] = useState(false);
-  const [flagReason, setFlagReason] = useState("");
-  const [selectedRepForFlag, setSelectedRepForFlag] = useState<any>(null);
+  const [inputZip, setInputZip] = useState("");
+  const [activeZip, setActiveZip] = useState<string | null>(null);
 
-  // ChatGPT zip code search functions
-  const searchByZipCode = () => {
-    if (!zipCode.trim()) {
-      toast({
-        title: "Zip Code Required",
-        description: "Please enter a zip code to find representatives",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate zip code format
-    const zipRegex = /^\d{5}(-\d{4})?$/;
-    if (!zipRegex.test(zipCode.trim())) {
-      toast({
-        title: "Invalid Zip Code",
-        description: "Please enter a valid zip code (e.g., 12345 or 12345-6789)",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setShowZipLoading(true);
-    setZipRepresentatives([]);
-    setSearchedZip(zipCode.trim());
-  };
-
-  const handleZipLoadingComplete = (representatives: any[], fromCache: boolean) => {
-    setZipRepresentatives(representatives);
-    setShowZipLoading(false);
-    
-    toast({
-      title: fromCache ? "Representatives Loaded" : "New Representatives Found",
-      description: fromCache 
-        ? `Found ${representatives.length} cached representatives for ${searchedZip}`
-        : `Found ${representatives.length} representatives for ${searchedZip}`,
-    });
-  };
-
-  const handleZipLoadingError = (error: string) => {
-    setShowZipLoading(false);
-    setZipRepresentatives([]);
-    
-    toast({
-      title: "Search Failed",
-      description: error,
-      variant: "destructive",
-    });
-  };
-
-  const followRepresentative = useMutation({
-    mutationFn: async (repData: { name: string; office: string; party?: string }) => {
-      const res = await apiRequest("/api/representatives/follow", "POST", repData);
+  const { data, isFetching, error } = useQuery<ZipLookupResult>({
+    queryKey: ["/api/representatives/by-zip", activeZip],
+    queryFn: async () => {
+      const res = await fetch(`/api/representatives/by-zip/${activeZip}`, { credentials: "include" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Lookup failed");
+      }
       return res.json();
     },
-    onSuccess: () => {
-      toast({
-        title: "Representative Followed",
-        description: "You'll receive updates about this representative",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to follow representative",
-        variant: "destructive",
-      });
-    },
+    enabled: !!activeZip,
+    retry: false,
   });
 
-  const flagRepresentative = useMutation({
-    mutationFn: async (data: { repId: string; repName: string; reason: string }) => {
-      return await apiRequest("/api/flags", "POST", {
-        targetId: data.repId,
-        targetType: "representative",
-        reason: `inaccurate_info: ${data.repName} - ${data.reason}`,
-      });
-    },
-    onSuccess: () => {
+  const handleSearch = () => {
+    const zip = inputZip.trim().slice(0, 5);
+    if (!/^\d{5}$/.test(zip)) {
       toast({
-        title: "Report Submitted",
-        description: "Thank you for reporting inaccurate information. An admin will review it.",
-      });
-      setFlagDialogOpen(false);
-      setFlagReason("");
-      setSelectedRepForFlag(null);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to submit report",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleOpenFlagDialog = (rep: any) => {
-    setSelectedRepForFlag(rep);
-    setFlagDialogOpen(true);
-  };
-
-  const handleSubmitFlag = () => {
-    if (!flagReason.trim()) {
-      toast({
-        title: "Reason Required",
-        description: "Please describe what information is inaccurate",
+        title: "Invalid zip code",
+        description: "Please enter a 5-digit US zip code.",
         variant: "destructive",
       });
       return;
     }
-    
-    if (selectedRepForFlag) {
-      flagRepresentative.mutate({
-        repId: selectedRepForFlag.id || `${selectedRepForFlag.name}-${selectedRepForFlag.office}`,
-        repName: selectedRepForFlag.name,
-        reason: flagReason,
-      });
-    }
+    setActiveZip(zip);
   };
 
+  const senators = data?.politicians.filter(p => isSenator(p.position)) ?? [];
+  const houseReps = data?.politicians.filter(p => !isSenator(p.position)) ?? [];
+
   return (
-    <div className="bg-slate-50 min-h-screen">
+    <div className="bg-slate-50 dark:bg-slate-950 min-h-screen">
       <Navigation />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">Your Representatives</h1>
-              <p className="text-slate-600 mt-2">
-                Find your elected officials by searching your zip code using our AI-powered search
-              </p>
-            </div>
-          </div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Current Representatives</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-2">
+            Find your federal Congress members by zip code. Data sourced from the ACP politician database.
+          </p>
         </div>
 
-        {/* ChatGPT Zip Code Search */}
-        <Card className="mb-8 border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50">
+        {/* Search card */}
+        <Card className="mb-6 border-blue-200 dark:border-blue-800 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950/40 dark:to-cyan-950/40">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-blue-500" />
+              <MapPin className="h-5 w-5 text-blue-500" />
               Find Your Representatives
             </CardTitle>
             <CardDescription>
-              Get comprehensive representative data powered by AI. Results are cached for instant future lookups.
+              Enter your zip code to see your U.S. senators and house representative from our database.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <Label htmlFor="zipcode" className="sr-only">Zip Code</Label>
-                <Input
-                  id="zipcode"
-                  placeholder="Enter zip code (e.g., 12345)"
-                  value={zipCode}
-                  onChange={(e) => setZipCode(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && searchByZipCode()}
-                  disabled={showZipLoading}
-                />
-              </div>
-              <Button 
-                onClick={searchByZipCode}
-                disabled={showZipLoading}
-                className="px-6 bg-blue-600 hover:bg-blue-700"
+            <div className="flex gap-3">
+              <Input
+                placeholder="Enter 5-digit zip code (e.g. 55414)"
+                value={inputZip}
+                maxLength={5}
+                onChange={(e) => setInputZip(e.target.value.replace(/\D/g, ""))}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className="max-w-xs"
+                disabled={isFetching}
+              />
+              <Button
+                onClick={handleSearch}
+                disabled={isFetching}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
-                <Zap className="h-4 w-4 mr-2" />
-                {showZipLoading ? "Loading..." : "Search"}
+                {isFetching ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Looking up...</>
+                ) : (
+                  <><Search className="h-4 w-4 mr-2" />Search</>
+                )}
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Loading Screen */}
-        {showZipLoading && (
-          <RepresentativesLoading
-            zipCode={searchedZip}
-            onComplete={handleZipLoadingComplete}
-            onError={handleZipLoadingError}
-          />
+        {/* Federal-only notice */}
+        <div className="flex items-start gap-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-4 py-3 mb-6 text-sm text-blue-800 dark:text-blue-300">
+          <Info className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            Currently showing <strong>federal Congress members</strong> only (U.S. Senate + House of Representatives).
+            State and local coverage is coming soon.
+          </span>
+        </div>
+
+        {/* Error state */}
+        {error && (
+          <Card className="mb-6 border-red-200 dark:border-red-800">
+            <CardContent className="flex items-center gap-3 py-6 text-red-700 dark:text-red-400">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <p>{(error as Error).message}</p>
+            </CardContent>
+          </Card>
         )}
 
         {/* Results */}
-        {zipRepresentatives.length > 0 && !showZipLoading && (
-          <div className="space-y-6 mb-8">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold text-slate-900">
-                Representatives for: {searchedZip}
-              </h2>
-              <p className="text-slate-600">
-                Found {zipRepresentatives.length} representatives
+        {data && !isFetching && (
+          <>
+            <div className="mb-6">
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                Showing federal representatives for ZIP <strong>{data.zipCode}</strong> —{" "}
+                <strong>{data.state}</strong>, {data.districtLabel}
               </p>
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 mt-2">
-                Cached for future instant access
-              </Badge>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {zipRepresentatives.map((rep, index) => (
-                <Card key={index} className="border-green-200 bg-green-50/50">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-slate-900">{rep.name}</h3>
-                        <p className="text-sm text-slate-600 mb-2">{rep.office}</p>
-                        
-                        {rep.party && (
-                          <Badge variant="outline" className="mb-3">
-                            {rep.party}
-                          </Badge>
-                        )}
-                        
-                        <div className="space-y-2 text-sm">
-                          {rep.level && (
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-slate-500" />
-                              <span className="capitalize">{rep.level} Level</span>
-                            </div>
-                          )}
-                          
-                          {rep.phone && (
-                            <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-slate-500" />
-                              <span>{rep.phone}</span>
-                            </div>
-                          )}
-                          
-                          {rep.email && (
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-4 w-4 text-slate-500" />
-                              <span>{rep.email}</span>
-                            </div>
-                          )}
-                          
-                          {rep.website && (
-                            <div className="flex items-center gap-2">
-                              <Globe className="h-4 w-4 text-slate-500" />
-                              <a 
-                                href={sanitizeUrl(rep.website)} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline"
-                              >
-                                Official Website
-                              </a>
-                            </div>
-                          )}
-                          
-                          {rep.district && (
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4 text-slate-500" />
-                              <span>{rep.district}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => followRepresentative.mutate({
-                          name: rep.name,
-                          office: rep.office,
-                          party: rep.party
-                        })}
-                        disabled={followRepresentative.isPending}
-                        data-testid={`button-follow-${index}`}
-                      >
-                        <Heart className="h-4 w-4 mr-1" />
-                        Follow
-                      </Button>
-                    </div>
-                    
-                    <div className="mt-4 pt-4 border-t border-green-200">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-slate-500 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => handleOpenFlagDialog(rep)}
-                        data-testid={`button-flag-${index}`}
-                      >
-                        <Flag className="h-4 w-4 mr-1" />
-                        Report Inaccurate Information
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
+            {/* Senators */}
+            {senators.length > 0 && (
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-3">
+                  U.S. Senators — {data.state}
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {senators.map(pol => (
+                    <PoliticianCard key={pol.id} politician={pol} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* House Reps */}
+            {houseReps.length > 0 && (
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-3">
+                  U.S. House Representative{houseReps.length > 1 ? "s" : ""} — {data.districtLabel}
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {houseReps.map(pol => (
+                    <PoliticianCard key={pol.id} politician={pol} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {data.politicians.length === 0 && (
+              <Card>
+                <CardContent className="py-10 text-center">
+                  <MapPin className="w-10 h-10 text-slate-400 mx-auto mb-3" />
+                  <p className="font-medium text-slate-700 dark:text-slate-300">No profiles found in our database yet</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    Your representatives for {data.state}'s {data.districtLabel} may not be imported yet.
+                    Run the Congress import from the admin panel to populate the database.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
 
-        {/* Flag Dialog */}
-        <Dialog open={flagDialogOpen} onOpenChange={setFlagDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Report Inaccurate Information</DialogTitle>
-              <DialogDescription>
-                {selectedRepForFlag && (
-                  <>Help us keep representative data accurate. Describe what information about <strong>{selectedRepForFlag.name}</strong> is incorrect.</>
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <Label htmlFor="flag-reason">What is inaccurate?</Label>
-              <Textarea
-                id="flag-reason"
-                placeholder="e.g., The phone number is outdated, the party affiliation is wrong, this person no longer holds this office..."
-                value={flagReason}
-                onChange={(e) => setFlagReason(e.target.value)}
-                className="mt-2"
-                rows={4}
-                data-testid="textarea-flag-reason"
-              />
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFlagDialogOpen(false);
-                  setFlagReason("");
-                  setSelectedRepForFlag(null);
-                }}
-                data-testid="button-cancel-flag"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSubmitFlag}
-                disabled={flagRepresentative.isPending}
-                className="bg-red-600 hover:bg-red-700"
-                data-testid="button-submit-flag"
-              >
-                <Flag className="h-4 w-4 mr-1" />
-                {flagRepresentative.isPending ? "Submitting..." : "Submit Report"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Empty State */}
-        {zipRepresentatives.length === 0 && !showZipLoading && (
+        {/* Empty / initial state */}
+        {!data && !isFetching && !error && (
           <Card>
             <CardContent className="text-center py-12">
               <MapPin className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-              <CardTitle className="mb-2">Find Your Representatives</CardTitle>
-              <CardDescription className="mb-4">
-                Enter your zip code above to discover your elected officials at federal, state, and local levels
-              </CardDescription>
+              <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-2">Enter Your Zip Code</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                We'll look up your congressional district and show your current federal representatives
+                from the ACP politician database, including corruption grades and special interest group data.
+              </p>
             </CardContent>
           </Card>
         )}
       </div>
     </div>
+  );
+}
+
+function PoliticianCard({ politician: pol }: { politician: PoliticianResult }) {
+  return (
+    <Card className="border-slate-200 dark:border-slate-700 hover:shadow-md transition-shadow">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate">{pol.fullName}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+              {pol.position?.title}
+            </p>
+          </div>
+          {pol.corruptionGrade && (
+            <span className={`text-lg font-bold px-2.5 py-1 rounded border text-center min-w-[2.5rem] shrink-0 ${gradeColor(pol.corruptionGrade)}`}>
+              {pol.corruptionGrade}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          {pol.party && (
+            <Badge variant={partyColor(pol.party) as any} className="text-xs">
+              {pol.party}
+            </Badge>
+          )}
+          {pol.rejectsAIPAC && (
+            <Badge className="text-xs bg-green-100 text-green-800 border border-green-300 dark:bg-green-950 dark:text-green-300 dark:border-green-700">
+              <ShieldCheck className="w-3 h-3 mr-1" />
+              Rejects AIPAC
+            </Badge>
+          )}
+        </div>
+
+        {pol.totalLobbyAmount > 0 && (
+          <div className="flex items-center gap-1.5 text-sm text-orange-700 dark:text-orange-400 mb-3">
+            <DollarSign className="w-4 h-4 shrink-0" />
+            <span>
+              <span className="font-medium">${(pol.totalLobbyAmount / 100).toLocaleString()}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">Israel lobby total</span>
+            </span>
+          </div>
+        )}
+
+        {pol.sigAcronyms.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {pol.sigAcronyms.slice(0, 6).map(acronym => (
+              <span
+                key={acronym}
+                className="text-xs px-1.5 py-0.5 rounded bg-orange-50 border border-orange-200 text-orange-700 dark:bg-orange-950/40 dark:border-orange-800 dark:text-orange-300"
+              >
+                {acronym}
+              </span>
+            ))}
+            {pol.sigAcronyms.length > 6 && (
+              <span className="text-xs text-slate-400">+{pol.sigAcronyms.length - 6} more</span>
+            )}
+          </div>
+        )}
+
+        <Link href={`/politicians/${pol.id}`}>
+          <Button variant="outline" size="sm" className="w-full mt-1">
+            <ExternalLink className="w-3.5 h-3.5 mr-2" />
+            View Full Profile
+          </Button>
+        </Link>
+      </CardContent>
+    </Card>
   );
 }

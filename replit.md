@@ -33,6 +33,8 @@ Preferred communication style: Simple, everyday language.
 - **Authentication System**: Session-based, role-based access (admin, moderator, citizen, candidate), protected routes.
 - **Social Feed System**: Supports posts, polls, announcements, with likes, comments, tagging, real-time updates, and a floating video player.
 - **Voting & Polling System**: Includes simple voting, advanced Ranked Choice Voting, and Blockchain Verification via Merkle Tree for cryptographic security.
+- **Congress Import System**: Admin one-click import of all 535 Congress members from a TrackAIPAC XLSX file. Creates politician profiles, congressional positions, 53 Israel lobby group SIGs, and SIG sponsorship links. Corruption grades auto-assigned based on total lobby money received. "Rejects AIPAC" badge for 16 pledged politicians.
+- **Current Representatives Lookup**: DB-backed zip code → congressional district lookup using the free US Census Bureau Geocoding API (no key required). Returns the user's 2 senators + house rep from our politician profiles DB with corruption grades, party, and lobby money data. Navigation tab renamed "Current Reps".
 - **Group Management**: Topic and location-based groups with discussion forums.
 - **Event Management System**: Comprehensive event creation, location-based discovery, and registration.
 - **Candidate Portal**: Profile management, proposal sharing, community integration, and self-service registration, including detailed politician profiles with corruption grading and claimable pages.
