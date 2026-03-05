@@ -267,12 +267,10 @@ function PoliticianCard({ politician: pol }: { politician: PoliticianResult }) {
         </div>
 
         {pol.totalLobbyAmount > 0 && (
-          <div className="flex items-center gap-1.5 text-sm text-orange-700 dark:text-orange-400 mb-3">
-            <DollarSign className="w-4 h-4 shrink-0" />
-            <span>
-              <span className="font-medium">${(pol.totalLobbyAmount / 100).toLocaleString()}</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">Israel lobby total</span>
-            </span>
+          <div className="flex items-center gap-1.5 text-sm mb-3">
+            <DollarSign className="w-4 h-4 shrink-0 text-orange-600" />
+            <span className="font-bold text-orange-600">${(pol.totalLobbyAmount / 100).toLocaleString()}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">Israel lobby total</span>
           </div>
         )}
 
@@ -281,13 +279,13 @@ function PoliticianCard({ politician: pol }: { politician: PoliticianResult }) {
             {pol.sigAcronyms.slice(0, 6).map(acronym => (
               <span
                 key={acronym}
-                className="text-xs px-1.5 py-0.5 rounded bg-orange-50 border border-orange-200 text-orange-700 dark:bg-orange-950/40 dark:border-orange-800 dark:text-orange-300"
+                className="text-xs font-medium px-1.5 py-0.5 rounded bg-orange-500 text-white"
               >
                 {acronym}
               </span>
             ))}
             {pol.sigAcronyms.length > 6 && (
-              <span className="text-xs text-slate-400">+{pol.sigAcronyms.length - 6} more</span>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">+{pol.sigAcronyms.length - 6} more</span>
             )}
           </div>
         )}
