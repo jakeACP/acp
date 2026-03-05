@@ -79,10 +79,6 @@ type PoliticianProfile = {
   verifiedDate?: string;
 };
 
-type ClaimRequest = PoliticianProfile & {
-  position?: PoliticalPosition | null;
-};
-
 type PlatformCandidate = {
   id: string;
   userId: string;
@@ -151,10 +147,6 @@ export default function AdminPoliticiansPage() {
 
   const { data: profiles = [], isLoading: profilesLoading } = useQuery<PoliticianProfile[]>({
     queryKey: ["/api/admin/politician-profiles"],
-  });
-
-  const { data: claimRequests = [], isLoading: claimsLoading } = useQuery<ClaimRequest[]>({
-    queryKey: ["/api/admin/politician-profiles/claim-requests"],
   });
 
   const { data: sigs = [] } = useQuery<SpecialInterestGroup[]>({
@@ -320,34 +312,6 @@ export default function AdminPoliticiansPage() {
     },
     onError: (error: any) => {
       toast({ title: "Error updating corruption grade", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const approveClaimMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return await apiRequest(`/api/admin/politician-profiles/${id}/claim-approve`, "PATCH");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles/claim-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
-      toast({ title: "Claim request approved successfully" });
-    },
-    onError: (error: any) => {
-      toast({ title: "Error approving claim", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const rejectClaimMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return await apiRequest(`/api/admin/politician-profiles/${id}/claim-reject`, "PATCH");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles/claim-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
-      toast({ title: "Claim request rejected" });
-    },
-    onError: (error: any) => {
-      toast({ title: "Error rejecting claim", description: error.message, variant: "destructive" });
     },
   });
 
