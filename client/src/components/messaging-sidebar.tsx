@@ -135,12 +135,12 @@ export function MessagingSidebar({
                 </div>
                 <div>
                   <Label htmlFor="channel-group">Connect to Group (Optional)</Label>
-                  <Select value={newChannelGroupId} onValueChange={setNewChannelGroupId}>
+                  <Select value={newChannelGroupId || "none"} onValueChange={(v) => setNewChannelGroupId(v === "none" ? "" : v)}>
                     <SelectTrigger data-testid="select-channel-group">
                       <SelectValue placeholder="Select a group" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No group</SelectItem>
+                      <SelectItem value="none">No group</SelectItem>
                       {Array.isArray(userGroups) && userGroups.map((group: any) => (
                         <SelectItem key={group.id} value={group.id}>
                           {group.name}

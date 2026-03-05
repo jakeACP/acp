@@ -68,7 +68,7 @@ export default function AdminRepresentativesPage() {
   // Filters and pagination
   const [repFilters, setRepFilters] = useState({
     search: "",
-    officeLevel: "",
+    officeLevel: "all",
     active: true
   });
   const [repPagination, setRepPagination] = useState({ limit: 50, offset: 0 });
@@ -129,7 +129,7 @@ export default function AdminRepresentativesPage() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (repFilters.search) params.append("search", repFilters.search);
-      if (repFilters.officeLevel) params.append("officeLevel", repFilters.officeLevel);
+      if (repFilters.officeLevel && repFilters.officeLevel !== "all") params.append("officeLevel", repFilters.officeLevel);
       params.append("active", repFilters.active.toString());
       params.append("limit", repPagination.limit.toString());
       params.append("offset", repPagination.offset.toString());
@@ -410,7 +410,7 @@ export default function AdminRepresentativesPage() {
                         <SelectValue placeholder="Office Level" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Levels</SelectItem>
+                        <SelectItem value="all">All Levels</SelectItem>
                         <SelectItem value="federal">Federal</SelectItem>
                         <SelectItem value="state">State</SelectItem>
                         <SelectItem value="local">Local</SelectItem>

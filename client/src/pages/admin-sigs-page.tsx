@@ -66,16 +66,16 @@ export default function AdminSigsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSig, setEditingSig] = useState<SpecialInterestGroup | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("");
-  const [industryFilter, setIndustryFilter] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [industryFilter, setIndustryFilter] = useState<string>("all");
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (searchQuery) params.append("search", searchQuery);
-      if (categoryFilter) params.append("category", categoryFilter);
-      if (industryFilter) params.append("industry", industryFilter);
+      if (categoryFilter && categoryFilter !== "all") params.append("category", categoryFilter);
+      if (industryFilter && industryFilter !== "all") params.append("industry", industryFilter);
       const url = `/api/admin/sigs${params.toString() ? `?${params.toString()}` : ""}`;
       const response = await fetch(url, { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch SIGs");
@@ -238,7 +238,7 @@ export default function AdminSigsPage() {
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value="all">All Categories</SelectItem>
                   {CATEGORIES.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
@@ -249,7 +249,7 @@ export default function AdminSigsPage() {
                   <SelectValue placeholder="All Industries" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Industries</SelectItem>
+                  <SelectItem value="all">All Industries</SelectItem>
                   {INDUSTRIES.map(ind => (
                     <SelectItem key={ind.value} value={ind.value}>{ind.label}</SelectItem>
                   ))}
