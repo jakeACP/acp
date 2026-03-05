@@ -494,7 +494,7 @@ export default function AdminPoliticiansPage() {
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Download className="w-4 h-4" />
-              Import All Congress Members
+              Import Candidates
             </Button>
           </div>
         </div>
