@@ -1422,6 +1422,146 @@ export class DatabaseStorage implements IStorage {
       .offset(offset);
   }
 
+  async getMyRepsFeed(userId: string, limit = 50): Promise<PostWithAuthor[]> {
+    // Get names of the user's followed representatives
+    const followedReps = await db
+      .select()
+      .from(followedRepresentatives)
+      .where(eq(followedRepresentatives.userId, userId));
+
+    if (followedReps.length === 0) return [];
+
+    // Match their names to politician profiles to get handles
+    const repNames = followedReps.map(r => r.name);
+    const profiles = await db
+      .select({ fullName: politicianProfiles.fullName, handle: politicianProfiles.handle })
+      .from(politicianProfiles)
+      .where(inArray(politicianProfiles.fullName, repNames));
+
+    const handles = profiles.map(p => p.handle).filter(Boolean) as string[];
+    if (handles.length === 0) return [];
+
+    // Build tag conditions: any post where tags @> ARRAY['@Handle']
+    const tagConditions = handles.map(h =>
+      sql`${posts.tags} @> ARRAY[${`@${h}`}]::text[]`
+    );
+
+    return await db
+      .select({
+        id: posts.id,
+        authorId: posts.authorId,
+        content: posts.content,
+        type: posts.type,
+        tags: posts.tags,
+        image: posts.image,
+        likesCount: posts.likesCount,
+        commentsCount: posts.commentsCount,
+        url: posts.url,
+        title: posts.title,
+        newsSourceName: posts.newsSourceName,
+        linkPreview: posts.linkPreview,
+        sharesCount: posts.sharesCount,
+        sharedPostId: posts.sharedPostId,
+        eventId: posts.eventId,
+        privacy: posts.privacy,
+        emojiReactionsCount: posts.emojiReactionsCount,
+        gifReactionsCount: posts.gifReactionsCount,
+        bookmarksCount: posts.bookmarksCount,
+        flagsCount: posts.flagsCount,
+        isDeleted: posts.isDeleted,
+        createdAt: posts.createdAt,
+        pollId: polls.id,
+        pollTitle: polls.title,
+        pollDescription: polls.description,
+        pollOptions: polls.options,
+        pollVotingType: polls.votingType,
+        pollIsBlockchainVerified: polls.isBlockchainVerified,
+        pollTotalVotes: polls.totalVotes,
+        pollEndDate: polls.endDate,
+        pollIsActive: polls.isActive,
+        author: {
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+        },
+      })
+      .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(polls, eq(posts.id, polls.postId))
+      .where(and(
+        eq(posts.isDeleted, false),
+        eq(posts.privacy, 'public'),
+        or(...tagConditions)
+      ))
+      .orderBy(desc(posts.createdAt))
+      .limit(limit);
+  }
+
+  async getMyCandidatesFeed(userId: string, limit = 50): Promise<PostWithAuthor[]> {
+    // Get candidates the user supports
+    const supports = await db
+      .select({ candidateUserId: candidates.userId })
+      .from(candidateSupports)
+      .innerJoin(candidates, eq(candidateSupports.candidateId, candidates.id))
+      .where(eq(candidateSupports.userId, userId));
+
+    if (supports.length === 0) return [];
+
+    const candidateUserIds = supports.map(s => s.candidateUserId);
+
+    return await db
+      .select({
+        id: posts.id,
+        authorId: posts.authorId,
+        content: posts.content,
+        type: posts.type,
+        tags: posts.tags,
+        image: posts.image,
+        likesCount: posts.likesCount,
+        commentsCount: posts.commentsCount,
+        url: posts.url,
+        title: posts.title,
+        newsSourceName: posts.newsSourceName,
+        linkPreview: posts.linkPreview,
+        sharesCount: posts.sharesCount,
+        sharedPostId: posts.sharedPostId,
+        eventId: posts.eventId,
+        privacy: posts.privacy,
+        emojiReactionsCount: posts.emojiReactionsCount,
+        gifReactionsCount: posts.gifReactionsCount,
+        bookmarksCount: posts.bookmarksCount,
+        flagsCount: posts.flagsCount,
+        isDeleted: posts.isDeleted,
+        createdAt: posts.createdAt,
+        pollId: polls.id,
+        pollTitle: polls.title,
+        pollDescription: polls.description,
+        pollOptions: polls.options,
+        pollVotingType: polls.votingType,
+        pollIsBlockchainVerified: polls.isBlockchainVerified,
+        pollTotalVotes: polls.totalVotes,
+        pollEndDate: polls.endDate,
+        pollIsActive: polls.isActive,
+        author: {
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+        },
+      })
+      .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(polls, eq(posts.id, polls.postId))
+      .where(and(
+        eq(posts.isDeleted, false),
+        eq(posts.privacy, 'public'),
+        inArray(posts.authorId, candidateUserIds)
+      ))
+      .orderBy(desc(posts.createdAt))
+      .limit(limit);
+  }
+
   // User Following Methods
   async followUser(followerId: string, followeeId: string): Promise<void> {
     await db.insert(userFollows).values({

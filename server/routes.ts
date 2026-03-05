@@ -542,6 +542,26 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.get("/api/feeds/my-reps", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const posts = await storage.getMyRepsFeed(req.user.id);
+      res.json(posts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/feeds/my-candidates", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const posts = await storage.getMyCandidatesFeed(req.user.id);
+      res.json(posts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // User Following API
   app.post("/api/follow", async (req, res) => {
     if (!req.isAuthenticated()) {

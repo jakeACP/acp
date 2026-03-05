@@ -1,30 +1,55 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { Group, User } from "@shared/schema";
-import { Leaf, GraduationCap, Scale, Users, Coins, Wallet, Copy, Check, Share2, Circle } from "lucide-react";
+import { Group } from "@shared/schema";
+import {
+  Globe, Newspaper, Users, BarChart3, Calendar, Heart,
+  Ban, FileText, ScrollText, Building2, MessageCircleReply,
+  Landmark, UserCheck, Circle, ChevronDown, ChevronUp
+} from "lucide-react";
 import { Link } from "wouter";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
-import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { useFeedView } from "@/contexts/feed-view-context";
+import { useFeedView, type FeedType } from "@/contexts/feed-view-context";
+
+type FilterItem = {
+  key: FeedType;
+  label: string;
+  icon: React.ElementType;
+  color?: string;
+};
+
+const PRIMARY_FILTERS: FilterItem[] = [
+  { key: 'all',       label: 'All Posts',  icon: Globe,             color: 'text-slate-600' },
+  { key: 'news',      label: 'News',       icon: Newspaper,         color: 'text-blue-600' },
+  { key: 'following', label: 'Following',  icon: Users,             color: 'text-indigo-600' },
+];
+
+const CONTENT_FILTERS: FilterItem[] = [
+  { key: 'polls',       label: 'Polls',       icon: BarChart3,        color: 'text-violet-600' },
+  { key: 'events',      label: 'Events',      icon: Calendar,         color: 'text-emerald-600' },
+  { key: 'charities',   label: 'Charities',   icon: Heart,            color: 'text-pink-600' },
+  { key: 'boycotts',    label: 'Boycotts',    icon: Ban,              color: 'text-red-600' },
+  { key: 'initiatives', label: 'Initiatives', icon: FileText,         color: 'text-orange-600' },
+  { key: 'petitions',   label: 'Petitions',   icon: ScrollText,       color: 'text-amber-600' },
+  { key: 'unions',      label: 'Unions',      icon: Building2,        color: 'text-purple-600' },
+  { key: 'debates',     label: 'Debates',     icon: MessageCircleReply, color: 'text-teal-600' },
+];
+
+const MY_PEOPLE_FILTERS: FilterItem[] = [
+  { key: 'my-reps',       label: 'My Reps',       icon: Landmark,   color: 'text-green-700' },
+  { key: 'my-candidates', label: 'My Candidates', icon: UserCheck,  color: 'text-blue-700' },
+];
 
 export function UserSidebar() {
   const { user } = useAuth();
-  const { toast } = useToast();
-  const [copied, setCopied] = useState(false);
-  const { activeView, setActiveView } = useFeedView();
-  
+  const { activeFeed, setActiveFeed, activeView, setActiveView } = useFeedView();
+  const [showGroups, setShowGroups] = useState(false);
+
   const { data: userGroups = [] } = useQuery<Group[]>({
     queryKey: ["/api/groups/user", user?.id],
-    enabled: !!user?.id,
-  });
-
-  const { data: voteData } = useQuery<{ voteCount: number }>({
-    queryKey: ["/api/user/vote-count"],
     enabled: !!user?.id,
   });
 
@@ -33,298 +58,189 @@ export function UserSidebar() {
     enabled: !!user?.id,
   });
 
-  const { data: balanceData } = useQuery<{ balance: string }>({
-    queryKey: ["/api/acp/balance"],
+  const { data: voteData } = useQuery<{ voteCount: number }>({
+    queryKey: ["/api/user/vote-count"],
     enabled: !!user?.id,
   });
 
-  const { data: onlineFriends = [] } = useQuery<User[]>({
+  const { data: onlineFriends = [] } = useQuery<any[]>({
     queryKey: ["/api/user/friends/online"],
     enabled: !!user?.id,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
-  const getGroupIcon = (category: string | null) => {
-    switch (category) {
-      case "climate": return <Leaf className="h-4 w-4 text-white" />;
-      case "education": return <GraduationCap className="h-4 w-4 text-white" />;
-      case "corruption": return <Scale className="h-4 w-4 text-white" />;
-      default: return <Users className="h-4 w-4 text-white" />;
-    }
+  const handleFeedSelect = (key: FeedType) => {
+    setActiveFeed(key);
+    setActiveView("all");
   };
 
-  const getGroupColor = (category: string | null) => {
-    switch (category) {
-      case "climate": return "bg-green-500";
-      case "education": return "bg-blue-500";
-      case "corruption": return "bg-red-500";
-      default: return "bg-slate-500";
-    }
-  };
+  const isActiveFeed = (key: FeedType) =>
+    activeView === "all" && activeFeed === key;
 
-  const personalInviteUrl = user ? `${window.location.origin}/auth?invite=${user.id}` : '';
-
-  const handleCopyInviteLink = async () => {
-    try {
-      await navigator.clipboard.writeText(personalInviteUrl);
-      setCopied(true);
-      toast({
-        title: "Link copied!",
-        description: "Your personal invitation link has been copied to clipboard.",
-      });
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      toast({
-        title: "Copy failed",
-        description: "Unable to copy link. Please copy it manually.",
-        variant: "destructive",
-      });
-    }
+  const FilterButton = ({ item }: { item: FilterItem }) => {
+    const Icon = item.icon;
+    const active = isActiveFeed(item.key);
+    return (
+      <button
+        onClick={() => handleFeedSelect(item.key)}
+        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 text-left ${
+          active
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "text-foreground hover:bg-muted"
+        }`}
+      >
+        <Icon className={`h-4 w-4 shrink-0 ${active ? "text-primary-foreground" : item.color}`} />
+        <span className="truncate">{item.label}</span>
+      </button>
+    );
   };
 
   return (
-    <div className="space-y-6">
-      {/* User Profile Card */}
-      <Card className="floating-card bg-card border border-border dark:border-border">
-        <CardContent className="p-6">
-          <div className="text-center">
-            <Avatar className="h-20 w-20 mx-auto mb-4">
+    <div className="space-y-3 sticky top-20">
+      {/* Compact User Profile */}
+      <Card className="floating-card bg-card border border-border">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10 shrink-0">
               <AvatarImage src={user?.avatar || ""} />
-              <AvatarFallback className="text-lg">
+              <AvatarFallback className="text-sm">
                 {user?.firstName?.[0]}{user?.lastName?.[0] || user?.username?.[0]?.toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            
-            <h3 className="text-lg font-semibold text-foreground">
-              {user?.firstName ? `${user.firstName} ${user.lastName}` : user?.username}
-            </h3>
-            
-            <div className="flex items-center justify-center gap-2 mt-2">
-              <Badge variant="outline" className="text-primary border-primary">
-                {user?.role === "citizen" ? "Active Citizen" : user?.role}
-              </Badge>
-              <img src={logoPath} alt="ACP" className="h-5 w-5 opacity-75" title="Anti-Corruption Party Member" />
-            </div>
-            
-            {user?.location && (
-              <p className="text-xs text-muted-foreground mt-1">{user.location}</p>
-            )}
-          </div>
-          
-          <div className="mt-6 grid grid-cols-3 gap-2 text-center">
-            <button 
-              onClick={() => setActiveView("votes")}
-              className={`p-2 rounded-lg transition-colors ${
-                activeView === "votes" 
-                  ? "bg-primary/10 border-2 border-primary" 
-                  : "hover:bg-muted"
-              }`}
-              data-testid="sidebar-stat-votes"
-            >
-              <p className="text-xl font-bold text-foreground">{voteData?.voteCount || 0}</p>
-              <p className="text-xs text-muted-foreground">Votes</p>
-            </button>
-            <Link 
-              href="/friends"
-              className="p-2 rounded-lg transition-colors hover:bg-muted block text-center"
-              data-testid="sidebar-stat-friends"
-            >
-              <p className="text-xl font-bold text-foreground">{friendData?.friendCount || 0}</p>
-              <p className="text-xs text-muted-foreground">Friends</p>
-            </Link>
-            <button 
-              onClick={() => setActiveView("groups")}
-              className={`p-2 rounded-lg transition-colors ${
-                activeView === "groups" 
-                  ? "bg-primary/10 border-2 border-primary" 
-                  : "hover:bg-muted"
-              }`}
-              data-testid="sidebar-stat-groups"
-            >
-              <p className="text-xl font-bold text-foreground">{userGroups.length}</p>
-              <p className="text-xs text-muted-foreground">Groups</p>
-            </button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* My Groups */}
-      <Card className="floating-card bg-card border border-border dark:border-border">
-        <CardHeader>
-          <CardTitle className="text-base">My Groups</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {userGroups.length > 0 ? (
-            <div className="space-y-3">
-              {userGroups.slice(0, 3).map((group) => (
-                <div key={group.id} className="flex items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${getGroupColor(group.category)}`}>
-                    {getGroupIcon(group.category)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {group.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {group.memberCount} members
-                    </p>
-                  </div>
-                </div>
-              ))}
-              
-              {userGroups.length > 3 && (
-                <Button variant="ghost" className="w-full text-primary text-sm p-0">
-                  View All Groups
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-4">
-              <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground mb-3">
-                You haven't joined any groups yet
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-sm text-foreground truncate">
+                {user?.firstName ? `${user.firstName} ${user.lastName}` : user?.username}
               </p>
-              <Button size="sm" className="w-full">
-                Explore Groups
-              </Button>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-primary border-primary shrink-0">
+                  {user?.role === "citizen" ? "Citizen" : user?.role}
+                </Badge>
+                <img src={logoPath} alt="ACP" className="h-3.5 w-3.5 opacity-75" />
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* Stats row */}
+          <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+            <button
+              onClick={() => setActiveView("votes")}
+              className={`flex-1 text-center py-1.5 rounded-md text-xs transition-colors ${
+                activeView === "votes" ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted text-muted-foreground"
+              }`}
+            >
+              <div className="font-bold text-sm text-foreground">{voteData?.voteCount ?? 0}</div>
+              <div>Votes</div>
+            </button>
+            <Link href="/friends" className="flex-1 text-center py-1.5 rounded-md text-xs hover:bg-muted text-muted-foreground transition-colors">
+              <div className="font-bold text-sm text-foreground">{friendData?.friendCount ?? 0}</div>
+              <div>Friends</div>
+            </Link>
+            <button
+              onClick={() => setActiveView("groups")}
+              className={`flex-1 text-center py-1.5 rounded-md text-xs transition-colors ${
+                activeView === "groups" ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted text-muted-foreground"
+              }`}
+            >
+              <div className="font-bold text-sm text-foreground">{userGroups.length}</div>
+              <div>Groups</div>
+            </button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Friends Online */}
-      <Card className="floating-card bg-card border border-border dark:border-border">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Circle className="h-3 w-3 text-green-500 fill-green-500" />
-            Friends Online
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {onlineFriends.length > 0 ? (
-            <div className="space-y-3">
-              {onlineFriends.slice(0, 5).map((friend) => (
+      {/* Feed Filter Panel */}
+      <Card className="floating-card bg-card border border-border">
+        <CardContent className="p-3 space-y-1">
+          {/* Primary feed types */}
+          {PRIMARY_FILTERS.map(item => (
+            <FilterButton key={item.key} item={item} />
+          ))}
+
+          <div className="border-t border-border my-2" />
+
+          {/* Content types */}
+          <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground px-3 pt-1 pb-0.5">
+            Content
+          </p>
+          {CONTENT_FILTERS.map(item => (
+            <FilterButton key={item.key} item={item} />
+          ))}
+
+          <div className="border-t border-border my-2" />
+
+          {/* My People */}
+          <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground px-3 pt-1 pb-0.5">
+            My People
+          </p>
+          {MY_PEOPLE_FILTERS.map(item => (
+            <FilterButton key={item.key} item={item} />
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* My Groups (collapsible) */}
+      {userGroups.length > 0 && (
+        <Card className="floating-card bg-card border border-border">
+          <CardContent className="p-3">
+            <button
+              onClick={() => setShowGroups(v => !v)}
+              className="w-full flex items-center justify-between text-sm font-semibold text-foreground hover:text-primary transition-colors"
+            >
+              <span>My Groups</span>
+              {showGroups ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {showGroups && (
+              <div className="mt-2 space-y-2">
+                {userGroups.slice(0, 5).map((group) => (
+                  <Link key={group.id} href={`/groups`}>
+                    <div className="flex items-center gap-2 py-1 hover:text-primary transition-colors cursor-pointer">
+                      <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                        <Users className="h-3 w-3 text-slate-500" />
+                      </div>
+                      <p className="text-sm text-foreground truncate">{group.name}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Friends Online (compact) */}
+      {onlineFriends.length > 0 && (
+        <Card className="floating-card bg-card border border-border">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Circle className="h-2.5 w-2.5 text-green-500 fill-green-500" />
+              <span className="text-xs font-semibold text-foreground">Online Now</span>
+            </div>
+            <div className="space-y-1.5">
+              {onlineFriends.slice(0, 4).map((friend: any) => (
                 <Link key={friend.id} href={`/profile/${friend.id}`}>
-                  <div 
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer"
-                    data-testid={`friend-online-${friend.id}`}
-                  >
-                    <div className="relative">
-                      <Avatar className="h-10 w-10">
+                  <div className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors">
+                    <div className="relative shrink-0">
+                      <Avatar className="h-6 w-6">
                         <AvatarImage src={friend.avatar || ""} />
-                        <AvatarFallback className="text-sm">
-                          {friend.firstName?.[0]}{friend.lastName?.[0] || friend.username?.[0]?.toUpperCase()}
+                        <AvatarFallback className="text-[10px]">
+                          {friend.firstName?.[0]}{friend.lastName?.[0]}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
+                      <div className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-green-500 border border-card" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {friend.firstName ? `${friend.firstName} ${friend.lastName}` : friend.username}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Online now</p>
-                    </div>
+                    <span className="text-xs text-foreground truncate">
+                      {friend.firstName ? `${friend.firstName} ${friend.lastName}` : friend.username}
+                    </span>
                   </div>
                 </Link>
               ))}
-              
-              {onlineFriends.length > 5 && (
-                <p className="text-xs text-center text-muted-foreground pt-2">
-                  +{onlineFriends.length - 5} more online
-                </p>
+              {onlineFriends.length > 4 && (
+                <p className="text-xs text-muted-foreground pt-1">+{onlineFriends.length - 4} more</p>
               )}
             </div>
-          ) : (
-            <div className="text-center py-6">
-              <Circle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No friends online right now
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ACP Credits Balance */}
-      <Card className="floating-card-lg bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2 text-foreground">
-            <Coins className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            ACP Credits
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <Coins className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              <span className="text-2xl font-bold text-foreground">
-                {balanceData?.balance ? parseFloat(balanceData.balance).toFixed(2) : '0.00'}
-              </span>
-              <span className="text-sm text-muted-foreground font-medium">ACP</span>
-            </div>
-            
-            <Link href="/crypto">
-              <Button 
-                size="sm" 
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md"
-              >
-                <Wallet className="h-4 w-4 mr-2" />
-                Open Wallet
-              </Button>
-            </Link>
-            
-            <p className="text-xs text-muted-foreground mt-2">
-              Earn credits through participation and subscriptions
-            </p>
-          </div>
-          
-          {/* Personal Invitation Section */}
-          <div className="mt-6 pt-4 border-t border-blue-200 dark:border-blue-800">
-            <div className="flex items-center gap-2 mb-3">
-              <Share2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <h4 className="text-sm font-medium text-foreground">Invite Friends</h4>
-            </div>
-            
-            <div className="bg-white dark:bg-card rounded-lg p-3 border border-blue-200 dark:border-blue-800 mb-3">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={personalInviteUrl}
-                  readOnly
-                  className="flex-1 text-xs text-muted-foreground bg-transparent border-none outline-none"
-                  data-testid="input-personal-invite-url"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCopyInviteLink}
-                  className="px-2 py-1 h-auto border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                  data-testid="button-copy-invite-link"
-                >
-                  {copied ? (
-                    <Check className="h-3 w-3" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                </Button>
-              </div>
-            </div>
-            
-            <Button
-              onClick={handleCopyInviteLink}
-              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white text-sm"
-              data-testid="button-copy-share-link"
-            >
-              <Share2 className="h-4 w-4 mr-2" />
-              Copy Share Link
-            </Button>
-            
-            <p className="text-xs text-center text-muted-foreground mt-2 font-medium">
-              💰 Get 20 ACP Credits for each person who joins!
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

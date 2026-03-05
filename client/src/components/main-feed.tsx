@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PostCard } from "@/components/post-card";
@@ -35,13 +34,13 @@ import {
   UserPlus,
   Leaf,
   GraduationCap,
-  Scale
+  Scale,
+  Landmark,
+  UserCheck
 } from "lucide-react";
 import { format } from "date-fns";
-import { useFeedView } from "@/contexts/feed-view-context";
+import { useFeedView, type FeedType } from "@/contexts/feed-view-context";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
-type FeedType = 'all' | 'news' | 'following' | 'polls' | 'events' | 'charities' | 'debates' | 'boycotts' | 'initiatives' | 'petitions' | 'unions';
 
 // Simple EventFeedCard component
 function EventFeedCard({ event }: { event: Event }) {
@@ -587,9 +586,8 @@ const ITEMS_PER_PAGE = 10;
 export function MainFeed() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { activeView, setActiveView } = useFeedView();
+  const { activeView, setActiveView, activeFeed, setActiveFeed } = useFeedView();
   const [showBlockchain, setShowBlockchain] = useState(false);
-  const [activeFeed, setActiveFeed] = useState<FeedType>('all');
   const [showMobileCreatePost, setShowMobileCreatePost] = useState(false);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -647,24 +645,32 @@ export function MainFeed() {
     enabled: activeFeed === 'unions',
   });
 
+  const { data: myRepsPosts = [], isLoading: isLoadingMyReps } = useQuery<PostWithAuthor[]>({
+    queryKey: ["/api/feeds/my-reps"],
+    enabled: activeFeed === 'my-reps' && !!user,
+  });
+
+  const { data: myCandidatesPosts = [], isLoading: isLoadingMyCandidates } = useQuery<PostWithAuthor[]>({
+    queryKey: ["/api/feeds/my-candidates"],
+    enabled: activeFeed === 'my-candidates' && !!user,
+  });
+
   const { data: userGroups = [] } = useQuery<any[]>({
     queryKey: ["/api/groups/user", user?.id],
     enabled: !!user?.id && (activeFeed === 'debates' || activeFeed === 'charities'),
   });
 
-  const isLoading = isLoadingAll || isLoadingFollowing || isLoadingNews;
+  const isLoading = isLoadingAll || isLoadingFollowing || isLoadingNews || isLoadingMyReps || isLoadingMyCandidates;
 
   // Get current feed posts based on active feed
   const getCurrentFeedPosts = () => {
     switch (activeFeed) {
-      case 'all':
-        return allFeedPosts;
-      case 'following':
-        return followingFeedPosts;
-      case 'news':
-        return newsFeedPosts;
-      default:
-        return [];
+      case 'all':       return allFeedPosts;
+      case 'following': return followingFeedPosts;
+      case 'news':      return newsFeedPosts;
+      case 'my-reps':   return myRepsPosts;
+      case 'my-candidates': return myCandidatesPosts;
+      default:          return [];
     }
   };
 
@@ -700,7 +706,8 @@ export function MainFeed() {
       case 'all':
       case 'following':
       case 'news':
-        // Use server-ranked posts for three-tier feed system
+      case 'my-reps':
+      case 'my-candidates':
         return currentPosts.map(post => ({ type: 'post' as const, data: post, createdAt: post.createdAt }));
       case 'polls':
         return polls.map(poll => ({ type: 'poll' as const, data: poll, createdAt: poll.createdAt }));
@@ -778,78 +785,24 @@ export function MainFeed() {
 
   return (
     <div className="page-background md:space-y-6">
-      {/* Feed Type Switcher - Desktop */}
-      <div className="hidden md:block">
-        <Card className="floating-card-lg shadow-lg border-0 bg-card/95 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <Tabs value={activeFeed} onValueChange={(value) => setActiveFeed(value as FeedType)} className="w-full">
-              <TabsList className="grid w-full grid-cols-5 lg:grid-cols-11 h-12 bg-muted/50 mb-4 rounded-xl overflow-x-auto">
-                <TabsTrigger value="all" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Globe className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">All</span>
-                </TabsTrigger>
-                <TabsTrigger value="news" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Newspaper className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">News</span>
-                </TabsTrigger>
-                <TabsTrigger value="following" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Users className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">Following</span>
-                </TabsTrigger>
-                <TabsTrigger value="polls" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <BarChart3 className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">Polls</span>
-                </TabsTrigger>
-                <TabsTrigger value="events" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Calendar className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">Events</span>
-                </TabsTrigger>
-                <TabsTrigger value="charities" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Heart className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">Charities</span>
-                </TabsTrigger>
-                <TabsTrigger value="boycotts" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Ban className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">Boycotts</span>
-                </TabsTrigger>
-                <TabsTrigger value="initiatives" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <FileText className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">Initiatives</span>
-                </TabsTrigger>
-                <TabsTrigger value="petitions" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <ScrollText className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">Petitions</span>
-                </TabsTrigger>
-                <TabsTrigger value="unions" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <Building2 className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">Unions</span>
-                </TabsTrigger>
-                <TabsTrigger value="debates" className="feed-tab flex items-center gap-2 data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200">
-                  <MessageCircleReply className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline font-medium">Debates</span>
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Mobile Feed Type Switcher - Horizontal Scroll */}
       <div className="md:hidden sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="px-4 py-3">
           <div className="flex gap-3 overflow-x-auto scrollbar-hide">
             {[
-              { key: 'all', label: 'All', icon: Globe, count: allFeedPosts.length },
-              { key: 'news', label: 'News', icon: Newspaper, count: newsFeedPosts.length },
-              { key: 'following', label: 'Following', icon: Users, count: followingFeedPosts.length },
-              { key: 'polls', label: 'Polls', icon: BarChart3, count: polls.length },
-              { key: 'events', label: 'Events', icon: Calendar, count: events.length },
-              { key: 'charities', label: 'Charities', icon: Heart, count: charities.length },
-              { key: 'boycotts', label: 'Boycotts', icon: Ban, count: boycotts.length },
-              { key: 'initiatives', label: 'Initiatives', icon: FileText, count: initiatives.length },
-              { key: 'petitions', label: 'Petitions', icon: ScrollText, count: petitions.length },
-              { key: 'unions', label: 'Unions', icon: Building2, count: unions.length },
-              { key: 'debates', label: 'Debates', icon: MessageCircleReply, count: 0 }
+              { key: 'all',           label: 'All',           icon: Globe,             count: allFeedPosts.length },
+              { key: 'news',          label: 'News',          icon: Newspaper,         count: newsFeedPosts.length },
+              { key: 'following',     label: 'Following',     icon: Users,             count: followingFeedPosts.length },
+              { key: 'my-reps',       label: 'My Reps',       icon: Landmark,          count: myRepsPosts.length },
+              { key: 'my-candidates', label: 'My Candidates', icon: UserCheck,         count: myCandidatesPosts.length },
+              { key: 'polls',         label: 'Polls',         icon: BarChart3,         count: polls.length },
+              { key: 'events',        label: 'Events',        icon: Calendar,          count: events.length },
+              { key: 'charities',     label: 'Charities',     icon: Heart,             count: charities.length },
+              { key: 'boycotts',      label: 'Boycotts',      icon: Ban,               count: boycotts.length },
+              { key: 'initiatives',   label: 'Initiatives',   icon: FileText,          count: initiatives.length },
+              { key: 'petitions',     label: 'Petitions',     icon: ScrollText,        count: petitions.length },
+              { key: 'unions',        label: 'Unions',        icon: Building2,         count: unions.length },
+              { key: 'debates',       label: 'Debates',       icon: MessageCircleReply, count: 0 }
             ].map(({ key, label, icon: Icon, count }) => (
               <button
                 key={key}
@@ -966,8 +919,12 @@ export function MainFeed() {
                   {activeFeed === 'events' && <Calendar className="h-12 w-12 mx-auto mb-2" />}
                   {activeFeed === 'charities' && <Heart className="h-12 w-12 mx-auto mb-2" />}
                   {activeFeed === 'debates' && <MessageCircleReply className="h-12 w-12 mx-auto mb-2" />}
+                  {activeFeed === 'my-reps' && <Landmark className="h-12 w-12 mx-auto mb-2" />}
+                  {activeFeed === 'my-candidates' && <UserCheck className="h-12 w-12 mx-auto mb-2" />}
                   <h3 className="text-lg font-semibold text-foreground">
-                    No {activeFeed} content yet
+                    {activeFeed === 'my-reps' && 'No posts from your representatives yet'}
+                    {activeFeed === 'my-candidates' && 'No posts from your candidates yet'}
+                    {activeFeed !== 'my-reps' && activeFeed !== 'my-candidates' && `No ${activeFeed} content yet`}
                   </h3>
                   <p className="text-muted-foreground mt-2">
                     {activeFeed === 'news' && 'No news or announcements to display'}
@@ -976,6 +933,8 @@ export function MainFeed() {
                     {activeFeed === 'events' && 'No upcoming events. Create the first one!'}
                     {activeFeed === 'charities' && 'No charities to display. Create the first one!'}
                     {activeFeed === 'debates' && 'No debate discussions yet. Start one!'}
+                    {activeFeed === 'my-reps' && 'Follow your representatives on the Current Reps page, then posts tagged @TheirHandle will appear here.'}
+                    {activeFeed === 'my-candidates' && 'Support candidates to see their posts here. Posts they are tagged in will also appear.'}
                   </p>
                 </>
               )}
