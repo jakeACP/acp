@@ -319,7 +319,7 @@ function PoliticianCard({ politician: pol }: { politician: PoliticianResult }) {
           <div className="flex items-center gap-1.5 text-sm mb-3">
             <DollarSign className="w-4 h-4 shrink-0 text-orange-600" />
             <span className="font-bold text-orange-600">${(pol.totalLobbyAmount / 100).toLocaleString()}</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">Israel lobby total</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">Total for All Lobbies</span>
           </div>
         )}
 

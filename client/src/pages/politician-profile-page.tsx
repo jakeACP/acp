@@ -520,7 +520,7 @@ export default function PoliticianProfilePage() {
               {hasIsraelLobby && totalLobbyAmount > 0 && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40 px-4 py-3">
                   <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
-                    Total Israel Lobby Contributions
+                    Total for All Lobbies
                   </p>
                   <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">
                     ${(totalLobbyAmount / 100).toLocaleString()}
