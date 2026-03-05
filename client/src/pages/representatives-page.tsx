@@ -37,12 +37,12 @@ type ZipLookupResult = {
 
 function gradeColor(grade?: string): string {
   switch (grade) {
-    case "A": return "bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-300 dark:border-green-700";
-    case "B": return "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700";
-    case "C": return "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-700";
-    case "D": return "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-700";
-    case "F": return "bg-red-100 text-red-800 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-700";
-    default: return "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600";
+    case "A": return "bg-green-600 text-white border-green-700";
+    case "B": return "bg-blue-500 text-white border-blue-600";
+    case "C": return "bg-yellow-400 text-yellow-900 border-yellow-500";
+    case "D": return "bg-orange-500 text-white border-orange-600";
+    case "F": return "bg-red-600 text-white border-red-700";
+    default: return "bg-slate-400 text-white border-slate-500";
   }
 }
 
@@ -259,7 +259,7 @@ function PoliticianCard({ politician: pol }: { politician: PoliticianResult }) {
             </Badge>
           )}
           {pol.rejectsAIPAC && (
-            <Badge className="text-xs bg-green-100 text-green-800 border border-green-300 dark:bg-green-950 dark:text-green-300 dark:border-green-700">
+            <Badge className="text-xs bg-green-600 text-white border border-green-700">
               <ShieldCheck className="w-3 h-3 mr-1" />
               Rejects AIPAC
             </Badge>

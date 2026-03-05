@@ -158,13 +158,13 @@ export default function PoliticianProfilePage() {
 
   const getCorruptionGradeColor = (grade: string) => {
     const colors = {
-      'A': 'bg-green-500 text-white',
+      'A': 'bg-green-600 text-white',
       'B': 'bg-blue-500 text-white',
-      'C': 'bg-yellow-500 text-black',
+      'C': 'bg-yellow-400 text-yellow-900',
       'D': 'bg-orange-500 text-white',
-      'F': 'bg-red-500 text-white',
+      'F': 'bg-red-600 text-white',
     };
-    return colors[grade as keyof typeof colors] || 'bg-gray-500 text-white';
+    return colors[grade as keyof typeof colors] || 'bg-slate-400 text-white';
   };
 
   // Filter posts where politician is tagged
