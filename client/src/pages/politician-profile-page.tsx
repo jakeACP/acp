@@ -186,12 +186,12 @@ export default function PoliticianProfilePage() {
           <div className="flex items-start justify-between gap-6">
             <div className="flex items-start gap-6 flex-1">
               {/* Profile Photo with Verified Badge */}
-              <div className="relative">
+              <div className="relative flex flex-col items-center gap-1">
                 {profile.photoUrl ? (
                   <img
                     src={profile.photoUrl}
                     alt={profile.fullName}
-                    className="w-32 h-32 rounded-lg object-cover"
+                    className={`w-32 h-32 rounded-lg object-cover transition-all duration-300 ${!profile.isVerified ? "grayscale" : ""}`}
                     data-testid="img-politician-photo"
                   />
                 ) : (
@@ -201,10 +201,16 @@ export default function PoliticianProfilePage() {
                     </span>
                   </div>
                 )}
-                {profile.isVerified && (
+                {profile.isVerified ? (
                   <div className="absolute -top-2 -left-2" data-testid="badge-verified">
                     <CheckCircle2 className="w-8 h-8 text-green-500 bg-white dark:bg-gray-900 rounded-full" />
                   </div>
+                ) : (
+                  profile.photoUrl && (
+                    <span className="text-xs text-slate-400 dark:text-slate-500 text-center leading-tight mt-1">
+                      Unclaimed profile
+                    </span>
+                  )
                 )}
               </div>
 

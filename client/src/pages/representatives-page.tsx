@@ -18,6 +18,8 @@ type PoliticianResult = {
   totalLobbyAmount: number;
   sigAcronyms: string[];
   rejectsAIPAC: boolean;
+  photoUrl?: string;
+  isVerified?: boolean;
   position?: {
     title: string;
     officeType: string;
@@ -261,15 +263,36 @@ export default function RepresentativesPage() {
 }
 
 function PoliticianCard({ politician: pol }: { politician: PoliticianResult }) {
+  const initials = pol.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
   return (
     <Card className="border-slate-200 dark:border-slate-700 hover:shadow-md transition-shadow">
       <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-2 mb-3">
+        {/* Avatar row */}
+        <div className="flex items-center gap-3 mb-3">
+          <div className="relative shrink-0">
+            {pol.photoUrl ? (
+              <img
+                src={pol.photoUrl}
+                alt={pol.fullName}
+                className={`w-14 h-14 rounded-full object-cover border-2 ${pol.isVerified ? "border-green-500" : "border-slate-300 grayscale"}`}
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center border-2 border-slate-300">
+                <span className="text-lg font-bold text-slate-500 dark:text-slate-300">{initials}</span>
+              </div>
+            )}
+            {pol.isVerified && (
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-slate-800" title="Verified — politician claimed profile" />
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate">{pol.fullName}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
               {pol.position?.title}
             </p>
+            {pol.photoUrl && !pol.isVerified && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">Unclaimed profile</span>
+            )}
           </div>
           {pol.corruptionGrade && (
             <span className={`text-lg font-bold px-2.5 py-1 rounded border text-center min-w-[2.5rem] shrink-0 ${gradeColor(pol.corruptionGrade)}`}>

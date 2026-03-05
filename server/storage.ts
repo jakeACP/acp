@@ -3285,6 +3285,13 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async updatePoliticianPhoto(id: string, photoUrl: string): Promise<void> {
+    await db
+      .update(politicianProfiles)
+      .set({ photoUrl, updatedAt: new Date() })
+      .where(eq(politicianProfiles.id, id));
+  }
+
   async deletePoliticianProfile(id: string): Promise<void> {
     await db
       .delete(politicianProfiles)

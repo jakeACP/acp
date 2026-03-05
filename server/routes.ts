@@ -4106,6 +4106,47 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.post("/api/admin/politicians/fetch-photos", ensureAdmin, async (req, res) => {
+    try {
+      const allProfiles = await storage.listPoliticianProfiles();
+      let fetched = 0;
+      let alreadyHad = 0;
+      let notFound = 0;
+
+      for (const profile of allProfiles) {
+        if (profile.photoUrl) {
+          alreadyHad++;
+          continue;
+        }
+        try {
+          const wikiName = profile.fullName.replace(/ /g, "_");
+          const wikiRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiName)}`, {
+            headers: { "User-Agent": "ACPPoliticalPlatform/1.0 (contact@anticorruptionparty.us)" },
+          });
+          if (wikiRes.ok) {
+            const wikiData: any = await wikiRes.json();
+            if (wikiData.type === "standard" && wikiData.thumbnail?.source) {
+              await storage.updatePoliticianPhoto(profile.id, wikiData.thumbnail.source);
+              fetched++;
+            } else {
+              notFound++;
+            }
+          } else {
+            notFound++;
+          }
+        } catch {
+          notFound++;
+        }
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      res.json({ success: true, fetched, alreadyHad, notFound, total: allProfiles.length });
+    } catch (error: any) {
+      console.error("Fetch photos error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Public politician profile page route
   app.get("/api/politician-profiles/:id", async (req, res) => {
     try {

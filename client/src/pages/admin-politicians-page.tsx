@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link, Unlink, Download, Loader2 } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link, Unlink, Download, Loader2, Image } from "lucide-react";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
 type SpecialInterestGroup = {
@@ -314,6 +314,23 @@ export default function AdminPoliticiansPage() {
   });
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+
+  const fetchPhotosMutation = useMutation({
+    mutationFn: async () => apiRequest("/api/admin/politicians/fetch-photos", "POST"),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      setPhotoDialogOpen(false);
+      toast({
+        title: "Photo fetch complete",
+        description: `${data.fetched} photos fetched from Wikipedia, ${data.alreadyHad} already had photos, ${data.notFound} not found on Wikipedia.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Photo fetch failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const importCongressMutation = useMutation({
     mutationFn: async () => apiRequest("/api/admin/politicians/import-congress", "POST"),
     onSuccess: (data: any) => {
@@ -429,14 +446,67 @@ export default function AdminPoliticiansPage() {
               Manage political positions and politician profiles
             </p>
           </div>
-          <Button
-            onClick={() => setImportDialogOpen(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            <Download className="w-4 h-4" />
-            Import All Congress Members
-          </Button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button
+              onClick={() => setPhotoDialogOpen(true)}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Image className="w-4 h-4" />
+              Fetch Wikipedia Photos
+            </Button>
+            <Button
+              onClick={() => setImportDialogOpen(true)}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Download className="w-4 h-4" />
+              Import All Congress Members
+            </Button>
+          </div>
         </div>
+
+        {/* Fetch Wikipedia Photos Dialog */}
+        <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Fetch Wikipedia Headshots</DialogTitle>
+              <DialogDescription>
+                This will pull official headshots for all 535 Congress members from Wikipedia.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300 py-2">
+              <p>• Photos are sourced from <strong>Wikipedia / Wikimedia Commons</strong> (free, no API key)</p>
+              <p>• Only politicians <strong>without an existing photo</strong> will be updated</p>
+              <p>• Photos will appear <strong>in grayscale</strong> until the politician claims their profile</p>
+              <p>• This process fetches ~535 photos with a brief pause between each request</p>
+              <p className="text-amber-600 dark:text-amber-400 mt-3">
+                ⏱ This will take approximately <strong>60–90 seconds</strong> to complete.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPhotoDialogOpen(false)} disabled={fetchPhotosMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => fetchPhotosMutation.mutate()}
+                disabled={fetchPhotosMutation.isPending}
+                className="bg-slate-800 hover:bg-slate-900 text-white"
+              >
+                {fetchPhotosMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Fetching photos... (~60–90 seconds)
+                  </>
+                ) : (
+                  <>
+                    <Image className="w-4 h-4 mr-2" />
+                    Start Fetch
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Congress Import Confirmation Dialog */}
         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
