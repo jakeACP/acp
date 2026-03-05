@@ -2144,26 +2144,44 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
 
     try {
-      const censusUrl = `https://geocoding.geo.census.gov/geocoder/geographies/address?benchmark=Public_AR_Current&vintage=Current_Current&layers=54&format=json&address=&zip=${zipCode}`;
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-
-      let censusData: any;
+      // Step 1: Use zippopotam.us to get lat/lng from zip code (free, no key needed)
+      let lat: string, lon: string;
       try {
-        const censusRes = await fetch(censusUrl, { signal: controller.signal });
-        censusData = await censusRes.json();
+        const zipController = new AbortController();
+        const zipTimeout = setTimeout(() => zipController.abort(), 8000);
+        const zipRes = await fetch(`https://api.zippopotam.us/us/${zipCode}`, { signal: zipController.signal });
+        clearTimeout(zipTimeout);
+        if (!zipRes.ok) {
+          return res.status(404).json({ message: `Zip code ${zipCode} not found. Please check and try again.` });
+        }
+        const zipData: any = await zipRes.json();
+        const place = zipData?.places?.[0];
+        if (!place) {
+          return res.status(404).json({ message: `No location data for zip code ${zipCode}.` });
+        }
+        lat = place.latitude;
+        lon = place.longitude;
+      } catch {
+        return res.status(503).json({ message: "Unable to reach the zip code lookup service. Please try again in a moment." });
+      }
+
+      // Step 2: Use Census coordinates API to get congressional district from lat/lng
+      let districts: any[] = [];
+      try {
+        const censusUrl = `https://geocoding.geo.census.gov/geocoder/geographies/coordinates?x=${lon}&y=${lat}&benchmark=Public_AR_Current&vintage=Current_Current&layers=54&format=json`;
+        const censusController = new AbortController();
+        const censusTimeout = setTimeout(() => censusController.abort(), 8000);
+        const censusRes = await fetch(censusUrl, { signal: censusController.signal });
+        clearTimeout(censusTimeout);
+        const censusData: any = await censusRes.json();
+        // Layer name includes the Congress session number (e.g. "119th Congressional Districts")
+        const geos = censusData?.result?.geographies ?? {};
+        const layerKey = Object.keys(geos).find(k => k.toLowerCase().includes("congressional districts"));
+        districts = layerKey ? (geos[layerKey] ?? []) : [];
       } catch {
         return res.status(503).json({ message: "Unable to reach the district lookup service. Please try again in a moment." });
-      } finally {
-        clearTimeout(timeout);
       }
 
-      const matches = censusData?.result?.addressMatches ?? [];
-      if (matches.length === 0) {
-        return res.status(404).json({ message: `No district found for zip code ${zipCode}. Please check the zip code and try again.` });
-      }
-
-      const districts: any[] = matches[0]?.geographies?.["Congressional Districts"] ?? [];
       if (districts.length === 0) {
         return res.status(404).json({ message: `Congressional district not found for zip code ${zipCode}.` });
       }
@@ -2172,9 +2190,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const locationSet = new Set<string>();
       const locations: Array<{ stateName: string; districtNum: number; isAtLarge: boolean }> = [];
       for (const d of districts) {
-        const geoid: string = d.GEOID ?? "";
-        const stateFips = geoid.slice(0, 2);
-        const districtCode = geoid.slice(2);
+        const stateFips: string = d.STATE ?? "";
+        const districtCode: string = d.CD119 ?? d.CD118 ?? d.BASENAME ?? "";
         const stateName = STATE_FIPS[stateFips];
         if (!stateName) continue;
         const districtNum = parseInt(districtCode, 10);
