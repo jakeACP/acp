@@ -2,7 +2,7 @@ import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, 
 import { FEED_CONFIG } from "@shared/feed-config";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, sql, count, inArray, gte } from "drizzle-orm";
+import { eq, desc, and, or, sql, count, inArray, gte, ilike } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -3283,6 +3283,39 @@ export class DatabaseStorage implements IStorage {
       .where(eq(politicianProfiles.id, id))
       .returning();
     return updated;
+  }
+
+  async searchPoliticians(q: string): Promise<any[]> {
+    const results = await db
+      .select({
+        politician: politicianProfiles,
+        position: politicalPositions,
+      })
+      .from(politicianProfiles)
+      .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .where(
+        or(
+          ilike(politicianProfiles.fullName, `%${q}%`),
+          ilike(politicianProfiles.handle, `%${q}%`)
+        )
+      )
+      .orderBy(politicianProfiles.fullName)
+      .limit(8);
+    return results.map(r => ({ ...r.politician, position: r.position }));
+  }
+
+  async getPoliticianByHandle(handle: string): Promise<any | null> {
+    const results = await db
+      .select({
+        politician: politicianProfiles,
+        position: politicalPositions,
+      })
+      .from(politicianProfiles)
+      .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .where(ilike(politicianProfiles.handle, handle))
+      .limit(1);
+    if (!results[0]) return null;
+    return { ...results[0].politician, position: results[0].position };
   }
 
   async updatePoliticianPhoto(id: string, photoUrl: string): Promise<void> {

@@ -1335,6 +1335,7 @@ export const politicianProfiles = pgTable("politician_profiles", {
   notes: text("notes"), // admin notes
   isCurrent: boolean("is_current").default(true), // currently holding office
   featured: boolean("featured").default(false), // featured in the Featured Candidate module
+  handle: text("handle").unique(), // @handle e.g. TomEmmerMN (no @ prefix stored)
   corruptionGrade: text("corruption_grade"), // A, B, C, D, or F corruption grade
   corruptionScorecard: text("corruption_scorecard"), // Detailed corruption history and information
   isVerified: boolean("is_verified").default(false), // Whether politician claimed and verified their page

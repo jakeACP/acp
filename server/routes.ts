@@ -4096,6 +4096,99 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // Bulk import all Congress members from the XLSX file
+  app.post("/api/admin/politicians/generate-handles", ensureAdmin, async (req, res) => {
+    const STATE_NAME_TO_ABBR: Record<string, string> = {
+      "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
+      "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Washington D.C.": "DC", "Florida": "FL",
+      "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL", "Indiana": "IN",
+      "Iowa": "IA", "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME",
+      "Maryland": "MD", "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN",
+      "Mississippi": "MS", "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
+      "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
+      "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK", "Oregon": "OR",
+      "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC", "South Dakota": "SD",
+      "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT", "Virginia": "VA",
+      "Washington": "WA", "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY", "Puerto Rico": "PR",
+    };
+
+    function buildHandle(fullName: string, stateAbbr: string): string {
+      let name = fullName
+        .replace(/\s+(?:Jr\.?|Sr\.?|II|III|IV|V|Esq\.?)$/i, "")
+        .replace(/\s+[A-Z]\.\s+/, " ")
+        .trim();
+      const parts = name.split(/\s+/);
+      const first = parts[0] ?? "";
+      const last = parts[parts.length - 1] ?? "";
+      return (first + last + stateAbbr).replace(/[^a-zA-Z0-9]/g, "");
+    }
+
+    function getStateFromTitle(title: string): string | null {
+      const senatorMatch = title.match(/^U\.S\. Senator from (.+)$/);
+      if (senatorMatch) return senatorMatch[1];
+      const repMatch = title.match(/^U\.S\. Representative,? (.+?)'s /);
+      if (repMatch) return repMatch[1];
+      const atLargeMatch = title.match(/^U\.S\. Representative from (.+?) \(At-Large\)$/);
+      if (atLargeMatch) return atLargeMatch[1];
+      return null;
+    }
+
+    try {
+      const allProfiles = await storage.listPoliticianProfiles();
+      let updated = 0;
+      let skipped = 0;
+      const usedHandles = new Set<string>();
+
+      for (const profile of allProfiles) {
+        const stateFromPosition = profile.position ? getStateFromTitle(profile.position.title) : null;
+        const stateAbbr = stateFromPosition ? STATE_NAME_TO_ABBR[stateFromPosition] : null;
+        if (!stateAbbr) { skipped++; continue; }
+
+        let handle = buildHandle(profile.fullName, stateAbbr);
+        if (!handle) { skipped++; continue; }
+
+        let finalHandle = handle;
+        let suffix = 2;
+        while (usedHandles.has(finalHandle.toLowerCase())) {
+          finalHandle = handle + suffix;
+          suffix++;
+        }
+        usedHandles.add(finalHandle.toLowerCase());
+
+        await storage.updatePoliticianProfile(profile.id, { handle: finalHandle } as any);
+        updated++;
+      }
+
+      res.json({ success: true, updated, skipped });
+    } catch (error: any) {
+      console.error("Generate handles error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Politician search by name/handle (authenticated)
+  app.get("/api/politicians/search", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const q = (req.query.q as string || "").trim();
+    if (!q || q.length < 2) return res.json([]);
+    try {
+      const results = await storage.searchPoliticians(q);
+      res.json(results);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Lookup politician by handle (public)
+  app.get("/api/politicians/by-handle/:handle", async (req, res) => {
+    try {
+      const profile = await storage.getPoliticianByHandle(req.params.handle);
+      if (!profile) return res.status(404).json({ message: "Politician not found" });
+      res.json(profile);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/admin/politicians/import-congress", ensureAdmin, async (req, res) => {
     try {
       const result = await storage.importCongress();

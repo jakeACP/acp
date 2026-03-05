@@ -1,6 +1,6 @@
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "./hooks/use-auth";
@@ -66,6 +66,40 @@ import { Loader2 } from "lucide-react";
 import { TwoFactorReminder } from "./components/two-factor-reminder";
 import { ErrorBoundary } from "./components/error-boundary";
 
+function PoliticianHandleRedirect({ params }: { params?: { handle?: string } }) {
+  const [, navigate] = useLocation();
+  const handle = params?.handle ?? "";
+
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ["/api/politicians/by-handle", handle],
+    queryFn: async () => {
+      const res = await fetch(`/api/politicians/by-handle/${encodeURIComponent(handle)}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Not found");
+      return res.json();
+    },
+    enabled: !!handle,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-border" />
+      </div>
+    );
+  }
+
+  if (data?.id) {
+    navigate(`/politicians/${data.id}`, { replace: true });
+    return null;
+  }
+
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <p className="text-muted-foreground">Politician @{handle} not found.</p>
+    </div>
+  );
+}
+
 function HomeRoute() {
   const { user, isLoading } = useAuth();
   
@@ -95,6 +129,7 @@ function Router() {
       <ProtectedRoute path="/polls/:id" component={PollDetailPage} />
       <ProtectedRoute path="/candidates" component={CandidatesPage} />
       <ProtectedRoute path="/candidates/:id" component={CandidateProfilePage} />
+      <ProtectedRoute path="/politicians/handle/:handle" component={PoliticianHandleRedirect} />
       <ProtectedRoute path="/politicians/:id" component={PoliticianProfilePage} />
       <ProtectedRoute path="/representatives" component={RepresentativesPage} />
       <ProtectedRoute path="/events" component={EventsPage} />

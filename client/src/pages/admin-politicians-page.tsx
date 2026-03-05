@@ -315,6 +315,22 @@ export default function AdminPoliticiansPage() {
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+  const [handleDialogOpen, setHandleDialogOpen] = useState(false);
+
+  const generateHandlesMutation = useMutation({
+    mutationFn: async () => apiRequest("/api/admin/politicians/generate-handles", "POST"),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      setHandleDialogOpen(false);
+      toast({
+        title: "Handles generated",
+        description: `${data.updated} politician handles created (e.g. @TomEmmerMN). ${data.skipped} skipped (no position assigned).`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Handle generation failed", description: error.message, variant: "destructive" });
+    },
+  });
 
   const fetchPhotosMutation = useMutation({
     mutationFn: async () => apiRequest("/api/admin/politicians/fetch-photos", "POST"),
@@ -448,6 +464,14 @@ export default function AdminPoliticiansPage() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <Button
+              onClick={() => setHandleDialogOpen(true)}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Users className="w-4 h-4" />
+              Generate @Handles
+            </Button>
+            <Button
               onClick={() => setPhotoDialogOpen(true)}
               variant="outline"
               className="flex items-center gap-2"
@@ -464,6 +488,44 @@ export default function AdminPoliticiansPage() {
             </Button>
           </div>
         </div>
+
+        {/* Generate Handles Dialog */}
+        <Dialog open={handleDialogOpen} onOpenChange={setHandleDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Generate @Handles for Politicians</DialogTitle>
+              <DialogDescription>
+                This will create a unique @handle for every Congress member in the format @FirstLastState.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300 py-2">
+              <p>• Format: <strong>@FirstLastState</strong> (e.g. @TomEmmerMN, @AmyKlobucharMN)</p>
+              <p>• Derived from each politician's name + their state from their position title</p>
+              <p>• Middle initials and suffixes (Jr., Sr., II, III) are automatically stripped</p>
+              <p>• Duplicates are automatically resolved by appending a number</p>
+              <p>• Safe to re-run — existing handles will be overwritten with regenerated ones</p>
+              <p className="text-slate-500 dark:text-slate-400 mt-3">
+                Only politicians with an assigned position (state) can receive a handle. Run the Congress import first if needed.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setHandleDialogOpen(false)} disabled={generateHandlesMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => generateHandlesMutation.mutate()}
+                disabled={generateHandlesMutation.isPending}
+                className="bg-slate-800 hover:bg-slate-900 text-white"
+              >
+                {generateHandlesMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating handles...</>
+                ) : (
+                  <><Users className="w-4 h-4 mr-2" />Generate Handles</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Fetch Wikipedia Photos Dialog */}
         <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>

@@ -444,9 +444,17 @@ export function PostCard({ post }: PostCardProps) {
           </div>
           
           {post.tags && post.tags.length > 0 && (
-            <Badge className={getTagColor(post.tags[0])}>
-              {post.tags[0]}
-            </Badge>
+            post.tags[0].startsWith("@") ? (
+              <WouterLink href={`/politicians/handle/${post.tags[0].slice(1)}`}>
+                <Badge className="bg-blue-600 text-white hover:bg-blue-700 cursor-pointer">
+                  {post.tags[0]}
+                </Badge>
+              </WouterLink>
+            ) : (
+              <Badge className={getTagColor(post.tags[0])}>
+                {post.tags[0]}
+              </Badge>
+            )
           )}
         </div>
       </CardHeader>

@@ -167,11 +167,13 @@ export default function PoliticianProfilePage() {
     return colors[grade as keyof typeof colors] || 'bg-slate-400 text-white';
   };
 
-  // Filter posts where politician is tagged
+  // Filter posts where politician is tagged (by name OR @handle)
   const taggedPosts = posts.filter((post: Post) => 
-    post.tags?.some(tag => 
-      tag.toLowerCase().includes(profile.fullName?.toLowerCase())
-    )
+    post.tags?.some(tag => {
+      const t = tag.toLowerCase();
+      if (profile.handle && t === `@${profile.handle.toLowerCase()}`) return true;
+      return t.includes(profile.fullName?.toLowerCase() ?? "");
+    })
   );
 
   const hasPendingClaim = profile.claimRequestStatus === 'pending';
@@ -216,9 +218,14 @@ export default function PoliticianProfilePage() {
 
               {/* Name and Position */}
               <div className="flex-1">
-                <CardTitle className="text-3xl mb-2" data-testid="text-politician-name">
+                <CardTitle className="text-3xl mb-1" data-testid="text-politician-name">
                   {profile.fullName}
                 </CardTitle>
+                {profile.handle && (
+                  <p className="text-base font-medium text-blue-600 dark:text-blue-400 mb-1">
+                    @{profile.handle}
+                  </p>
+                )}
                 {profile.position && (
                   <CardDescription className="text-lg" data-testid="text-politician-position">
                     {profile.position.title}
