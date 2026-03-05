@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link, Unlink, Download, Loader2, Image, FileDown } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link, Unlink, Download, Loader2, Image, FileDown, Search, X, Shield, ExternalLink } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
@@ -82,6 +83,34 @@ type ClaimRequest = PoliticianProfile & {
   position?: PoliticalPosition | null;
 };
 
+type PlatformCandidate = {
+  id: string;
+  userId: string;
+  bio?: string;
+  party?: string;
+  platform?: string;
+  location?: string;
+  photoUrl?: string;
+  websiteUrl?: string;
+  isActive: boolean;
+  isFeatured: boolean;
+  user?: {
+    username: string;
+    displayName?: string;
+    email?: string;
+  };
+};
+
+type DelegateUser = {
+  id: string;
+  username: string;
+  email: string;
+  displayName?: string;
+  role: string;
+  managedState?: string;
+  createdAt?: string;
+};
+
 export default function AdminPoliticiansPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("positions");
@@ -95,6 +124,26 @@ export default function AdminPoliticiansPage() {
   const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
   const [selectedPoliticianForSponsor, setSelectedPoliticianForSponsor] = useState<PoliticianProfile | null>(null);
   const [sponsorshipFilter, setSponsorshipFilter] = useState<string>("");
+
+  // Positions search/filter
+  const [positionSearch, setPositionSearch] = useState("");
+  const [positionLevelFilter, setPositionLevelFilter] = useState("all");
+  const [positionTypeFilter, setPositionTypeFilter] = useState("all");
+
+  // Profiles search/filter
+  const [profileSearch, setProfileSearch] = useState("");
+  const [profilePartyFilter, setProfilePartyFilter] = useState("all");
+  const [profileGradeFilter, setProfileGradeFilter] = useState("all");
+  const [profileStatusFilter, setProfileStatusFilter] = useState("all");
+  const [profileStateFilter, setProfileStateFilter] = useState("all");
+
+  // Candidates search/filter
+  const [candidateSearch, setCandidateSearch] = useState("");
+  const [candidatePartyFilter, setCandidatePartyFilter] = useState("all");
+  const [candidateStateFilter, setCandidateStateFilter] = useState("all");
+
+  // Delegates search
+  const [delegateSearch, setDelegateSearch] = useState("");
 
   const { data: positions = [], isLoading: positionsLoading } = useQuery<PoliticalPosition[]>({
     queryKey: ["/api/admin/political-positions"],
@@ -126,6 +175,19 @@ export default function AdminPoliticiansPage() {
       return response.json();
     },
     enabled: !!selectedPoliticianForSponsor,
+  });
+
+  const { data: platformCandidates = [], isLoading: candidatesLoading } = useQuery<PlatformCandidate[]>({
+    queryKey: ["/api/candidates"],
+  });
+
+  const { data: allAdminUsers = [], isLoading: delegatesLoading } = useQuery<DelegateUser[]>({
+    queryKey: ["/api/admin/users"],
+    queryFn: async () => {
+      const response = await fetch("/api/admin/users", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch users");
+      return response.json();
+    },
   });
 
   const createPositionMutation = useMutation({
@@ -451,6 +513,82 @@ export default function AdminPoliticiansPage() {
   const filledPositions = positions.filter(p => p.currentHolderId);
   const currentProfiles = profiles.filter(p => p.isCurrent);
 
+  // Derived filter options
+  const uniqueParties = [...new Set(profiles.map(p => p.party).filter(Boolean) as string[])].sort();
+  const uniqueJurisdictions = [...new Set(positions.map(p => p.jurisdiction).filter(Boolean) as string[])].sort();
+  const delegates = allAdminUsers.filter(u => ["admin", "state_admin", "moderator"].includes(u.role));
+
+  // Filtered positions
+  const filteredPositions = positions.filter(p => {
+    const q = positionSearch.toLowerCase();
+    const holder = profiles.find(pr => pr.id === p.currentHolderId);
+    const matchSearch = !q
+      || p.title.toLowerCase().includes(q)
+      || p.jurisdiction.toLowerCase().includes(q)
+      || p.officeType.toLowerCase().includes(q)
+      || p.level.toLowerCase().includes(q)
+      || (p.district || "").toLowerCase().includes(q)
+      || (holder?.fullName || "").toLowerCase().includes(q);
+    const matchLevel = positionLevelFilter === "all" || p.level === positionLevelFilter;
+    const matchType = positionTypeFilter === "all" || p.officeType === positionTypeFilter;
+    return matchSearch && matchLevel && matchType;
+  });
+
+  // Filtered profiles
+  const filteredProfiles = profiles.filter(p => {
+    const q = profileSearch.toLowerCase();
+    const position = positions.find(pos => pos.id === p.positionId);
+    const matchSearch = !q
+      || p.fullName.toLowerCase().includes(q)
+      || (p.party || "").toLowerCase().includes(q)
+      || (p.biography || "").toLowerCase().includes(q)
+      || (p.email || "").toLowerCase().includes(q)
+      || (position?.title || "").toLowerCase().includes(q)
+      || (position?.jurisdiction || "").toLowerCase().includes(q)
+      || (position?.district || "").toLowerCase().includes(q);
+    const matchParty = profilePartyFilter === "all" || p.party === profilePartyFilter;
+    const matchGrade = profileGradeFilter === "all"
+      || (profileGradeFilter === "none" ? !p.corruptionGrade : p.corruptionGrade === profileGradeFilter);
+    const matchStatus = profileStatusFilter === "all"
+      || (profileStatusFilter === "current" ? p.isCurrent : !p.isCurrent);
+    const matchState = profileStateFilter === "all"
+      || (position?.jurisdiction || "").toLowerCase().includes(profileStateFilter.toLowerCase());
+    return matchSearch && matchParty && matchGrade && matchStatus && matchState;
+  });
+
+  // Filtered candidates
+  const filteredCandidates = platformCandidates.filter(c => {
+    const q = candidateSearch.toLowerCase();
+    const matchSearch = !q
+      || (c.user?.username || "").toLowerCase().includes(q)
+      || (c.user?.displayName || "").toLowerCase().includes(q)
+      || (c.party || "").toLowerCase().includes(q)
+      || (c.bio || "").toLowerCase().includes(q)
+      || (c.location || "").toLowerCase().includes(q)
+      || (c.platform || "").toLowerCase().includes(q);
+    const matchParty = candidatePartyFilter === "all" || c.party === candidatePartyFilter;
+    const matchState = candidateStateFilter === "all"
+      || (c.location || "").toLowerCase().includes(candidateStateFilter.toLowerCase());
+    return matchSearch && matchParty && matchState;
+  });
+
+  // Filtered delegates
+  const filteredDelegates = delegates.filter(u => {
+    const q = delegateSearch.toLowerCase();
+    return !q
+      || u.username.toLowerCase().includes(q)
+      || u.email.toLowerCase().includes(q)
+      || (u.displayName || "").toLowerCase().includes(q)
+      || (u.managedState || "").toLowerCase().includes(q)
+      || u.role.toLowerCase().includes(q);
+  });
+
+  const ROLE_COLORS: Record<string, string> = {
+    admin: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+    state_admin: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+    moderator: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <AdminNavigation />
@@ -695,13 +833,14 @@ export default function AdminPoliticiansPage() {
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="positions" data-testid="tab-positions">Positions</TabsTrigger>
                 <TabsTrigger value="profiles" data-testid="tab-profiles">Profiles</TabsTrigger>
-                <TabsTrigger value="sponsorships" data-testid="tab-sponsorships">Sponsorships</TabsTrigger>
-                <TabsTrigger value="claims" data-testid="tab-claim-requests">Claims</TabsTrigger>
+                <TabsTrigger value="candidates" data-testid="tab-candidates">Candidates</TabsTrigger>
+                <TabsTrigger value="delegates" data-testid="tab-delegates">Delegates</TabsTrigger>
               </TabsList>
 
+              {/* ── POSITIONS TAB ── */}
               <TabsContent value="positions" className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                <div className="flex justify-between items-start gap-4 flex-wrap">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
                     Political positions are permanent entities (e.g., "President of the United States", "Senator from California")
                   </p>
                   <Button
@@ -716,15 +855,54 @@ export default function AdminPoliticiansPage() {
                   </Button>
                 </div>
 
+                {/* Search + filters */}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Search by title, jurisdiction, district, holder..."
+                      value={positionSearch}
+                      onChange={e => setPositionSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                    {positionSearch && (
+                      <button onClick={() => setPositionSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <Select value={positionLevelFilter} onValueChange={setPositionLevelFilter}>
+                    <SelectTrigger className="w-[130px]"><SelectValue placeholder="Level" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Levels</SelectItem>
+                      <SelectItem value="federal">Federal</SelectItem>
+                      <SelectItem value="state">State</SelectItem>
+                      <SelectItem value="county">County</SelectItem>
+                      <SelectItem value="city">City</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={positionTypeFilter} onValueChange={setPositionTypeFilter}>
+                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="Type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="Executive">Executive</SelectItem>
+                      <SelectItem value="Legislative">Legislative</SelectItem>
+                      <SelectItem value="Judicial">Judicial</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-slate-500">{filteredPositions.length} of {positions.length}</span>
+                </div>
+
                 {positionsLoading ? (
                   <div className="text-center py-8">Loading positions...</div>
-                ) : positions.length === 0 ? (
+                ) : filteredPositions.length === 0 ? (
                   <div className="text-center py-12 text-slate-500 dark:text-slate-400">
                     <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No political positions created yet</p>
+                    <p>{positions.length === 0 ? "No political positions created yet" : "No positions match your search"}</p>
                   </div>
                 ) : (
-                  <div className="border rounded-lg">
+                  <div className="border rounded-lg overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -732,13 +910,14 @@ export default function AdminPoliticiansPage() {
                           <TableHead>Type</TableHead>
                           <TableHead>Level</TableHead>
                           <TableHead>Jurisdiction</TableHead>
+                          <TableHead>District</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Current Holder</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {positions.map((position) => {
+                        {filteredPositions.map((position) => {
                           const currentHolder = profiles.find(p => p.id === position.currentHolderId);
                           return (
                             <TableRow key={position.id} data-testid={`row-position-${position.id}`}>
@@ -750,6 +929,7 @@ export default function AdminPoliticiansPage() {
                                 <Badge variant="secondary">{position.level}</Badge>
                               </TableCell>
                               <TableCell>{position.jurisdiction}</TableCell>
+                              <TableCell className="text-slate-500 text-sm">{position.district || "-"}</TableCell>
                               <TableCell>
                                 <Badge variant={position.isActive ? "default" : "secondary"}>
                                   {position.isActive ? "Active" : "Inactive"}
@@ -794,9 +974,10 @@ export default function AdminPoliticiansPage() {
                 )}
               </TabsContent>
 
+              {/* ── PROFILES TAB ── */}
               <TabsContent value="profiles" className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                <div className="flex justify-between items-start gap-4 flex-wrap">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
                     Politician profiles represent the actual people who hold or have held political positions
                   </p>
                   <Button
@@ -812,23 +993,81 @@ export default function AdminPoliticiansPage() {
                   </Button>
                 </div>
 
+                {/* Search + filters */}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Search by name, party, position, state, district, bio..."
+                      value={profileSearch}
+                      onChange={e => setProfileSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                    {profileSearch && (
+                      <button onClick={() => setProfileSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <Select value={profileStatusFilter} onValueChange={setProfileStatusFilter}>
+                    <SelectTrigger className="w-[120px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="current">Current</SelectItem>
+                      <SelectItem value="former">Former</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={profilePartyFilter} onValueChange={setProfilePartyFilter}>
+                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="Party" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Parties</SelectItem>
+                      {uniqueParties.map(party => (
+                        <SelectItem key={party} value={party}>{party}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={profileGradeFilter} onValueChange={setProfileGradeFilter}>
+                    <SelectTrigger className="w-[120px]"><SelectValue placeholder="Grade" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Grades</SelectItem>
+                      <SelectItem value="A">Grade A</SelectItem>
+                      <SelectItem value="B">Grade B</SelectItem>
+                      <SelectItem value="C">Grade C</SelectItem>
+                      <SelectItem value="D">Grade D</SelectItem>
+                      <SelectItem value="F">Grade F</SelectItem>
+                      <SelectItem value="none">No Grade</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={profileStateFilter} onValueChange={setProfileStateFilter}>
+                    <SelectTrigger className="w-[150px]"><SelectValue placeholder="Jurisdiction" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Jurisdictions</SelectItem>
+                      {uniqueJurisdictions.slice(0, 60).map(j => (
+                        <SelectItem key={j} value={j}>{j}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-slate-500">{filteredProfiles.length} of {profiles.length}</span>
+                </div>
+
                 {profilesLoading ? (
                   <div className="text-center py-8">Loading profiles...</div>
-                ) : profiles.length === 0 ? (
+                ) : filteredProfiles.length === 0 ? (
                   <div className="text-center py-12 text-slate-500 dark:text-slate-400">
                     <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No politician profiles created yet</p>
+                    <p>{profiles.length === 0 ? "No politician profiles created yet" : "No profiles match your search"}</p>
                   </div>
                 ) : (
-                  <div className="border rounded-lg">
+                  <div className="border rounded-lg overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[50px]">Featured</TableHead>
-                          <TableHead className="w-[80px]">Photo</TableHead>
+                          <TableHead className="w-[60px]">Photo</TableHead>
                           <TableHead>Name</TableHead>
                           <TableHead>Party</TableHead>
                           <TableHead>Position</TableHead>
+                          <TableHead>State</TableHead>
                           <TableHead>Term</TableHead>
                           <TableHead>Grade</TableHead>
                           <TableHead>Status</TableHead>
@@ -836,7 +1075,7 @@ export default function AdminPoliticiansPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {profiles.map((profile) => {
+                        {filteredProfiles.map((profile) => {
                           const position = positions.find(p => p.id === profile.positionId);
                           return (
                             <TableRow key={profile.id} data-testid={`row-profile-${profile.id}`}>
@@ -863,22 +1102,25 @@ export default function AdminPoliticiansPage() {
                                   <img
                                     src={profile.photoUrl}
                                     alt={profile.fullName}
-                                    className="w-12 h-12 rounded-full object-cover"
+                                    className="w-10 h-10 rounded-full object-cover"
                                   />
                                 ) : (
-                                  <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                                    <Users className="h-6 w-6 text-slate-400" />
+                                  <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                                    <Users className="h-5 w-5 text-slate-400" />
                                   </div>
                                 )}
                               </TableCell>
                               <TableCell className="font-medium">{profile.fullName}</TableCell>
-                              <TableCell>{profile.party || "-"}</TableCell>
-                              <TableCell>
+                              <TableCell className="text-sm">{profile.party || "-"}</TableCell>
+                              <TableCell className="text-sm">
                                 {position ? position.title : <span className="text-slate-400">Not assigned</span>}
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="text-sm text-slate-500">
+                                {position?.jurisdiction || "-"}
+                              </TableCell>
+                              <TableCell className="text-sm">
                                 {profile.termStart && profile.termEnd
-                                  ? `${profile.termStart} - ${profile.termEnd}`
+                                  ? `${profile.termStart} – ${profile.termEnd}`
                                   : profile.termStart || "-"}
                               </TableCell>
                               <TableCell>
@@ -957,215 +1199,205 @@ export default function AdminPoliticiansPage() {
                 )}
               </TabsContent>
 
-              <TabsContent value="sponsorships" className="space-y-4">
-                <div className="flex flex-col gap-4">
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Link Special Interest Groups (PACs, corporate sponsors, etc.) to politician profiles for corruption scorecard tracking
-                    </p>
-                  </div>
-
-                  <div className="flex gap-4">
-                    <Select value={sponsorshipFilter} onValueChange={(val) => {
-                      setSponsorshipFilter(val);
-                      const politician = profiles.find(p => p.id === val);
-                      setSelectedPoliticianForSponsor(politician || null);
-                    }}>
-                      <SelectTrigger className="w-[300px]" data-testid="select-politician-sponsor">
-                        <SelectValue placeholder="Select a politician to manage sponsors..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {profiles.map(profile => (
-                          <SelectItem key={profile.id} value={profile.id}>{profile.fullName}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    
-                    {selectedPoliticianForSponsor && (
-                      <Button
-                        onClick={() => setSponsorDialogOpen(true)}
-                        data-testid="btn-add-sponsor"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Link Sponsor
-                      </Button>
-                    )}
-                  </div>
-
-                  {selectedPoliticianForSponsor ? (
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center gap-3">
-                          {selectedPoliticianForSponsor.photoUrl ? (
-                            <img src={selectedPoliticianForSponsor.photoUrl} alt="" className="w-12 h-12 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                              <Users className="h-6 w-6 text-slate-400" />
-                            </div>
-                          )}
-                          <div>
-                            <CardTitle className="text-lg">{selectedPoliticianForSponsor.fullName}</CardTitle>
-                            <CardDescription>{selectedPoliticianForSponsor.party || "No party"}</CardDescription>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        {sponsorsLoading ? (
-                          <div className="text-center py-4">Loading sponsors...</div>
-                        ) : politicianSponsors.length === 0 ? (
-                          <div className="text-center py-8 text-slate-500">
-                            <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                            <p>No sponsors linked yet</p>
-                            <p className="text-sm mt-1">Click "Link Sponsor" to add a SIG relationship</p>
-                          </div>
-                        ) : (
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Organization</TableHead>
-                                <TableHead>Category</TableHead>
-                                <TableHead>Relationship</TableHead>
-                                <TableHead>Amount</TableHead>
-                                <TableHead>Period</TableHead>
-                                <TableHead>Source</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {politicianSponsors.map((sponsorship) => (
-                                <TableRow key={sponsorship.id}>
-                                  <TableCell className="font-medium">
-                                    {sponsorship.sig?.name || "Unknown"}
-                                    {sponsorship.sig?.acronym && <span className="text-slate-500 ml-1">({sponsorship.sig.acronym})</span>}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline">{sponsorship.sig?.category || "-"}</Badge>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge variant={sponsorship.relationshipType === "primary_sponsor" ? "default" : "secondary"}>
-                                      {sponsorship.relationshipType.replace(/_/g, " ")}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell>
-                                    {sponsorship.reportedAmount 
-                                      ? `$${(sponsorship.reportedAmount / 100).toLocaleString()}`
-                                      : "-"}
-                                  </TableCell>
-                                  <TableCell>{sponsorship.contributionPeriod || "-"}</TableCell>
-                                  <TableCell className="max-w-[150px] truncate">
-                                    {sponsorship.disclosureSource || "-"}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        if (confirm(`Unlink ${sponsorship.sig?.name} from ${selectedPoliticianForSponsor.fullName}?`)) {
-                                          unlinkSponsorMutation.mutate({
-                                            politicianId: selectedPoliticianForSponsor.id,
-                                            sigId: sponsorship.sigId
-                                          });
-                                        }
-                                      }}
-                                      data-testid={`btn-unlink-${sponsorship.id}`}
-                                    >
-                                      <Unlink className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className="text-center py-12 text-slate-500 dark:text-slate-400 border rounded-lg">
-                      <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Select a politician to view and manage their campaign sponsors</p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="claims" className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Review and approve page claim requests from politicians
+              {/* ── CANDIDATES TAB ── */}
+              <TabsContent value="candidates" className="space-y-4">
+                <div className="flex justify-between items-start gap-4 flex-wrap">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
+                    Platform users who have registered as election candidates. Use the Import Candidates button above to bulk-import from CSV.
                   </p>
                 </div>
 
-                {claimsLoading ? (
-                  <div>Loading claim requests...</div>
-                ) : claimRequests.length === 0 ? (
-                  <div className="text-center py-8 text-slate-600 dark:text-slate-400">
-                    No pending claim requests
+                {/* Search + filters */}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Search by name, party, location, platform, bio..."
+                      value={candidateSearch}
+                      onChange={e => setCandidateSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                    {candidateSearch && (
+                      <button onClick={() => setCandidateSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <Select value={candidatePartyFilter} onValueChange={setCandidatePartyFilter}>
+                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="Party" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Parties</SelectItem>
+                      {[...new Set(platformCandidates.map(c => c.party).filter(Boolean) as string[])].sort().map(p => (
+                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={candidateStateFilter} onValueChange={setCandidateStateFilter}>
+                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="State/Location" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Locations</SelectItem>
+                      {[...new Set(platformCandidates.map(c => c.location).filter(Boolean) as string[])].sort().map(loc => (
+                        <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-slate-500">{filteredCandidates.length} of {platformCandidates.length}</span>
+                </div>
+
+                {candidatesLoading ? (
+                  <div className="text-center py-8">Loading candidates...</div>
+                ) : filteredCandidates.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                    <UserPlus className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{platformCandidates.length === 0 ? "No candidates have registered on the platform yet" : "No candidates match your search"}</p>
                   </div>
                 ) : (
-                  <div className="rounded-md border">
+                  <div className="border rounded-lg overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Politician Name</TableHead>
-                          <TableHead>Position</TableHead>
-                          <TableHead>Request Email</TableHead>
-                          <TableHead>Request Phone</TableHead>
-                          <TableHead>Request Date</TableHead>
-                          <TableHead>Actions</TableHead>
+                          <TableHead className="w-[60px]">Photo</TableHead>
+                          <TableHead>Name / Username</TableHead>
+                          <TableHead>Party</TableHead>
+                          <TableHead>Location</TableHead>
+                          <TableHead>Bio</TableHead>
+                          <TableHead>Website</TableHead>
+                          <TableHead>Status</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {claimRequests.map((claim: any) => {
-                          return (
-                            <TableRow key={claim.id}>
-                              <TableCell className="font-medium" data-testid={`text-claim-name-${claim.id}`}>
-                                {claim.fullName}
-                              </TableCell>
-                              <TableCell data-testid={`text-claim-position-${claim.id}`}>
-                                {claim.position?.title || "No position"}
-                              </TableCell>
-                              <TableCell data-testid={`text-claim-email-${claim.id}`}>
-                                {claim.claimRequestEmail}
-                              </TableCell>
-                              <TableCell data-testid={`text-claim-phone-${claim.id}`}>
-                                {claim.claimRequestPhone}
-                              </TableCell>
-                              <TableCell data-testid={`text-claim-date-${claim.id}`}>
-                                {claim.claimRequestDate 
-                                  ? new Date(claim.claimRequestDate).toLocaleDateString()
-                                  : "-"}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="default"
-                                    size="sm"
-                                    onClick={() => {
-                                      if (confirm(`Approve claim request for ${claim.fullName}? This will verify their profile and they will receive a green checkmark.`)) {
-                                        approveClaimMutation.mutate(claim.id);
-                                      }
-                                    }}
-                                    data-testid={`button-approve-claim-${claim.id}`}
-                                  >
-                                    Approve
-                                  </Button>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => {
-                                      if (confirm(`Reject claim request for ${claim.fullName}?`)) {
-                                        rejectClaimMutation.mutate(claim.id);
-                                      }
-                                    }}
-                                    data-testid={`button-reject-claim-${claim.id}`}
-                                  >
-                                    Reject
-                                  </Button>
+                        {filteredCandidates.map((candidate) => (
+                          <TableRow key={candidate.id}>
+                            <TableCell>
+                              {candidate.photoUrl ? (
+                                <img
+                                  src={candidate.photoUrl}
+                                  alt=""
+                                  className="w-10 h-10 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                                  <Users className="h-5 w-5 text-slate-400" />
                                 </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{candidate.user?.displayName || candidate.user?.username || "Unknown"}</div>
+                              {candidate.user?.username && (
+                                <div className="text-xs text-slate-500">@{candidate.user.username}</div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm">{candidate.party || "-"}</TableCell>
+                            <TableCell className="text-sm">{candidate.location || "-"}</TableCell>
+                            <TableCell className="text-sm max-w-[200px]">
+                              <span className="line-clamp-2 text-slate-600 dark:text-slate-400">
+                                {candidate.bio || "-"}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {candidate.websiteUrl ? (
+                                <a href={candidate.websiteUrl} target="_blank" rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                                  <ExternalLink className="h-3 w-3" />Site
+                                </a>
+                              ) : <span className="text-slate-400 text-xs">-</span>}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={candidate.isActive ? "default" : "secondary"}>
+                                {candidate.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                              {candidate.isFeatured && (
+                                <Badge className="ml-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Featured</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ── DELEGATES TAB ── */}
+              <TabsContent value="delegates" className="space-y-4">
+                <div className="flex justify-between items-start gap-4 flex-wrap">
+                  <div>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
+                      Delegates are users with elevated roles (Admin, State Admin, Moderator) who have permission to manage and import Candidates, Current Reps, and Positions. Assign roles in User Management.
+                    </p>
+                  </div>
+                  <Link href="/admin/users">
+                    <Button variant="outline" className="flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Manage Roles
+                    </Button>
+                  </Link>
+                </div>
+
+                {/* Search */}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <div className="relative flex-1 min-w-[200px] max-w-sm">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Search by name, email, role, state..."
+                      value={delegateSearch}
+                      onChange={e => setDelegateSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                    {delegateSearch && (
+                      <button onClick={() => setDelegateSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <span className="text-xs text-slate-500">{filteredDelegates.length} of {delegates.length} delegates</span>
+                </div>
+
+                {delegatesLoading ? (
+                  <div className="text-center py-8">Loading delegates...</div>
+                ) : filteredDelegates.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                    <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{delegates.length === 0 ? "No delegates assigned yet. Go to User Management to grant roles." : "No delegates match your search"}</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Username</TableHead>
+                          <TableHead>Display Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Managed State</TableHead>
+                          <TableHead>Permissions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredDelegates.map((user) => (
+                          <TableRow key={user.id}>
+                            <TableCell className="font-medium">@{user.username}</TableCell>
+                            <TableCell className="text-sm">{user.displayName || "-"}</TableCell>
+                            <TableCell className="text-sm text-slate-500">{user.email}</TableCell>
+                            <TableCell>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ROLE_COLORS[user.role] || "bg-slate-100 text-slate-700"}`}>
+                                {user.role === "state_admin" ? "State Admin" : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {user.managedState ? (
+                                <Badge variant="outline">{user.managedState}</Badge>
+                              ) : (
+                                <span className="text-slate-400 text-sm">All states</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-slate-500">
+                              {user.role === "admin" && "Full access: Candidates, Reps, Positions, SIGs"}
+                              {user.role === "state_admin" && `State data: ${user.managedState || "unset"} — Candidates, Reps, Positions`}
+                              {user.role === "moderator" && "Import access: Candidates, Reps, Positions"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
                   </div>
