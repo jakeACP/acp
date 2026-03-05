@@ -418,8 +418,9 @@ export default function AdminPoliticiansPage() {
       setCandidateImportOpen(false);
       setCandidateImportRows([]);
       setCandidateImportPreview({});
+      setActiveTab("profiles");
       toast({
-        title: "Candidates imported",
+        title: "Import complete — see Profiles tab",
         description: `${data.created + data.updated} total — ${data.created} created, ${data.updated} updated, ${data.positions_created} positions added.`,
       });
     },
@@ -1272,16 +1273,16 @@ export default function AdminPoliticiansPage() {
               <TabsContent value="profiles" className="space-y-4">
                 <div className="flex justify-between items-start gap-4 flex-wrap">
                   <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
-                    Politician profiles represent the actual people who hold or have held political positions
+                    Politician and candidate profiles — includes Congress members, state candidates (imported from XLSX/CSV), and anyone manually added.
                   </p>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => setProfileImportOpen(true)}
+                      onClick={() => setCandidateImportOpen(true)}
                       className="flex items-center gap-2"
                     >
                       <Upload className="h-4 w-4" />
-                      Import from CSV
+                      Import from XLSX/CSV
                     </Button>
                     <Button
                       onClick={() => {
@@ -1507,15 +1508,8 @@ export default function AdminPoliticiansPage() {
               <TabsContent value="candidates" className="space-y-4">
                 <div className="flex justify-between items-start gap-4 flex-wrap">
                   <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
-                    Election candidates from any XLSX/CSV file (e.g. state candidate lists). Platform users who self-registered are also shown here.
+                    Platform users who self-registered as election candidates. To import state candidates from XLSX/CSV, use the <strong>Profiles tab → Import from XLSX/CSV</strong>.
                   </p>
-                  <Button
-                    onClick={() => setCandidateImportOpen(true)}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <Upload className="h-4 w-4" />
-                    Import from XLSX/CSV
-                  </Button>
                 </div>
 
                 {/* Search + filters */}
