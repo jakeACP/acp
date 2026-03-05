@@ -14,8 +14,8 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
-  getUserCount(): Promise<number>;
-  getAllUsers(limit?: number, offset?: number): Promise<User[]>;
+  getUserCount(search?: string): Promise<number>;
+  getAllUsers(limit?: number, offset?: number, search?: string): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(userId: string, updateData: Partial<User>): Promise<User>;
   updateUserStripeInfo(userId: string, customerId: string, subscriptionId: string): Promise<User>;
@@ -227,7 +227,7 @@ export interface IStorage {
   seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number>;
   
   importCongress(): Promise<{ profiles_created: number; profiles_updated: number; positions_created: number; sigs_created: number; sponsorships_created: number }>;
-  importCandidates(candidates: Array<{ fullName: string; office: string; officeLevel: string; district: string; party: string; isIncumbent: string; status: string; primaryDate: string; generalDate: string; ballotpediaUrl: string; notes: string }>): Promise<{ created: number; updated: number; positions_created: number }>;
+  importCandidates(candidates: Array<{ fullName: string; office: string; officeLevel: string; district: string; party: string; isIncumbent: string; status: string; primaryDate: string; generalDate: string; ballotpediaUrl: string; notes: string; profileType?: string }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number }>;
   importProfilesCsv(profiles: Array<{ fullName: string; party: string; email: string; phone: string; website: string; biography: string; termStart: string; termEnd: string; isCurrent: string; officeAddress: string }>): Promise<{ created: number; updated: number }>;
   importPositionsCsv(positions: Array<{ title: string; officeType: string; level: string; jurisdiction: string; district: string; termLength: string; isElected: string; isActive: string }>): Promise<{ created: number; updated: number }>;
 
@@ -544,12 +544,26 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async getUserCount(): Promise<number> {
+  async getUserCount(search = ""): Promise<number> {
+    if (search) {
+      const q = `%${search.toLowerCase()}%`;
+      const result = await db.select({ count: count() }).from(users)
+        .where(sql`lower(username) LIKE ${q} OR lower(email) LIKE ${q} OR lower(coalesce(first_name,'') || ' ' || coalesce(last_name,'')) LIKE ${q}`);
+      return result[0]?.count || 0;
+    }
     const result = await db.select({ count: count() }).from(users);
     return result[0]?.count || 0;
   }
 
-  async getAllUsers(limit = 50, offset = 0): Promise<User[]> {
+  async getAllUsers(limit = 50, offset = 0, search = ""): Promise<User[]> {
+    if (search) {
+      const q = `%${search.toLowerCase()}%`;
+      return await db.select().from(users)
+        .where(sql`lower(username) LIKE ${q} OR lower(email) LIKE ${q} OR lower(coalesce(first_name,'') || ' ' || coalesce(last_name,'')) LIKE ${q}`)
+        .orderBy(desc(users.createdAt))
+        .limit(limit)
+        .offset(offset);
+    }
     return await db
       .select()
       .from(users)
@@ -4060,13 +4074,94 @@ export class DatabaseStorage implements IStorage {
   async importCandidates(candidates: Array<{
     fullName: string; office: string; officeLevel: string; district: string;
     party: string; isIncumbent: string; status: string; primaryDate: string;
-    generalDate: string; ballotpediaUrl: string; notes: string;
-  }>): Promise<{ created: number; updated: number; positions_created: number }> {
+    generalDate: string; ballotpediaUrl: string; notes: string; profileType?: string;
+  }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number }> {
     let created = 0;
     let updated = 0;
     let positions_created = 0;
+    let photos_fetched = 0;
+    let handles_generated = 0;
+
+    const STATE_NAME_TO_ABBR: Record<string, string> = {
+      "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
+      "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Washington D.C.": "DC", "Florida": "FL",
+      "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL", "Indiana": "IN",
+      "Iowa": "IA", "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME",
+      "Maryland": "MD", "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN",
+      "Mississippi": "MS", "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
+      "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
+      "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK", "Oregon": "OR",
+      "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC", "South Dakota": "SD",
+      "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT", "Virginia": "VA",
+      "Washington": "WA", "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY", "Puerto Rico": "PR",
+    };
+
+    const US_STATE_ABBRS = new Set(Object.values(STATE_NAME_TO_ABBR));
+
+    function buildHandle(fullName: string, stateAbbr: string): string {
+      let name = fullName
+        .replace(/\s+(?:Jr\.?|Sr\.?|II|III|IV|V|Esq\.?)$/i, "")
+        .replace(/\s+[A-Z]\.\s+/, " ")
+        .trim();
+      const parts = name.split(/\s+/);
+      const first = parts[0] ?? "";
+      const last = parts[parts.length - 1] ?? "";
+      return (first + last + stateAbbr).replace(/[^a-zA-Z0-9]/g, "");
+    }
+
+    function getStateAbbrFromDistrict(district: string): string | null {
+      if (!district) return null;
+      const upper = district.trim().toUpperCase();
+      if (US_STATE_ABBRS.has(upper)) return upper;
+      for (const [name, abbr] of Object.entries(STATE_NAME_TO_ABBR)) {
+        if (district.toLowerCase().includes(name.toLowerCase())) return abbr;
+      }
+      const match = district.match(/\b([A-Z]{2})\b/);
+      if (match && US_STATE_ABBRS.has(match[1])) return match[1];
+      return null;
+    }
+
+    async function fetchBallotpediaPhoto(ballotpediaUrl: string): Promise<string | null> {
+      try {
+        const pageTitle = ballotpediaUrl.replace("https://ballotpedia.org/", "").split("?")[0];
+        if (!pageTitle) return null;
+        const res = await fetch(
+          `https://ballotpedia.org/api.php?action=query&titles=${encodeURIComponent(pageTitle)}&prop=pageimages&pithumbsize=300&format=json`,
+          { headers: { "User-Agent": "ACPlatform/1.0 (contact@anticocorruptionparty.org)" } }
+        );
+        if (!res.ok) return null;
+        const data: any = await res.json();
+        const pages = data?.query?.pages;
+        if (!pages) return null;
+        const page = Object.values(pages)[0] as any;
+        return page?.thumbnail?.source || null;
+      } catch {
+        return null;
+      }
+    }
+
+    async function fetchWikipediaPhoto(fullName: string): Promise<string | null> {
+      try {
+        const wikiName = fullName.replace(/\s+/g, "_");
+        const res = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiName)}`,
+          { headers: { "User-Agent": "ACPlatform/1.0" } }
+        );
+        if (!res.ok) return null;
+        const data: any = await res.json();
+        return data?.thumbnail?.source || null;
+      } catch {
+        return null;
+      }
+    }
 
     const positionCache = new Map<string, string>();
+    const usedHandles = new Set<string>();
+
+    const existingHandles = await db.select({ handle: politicianProfiles.handle }).from(politicianProfiles);
+    for (const r of existingHandles) {
+      if (r.handle) usedHandles.add(r.handle.toLowerCase());
+    }
 
     for (const row of candidates) {
       const office = (row.office || "").trim();
@@ -4117,10 +4212,23 @@ export class DatabaseStorage implements IStorage {
 
       const notesText = [row.status, row.notes].filter(Boolean).join(" | ") || null;
 
+      const normalizedProfileType = (() => {
+        const pt = (row.profileType || "").toLowerCase().trim();
+        if (pt === "representative") return "representative";
+        if (pt === "delegate") return "delegate";
+        return "candidate";
+      })();
+
       const existingProfiles = await db.select().from(politicianProfiles)
         .where(sql`lower(full_name) = lower(${fullName})`);
 
+      let profileId: string;
+      let existingPhotoUrl: string | null = null;
+
       if (existingProfiles.length > 0) {
+        const existing = existingProfiles[0];
+        profileId = existing.id;
+        existingPhotoUrl = existing.photoUrl || null;
         await db.update(politicianProfiles).set({
           party: row.party || undefined,
           isCurrent: row.isIncumbent === "Yes",
@@ -4129,11 +4237,12 @@ export class DatabaseStorage implements IStorage {
           termEnd: row.generalDate || undefined,
           notes: notesText,
           positionId: positionId || undefined,
+          profileType: normalizedProfileType,
           updatedAt: new Date(),
-        }).where(eq(politicianProfiles.id, existingProfiles[0].id));
+        } as any).where(eq(politicianProfiles.id, existing.id));
         updated++;
       } else {
-        await db.insert(politicianProfiles).values({
+        const [inserted] = await db.insert(politicianProfiles).values({
           fullName,
           party: row.party || null,
           isCurrent: row.isIncumbent === "Yes",
@@ -4142,12 +4251,47 @@ export class DatabaseStorage implements IStorage {
           termEnd: row.generalDate || null,
           notes: notesText,
           positionId: positionId || null,
-        });
+          profileType: normalizedProfileType,
+        } as any).returning();
+        profileId = inserted.id;
         created++;
+      }
+
+      if (!existingPhotoUrl) {
+        let photoUrl: string | null = null;
+        if (row.ballotpediaUrl) {
+          photoUrl = await fetchBallotpediaPhoto(row.ballotpediaUrl);
+        }
+        if (!photoUrl) {
+          photoUrl = await fetchWikipediaPhoto(fullName);
+        }
+        if (photoUrl) {
+          await db.update(politicianProfiles).set({ photoUrl, updatedAt: new Date() })
+            .where(eq(politicianProfiles.id, profileId));
+          photos_fetched++;
+        }
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      const stateAbbr = getStateAbbrFromDistrict(district);
+      if (stateAbbr) {
+        let handle = buildHandle(fullName, stateAbbr);
+        if (handle) {
+          let finalHandle = handle;
+          let suffix = 2;
+          while (usedHandles.has(finalHandle.toLowerCase())) {
+            finalHandle = handle + suffix;
+            suffix++;
+          }
+          usedHandles.add(finalHandle.toLowerCase());
+          await db.update(politicianProfiles).set({ handle: finalHandle } as any)
+            .where(eq(politicianProfiles.id, profileId));
+          handles_generated++;
+        }
       }
     }
 
-    return { created, updated, positions_created };
+    return { created, updated, positions_created, photos_fetched, handles_generated };
   }
 
   async importProfilesCsv(profiles: Array<{

@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, Image, FileDown, Search, X, Shield, ExternalLink } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
@@ -68,8 +68,10 @@ type PoliticianProfile = {
   termStart?: string;
   termEnd?: string;
   isCurrent: boolean;
+  profileType?: string;
   positionId?: string;
   featured?: boolean;
+  handle?: string;
   corruptionGrade?: string;
   corruptionScorecard?: string;
   isVerified?: boolean;
@@ -80,33 +82,6 @@ type PoliticianProfile = {
   verifiedDate?: string;
 };
 
-type PlatformCandidate = {
-  id: string;
-  userId: string;
-  bio?: string;
-  party?: string;
-  platform?: string;
-  location?: string;
-  photoUrl?: string;
-  websiteUrl?: string;
-  isActive: boolean;
-  isFeatured: boolean;
-  user?: {
-    username: string;
-    displayName?: string;
-    email?: string;
-  };
-};
-
-type DelegateUser = {
-  id: string;
-  username: string;
-  email: string;
-  displayName?: string;
-  role: string;
-  managedState?: string;
-  createdAt?: string;
-};
 
 export default function AdminPoliticiansPage() {
   const { toast } = useToast();
@@ -134,13 +109,6 @@ export default function AdminPoliticiansPage() {
   const [profileStatusFilter, setProfileStatusFilter] = useState("all");
   const [profileStateFilter, setProfileStateFilter] = useState("all");
 
-  // Candidates search/filter
-  const [candidateSearch, setCandidateSearch] = useState("");
-  const [candidatePartyFilter, setCandidatePartyFilter] = useState("all");
-  const [candidateStateFilter, setCandidateStateFilter] = useState("all");
-
-  // Delegates search
-  const [delegateSearch, setDelegateSearch] = useState("");
 
   const { data: positions = [], isLoading: positionsLoading } = useQuery<PoliticalPosition[]>({
     queryKey: ["/api/admin/political-positions"],
@@ -170,19 +138,6 @@ export default function AdminPoliticiansPage() {
     enabled: !!selectedPoliticianForSponsor,
   });
 
-  const { data: platformCandidates = [], isLoading: candidatesLoading } = useQuery<PlatformCandidate[]>({
-    queryKey: ["/api/candidates"],
-  });
-
-  const { data: allAdminUsers = [], isLoading: delegatesLoading } = useQuery<DelegateUser[]>({
-    queryKey: ["/api/admin/users"],
-    queryFn: async () => {
-      const response = await fetch("/api/admin/users", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch users");
-      const data = await response.json();
-      return Array.isArray(data) ? data : (data.users || []);
-    },
-  });
 
   const createPositionMutation = useMutation({
     mutationFn: async (data: Partial<PoliticalPosition>) => {
@@ -343,8 +298,9 @@ export default function AdminPoliticiansPage() {
   });
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
-  const [handleDialogOpen, setHandleDialogOpen] = useState(false);
+
+  // Profile sub-filter (all, representatives, candidates, delegates)
+  const [profileSubFilter, setProfileSubFilter] = useState("all");
 
   // Candidate XLSX import
   const [candidateImportOpen, setCandidateImportOpen] = useState(false);
@@ -361,36 +317,6 @@ export default function AdminPoliticiansPage() {
   const [positionImportOpen, setPositionImportOpen] = useState(false);
   const [positionImportRows, setPositionImportRows] = useState<any[]>([]);
   const positionFileRef = useRef<HTMLInputElement>(null);
-
-  const generateHandlesMutation = useMutation({
-    mutationFn: async () => apiRequest("/api/admin/politicians/generate-handles", "POST"),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
-      setHandleDialogOpen(false);
-      toast({
-        title: "Handles generated",
-        description: `${data.updated} politician handles created (e.g. @TomEmmerMN). ${data.skipped} skipped (no position assigned).`,
-      });
-    },
-    onError: (error: any) => {
-      toast({ title: "Handle generation failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const fetchPhotosMutation = useMutation({
-    mutationFn: async () => apiRequest("/api/admin/politicians/fetch-photos", "POST"),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
-      setPhotoDialogOpen(false);
-      toast({
-        title: "Photo fetch complete",
-        description: `${data.fetched} photos fetched from Wikipedia, ${data.alreadyHad} already had photos, ${data.notFound} not found on Wikipedia.`,
-      });
-    },
-    onError: (error: any) => {
-      toast({ title: "Photo fetch failed", description: error.message, variant: "destructive" });
-    },
-  });
 
   const importCongressMutation = useMutation({
     mutationFn: async () => apiRequest("/api/admin/politicians/import-congress", "POST"),
@@ -421,7 +347,7 @@ export default function AdminPoliticiansPage() {
       setActiveTab("profiles");
       toast({
         title: "Import complete — see Profiles tab",
-        description: `${data.created + data.updated} total — ${data.created} created, ${data.updated} updated, ${data.positions_created} positions added.`,
+        description: `${data.created + data.updated} total — ${data.created} created, ${data.updated} updated, ${data.positions_created} positions added, ${data.photos_fetched ?? 0} photos fetched, ${data.handles_generated ?? 0} handles generated.`,
       });
     },
     onError: (error: any) => {
@@ -553,8 +479,6 @@ export default function AdminPoliticiansPage() {
   // Derived filter options
   const uniqueParties = [...new Set(profiles.map(p => p.party).filter(Boolean) as string[])].sort();
   const uniqueJurisdictions = [...new Set(positions.map(p => p.jurisdiction).filter(Boolean) as string[])].sort();
-  const delegates = allAdminUsers.filter(u => ["admin", "state_admin", "moderator"].includes(u.role));
-
   // Filtered positions
   const filteredPositions = positions.filter(p => {
     const q = positionSearch.toLowerCase();
@@ -590,40 +514,24 @@ export default function AdminPoliticiansPage() {
       || (profileStatusFilter === "current" ? p.isCurrent : !p.isCurrent);
     const matchState = profileStateFilter === "all"
       || (position?.jurisdiction || "").toLowerCase().includes(profileStateFilter.toLowerCase());
-    return matchSearch && matchParty && matchGrade && matchStatus && matchState;
+    const matchSubFilter = profileSubFilter === "all"
+      || (profileSubFilter === "representatives" ? (p.profileType === "representative" || !p.profileType) : false)
+      || (profileSubFilter === "candidates" ? p.profileType === "candidate" : false)
+      || (profileSubFilter === "delegates" ? p.profileType === "delegate" : false);
+    return matchSearch && matchParty && matchGrade && matchStatus && matchState && matchSubFilter;
   });
 
-  // Filtered candidates
-  const filteredCandidates = platformCandidates.filter(c => {
-    const q = candidateSearch.toLowerCase();
-    const matchSearch = !q
-      || (c.user?.username || "").toLowerCase().includes(q)
-      || (c.user?.displayName || "").toLowerCase().includes(q)
-      || (c.party || "").toLowerCase().includes(q)
-      || (c.bio || "").toLowerCase().includes(q)
-      || (c.location || "").toLowerCase().includes(q)
-      || (c.platform || "").toLowerCase().includes(q);
-    const matchParty = candidatePartyFilter === "all" || c.party === candidatePartyFilter;
-    const matchState = candidateStateFilter === "all"
-      || (c.location || "").toLowerCase().includes(candidateStateFilter.toLowerCase());
-    return matchSearch && matchParty && matchState;
-  });
-
-  // Filtered delegates
-  const filteredDelegates = delegates.filter(u => {
-    const q = delegateSearch.toLowerCase();
-    return !q
-      || u.username.toLowerCase().includes(q)
-      || u.email.toLowerCase().includes(q)
-      || (u.displayName || "").toLowerCase().includes(q)
-      || (u.managedState || "").toLowerCase().includes(q)
-      || u.role.toLowerCase().includes(q);
-  });
 
   const ROLE_COLORS: Record<string, string> = {
     admin: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
     state_admin: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
     moderator: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  };
+
+  const PROFILE_TYPE_COLORS: Record<string, string> = {
+    representative: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    candidate: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    delegate: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   };
 
   function parseFileToRows(file: File): Promise<any[]> {
@@ -647,21 +555,28 @@ export default function AdminPoliticiansPage() {
 
   async function handleCandidateFileSelect(file: File) {
     const raw = await parseFileToRows(file);
-    const rows = raw.map(r => ({
-      fullName: String(r["FULL_NAME"] || r["Full Name"] || r["fullName"] || "").trim(),
-      office: String(r["OFFICE"] || r["Office"] || r["office"] || "").trim(),
-      officeLevel: String(r["OFFICE_LEVEL"] || r["Office Level"] || r["officeLevel"] || "State").trim(),
-      district: String(r["DISTRICT"] || r["District"] || r["district"] || "").trim(),
-      party: String(r["PARTY"] || r["Party"] || r["party"] || "").trim(),
-      isIncumbent: String(r["INCUMBENT"] || r["Incumbent"] || r["isIncumbent"] || "No").trim(),
-      status: String(r["STATUS"] || r["Status"] || r["status"] || "").trim(),
-      primaryDate: String(r["PRIMARY_DATE"] || r["Primary Date"] || r["primaryDate"] || "").trim(),
-      generalDate: String(r["GENERAL_DATE"] || r["General Date"] || r["generalDate"] || "").trim(),
-      ballotpediaUrl: String(r["BALLOTPEDIA_URL"] || r["Ballotpedia URL"] || r["ballotpediaUrl"] || "").trim(),
-      notes: String(r["NOTES"] || r["Notes"] || r["notes"] || "").trim(),
-    })).filter(r => r.fullName);
+    const rows = raw.map(r => {
+      const rawType = String(r["PROFILE_TYPE"] || r["Profile Type"] || r["profileType"] || "").trim().toLowerCase();
+      let profileType = "candidate";
+      if (rawType === "representative") profileType = "representative";
+      else if (rawType === "delegate") profileType = "delegate";
+      return {
+        fullName: String(r["FULL_NAME"] || r["Full Name"] || r["fullName"] || "").trim(),
+        office: String(r["OFFICE"] || r["Office"] || r["office"] || "").trim(),
+        officeLevel: String(r["OFFICE_LEVEL"] || r["Office Level"] || r["officeLevel"] || "State").trim(),
+        district: String(r["DISTRICT"] || r["District"] || r["district"] || "").trim(),
+        party: String(r["PARTY"] || r["Party"] || r["party"] || "").trim(),
+        isIncumbent: String(r["INCUMBENT"] || r["Incumbent"] || r["isIncumbent"] || "No").trim(),
+        status: String(r["STATUS"] || r["Status"] || r["status"] || "").trim(),
+        primaryDate: String(r["PRIMARY_DATE"] || r["Primary Date"] || r["primaryDate"] || "").trim(),
+        generalDate: String(r["GENERAL_DATE"] || r["General Date"] || r["generalDate"] || "").trim(),
+        ballotpediaUrl: String(r["BALLOTPEDIA_URL"] || r["Ballotpedia URL"] || r["ballotpediaUrl"] || "").trim(),
+        notes: String(r["NOTES"] || r["Notes"] || r["notes"] || "").trim(),
+        profileType,
+      };
+    }).filter(r => r.fullName);
     const preview: Record<string, number> = {};
-    rows.forEach(r => { preview[r.office] = (preview[r.office] || 0) + 1; });
+    rows.forEach(r => { preview[r.profileType] = (preview[r.profileType] || 0) + 1; });
     setCandidateImportRows(rows);
     setCandidateImportPreview(preview);
   }
@@ -712,22 +627,6 @@ export default function AdminPoliticiansPage() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <Button
-              onClick={() => setHandleDialogOpen(true)}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Users className="w-4 h-4" />
-              Generate @Handles
-            </Button>
-            <Button
-              onClick={() => setPhotoDialogOpen(true)}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Image className="w-4 h-4" />
-              Fetch Wikipedia Photos
-            </Button>
-            <Button
               variant="outline"
               onClick={() => downloadCsv(TEMPLATES.politicians.filename, TEMPLATES.politicians.headers, TEMPLATES.politicians.sample)}
               className="flex items-center gap-2"
@@ -745,87 +644,6 @@ export default function AdminPoliticiansPage() {
             </Button>
           </div>
         </div>
-
-        {/* Generate Handles Dialog */}
-        <Dialog open={handleDialogOpen} onOpenChange={setHandleDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Generate @Handles for Politicians</DialogTitle>
-              <DialogDescription>
-                This will create a unique @handle for every Congress member in the format @FirstLastState.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300 py-2">
-              <p>• Format: <strong>@FirstLastState</strong> (e.g. @TomEmmerMN, @AmyKlobucharMN)</p>
-              <p>• Derived from each politician's name + their state from their position title</p>
-              <p>• Middle initials and suffixes (Jr., Sr., II, III) are automatically stripped</p>
-              <p>• Duplicates are automatically resolved by appending a number</p>
-              <p>• Safe to re-run — existing handles will be overwritten with regenerated ones</p>
-              <p className="text-slate-500 dark:text-slate-400 mt-3">
-                Only politicians with an assigned position (state) can receive a handle. Run the Congress import first if needed.
-              </p>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setHandleDialogOpen(false)} disabled={generateHandlesMutation.isPending}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => generateHandlesMutation.mutate()}
-                disabled={generateHandlesMutation.isPending}
-                className="bg-slate-800 hover:bg-slate-900 text-white"
-              >
-                {generateHandlesMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating handles...</>
-                ) : (
-                  <><Users className="w-4 h-4 mr-2" />Generate Handles</>
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Fetch Wikipedia Photos Dialog */}
-        <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Fetch Wikipedia Headshots</DialogTitle>
-              <DialogDescription>
-                This will pull official headshots for all 535 Congress members from Wikipedia.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300 py-2">
-              <p>• Photos are sourced from <strong>Wikipedia / Wikimedia Commons</strong> (free, no API key)</p>
-              <p>• Only politicians <strong>without an existing photo</strong> will be updated</p>
-              <p>• Photos will appear <strong>in grayscale</strong> until the politician claims their profile</p>
-              <p>• This process fetches ~535 photos with a brief pause between each request</p>
-              <p className="text-amber-600 dark:text-amber-400 mt-3">
-                ⏱ This will take approximately <strong>60–90 seconds</strong> to complete.
-              </p>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setPhotoDialogOpen(false)} disabled={fetchPhotosMutation.isPending}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => fetchPhotosMutation.mutate()}
-                disabled={fetchPhotosMutation.isPending}
-                className="bg-slate-800 hover:bg-slate-900 text-white"
-              >
-                {fetchPhotosMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Fetching photos... (~60–90 seconds)
-                  </>
-                ) : (
-                  <>
-                    <Image className="w-4 h-4 mr-2" />
-                    Start Fetch
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Congress Import Confirmation Dialog */}
         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
@@ -872,16 +690,16 @@ export default function AdminPoliticiansPage() {
           </DialogContent>
         </Dialog>
 
-        {/* ── Candidate XLSX Import Dialog ── */}
+        {/* ── Universal Profile Import Dialog ── */}
         <Dialog open={candidateImportOpen} onOpenChange={(open) => {
           setCandidateImportOpen(open);
           if (!open) { setCandidateImportRows([]); setCandidateImportPreview({}); }
         }}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Import Election Candidates</DialogTitle>
+              <DialogTitle>Import Profiles (Universal)</DialogTitle>
               <DialogDescription>
-                Upload an XLSX or CSV file with candidate data. Required columns: FULL_NAME, OFFICE, OFFICE_LEVEL, DISTRICT, PARTY, INCUMBENT, BALLOTPEDIA_URL
+                Upload an XLSX or CSV file with any combination of Representatives, Candidates, or Delegates. The PROFILE_TYPE column determines how each row is categorized. Photos and @handles are automatically fetched and generated during import.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
@@ -898,22 +716,25 @@ export default function AdminPoliticiansPage() {
                   }}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  Template columns: FULL_NAME, OFFICE, OFFICE_LEVEL, DISTRICT, PARTY, INCUMBENT (Yes/No), STATUS, PRIMARY_DATE, GENERAL_DATE, BALLOTPEDIA_URL, NOTES
+                  Columns: FULL_NAME, OFFICE, OFFICE_LEVEL, DISTRICT, PARTY, INCUMBENT (Yes/No), <strong>PROFILE_TYPE</strong> (Representative / Candidate / Delegate), PRIMARY_DATE, GENERAL_DATE, BALLOTPEDIA_URL, NOTES
                 </p>
               </div>
 
               {candidateImportRows.length > 0 && (
                 <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800 p-3 space-y-2">
                   <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                    Found {candidateImportRows.length} candidates ready to import
+                    Found {candidateImportRows.length} profiles ready to import
                   </p>
                   <div className="space-y-0.5">
-                    {Object.entries(candidateImportPreview).map(([office, count]) => (
-                      <p key={office} className="text-xs text-green-700 dark:text-green-300">
-                        • {office}: {count}
+                    {Object.entries(candidateImportPreview).map(([type, count]) => (
+                      <p key={type} className="text-xs text-green-700 dark:text-green-300">
+                        • {type.charAt(0).toUpperCase() + type.slice(1)}: {count as number}
                       </p>
                     ))}
                   </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Photos will be fetched from Ballotpedia then Wikipedia. @handles will be auto-generated. This may take a moment.
+                  </p>
                 </div>
               )}
             </div>
@@ -927,9 +748,9 @@ export default function AdminPoliticiansPage() {
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 {importCandidatesMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Importing...</>
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Importing & fetching photos...</>
                 ) : (
-                  <><Upload className="w-4 h-4 mr-2" />Import {candidateImportRows.length > 0 ? `${candidateImportRows.length} Candidates` : "Candidates"}</>
+                  <><Upload className="w-4 h-4 mr-2" />Import {candidateImportRows.length > 0 ? `${candidateImportRows.length} Profiles` : "Profiles"}</>
                 )}
               </Button>
             </DialogFooter>
@@ -1094,12 +915,12 @@ export default function AdminPoliticiansPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Filled Positions
+                Current Representatives
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{filledPositions.length}</div>
+                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{currentProfiles.length}</div>
                 <UserPlus className="h-8 w-8 text-amber-500" />
               </div>
             </CardContent>
@@ -1115,11 +936,9 @@ export default function AdminPoliticiansPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="positions" data-testid="tab-positions">Positions</TabsTrigger>
                 <TabsTrigger value="profiles" data-testid="tab-profiles">Profiles</TabsTrigger>
-                <TabsTrigger value="candidates" data-testid="tab-candidates">Candidates</TabsTrigger>
-                <TabsTrigger value="delegates" data-testid="tab-delegates">Delegates</TabsTrigger>
               </TabsList>
 
               {/* ── POSITIONS TAB ── */}
@@ -1273,7 +1092,7 @@ export default function AdminPoliticiansPage() {
               <TabsContent value="profiles" className="space-y-4">
                 <div className="flex justify-between items-start gap-4 flex-wrap">
                   <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
-                    Politician and candidate profiles — includes Congress members, state candidates (imported from XLSX/CSV), and anyone manually added.
+                    All politician and candidate profiles — Representatives (current elected officials), Candidates (running for office), and Delegates. Import any type using the universal XLSX importer.
                   </p>
                   <div className="flex items-center gap-2">
                     <Button
@@ -1296,6 +1115,35 @@ export default function AdminPoliticiansPage() {
                       Create Profile
                     </Button>
                   </div>
+                </div>
+
+                {/* Sub-filter pills */}
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { key: "all", label: "All" },
+                    { key: "representatives", label: "Representatives" },
+                    { key: "candidates", label: "Candidates" },
+                    { key: "delegates", label: "Delegates" },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setProfileSubFilter(key)}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                        profileSubFilter === key
+                          ? "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {label}
+                      {key !== "all" && (
+                        <span className="ml-1.5 text-xs opacity-70">
+                          {key === "representatives" && profiles.filter(p => p.profileType === "representative" || !p.profileType).length}
+                          {key === "candidates" && profiles.filter(p => p.profileType === "candidate").length}
+                          {key === "delegates" && profiles.filter(p => p.profileType === "delegate").length}
+                        </span>
+                      )}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Search + filters */}
@@ -1370,12 +1218,12 @@ export default function AdminPoliticiansPage() {
                           <TableHead className="w-[50px]">Featured</TableHead>
                           <TableHead className="w-[60px]">Photo</TableHead>
                           <TableHead>Name</TableHead>
+                          <TableHead>Type</TableHead>
                           <TableHead>Party</TableHead>
                           <TableHead>Position</TableHead>
                           <TableHead>State</TableHead>
                           <TableHead>Term</TableHead>
                           <TableHead>Grade</TableHead>
-                          <TableHead>Status</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1415,7 +1263,21 @@ export default function AdminPoliticiansPage() {
                                   </div>
                                 )}
                               </TableCell>
-                              <TableCell className="font-medium">{profile.fullName}</TableCell>
+                              <TableCell className="font-medium">
+                                {profile.fullName}
+                                {profile.handle && (
+                                  <div className="text-xs text-slate-400">@{profile.handle}</div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                  PROFILE_TYPE_COLORS[profile.profileType || "representative"] || "bg-blue-100 text-blue-800"
+                                }`}>
+                                  {profile.profileType
+                                    ? profile.profileType.charAt(0).toUpperCase() + profile.profileType.slice(1)
+                                    : "Representative"}
+                                </span>
+                              </TableCell>
                               <TableCell className="text-sm">{profile.party || "-"}</TableCell>
                               <TableCell className="text-sm">
                                 {position ? position.title : <span className="text-slate-400">Not assigned</span>}
@@ -1450,11 +1312,6 @@ export default function AdminPoliticiansPage() {
                                     <SelectItem value="F">F</SelectItem>
                                   </SelectContent>
                                 </Select>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={profile.isCurrent ? "default" : "secondary"}>
-                                  {profile.isCurrent ? "Current" : "Former"}
-                                </Badge>
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
@@ -1504,210 +1361,6 @@ export default function AdminPoliticiansPage() {
                 )}
               </TabsContent>
 
-              {/* ── CANDIDATES TAB ── */}
-              <TabsContent value="candidates" className="space-y-4">
-                <div className="flex justify-between items-start gap-4 flex-wrap">
-                  <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
-                    Platform users who self-registered as election candidates. To import state candidates from XLSX/CSV, use the <strong>Profiles tab → Import from XLSX/CSV</strong>.
-                  </p>
-                </div>
-
-                {/* Search + filters */}
-                <div className="flex flex-wrap gap-2 items-center">
-                  <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                      placeholder="Search by name, party, location, platform, bio..."
-                      value={candidateSearch}
-                      onChange={e => setCandidateSearch(e.target.value)}
-                      className="pl-8"
-                    />
-                    {candidateSearch && (
-                      <button onClick={() => setCandidateSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                  <Select value={candidatePartyFilter} onValueChange={setCandidatePartyFilter}>
-                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="Party" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Parties</SelectItem>
-                      {[...new Set(platformCandidates.map(c => c.party).filter(Boolean) as string[])].sort().map(p => (
-                        <SelectItem key={p} value={p}>{p}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={candidateStateFilter} onValueChange={setCandidateStateFilter}>
-                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="State/Location" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Locations</SelectItem>
-                      {[...new Set(platformCandidates.map(c => c.location).filter(Boolean) as string[])].sort().map(loc => (
-                        <SelectItem key={loc} value={loc}>{loc}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <span className="text-xs text-slate-500">{filteredCandidates.length} of {platformCandidates.length}</span>
-                </div>
-
-                {candidatesLoading ? (
-                  <div className="text-center py-8">Loading candidates...</div>
-                ) : filteredCandidates.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-                    <UserPlus className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>{platformCandidates.length === 0 ? "No candidates have registered on the platform yet" : "No candidates match your search"}</p>
-                  </div>
-                ) : (
-                  <div className="border rounded-lg overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[60px]">Photo</TableHead>
-                          <TableHead>Name / Username</TableHead>
-                          <TableHead>Party</TableHead>
-                          <TableHead>Location</TableHead>
-                          <TableHead>Bio</TableHead>
-                          <TableHead>Website</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredCandidates.map((candidate) => (
-                          <TableRow key={candidate.id}>
-                            <TableCell>
-                              {candidate.photoUrl ? (
-                                <img
-                                  src={candidate.photoUrl}
-                                  alt=""
-                                  className="w-10 h-10 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                                  <Users className="h-5 w-5 text-slate-400" />
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="font-medium">{candidate.user?.displayName || candidate.user?.username || "Unknown"}</div>
-                              {candidate.user?.username && (
-                                <div className="text-xs text-slate-500">@{candidate.user.username}</div>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-sm">{candidate.party || "-"}</TableCell>
-                            <TableCell className="text-sm">{candidate.location || "-"}</TableCell>
-                            <TableCell className="text-sm max-w-[200px]">
-                              <span className="line-clamp-2 text-slate-600 dark:text-slate-400">
-                                {candidate.bio || "-"}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              {candidate.websiteUrl ? (
-                                <a href={candidate.websiteUrl} target="_blank" rel="noopener noreferrer"
-                                  className="text-blue-600 hover:underline text-xs flex items-center gap-1">
-                                  <ExternalLink className="h-3 w-3" />Site
-                                </a>
-                              ) : <span className="text-slate-400 text-xs">-</span>}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={candidate.isActive ? "default" : "secondary"}>
-                                {candidate.isActive ? "Active" : "Inactive"}
-                              </Badge>
-                              {candidate.isFeatured && (
-                                <Badge className="ml-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Featured</Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* ── DELEGATES TAB ── */}
-              <TabsContent value="delegates" className="space-y-4">
-                <div className="flex justify-between items-start gap-4 flex-wrap">
-                  <div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
-                      Delegates are users with elevated roles (Admin, State Admin, Moderator) who have permission to manage and import Candidates, Current Reps, and Positions. Assign roles in User Management.
-                    </p>
-                  </div>
-                  <Link href="/admin/users">
-                    <Button variant="outline" className="flex items-center gap-2">
-                      <Shield className="h-4 w-4" />
-                      Manage Roles
-                    </Button>
-                  </Link>
-                </div>
-
-                {/* Search */}
-                <div className="flex flex-wrap gap-2 items-center">
-                  <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                      placeholder="Search by name, email, role, state..."
-                      value={delegateSearch}
-                      onChange={e => setDelegateSearch(e.target.value)}
-                      className="pl-8"
-                    />
-                    {delegateSearch && (
-                      <button onClick={() => setDelegateSearch("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                  <span className="text-xs text-slate-500">{filteredDelegates.length} of {delegates.length} delegates</span>
-                </div>
-
-                {delegatesLoading ? (
-                  <div className="text-center py-8">Loading delegates...</div>
-                ) : filteredDelegates.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-                    <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>{delegates.length === 0 ? "No delegates assigned yet. Go to User Management to grant roles." : "No delegates match your search"}</p>
-                  </div>
-                ) : (
-                  <div className="border rounded-lg overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Username</TableHead>
-                          <TableHead>Display Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Managed State</TableHead>
-                          <TableHead>Permissions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredDelegates.map((user) => (
-                          <TableRow key={user.id}>
-                            <TableCell className="font-medium">@{user.username}</TableCell>
-                            <TableCell className="text-sm">{user.displayName || "-"}</TableCell>
-                            <TableCell className="text-sm text-slate-500">{user.email}</TableCell>
-                            <TableCell>
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ROLE_COLORS[user.role] || "bg-slate-100 text-slate-700"}`}>
-                                {user.role === "state_admin" ? "State Admin" : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              {user.managedState ? (
-                                <Badge variant="outline">{user.managedState}</Badge>
-                              ) : (
-                                <span className="text-slate-400 text-sm">All states</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-xs text-slate-500">
-                              {user.role === "admin" && "Full access: Candidates, Reps, Positions, SIGs"}
-                              {user.role === "state_admin" && `State data: ${user.managedState || "unset"} — Candidates, Reps, Positions`}
-                              {user.role === "moderator" && "Import access: Candidates, Reps, Positions"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </TabsContent>
             </Tabs>
           </CardContent>
         </Card>

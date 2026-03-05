@@ -1335,6 +1335,7 @@ export const politicianProfiles = pgTable("politician_profiles", {
   previousPositions: json("previous_positions"), // array of previous positions held
   notes: text("notes"), // admin notes
   isCurrent: boolean("is_current").default(true), // currently holding office
+  profileType: text("profile_type"), // "representative", "candidate", or "delegate"
   featured: boolean("featured").default(false), // featured in the Featured Candidate module
   handle: text("handle").unique(), // @handle e.g. TomEmmerMN (no @ prefix stored)
   corruptionGrade: text("corruption_grade"), // A, B, C, D, or F corruption grade
@@ -1356,6 +1357,7 @@ export const politicianProfiles = pgTable("politician_profiles", {
   claimStatusIndex: index("politician_profiles_claim_status_idx").on(table.claimRequestStatus),
   corruptionGradeCheck: sql`CHECK (${table.corruptionGrade} IN ('A', 'B', 'C', 'D', 'F') OR ${table.corruptionGrade} IS NULL)`,
   claimStatusCheck: sql`CHECK (${table.claimRequestStatus} IN ('pending', 'approved', 'rejected') OR ${table.claimRequestStatus} IS NULL)`,
+  profileTypeCheck: sql`CHECK (${table.profileType} IN ('representative', 'candidate', 'delegate') OR ${table.profileType} IS NULL)`,
 }));
 
 // User Corruption Ratings - Community ratings for politician corruption

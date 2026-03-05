@@ -4970,8 +4970,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
-      const allUsers = await storage.getAllUsers(limit, offset);
-      const totalCount = await storage.getUserCount();
+      const search = (req.query.search as string || "").trim();
+      const allUsers = await storage.getAllUsers(limit, offset, search);
+      const totalCount = await storage.getUserCount(search);
       
       res.json({
         users: allUsers,

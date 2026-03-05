@@ -21,6 +21,7 @@ const US_STATES = [
 
 export default function AdminUsersPage() {
   const [page, setPage] = useState(0);
+  const [search, setSearch] = useState("");
   const [roleDialogUser, setRoleDialogUser] = useState<any>(null);
   const [selectedRole, setSelectedRole] = useState("citizen");
   const [selectedState, setSelectedState] = useState("all");
@@ -28,7 +29,7 @@ export default function AdminUsersPage() {
   const limit = 20;
 
   const { data, isLoading } = useQuery({
-    queryKey: [`/api/admin/users?limit=${limit}&offset=${page * limit}`],
+    queryKey: [`/api/admin/users?limit=${limit}&offset=${page * limit}&search=${encodeURIComponent(search)}`],
   });
 
   const users = data?.users || [];
@@ -62,6 +63,11 @@ export default function AdminUsersPage() {
     }
   };
 
+  const getRoleLabel = (role: string) => {
+    if (role === "state_admin") return "Delegate";
+    return role.charAt(0).toUpperCase() + role.slice(1);
+  };
+
   const openRoleDialog = (user: any) => {
     setRoleDialogUser(user);
     setSelectedRole(user.role || "citizen");
@@ -88,6 +94,19 @@ export default function AdminUsersPage() {
           </p>
         </div>
 
+        {/* Search bar */}
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <svg className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" /></svg>
+            <Input
+              placeholder="Search by name, username, or email..."
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(0); }}
+              className="pl-9"
+            />
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading users...</p>
@@ -106,7 +125,7 @@ export default function AdminUsersPage() {
                         </CardTitle>
                         <div className="flex gap-2 mt-2 flex-wrap items-center">
                           <Badge className={getRoleBadgeColor(user.role)}>
-                            {user.role}
+                            {getRoleLabel(user.role)}
                           </Badge>
                           {user.managedState && (
                             <Badge variant="outline" className="text-orange-600 border-orange-400">
@@ -230,7 +249,7 @@ export default function AdminUsersPage() {
               Manage Role
             </DialogTitle>
             <DialogDescription>
-              Update the role for <strong>@{roleDialogUser?.username}</strong>. State admins can import data for their assigned state.
+              Update the role for <strong>@{roleDialogUser?.username}</strong>. Delegates can import and manage data for their assigned state.
             </DialogDescription>
           </DialogHeader>
 
@@ -245,7 +264,7 @@ export default function AdminUsersPage() {
                   <SelectItem value="citizen">Citizen — standard user</SelectItem>
                   <SelectItem value="candidate">Candidate — running for office</SelectItem>
                   <SelectItem value="moderator">Moderator — content moderation</SelectItem>
-                  <SelectItem value="state_admin">State Admin — data entry for a state</SelectItem>
+                  <SelectItem value="state_admin">Delegate — manages data for a specific state</SelectItem>
                   <SelectItem value="admin">Admin — full access</SelectItem>
                 </SelectContent>
               </Select>
@@ -273,7 +292,7 @@ export default function AdminUsersPage() {
               <p><strong>Citizen</strong> — post, vote, follow, engage</p>
               <p><strong>Candidate</strong> — candidate profile + citizen access</p>
               <p><strong>Moderator</strong> — review flagged content</p>
-              <p><strong>State Admin</strong> — import data for one state + moderator</p>
+              <p><strong>Delegate</strong> — import and manage data for one state</p>
               <p><strong>Admin</strong> — full system access</p>
             </div>
           </div>
