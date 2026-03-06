@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, ExternalLink, AlertTriangle, TrendingUp } from "lucide-react";
+import { Navigation } from "@/components/navigation";
 
 type SIG = {
   id: string;
@@ -68,6 +69,7 @@ export default function SigsDirectoryPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Navigation />
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
         {/* Header */}
         <div>

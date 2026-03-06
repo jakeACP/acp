@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
+import { Navigation } from "@/components/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,7 @@ export default function SigProfilePage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Navigation />
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
         {/* Back */}
         <Link href="/sigs">
