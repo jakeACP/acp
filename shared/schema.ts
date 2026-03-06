@@ -1346,6 +1346,8 @@ export const politicianProfiles = pgTable("politician_profiles", {
   claimRequestStatus: text("claim_request_status"), // pending, approved, rejected
   claimRequestDate: timestamp("claim_request_date"), // When claim was requested
   verifiedDate: timestamp("verified_date"), // When admin approved the claim
+  claimToken: text("claim_token"), // Email-based claim verification token
+  claimTokenExpiry: timestamp("claim_token_expiry"), // Token expiry (72h)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

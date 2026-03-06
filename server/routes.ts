@@ -4314,6 +4314,22 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Verify email claim token (clicked from email link) — must be BEFORE /:id
+  app.get("/api/politician-profiles/verify-claim/:token", async (req, res) => {
+    try {
+      const profile = await storage.verifyClaimToken(req.params.token);
+      if (!profile) {
+        return res.redirect(`/politicians?claim_error=invalid_or_expired`);
+      }
+      await storage.approveClaimRequest(profile.id);
+      await storage.setPoliticianClaimToken(profile.id, "", new Date(0));
+      res.redirect(`/politicians/${profile.id}?claimed=true`);
+    } catch (error: any) {
+      console.error("Verify claim token error:", error);
+      res.redirect(`/politicians?claim_error=server_error`);
+    }
+  });
+
   // Public politician profile page route
   app.get("/api/politician-profiles/:id", async (req, res) => {
     try {
@@ -4325,6 +4341,64 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     } catch (error: any) {
       console.error("Get politician profile error:", error);
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Refresh BallotPedia/Wikipedia data for all profiles (or one)
+  app.post("/api/admin/politician-profiles/refresh-data", ensureAdmin, async (req, res) => {
+    try {
+      const { id } = req.body;
+      if (id) {
+        const result = await storage.refreshProfileData(id as string);
+        return res.json(result);
+      }
+      const result = await storage.refreshAllProfilesData();
+      res.json(result);
+    } catch (error: any) {
+      console.error("Refresh profile data error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Submit email-based page claim request
+  app.post("/api/politician-profiles/:id/claim-by-email", async (req, res) => {
+    try {
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+      if (!profile.email) return res.status(400).json({ message: "This profile has no public email on file" });
+      if (profile.isVerified) return res.status(400).json({ message: "This profile is already claimed" });
+
+      const { randomBytes } = await import("crypto");
+      const token = randomBytes(32).toString("hex");
+      const expiry = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72 hours
+
+      await storage.setPoliticianClaimToken(req.params.id, token, expiry);
+
+      const verifyUrl = `${req.protocol}://${req.get("host")}/api/politician-profiles/verify-claim/${token}`;
+      const { sendClaimVerificationEmail } = await import("./email");
+      await sendClaimVerificationEmail(profile.email, profile.fullName, verifyUrl);
+
+      res.json({ sent: true, email: profile.email });
+    } catch (error: any) {
+      console.error("Claim by email error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Verify email claim token (clicked from email link)
+  app.get("/api/politician-profiles/verify-claim/:token", async (req, res) => {
+    try {
+      const profile = await storage.verifyClaimToken(req.params.token);
+      if (!profile) {
+        return res.redirect(`/politicians?claim_error=invalid_or_expired`);
+      }
+      await storage.approveClaimRequest(profile.id);
+      // Clear the token
+      await storage.setPoliticianClaimToken(profile.id, "", new Date(0));
+      res.redirect(`/politicians/${profile.id}?claimed=true`);
+    } catch (error: any) {
+      console.error("Verify claim token error:", error);
+      res.redirect(`/politicians?claim_error=server_error`);
     }
   });
 

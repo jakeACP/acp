@@ -52,6 +52,7 @@ export default function PoliticianProfilePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
+  const [claimStep, setClaimStep] = useState<"ask-email" | "email-sent" | "manual">("ask-email");
 
   const { data: profile, isLoading: profileLoading } = useQuery<PoliticianProfileWithPosition>({
     queryKey: [`/api/politician-profiles/${id}`],
@@ -114,6 +115,22 @@ export default function PoliticianProfilePage() {
   const onSubmitClaim = (data: ClaimFormData) => {
     claimMutation.mutate(data);
   };
+
+  const claimByEmailMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest(`/api/politician-profiles/${id}/claim-by-email`, "POST");
+    },
+    onSuccess: () => {
+      setClaimStep("email-sent");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Email Send Failed",
+        description: error.message || "Failed to send verification email",
+        variant: "destructive",
+      });
+    },
+  });
 
   const ratingMutation = useMutation({
     mutationFn: async (data: RatingFormData) => {
@@ -239,69 +256,156 @@ export default function PoliticianProfilePage() {
                 
                 {/* Claim Page Button */}
               {canClaim && (
-                <Dialog open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
+                <Dialog open={claimDialogOpen} onOpenChange={(open) => {
+                  setClaimDialogOpen(open);
+                  if (!open) { setClaimStep("ask-email"); form.reset(); }
+                }}>
                   <DialogTrigger asChild>
                     <Button className="mt-4" variant="outline" data-testid="button-claim-page">
                       Claim This Page
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Claim Your Profile Page</DialogTitle>
-                      <DialogDescription>
-                        To claim this page, you must provide your office email address and phone number. 
-                        We will call you to verify your identity before approving your claim.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmitClaim)} className="space-y-4">
-                        <FormField
-                          control={form.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Office Email Address</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="email" 
-                                  placeholder="your.name@office.gov" 
-                                  {...field} 
-                                  data-testid="input-claim-email"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="phone"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Phone Number</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="tel" 
-                                  placeholder="(555) 123-4567" 
-                                  {...field} 
-                                  data-testid="input-claim-phone"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <DialogFooter>
-                          <Button 
-                            type="submit" 
-                            disabled={claimMutation.isPending}
-                            data-testid="button-submit-claim"
+                    {/* Step 1: offer email verification if profile has a public email */}
+                    {claimStep === "ask-email" && profile?.email && (
+                      <>
+                        <DialogHeader>
+                          <DialogTitle>Claim Your Profile Page</DialogTitle>
+                          <DialogDescription>
+                            We found a public contact email associated with this profile. The fastest way to verify is to send a confirmation link there.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="py-4 space-y-4">
+                          <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Public contact email on file</p>
+                            <p className="font-medium text-slate-900 dark:text-slate-100">{profile.email}</p>
+                          </div>
+                          <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Can you receive emails at this address?
+                          </p>
+                        </div>
+                        <DialogFooter className="flex-col sm:flex-row gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => setClaimStep("manual")}
+                            className="sm:order-first"
                           >
-                            {claimMutation.isPending ? "Submitting..." : "Submit Claim Request"}
+                            No, use a different method
+                          </Button>
+                          <Button
+                            onClick={() => claimByEmailMutation.mutate()}
+                            disabled={claimByEmailMutation.isPending}
+                            data-testid="button-send-claim-email"
+                          >
+                            {claimByEmailMutation.isPending ? "Sending..." : "Yes, send me a verification link"}
                           </Button>
                         </DialogFooter>
-                      </form>
-                    </Form>
+                      </>
+                    )}
+
+                    {/* Step 1 (no email): skip straight to manual */}
+                    {claimStep === "ask-email" && !profile?.email && (
+                      <>
+                        <DialogHeader>
+                          <DialogTitle>Claim Your Profile Page</DialogTitle>
+                          <DialogDescription>
+                            To claim this page, provide your office email and phone number. An admin will contact you to verify your identity.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <Form {...form}>
+                          <form onSubmit={form.handleSubmit(onSubmitClaim)} className="space-y-4">
+                            <FormField control={form.control} name="email" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Office Email Address</FormLabel>
+                                <FormControl>
+                                  <Input type="email" placeholder="your.name@office.gov" {...field} data-testid="input-claim-email" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <FormField control={form.control} name="phone" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Phone Number</FormLabel>
+                                <FormControl>
+                                  <Input type="tel" placeholder="(555) 123-4567" {...field} data-testid="input-claim-phone" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <DialogFooter>
+                              <Button type="submit" disabled={claimMutation.isPending} data-testid="button-submit-claim">
+                                {claimMutation.isPending ? "Submitting..." : "Submit Claim Request"}
+                              </Button>
+                            </DialogFooter>
+                          </form>
+                        </Form>
+                      </>
+                    )}
+
+                    {/* Step 2: email sent confirmation */}
+                    {claimStep === "email-sent" && (
+                      <>
+                        <DialogHeader>
+                          <DialogTitle>Check your inbox</DialogTitle>
+                          <DialogDescription>
+                            A verification link has been sent to:
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="py-4 space-y-4">
+                          <div className="rounded-md border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 px-4 py-3">
+                            <p className="font-medium text-green-800 dark:text-green-300">{profile?.email}</p>
+                          </div>
+                          <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Click the link in that email within 72 hours to verify your identity and activate your profile page. If you don't see it, check your spam folder.
+                          </p>
+                        </div>
+                        <DialogFooter>
+                          <Button onClick={() => setClaimDialogOpen(false)}>Done</Button>
+                        </DialogFooter>
+                      </>
+                    )}
+
+                    {/* Manual fallback: form submission to admin queue */}
+                    {claimStep === "manual" && (
+                      <>
+                        <DialogHeader>
+                          <DialogTitle>Claim Your Profile Page</DialogTitle>
+                          <DialogDescription>
+                            Provide your office email and phone number. An administrator will review your request and contact you to verify your identity.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <Form {...form}>
+                          <form onSubmit={form.handleSubmit(onSubmitClaim)} className="space-y-4">
+                            <FormField control={form.control} name="email" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Office Email Address</FormLabel>
+                                <FormControl>
+                                  <Input type="email" placeholder="your.name@office.gov" {...field} data-testid="input-claim-email" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <FormField control={form.control} name="phone" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Phone Number</FormLabel>
+                                <FormControl>
+                                  <Input type="tel" placeholder="(555) 123-4567" {...field} data-testid="input-claim-phone" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <DialogFooter className="flex-col sm:flex-row gap-2">
+                              <Button variant="outline" type="button" onClick={() => setClaimStep("ask-email")} className="sm:order-first">
+                                Back
+                              </Button>
+                              <Button type="submit" disabled={claimMutation.isPending} data-testid="button-submit-claim">
+                                {claimMutation.isPending ? "Submitting..." : "Submit Claim Request"}
+                              </Button>
+                            </DialogFooter>
+                          </form>
+                        </Form>
+                      </>
+                    )}
                   </DialogContent>
                 </Dialog>
               )}

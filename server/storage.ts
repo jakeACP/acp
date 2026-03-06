@@ -208,6 +208,10 @@ export interface IStorage {
   approveClaimRequest(profileId: string): Promise<PoliticianProfile>;
   rejectClaimRequest(profileId: string): Promise<PoliticianProfile>;
   getFeaturedPoliticians(): Promise<any[]>;
+  refreshProfileData(id: string): Promise<{ updated: boolean; fields: string[] }>;
+  refreshAllProfilesData(): Promise<{ updated: number; skipped: number }>;
+  setPoliticianClaimToken(id: string, token: string, expiry: Date): Promise<void>;
+  verifyClaimToken(token: string): Promise<PoliticianProfile | null>;
 
   // Politician Corruption Ratings
   submitCorruptionRating(politicianId: string, userId: string, grade: string, reasoning?: string): Promise<PoliticianCorruptionRating>;
@@ -3550,6 +3554,124 @@ export class DatabaseStorage implements IStorage {
       .where(eq(politicianProfiles.id, profileId))
       .returning();
     return updated;
+  }
+
+  // ─── Shared BallotPedia / Wikipedia helpers ──────────────────────────────
+
+  private async _fetchEnrichedData(profile: { fullName: string; website?: string | null; ballotpediaUrl?: string | null }): Promise<{
+    photoUrl?: string;
+    website?: string;
+    socialMedia?: Record<string, string>;
+    biography?: string;
+  }> {
+    const result: { photoUrl?: string; website?: string; socialMedia?: Record<string, string>; biography?: string } = {};
+
+    // Try BallotPedia first
+    if (profile.ballotpediaUrl) {
+      try {
+        const pageTitle = (profile.ballotpediaUrl as string).replace("https://ballotpedia.org/", "").split("?")[0];
+        if (pageTitle) {
+          const res = await fetch(
+            `https://ballotpedia.org/api.php?action=query&titles=${encodeURIComponent(pageTitle)}&prop=pageimages|extlinks&pithumbsize=300&ellimit=max&format=json`,
+            { headers: { "User-Agent": "ACPlatform/1.0 (contact@anticorruptionparty.us)" }, signal: AbortSignal.timeout(8000) }
+          );
+          if (res.ok) {
+            const data: any = await res.json();
+            const pages = data?.query?.pages;
+            if (pages) {
+              const page = Object.values(pages)[0] as any;
+              if (page?.thumbnail?.source) result.photoUrl = page.thumbnail.source;
+              const social: Record<string, string> = {};
+              const links: string[] = (page?.extlinks || []).map((l: any) => l["*"] || "");
+              for (const link of links) {
+                if (!link) continue;
+                if (!result.website && (link.includes(".gov") || link.includes(".org")) && !link.includes("twitter") && !link.includes("facebook")) {
+                  result.website = link;
+                }
+                if (!social.twitter && (link.includes("twitter.com/") || link.includes("x.com/"))) social.twitter = link;
+                if (!social.facebook && link.includes("facebook.com/")) social.facebook = link;
+                if (!social.instagram && link.includes("instagram.com/")) social.instagram = link;
+                if (!social.youtube && link.includes("youtube.com/")) social.youtube = link;
+                if (!social.linkedin && link.includes("linkedin.com/")) social.linkedin = link;
+              }
+              if (Object.keys(social).length > 0) result.socialMedia = social;
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Try Wikipedia for photo fallback + biography
+    try {
+      const wikiName = profile.fullName.replace(/\s+/g, "_");
+      const res = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiName)}`,
+        { headers: { "User-Agent": "ACPlatform/1.0" }, signal: AbortSignal.timeout(6000) }
+      );
+      if (res.ok) {
+        const data: any = await res.json();
+        if (!result.photoUrl && data?.thumbnail?.source) result.photoUrl = data.thumbnail.source;
+        if (data?.extract) result.biography = data.extract.slice(0, 800);
+      }
+    } catch { /* ignore */ }
+
+    return result;
+  }
+
+  async refreshProfileData(id: string): Promise<{ updated: boolean; fields: string[] }> {
+    const profile = await this.getPoliticianProfile(id);
+    if (!profile) return { updated: false, fields: [] };
+
+    const enriched = await this._fetchEnrichedData(profile);
+    const patch: Partial<PoliticianProfile> = {};
+    const fields: string[] = [];
+
+    if (enriched.photoUrl && !profile.photoUrl) { patch.photoUrl = enriched.photoUrl; fields.push("photoUrl"); }
+    if (enriched.website && !profile.website) { patch.website = enriched.website; fields.push("website"); }
+    if (enriched.biography && !profile.biography) { patch.biography = enriched.biography; fields.push("biography"); }
+    if (enriched.socialMedia) {
+      const existing = (profile.socialMedia as Record<string, string>) || {};
+      const merged = { ...enriched.socialMedia, ...existing }; // don't overwrite existing
+      if (JSON.stringify(merged) !== JSON.stringify(existing)) { patch.socialMedia = merged; fields.push("socialMedia"); }
+    }
+
+    if (fields.length === 0) return { updated: false, fields: [] };
+    await this.updatePoliticianProfile(id, patch);
+    return { updated: true, fields };
+  }
+
+  async refreshAllProfilesData(): Promise<{ updated: number; skipped: number }> {
+    const allProfiles = await db
+      .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName, photoUrl: politicianProfiles.photoUrl, website: politicianProfiles.website, biography: politicianProfiles.biography, socialMedia: politicianProfiles.socialMedia, ballotpediaUrl: (politicianProfiles as any).ballotpediaUrl })
+      .from(politicianProfiles);
+
+    let updated = 0, skipped = 0;
+    for (const p of allProfiles) {
+      if (p.photoUrl && p.website && p.biography) { skipped++; continue; }
+      const result = await this.refreshProfileData(p.id);
+      if (result.updated) updated++; else skipped++;
+      await new Promise(r => setTimeout(r, 80)); // gentle rate-limit
+    }
+    return { updated, skipped };
+  }
+
+  async setPoliticianClaimToken(id: string, token: string, expiry: Date): Promise<void> {
+    await db
+      .update(politicianProfiles)
+      .set({ claimToken: token, claimTokenExpiry: expiry, updatedAt: new Date() } as any)
+      .where(eq(politicianProfiles.id, id));
+  }
+
+  async verifyClaimToken(token: string): Promise<PoliticianProfile | null> {
+    const [profile] = await db
+      .select()
+      .from(politicianProfiles)
+      .where(eq((politicianProfiles as any).claimToken, token))
+      .limit(1);
+    if (!profile) return null;
+    const expiry = (profile as any).claimTokenExpiry;
+    if (!expiry || new Date() > new Date(expiry)) return null;
+    return profile;
   }
 
   async getFeaturedPoliticians(): Promise<any[]> {

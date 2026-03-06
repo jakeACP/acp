@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
@@ -387,6 +387,44 @@ export default function AdminPoliticiansPage() {
     onError: (error: any) => {
       toast({ title: "Import failed", description: error.message, variant: "destructive" });
     },
+  });
+
+  // Claim requests
+  const { data: claimRequests = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/politician-profiles/claim-requests"],
+    refetchInterval: 30000,
+  });
+
+  const pendingClaims = (claimRequests as any[]).filter((r: any) => r.claimRequestStatus === "pending");
+
+  const approveClaimMutation = useMutation({
+    mutationFn: async (id: string) => apiRequest(`/api/admin/politician-profiles/${id}/claim-approve`, "PATCH"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles/claim-requests"] });
+      toast({ title: "Claim approved", description: "Profile marked as verified." });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const rejectClaimMutation = useMutation({
+    mutationFn: async (id: string) => apiRequest(`/api/admin/politician-profiles/${id}/claim-reject`, "PATCH"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles/claim-requests"] });
+      toast({ title: "Claim rejected" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const refreshDataMutation = useMutation({
+    mutationFn: async () => apiRequest("/api/admin/politician-profiles/refresh-data", "POST"),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({
+        title: "Refresh complete",
+        description: `${data.updated ?? 0} profiles updated, ${data.skipped ?? 0} skipped.`,
+      });
+    },
+    onError: (err: any) => toast({ title: "Refresh failed", description: err.message, variant: "destructive" }),
   });
 
   const handlePositionSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -947,9 +985,17 @@ export default function AdminPoliticiansPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="positions" data-testid="tab-positions">Positions</TabsTrigger>
                 <TabsTrigger value="profiles" data-testid="tab-profiles">Profiles</TabsTrigger>
+                <TabsTrigger value="claim-requests" data-testid="tab-claim-requests" className="relative">
+                  Claim Requests
+                  {pendingClaims.length > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-red-500 text-white">
+                      {pendingClaims.length}
+                    </span>
+                  )}
+                </TabsTrigger>
               </TabsList>
 
               {/* ── POSITIONS TAB ── */}
@@ -1105,7 +1151,7 @@ export default function AdminPoliticiansPage() {
                   <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
                     All politician and candidate profiles — Representatives (current elected officials), Candidates (running for office), and Delegates. Import any type using the universal XLSX importer.
                   </p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Button
                       variant="outline"
                       onClick={() => setCandidateImportOpen(true)}
@@ -1113,6 +1159,19 @@ export default function AdminPoliticiansPage() {
                     >
                       <Upload className="h-4 w-4" />
                       Import from XLSX/CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => refreshDataMutation.mutate()}
+                      disabled={refreshDataMutation.isPending}
+                      className="flex items-center gap-2"
+                      title="Scan BallotPedia and Wikipedia to fill in missing photos, social media links, bios, and websites"
+                    >
+                      {refreshDataMutation.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" />Refreshing...</>
+                      ) : (
+                        <><RefreshCw className="h-4 w-4" />Refresh Data</>
+                      )}
                     </Button>
                     <Button
                       onClick={() => {
@@ -1372,6 +1431,64 @@ export default function AdminPoliticiansPage() {
                       </TableBody>
                     </Table>
                   </div>
+                )}
+              </TabsContent>
+
+              {/* ── CLAIM REQUESTS TAB ── */}
+              <TabsContent value="claim-requests" className="space-y-4">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Manual claim requests submitted by politicians who don't have a public email on file. Verify their identity before approving.
+                </p>
+                {pendingClaims.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <Inbox className="w-10 h-10 mb-3 opacity-40" />
+                    <p className="text-sm">No pending claim requests</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Politician</TableHead>
+                        <TableHead>Submitted Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingClaims.map((claim: any) => (
+                        <TableRow key={claim.id}>
+                          <TableCell className="font-medium">{claim.fullName}</TableCell>
+                          <TableCell>{claim.claimRequestEmail || "—"}</TableCell>
+                          <TableCell>{claim.claimRequestPhone || "—"}</TableCell>
+                          <TableCell>{claim.claimRequestDate ? new Date(claim.claimRequestDate).toLocaleDateString() : "—"}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white gap-1"
+                                onClick={() => approveClaimMutation.mutate(claim.id)}
+                                disabled={approveClaimMutation.isPending}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="gap-1"
+                                onClick={() => rejectClaimMutation.mutate(claim.id)}
+                                disabled={rejectClaimMutation.isPending}
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                Reject
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </TabsContent>
 
