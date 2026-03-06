@@ -456,6 +456,48 @@ export function setupAuth(app: Express) {
     }
   });
 
+  // Admin passphrase reset — bypasses email flow, only works for "admin" account
+  app.post("/api/admin-passphrase-reset", async (req, res) => {
+    try {
+      const { passphrase, newPassword } = req.body;
+
+      if (!passphrase || !newPassword) {
+        return res.status(400).json({ message: "Passphrase and new password are required" });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
+      }
+
+      const storedHash = process.env.ADMIN_PASSPHRASE_HASH;
+      if (!storedHash) {
+        return res.status(500).json({ message: "Admin passphrase not configured on this server" });
+      }
+
+      const [salt, expectedHash] = storedHash.split(':');
+      const inputHash = (await scryptAsync(passphrase.trim(), salt, 64) as Buffer).toString('hex');
+
+      // Use timing-safe comparison to prevent timing attacks
+      const inputBuf = Buffer.from(inputHash, 'hex');
+      const expectedBuf = Buffer.from(expectedHash, 'hex');
+      if (inputBuf.length !== expectedBuf.length || !timingSafeEqual(inputBuf, expectedBuf)) {
+        return res.status(401).json({ message: "Incorrect passphrase" });
+      }
+
+      const adminUser = await storage.getUserByUsername("admin");
+      if (!adminUser) {
+        return res.status(404).json({ message: "Admin account not found" });
+      }
+
+      const hashedNewPassword = await hashPassword(newPassword);
+      await storage.updateUserPassword(adminUser.id, hashedNewPassword);
+
+      res.json({ message: "Admin password reset successfully" });
+    } catch (error: any) {
+      console.error("Admin passphrase reset error:", error);
+      res.status(500).json({ message: "Failed to reset admin password" });
+    }
+  });
+
   // Invitation Management Routes
 
   // Create invitation (admin-only)
