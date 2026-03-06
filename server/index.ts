@@ -121,14 +121,11 @@ async function setupRoutes() {
     if (process.env.ADMIN_PASSPHRASE) {
       try {
         const { storage } = await import("./storage");
-        const { scrypt, randomBytes } = await import("crypto");
-        const { promisify } = await import("util");
-        const scryptAsync = promisify(scrypt);
+        const { hashPassword } = await import("./auth");
         const adminUser = await storage.getUserByUsername("admin");
         if (adminUser) {
-          const salt = randomBytes(16).toString("hex");
-          const hash = (await scryptAsync(process.env.ADMIN_PASSPHRASE, salt, 64) as Buffer).toString("hex");
-          await storage.updateUserPassword(adminUser.id, `${salt}:${hash}`);
+          const hashed = await hashPassword(process.env.ADMIN_PASSPHRASE);
+          await storage.updateUserPassword(adminUser.id, hashed);
           log("Admin password synced to ADMIN_PASSPHRASE secret");
         }
       } catch (e: any) {
