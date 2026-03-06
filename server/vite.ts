@@ -78,7 +78,17 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
+  // Return 404 for missing static asset files instead of serving index.html,
+  // which would cause the browser to receive HTML instead of JS/CSS.
+  const ASSET_EXT = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|json|webp|avif)$/i;
+  app.use("*", (req, res, next) => {
+    if (ASSET_EXT.test(req.path)) {
+      return res.status(404).end();
+    }
+    next();
+  });
+
+  // fall through to index.html for all SPA routes
   app.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });

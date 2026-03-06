@@ -109,7 +109,7 @@ export function setupAuth(app: Express) {
     cookie: {
       httpOnly: true,
       secure: isProduction,
-      sameSite: "strict",
+      sameSite: "lax",
       maxAge: 24 * 60 * 60 * 1000,
     },
   };
@@ -126,7 +126,7 @@ export function setupAuth(app: Express) {
     cookieName: "__csrf",
     cookieOptions: {
       httpOnly: true,
-      sameSite: "strict",
+      sameSite: "lax",
       secure: isProduction,
       path: "/",
     },

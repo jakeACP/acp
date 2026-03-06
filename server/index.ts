@@ -11,7 +11,8 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Health check — first thing registered, responds immediately
+// Health check — first thing registered, responds immediately regardless of
+// whether routes have finished loading.
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -51,9 +52,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── Startup guard ────────────────────────────────────────────────────────────
+// During the ~4s window between listen() and setupRoutes() completing, return
+// 503 with Retry-After so Replit's load balancer waits instead of declaring the
+// server dead and returning 502 to users.
+let serverReady = false;
+app.use((_req, res, next) => {
+  if (serverReady) return next();
+  res.setHeader('Retry-After', '5');
+  res.status(503).json({ message: 'Server is starting, please retry shortly.' });
+});
+
 // ─── Start listening IMMEDIATELY ─────────────────────────────────────────────
-// The server accepts connections right away. Heavy route/DB setup runs after.
-// This ensures Replit's healthcheck gets a 200 from /health within milliseconds.
 const port = parseInt(process.env.PORT || '5000', 10);
 const httpServer = http.createServer(app);
 
@@ -84,8 +94,6 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // ─── Load routes dynamically AFTER server is listening ───────────────────────
-// Using dynamic import() so heavy modules (routes.ts, storage.ts, etc.) are
-// NOT loaded before server.listen() — this keeps startup under ~200ms.
 async function setupRoutes() {
   try {
     log("Loading routes...");
@@ -109,6 +117,8 @@ async function setupRoutes() {
       serveStatic(app);
     }
 
+    // Mark server ready — the 503 startup guard will now pass all requests through
+    serverReady = true;
     log("Server fully ready");
   } catch (error: any) {
     log(`Setup error: ${error.message} — retrying in 5 seconds`);
