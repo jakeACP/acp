@@ -477,8 +477,16 @@ export default function AdminPoliticiansPage() {
   const currentProfiles = profiles.filter(p => p.isCurrent);
 
   // Derived filter options
-  const uniqueParties = [...new Set(profiles.map(p => p.party).filter(Boolean) as string[])].sort();
-  const uniqueJurisdictions = [...new Set(positions.map(p => p.jurisdiction).filter(Boolean) as string[])].sort();
+  const normalizeParty = (party: string | null | undefined): string => {
+    if (!party) return "";
+    const p = party.trim();
+    if (["I", "Independent", "Unaffiliated"].includes(p)) return "Independent";
+    if (p === "Democratic") return "Democrat";
+    return p;
+  };
+  const uniqueParties = [...new Set(
+    profiles.map(p => normalizeParty(p.party)).filter(Boolean)
+  )].sort();
   // Filtered positions
   const filteredPositions = positions.filter(p => {
     const q = positionSearch.toLowerCase();
@@ -507,13 +515,16 @@ export default function AdminPoliticiansPage() {
       || (position?.title || "").toLowerCase().includes(q)
       || (position?.jurisdiction || "").toLowerCase().includes(q)
       || (position?.district || "").toLowerCase().includes(q);
-    const matchParty = profilePartyFilter === "all" || p.party === profilePartyFilter;
+    const matchParty = profilePartyFilter === "all" || normalizeParty(p.party) === profilePartyFilter;
     const matchGrade = profileGradeFilter === "all"
       || (profileGradeFilter === "none" ? !p.corruptionGrade : p.corruptionGrade === profileGradeFilter);
     const matchStatus = profileStatusFilter === "all"
-      || (profileStatusFilter === "current" ? p.isCurrent : !p.isCurrent);
+      || (profileStatusFilter === "current" ? (p.isCurrent && p.profileType !== "candidate") : false)
+      || (profileStatusFilter === "former" ? (!p.isCurrent && p.profileType !== "candidate") : false)
+      || (profileStatusFilter === "running" ? p.profileType === "candidate" : false);
     const matchState = profileStateFilter === "all"
-      || (position?.jurisdiction || "").toLowerCase().includes(profileStateFilter.toLowerCase());
+      || (profileStateFilter === "acp-admins" ? p.profileType === "delegate" : false)
+      || (position?.level || "").toLowerCase() === profileStateFilter.toLowerCase();
     const matchSubFilter = profileSubFilter === "all"
       || (profileSubFilter === "representatives" ? (p.profileType === "representative" || !p.profileType) : false)
       || (profileSubFilter === "candidates" ? p.profileType === "candidate" : false)
@@ -1168,6 +1179,7 @@ export default function AdminPoliticiansPage() {
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="current">Current</SelectItem>
                       <SelectItem value="former">Former</SelectItem>
+                      <SelectItem value="running">Running</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={profilePartyFilter} onValueChange={setProfilePartyFilter}>
@@ -1195,9 +1207,11 @@ export default function AdminPoliticiansPage() {
                     <SelectTrigger className="w-[150px]"><SelectValue placeholder="Jurisdiction" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Jurisdictions</SelectItem>
-                      {uniqueJurisdictions.slice(0, 60).map(j => (
-                        <SelectItem key={j} value={j}>{j}</SelectItem>
-                      ))}
+                      <SelectItem value="federal">Federal</SelectItem>
+                      <SelectItem value="state">State</SelectItem>
+                      <SelectItem value="county">County</SelectItem>
+                      <SelectItem value="city">City</SelectItem>
+                      <SelectItem value="acp-admins">ACP-Admins</SelectItem>
                     </SelectContent>
                   </Select>
                   <span className="text-xs text-slate-500">{filteredProfiles.length} of {profiles.length}</span>
