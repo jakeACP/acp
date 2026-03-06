@@ -13,7 +13,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { ArrowLeft, Mail, Shield, KeyRound, CheckCircle } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 
-// Standard email reset schema — also accepts "admin" as a special value
 const forgotPasswordSchema = z.object({
   email: z.string().min(1, "Required").refine(
     v => v === "admin" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
@@ -23,11 +22,6 @@ const forgotPasswordSchema = z.object({
 
 const adminResetSchema = z.object({
   passphrase: z.string().min(1, "Passphrase is required"),
-  newPassword: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string().min(1, "Please confirm your password"),
-}).refine(d => d.newPassword === d.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
 });
 
 type ForgotPasswordData = z.infer<typeof forgotPasswordSchema>;
@@ -46,7 +40,7 @@ export default function ForgotPasswordPage() {
 
   const adminForm = useForm<AdminResetData>({
     resolver: zodResolver(adminResetSchema),
-    defaultValues: { passphrase: "", newPassword: "", confirmPassword: "" },
+    defaultValues: { passphrase: "" },
   });
 
   const forgotPasswordMutation = useMutation({
@@ -67,19 +61,15 @@ export default function ForgotPasswordPage() {
 
   const adminResetMutation = useMutation({
     mutationFn: async (data: AdminResetData) => {
-      return apiRequest("/api/admin-passphrase-reset", "POST", {
-        passphrase: data.passphrase,
-        newPassword: data.newPassword,
-      });
+      return apiRequest("/api/admin-passphrase-reset", "POST", { passphrase: data.passphrase });
     },
     onSuccess: () => {
       setResetDone(true);
-      toast({ title: "Password Reset", description: "Admin password updated successfully." });
     },
     onError: (error: any) => {
       toast({
-        title: "Reset Failed",
-        description: error.message || "Incorrect passphrase. Please try again.",
+        title: "Incorrect Passphrase",
+        description: error.message || "The passphrase did not match. Please try again.",
         variant: "destructive",
       });
     },
@@ -131,7 +121,7 @@ export default function ForgotPasswordPage() {
     );
   }
 
-  // ── Success: admin password reset ───────────────────────────────────────────
+  // ── Success: admin password restored ───────────────────────────────────────
   if (resetDone) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -139,7 +129,7 @@ export default function ForgotPasswordPage() {
           <CardHeader className="text-center">
             <div className="flex items-center justify-center mb-4">
               <img src={logoPath} alt="Anti-Corruption Party" className="h-12 w-12 mr-3" />
-              <CardTitle className="text-2xl">Password Updated</CardTitle>
+              <CardTitle className="text-2xl">Password Restored</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -148,7 +138,7 @@ export default function ForgotPasswordPage() {
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
               <p className="text-slate-600 mb-4">
-                The admin password has been reset. You can now log in with your new password.
+                Your admin password has been restored. You can now log in with your stored passphrase.
               </p>
             </div>
             <Link href="/auth">
@@ -174,7 +164,7 @@ export default function ForgotPasswordPage() {
               <CardTitle className="text-2xl">Admin Recovery</CardTitle>
             </div>
             <CardDescription>
-              Enter your 10-word recovery passphrase and choose a new password.
+              Enter your admin passphrase to restore your password.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -185,11 +175,11 @@ export default function ForgotPasswordPage() {
                   name="passphrase"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Recovery Passphrase</FormLabel>
+                      <FormLabel>Admin Passphrase</FormLabel>
                       <FormControl>
                         <Input
                           type="password"
-                          placeholder="Enter all 10 words separated by spaces"
+                          placeholder="Enter your admin passphrase"
                           autoComplete="off"
                           {...field}
                         />
@@ -198,34 +188,8 @@ export default function ForgotPasswordPage() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={adminForm.control}
-                  name="newPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>New Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="At least 8 characters" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={adminForm.control}
-                  name="confirmPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Confirm New Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="Repeat new password" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <Button type="submit" disabled={adminResetMutation.isPending} className="w-full">
-                  {adminResetMutation.isPending ? "Verifying…" : "Reset Admin Password"}
+                  {adminResetMutation.isPending ? "Verifying…" : "Restore My Password"}
                 </Button>
               </form>
             </Form>
@@ -242,7 +206,7 @@ export default function ForgotPasswordPage() {
                 <KeyRound className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
                 <div className="text-sm text-amber-800">
                   <p className="font-medium">Admin-Only Recovery</p>
-                  <p className="mt-1">This form only works for the admin account. Your passphrase is stored in Replit Secrets.</p>
+                  <p className="mt-1">This restores the admin password to the value stored in your Replit Secrets (<code>ADMIN_PASSPHRASE</code>).</p>
                 </div>
               </div>
             </div>

@@ -459,27 +459,18 @@ export function setupAuth(app: Express) {
   // Admin passphrase reset — bypasses email flow, only works for "admin" account
   app.post("/api/admin-passphrase-reset", async (req, res) => {
     try {
-      const { passphrase, newPassword } = req.body;
+      const { passphrase } = req.body;
 
-      if (!passphrase || !newPassword) {
-        return res.status(400).json({ message: "Passphrase and new password are required" });
-      }
-      if (newPassword.length < 8) {
-        return res.status(400).json({ message: "Password must be at least 8 characters" });
+      if (!passphrase) {
+        return res.status(400).json({ message: "Passphrase is required" });
       }
 
-      const storedHash = process.env.ADMIN_PASSPHRASE_HASH;
-      if (!storedHash) {
+      const adminPassphrase = process.env.ADMIN_PASSPHRASE;
+      if (!adminPassphrase) {
         return res.status(500).json({ message: "Admin passphrase not configured on this server" });
       }
 
-      const [salt, expectedHash] = storedHash.split(':');
-      const inputHash = (await scryptAsync(passphrase.trim(), salt, 64) as Buffer).toString('hex');
-
-      // Use timing-safe comparison to prevent timing attacks
-      const inputBuf = Buffer.from(inputHash, 'hex');
-      const expectedBuf = Buffer.from(expectedHash, 'hex');
-      if (inputBuf.length !== expectedBuf.length || !timingSafeEqual(inputBuf, expectedBuf)) {
+      if (passphrase.trim() !== adminPassphrase) {
         return res.status(401).json({ message: "Incorrect passphrase" });
       }
 
@@ -488,13 +479,14 @@ export function setupAuth(app: Express) {
         return res.status(404).json({ message: "Admin account not found" });
       }
 
-      const hashedNewPassword = await hashPassword(newPassword);
-      await storage.updateUserPassword(adminUser.id, hashedNewPassword);
+      // Restore admin password back to the ADMIN_PASSPHRASE secret value
+      const restoredPassword = await hashPassword(adminPassphrase);
+      await storage.updateUserPassword(adminUser.id, restoredPassword);
 
-      res.json({ message: "Admin password reset successfully" });
+      res.json({ message: "Admin password restored successfully" });
     } catch (error: any) {
       console.error("Admin passphrase reset error:", error);
-      res.status(500).json({ message: "Failed to reset admin password" });
+      res.status(500).json({ message: "Failed to restore admin password" });
     }
   });
 

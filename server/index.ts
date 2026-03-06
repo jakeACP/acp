@@ -117,6 +117,25 @@ async function setupRoutes() {
       serveStatic(app);
     }
 
+    // Sync admin password to ADMIN_PASSPHRASE secret on every startup
+    if (process.env.ADMIN_PASSPHRASE) {
+      try {
+        const { storage } = await import("./storage");
+        const { scrypt, randomBytes } = await import("crypto");
+        const { promisify } = await import("util");
+        const scryptAsync = promisify(scrypt);
+        const adminUser = await storage.getUserByUsername("admin");
+        if (adminUser) {
+          const salt = randomBytes(16).toString("hex");
+          const hash = (await scryptAsync(process.env.ADMIN_PASSPHRASE, salt, 64) as Buffer).toString("hex");
+          await storage.updateUserPassword(adminUser.id, `${salt}:${hash}`);
+          log("Admin password synced to ADMIN_PASSPHRASE secret");
+        }
+      } catch (e: any) {
+        log(`Admin password sync skipped: ${e.message}`);
+      }
+    }
+
     // Mark server ready — the 503 startup guard will now pass all requests through
     serverReady = true;
     log("Server fully ready");
