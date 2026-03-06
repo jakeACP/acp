@@ -1,0 +1,136 @@
+You are acting as a senior full-stack debugging engineer.
+
+My deployed app works correctly at:
+
+https://anticorruptionparty.replit.app
+
+But when accessed through the custom domain:
+
+https://anticorruptionparty.us
+
+the site sometimes shows:
+
+• 502 Bad Gateway
+• partially rendered or “jumbled” HTML
+• missing CSS/JS assets
+
+Your task is to investigate and produce a COMPLETE DIAGNOSTIC PLAN before modifying any code.
+
+Do NOT immediately implement changes. First determine the root cause.
+
+------------------------------------------------
+PHASE 1 — Inspect Deployment Infrastructure
+------------------------------------------------
+
+Check the following:
+
+1. Deployment configuration
+   • confirm deployment type (Autoscale / Reserved VM / Static)
+   • confirm build command and run command
+   • verify server process runs continuously
+   • confirm server listens on 0.0.0.0 and correct port
+
+2. Runtime errors
+   • inspect deployment logs
+   • identify crashes or unhandled exceptions
+   • check if any scheduled jobs or AI scripts run at startup
+
+3. Environment variables
+   • verify all secrets used in code exist in Deployment Secrets
+   • compare workspace secrets vs deployment secrets
+   • check for missing API keys causing startup failures
+
+------------------------------------------------
+PHASE 2 — Domain & DNS Verification
+------------------------------------------------
+
+Check configuration of the custom domain.
+
+Verify:
+
+• only ONE A record exists pointing to Replit
+• no conflicting A / AAAA records
+• Cloudflare proxy is disabled if present
+• SSL certificate issued successfully
+• DNS propagation completed
+
+Confirm that:
+
+anticorruptionparty.us
+www.anticorruptionparty.us
+
+both resolve properly to the Replit deployment.
+
+------------------------------------------------
+PHASE 3 — Reverse Proxy & Headers
+------------------------------------------------
+
+Check backend server configuration.
+
+Verify:
+
+• Express / Node server has
+  app.set("trust proxy", 1)
+
+• cookies and sessions respect HTTPS
+• no redirects causing loops between domains
+• CORS configuration allows the custom domain
+
+------------------------------------------------
+PHASE 4 — Frontend Asset Loading
+------------------------------------------------
+
+Investigate the frontend build.
+
+Check for:
+
+• absolute URLs referencing the replit.app domain
+• incorrect BASE_URL / API_URL environment variables
+• broken asset paths
+• Vite / Next / React build configs using hardcoded domain values
+
+Ensure assets load correctly from BOTH:
+
+anticorruptionparty.us
+anticorruptionparty.replit.app
+
+------------------------------------------------
+PHASE 5 — AI Auto-Posting Feature
+------------------------------------------------
+
+I recently added an AI tool that posts automatically.
+
+Check whether this code:
+
+• runs during server startup
+• crashes when API keys are missing
+• blocks the server event loop
+• causes the process to exit
+
+If found, move it to a background worker or scheduled job.
+
+------------------------------------------------
+PHASE 6 — Browser Rendering Issues
+------------------------------------------------
+
+Simulate loading the site and inspect:
+
+• network errors
+• missing CSS / JS files
+• incorrect content-type headers
+• caching issues
+
+------------------------------------------------
+OUTPUT REQUIRED
+------------------------------------------------
+
+Before implementing fixes, produce a report containing:
+
+1. Root cause hypothesis
+2. Evidence from logs or code
+3. Files involved
+4. Exact fixes required
+5. Risk of each fix
+6. Step-by-step implementation plan
+
+Only after the plan is approved should code changes be implemented.
