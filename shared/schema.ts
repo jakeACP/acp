@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, json, decimal, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, json, decimal, real, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -1396,6 +1396,8 @@ export const specialInterestGroups = pgTable("special_interest_groups", {
   dataSourceName: text("data_source_name"), // Primary data source name (e.g. "OpenSecrets")
   dataSourceUrl: text("data_source_url"), // Link to data source
   disclosureNotes: text("disclosure_notes"), // Admin notes about the organization
+  gradeWeight: real("grade_weight").default(1.0), // Multiplier for grade impact (0.5 = 50%, 2.0 = 200%)
+  isAce: boolean("is_ace").default(false), // Anti-Corruption Endorsement — positive pledge
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1421,6 +1423,7 @@ export const politicianSigSponsorships = pgTable("politician_sig_sponsorships", 
   disclosureSource: text("disclosure_source"), // Where the info came from (FEC, OpenSecrets, etc.)
   disclosureUrl: text("disclosure_url"), // Link to disclosure document
   notes: text("notes"), // Admin notes
+  sigRank: integer("sig_rank"), // Per-politician rank (1 = highest impact). Used to weight grade calculation.
   isVerified: boolean("is_verified").default(false), // Has this been fact-checked
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

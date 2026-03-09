@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
@@ -25,6 +25,8 @@ type SpecialInterestGroup = {
   acronym?: string;
   category: string;
   industry?: string;
+  gradeWeight?: number;
+  isAce?: boolean;
   isActive: boolean;
 };
 
@@ -37,6 +39,7 @@ type PoliticianSponsorship = {
   contributionPeriod?: string;
   disclosureSource?: string;
   isVerified?: boolean;
+  sigRank?: number | null;
   sig?: SpecialInterestGroup;
 };
 
@@ -96,6 +99,8 @@ export default function AdminPoliticiansPage() {
   const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
   const [selectedPoliticianForSponsor, setSelectedPoliticianForSponsor] = useState<PoliticianProfile | null>(null);
   const [sponsorshipFilter, setSponsorshipFilter] = useState<string>("");
+  const [manageSigsOpen, setManageSigsOpen] = useState(false);
+  const [managingSigsPolitician, setManagingSigsPolitician] = useState<PoliticianProfile | null>(null);
 
   // Positions search/filter
   const [positionSearch, setPositionSearch] = useState("");
@@ -136,6 +141,17 @@ export default function AdminPoliticiansPage() {
       return response.json();
     },
     enabled: !!selectedPoliticianForSponsor,
+  });
+
+  const { data: managedSponsors = [], isLoading: managedSponsorsLoading } = useQuery<PoliticianSponsorship[]>({
+    queryKey: ["/api/admin/politician-profiles", managingSigsPolitician?.id, "sponsors"],
+    queryFn: async () => {
+      if (!managingSigsPolitician) return [];
+      const response = await fetch(`/api/admin/politician-profiles/${managingSigsPolitician.id}/sponsors`, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch sponsors");
+      return response.json();
+    },
+    enabled: !!managingSigsPolitician,
   });
 
 
@@ -290,10 +306,36 @@ export default function AdminPoliticiansPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles", selectedPoliticianForSponsor?.id, "sponsors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles", managingSigsPolitician?.id, "sponsors"] });
       toast({ title: "Sponsor unlinked successfully" });
     },
     onError: (error: any) => {
       toast({ title: "Error unlinking sponsor", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateSponsorRankMutation = useMutation({
+    mutationFn: async ({ id, sigRank }: { id: string; sigRank: number | null }) => {
+      return await apiRequest(`/api/admin/politician-sponsorships/${id}`, "PATCH", { sigRank });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles", managingSigsPolitician?.id, "sponsors"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error updating rank", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const recalculateGradeMutation = useMutation({
+    mutationFn: async (politicianId: string) => {
+      return await apiRequest(`/api/admin/politician-profiles/${politicianId}/recalculate-grade`, "POST");
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: `Grade recalculated: ${data.grade}`, description: data.message });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error recalculating grade", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1402,6 +1444,19 @@ export default function AdminPoliticiansPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    title="Manage SIG Sponsorships & Grade"
+                                    onClick={() => {
+                                      setManagingSigsPolitician(profile);
+                                      setSelectedPoliticianForSponsor(profile);
+                                      setManageSigsOpen(true);
+                                    }}
+                                    data-testid={`button-manage-sigs-${profile.id}`}
+                                  >
+                                    <Shield className="h-4 w-4 text-blue-500" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => {
                                       setEditingProfile(profile);
                                       setUploadedPhotoUrl(profile.photoUrl);
@@ -1881,6 +1936,163 @@ export default function AdminPoliticiansPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manageSigsOpen} onOpenChange={setManageSigsOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-blue-500" />
+              SIG Sponsorships — {managingSigsPolitician?.fullName}
+            </DialogTitle>
+            <DialogDescription>
+              Manage interest groups, set impact rank, and recalculate the corruption grade.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-slate-500">
+                Rank 1 = highest impact. ACE groups reduce the score.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setManageSigsOpen(false);
+                    setSponsorDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Link SIG
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  disabled={recalculateGradeMutation.isPending || !managingSigsPolitician}
+                  onClick={() => managingSigsPolitician && recalculateGradeMutation.mutate(managingSigsPolitician.id)}
+                >
+                  {recalculateGradeMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Calculator className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Recalculate Grade
+                </Button>
+              </div>
+            </div>
+
+            {managedSponsorsLoading ? (
+              <div className="flex items-center justify-center py-8 text-slate-400">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />Loading...
+              </div>
+            ) : managedSponsors.length === 0 ? (
+              <div className="text-center py-8 text-slate-400">
+                No SIGs linked yet. Click "Link SIG" to add one.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Organization</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="w-[100px]">Amount</TableHead>
+                    <TableHead className="w-[90px] text-center">Rank</TableHead>
+                    <TableHead className="w-[60px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {managedSponsors
+                    .slice()
+                    .sort((a, b) => {
+                      if (a.sigRank == null && b.sigRank == null) return 0;
+                      if (a.sigRank == null) return 1;
+                      if (b.sigRank == null) return -1;
+                      return a.sigRank - b.sigRank;
+                    })
+                    .map((sp) => (
+                    <TableRow key={sp.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {sp.sig?.isAce && (
+                            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                          )}
+                          <div>
+                            <div className="font-medium text-sm">{sp.sig?.name ?? sp.sigId}</div>
+                            {sp.sig?.acronym && (
+                              <div className="text-xs text-slate-500">({sp.sig.acronym})</div>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          <Badge variant={sp.sig?.isAce ? "default" : "outline"} className={sp.sig?.isAce ? "bg-emerald-600 text-white text-xs w-fit" : "text-xs w-fit"}>
+                            {sp.sig?.isAce ? "ACE" : sp.relationshipType.replace("_", " ")}
+                          </Badge>
+                          {sp.sig?.gradeWeight !== undefined && sp.sig.gradeWeight !== 1 && (
+                            <span className="text-xs text-slate-400">×{sp.sig.gradeWeight} weight</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {sp.reportedAmount ? `$${sp.reportedAmount.toLocaleString()}` : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 justify-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            disabled={updateSponsorRankMutation.isPending}
+                            onClick={() => {
+                              const newRank = sp.sigRank ? sp.sigRank - 1 : null;
+                              updateSponsorRankMutation.mutate({ id: sp.id, sigRank: newRank && newRank > 0 ? newRank : null });
+                            }}
+                          >
+                            <ArrowUp className="h-3 w-3" />
+                          </Button>
+                          <span className="text-xs w-5 text-center font-mono">{sp.sigRank ?? "—"}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            disabled={updateSponsorRankMutation.isPending}
+                            onClick={() => {
+                              const newRank = (sp.sigRank ?? 0) + 1;
+                              updateSponsorRankMutation.mutate({ id: sp.id, sigRank: newRank });
+                            }}
+                          >
+                            <ArrowDown className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            if (managingSigsPolitician) {
+                              unlinkSponsorMutation.mutate({ politicianId: managingSigsPolitician.id, sigId: sp.sigId });
+                            }
+                          }}
+                        >
+                          <Unlink className="h-3.5 w-3.5 text-red-400" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManageSigsOpen(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

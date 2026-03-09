@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, ExternalLink, AlertTriangle, TrendingUp } from "lucide-react";
+import { Loader2, Search, ExternalLink, AlertTriangle, TrendingUp, ShieldCheck } from "lucide-react";
 import { Navigation } from "@/components/navigation";
 
 type SIG = {
@@ -19,9 +19,11 @@ type SIG = {
   dataSourceName?: string;
   dataSourceUrl?: string;
   disclosureNotes?: string;
+  gradeWeight?: number;
+  isAce?: boolean;
 };
 
-const CATEGORIES = ["All", "Special Interest", "Super PAC", "Dark Money", "Industry PAC", "Pledge", "Labor Union", "Endorsement Org"];
+const CATEGORIES = ["All", "Anti-Corruption Endorsement", "Special Interest", "Super PAC", "Dark Money", "Industry PAC", "Pledge", "Labor Union", "Endorsement Org"];
 const SENTIMENTS = ["all", "negative", "positive", "neutral"];
 
 function sentimentLabel(s?: string) {
@@ -36,6 +38,13 @@ function sentimentBadgeClass(s?: string) {
   return "bg-gray-400 text-white hover:bg-gray-500";
 }
 
+function cardBgClass(sig: SIG): string {
+  if (sig.isAce) return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700";
+  if (sig.sentiment === "negative") return "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900";
+  if (sig.sentiment === "positive") return "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900";
+  return "";
+}
+
 function categoryBadgeClass(cat: string) {
   const map: Record<string, string> = {
     "Super PAC": "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950 dark:text-orange-200",
@@ -45,6 +54,7 @@ function categoryBadgeClass(cat: string) {
     "Pledge": "bg-green-100 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-200",
     "Labor Union": "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-200",
     "Endorsement Org": "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950 dark:text-teal-200",
+    "Anti-Corruption Endorsement": "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-200",
   };
   return map[cat] || "bg-muted text-muted-foreground";
 }
@@ -59,13 +69,16 @@ export default function SigsDirectoryPage() {
   });
 
   const filtered = sigs.filter(sig => {
-    const matchCat = activeCategory === "All" || sig.category === activeCategory;
+    const matchCat = activeCategory === "All" ||
+      (activeCategory === "Anti-Corruption Endorsement" ? sig.isAce : sig.category === activeCategory);
     const matchSent = activeSentiment === "all" || sig.sentiment === activeSentiment;
-    const matchSearch = !search || 
+    const matchSearch = !search ||
       sig.name.toLowerCase().includes(search.toLowerCase()) ||
       sig.description?.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSent && matchSearch;
   });
+
+  const aceCount = sigs.filter(s => s.isAce).length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -73,9 +86,9 @@ export default function SigsDirectoryPage() {
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Influence Map</h1>
+          <h1 className="text-3xl font-bold text-foreground">Interest Groups</h1>
           <p className="text-muted-foreground mt-2 max-w-2xl">
-            Track special interest groups, super PACs, dark money organizations, and the pledges that politicians make. 
+            Track special interest groups, super PACs, dark money organizations, and the pledges that politicians make.
             Understanding who funds our politicians is essential to holding them accountable.
           </p>
         </div>
@@ -90,6 +103,12 @@ export default function SigsDirectoryPage() {
             <TrendingUp className="h-4 w-4" />
             {sigs.filter(s => s.sentiment === "positive").length} Reform-aligned organizations
           </span>
+          {aceCount > 0 && (
+            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+              <ShieldCheck className="h-4 w-4" />
+              {aceCount} Anti-Corruption Endorsements
+            </span>
+          )}
         </div>
 
         {/* Search */}
@@ -111,7 +130,11 @@ export default function SigsDirectoryPage() {
               variant={activeCategory === cat ? "default" : "outline"}
               size="sm"
               onClick={() => setActiveCategory(cat)}
+              className={cat === "Anti-Corruption Endorsement" && activeCategory !== cat
+                ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"
+                : ""}
             >
+              {cat === "Anti-Corruption Endorsement" && <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />}
               {cat}
             </Button>
           ))}
@@ -147,17 +170,27 @@ export default function SigsDirectoryPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map(sig => (
-              <Card key={sig.id} className="flex flex-col hover:shadow-md transition-shadow">
+              <Card key={sig.id} className={`flex flex-col hover:shadow-md transition-shadow ${cardBgClass(sig)}`}>
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base leading-tight">{sig.name}</CardTitle>
+                    <CardTitle className="text-base leading-tight flex items-center gap-2">
+                      {sig.isAce && <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+                      {sig.name}
+                    </CardTitle>
                     <Badge className={`text-xs shrink-0 ${sentimentBadgeClass(sig.sentiment)}`}>
-                      {sentimentLabel(sig.sentiment)}
+                      {sig.isAce ? "ACE" : sentimentLabel(sig.sentiment)}
                     </Badge>
                   </div>
-                  <Badge variant="outline" className={`text-xs w-fit ${categoryBadgeClass(sig.category)}`}>
-                    {sig.category}
-                  </Badge>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge variant="outline" className={`text-xs w-fit ${categoryBadgeClass(sig.category)}`}>
+                      {sig.isAce ? "Anti-Corruption Endorsement" : sig.category}
+                    </Badge>
+                    {sig.gradeWeight !== undefined && sig.gradeWeight !== 1.0 && (
+                      <Badge variant="outline" className="text-xs w-fit bg-slate-50 dark:bg-slate-800">
+                        {Math.round(sig.gradeWeight * 100)}% weight
+                      </Badge>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="flex flex-col flex-1 gap-3">
                   <p className="text-sm text-muted-foreground line-clamp-3">

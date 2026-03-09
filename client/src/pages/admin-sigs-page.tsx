@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Users, Database, Loader2, FileDown } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Users, Database, Loader2, FileDown, ShieldCheck } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 
 type SpecialInterestGroup = {
@@ -29,6 +29,8 @@ type SpecialInterestGroup = {
   foundedYear?: number;
   industry?: string;
   disclosureNotes?: string;
+  gradeWeight?: number;
+  isAce?: boolean;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -43,6 +45,7 @@ const CATEGORIES = [
   { value: "nonprofit", label: "Non-Profit Organization" },
   { value: "industry", label: "Industry Association" },
   { value: "foreign", label: "Foreign Entity" },
+  { value: "Anti-Corruption Endorsement", label: "Anti-Corruption Endorsement (ACE)" },
   { value: "other", label: "Other" },
 ];
 
@@ -143,6 +146,7 @@ export default function AdminSigsPage() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const gradeWeightRaw = formData.get("gradeWeight") as string;
     const data: Partial<SpecialInterestGroup> = {
       name: formData.get("name") as string,
       acronym: formData.get("acronym") as string || undefined,
@@ -155,6 +159,7 @@ export default function AdminSigsPage() {
       foundedYear: formData.get("foundedYear") ? parseInt(formData.get("foundedYear") as string) : undefined,
       industry: formData.get("industry") as string || undefined,
       disclosureNotes: formData.get("disclosureNotes") as string || undefined,
+      gradeWeight: gradeWeightRaw ? parseFloat(gradeWeightRaw) : undefined,
       isActive: formData.get("isActive") === "on",
     };
 
@@ -315,7 +320,19 @@ export default function AdminSigsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{getCategoryLabel(sig.category)}</Badge>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="outline">{getCategoryLabel(sig.category)}</Badge>
+                          {sig.isAce && (
+                            <Badge className="bg-emerald-600 text-white text-xs gap-1 px-1.5">
+                              <ShieldCheck className="h-3 w-3" />ACE
+                            </Badge>
+                          )}
+                          {sig.gradeWeight !== undefined && sig.gradeWeight !== 1 && (
+                            <Badge variant="secondary" className="text-xs">
+                              ×{sig.gradeWeight}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {sig.industry ? getIndustryLabel(sig.industry) : "-"}
@@ -517,6 +534,23 @@ export default function AdminSigsPage() {
                   placeholder="Internal notes about this organization..."
                   data-testid="input-sig-notes"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="gradeWeight">Grade Impact Weight</Label>
+                <Input
+                  id="gradeWeight"
+                  name="gradeWeight"
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  defaultValue={editingSig?.gradeWeight ?? 1.0}
+                  data-testid="input-sig-grade-weight"
+                />
+                <p className="text-xs text-slate-500">
+                  Multiplier applied to this group's contribution when calculating a politician's grade. 1.0 = normal, 2.0 = double impact, 0.5 = half impact. ACE groups use this to offset negative scores.
+                </p>
               </div>
 
               <div className="flex items-center space-x-2">

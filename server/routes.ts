@@ -4138,6 +4138,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Recalculate a politician's grade based on SIG weights and ranks
+  app.post("/api/admin/politician-profiles/:id/recalculate-grade", ensureAdmin, async (req, res) => {
+    try {
+      const grade = await storage.recalculateGradeFromSigs(req.params.id);
+      res.json({ grade, message: `Grade recalculated: ${grade}` });
+    } catch (error: any) {
+      console.error("Recalculate grade error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Bulk import all Congress members from the XLSX file
   app.post("/api/admin/politicians/generate-handles", ensureAdmin, async (req, res) => {
     const STATE_NAME_TO_ABBR: Record<string, string> = {
@@ -4680,7 +4691,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Create a new SIG
   app.post("/api/admin/sigs", ensureAdmin, async (req, res) => {
     try {
-      const data = z.object({
+      const rawData = z.object({
         name: z.string().min(1),
         acronym: z.string().optional(),
         description: z.string().optional(),
@@ -4692,8 +4703,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         foundedYear: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
         industry: z.string().optional(),
         disclosureNotes: z.string().optional(),
+        gradeWeight: z.number().min(0).max(10).optional(),
         isActive: z.boolean().optional(),
       }).parse(req.body);
+      const data = { ...rawData, isAce: rawData.category === 'Anti-Corruption Endorsement' };
 
       const sig = await storage.createSpecialInterestGroup(data);
       res.status(201).json(sig);
@@ -4709,7 +4722,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Update a SIG
   app.patch("/api/admin/sigs/:id", ensureAdmin, async (req, res) => {
     try {
-      const data = z.object({
+      const rawData = z.object({
         name: z.string().min(1).optional(),
         acronym: z.string().optional(),
         description: z.string().optional(),
@@ -4721,8 +4734,13 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         foundedYear: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
         industry: z.string().optional(),
         disclosureNotes: z.string().optional(),
+        gradeWeight: z.number().min(0).max(10).optional(),
         isActive: z.boolean().optional(),
       }).parse(req.body);
+      const data = {
+        ...rawData,
+        ...(rawData.category !== undefined ? { isAce: rawData.category === 'Anti-Corruption Endorsement' } : {}),
+      };
 
       const sig = await storage.updateSpecialInterestGroup(req.params.id, data);
       res.json(sig);
@@ -4816,11 +4834,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Admin: Update a sponsorship
+  // Admin: Update a sponsorship (including sigRank)
   app.patch("/api/admin/politician-sponsorships/:id", ensureAdmin, async (req, res) => {
     try {
       const data = z.object({
-        relationshipType: z.enum(['primary_sponsor', 'sponsor', 'donor', 'affiliated', 'endorsed']).optional(),
+        relationshipType: z.enum(['primary_sponsor', 'sponsor', 'donor', 'affiliated', 'endorsed', 'pledged_against']).optional(),
         reportedAmount: z.number().int().optional(),
         amountCurrency: z.string().optional(),
         contributionPeriod: z.string().optional(),
@@ -4830,6 +4848,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         disclosureUrl: z.string().url().optional().or(z.literal('')),
         notes: z.string().optional(),
         isVerified: z.boolean().optional(),
+        sigRank: z.number().int().min(1).nullable().optional(),
       }).parse(req.body);
 
       const sponsorship = await storage.updatePoliticianSponsorship(req.params.id, {

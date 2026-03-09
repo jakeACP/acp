@@ -240,6 +240,7 @@ export interface IStorage {
   listPoliticianSponsors(politicianId: string): Promise<any[]>;
   linkSponsorToPolitician(data: InsertPoliticianSigSponsorship): Promise<PoliticianSigSponsorship>;
   updatePoliticianSponsorship(id: string, patch: Partial<PoliticianSigSponsorship>): Promise<PoliticianSigSponsorship>;
+  recalculateGradeFromSigs(politicianId: string): Promise<string>;
   unlinkSponsorFromPolitician(politicianId: string, sigId: string): Promise<void>;
   getPoliticiansBySig(sigId: string): Promise<any[]>;
 
@@ -3981,6 +3982,31 @@ export class DatabaseStorage implements IStorage {
       .where(eq(politicianSigSponsorships.id, id))
       .returning();
     return sponsorship;
+  }
+
+  async recalculateGradeFromSigs(politicianId: string): Promise<string> {
+    const sponsorships = await this.listPoliticianSponsors(politicianId);
+    let weightedScore = 0;
+    for (const s of sponsorships) {
+      if (!s.sig) continue;
+      const rankMultiplier = s.sigRank ? 1 / s.sigRank : 1.0;
+      if (s.sig.isAce) {
+        weightedScore -= (s.sig.gradeWeight ?? 1.0) * rankMultiplier * 500_000;
+      } else {
+        const amount = s.reportedAmount ?? 0;
+        weightedScore += amount * (s.sig.gradeWeight ?? 1.0) * rankMultiplier;
+      }
+    }
+    let grade: string;
+    if (weightedScore <= 0) grade = 'A';
+    else if (weightedScore < 100_000) grade = 'B';
+    else if (weightedScore < 500_000) grade = 'C';
+    else if (weightedScore < 1_000_000) grade = 'D';
+    else grade = 'F';
+    await db.update(politicianProfiles)
+      .set({ corruptionGrade: grade })
+      .where(eq(politicianProfiles.id, politicianId));
+    return grade;
   }
 
   async importCongress(): Promise<{
