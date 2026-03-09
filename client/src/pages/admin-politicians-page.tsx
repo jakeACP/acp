@@ -1337,7 +1337,7 @@ export default function AdminPoliticiansPage() {
                           <TableHead>Party</TableHead>
                           <TableHead>Position</TableHead>
                           <TableHead>State</TableHead>
-                          <TableHead>Term</TableHead>
+                          <TableHead>Grand Total</TableHead>
                           <TableHead>Grade</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
@@ -1401,9 +1401,9 @@ export default function AdminPoliticiansPage() {
                                 {position?.jurisdiction || "-"}
                               </TableCell>
                               <TableCell className="text-sm">
-                                {profile.termStart && profile.termEnd
-                                  ? `${profile.termStart} – ${profile.termEnd}`
-                                  : profile.termStart || "-"}
+                                {profile.totalContributions
+                                  ? <span className="text-red-600 dark:text-red-400 font-medium">${Number(profile.totalContributions).toLocaleString()}</span>
+                                  : <span className="text-slate-400">-</span>}
                               </TableCell>
                               <TableCell>
                                 <Select
