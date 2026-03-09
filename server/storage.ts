@@ -197,6 +197,7 @@ export interface IStorage {
   
   // Politician Profiles Management
   listPoliticianProfiles(filters?: { positionId?: string; isCurrent?: boolean }): Promise<any[]>;
+  listPoliticiansWithSigs(): Promise<any[]>;
   getPoliticiansByPositionTitles(titles: string[]): Promise<any[]>;
   getPoliticianProfile(id: string): Promise<any>;
   createPoliticianProfile(data: InsertPoliticianProfile): Promise<PoliticianProfile>;
@@ -3397,6 +3398,53 @@ export class DatabaseStorage implements IStorage {
     
     const results = await query.orderBy(politicianProfiles.fullName);
     return results.map(r => ({ ...r.politician, position: r.position }));
+  }
+
+  async listPoliticiansWithSigs(): Promise<any[]> {
+    const results = await db
+      .select({
+        politician: politicianProfiles,
+        position: politicalPositions,
+      })
+      .from(politicianProfiles)
+      .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .where(eq(politicianProfiles.isCurrent, true))
+      .orderBy(
+        sql`CASE ${politicianProfiles.corruptionGrade} WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END`,
+        politicianProfiles.fullName
+      )
+      .limit(500);
+
+    const politicians = results.map(r => ({ ...r.politician, position: r.position }));
+    if (politicians.length === 0) return [];
+
+    const ids = politicians.map(p => p.id);
+    const sponsorships = await db
+      .select({
+        politicianId: politicianSigSponsorships.politicianId,
+        acronym: specialInterestGroups.acronym,
+        reportedAmount: politicianSigSponsorships.reportedAmount,
+        relationshipType: politicianSigSponsorships.relationshipType,
+      })
+      .from(politicianSigSponsorships)
+      .innerJoin(specialInterestGroups, eq(politicianSigSponsorships.sigId, specialInterestGroups.id))
+      .where(inArray(politicianSigSponsorships.politicianId, ids));
+
+    const sigMap = new Map<string, typeof sponsorships>();
+    for (const s of sponsorships) {
+      if (!sigMap.has(s.politicianId)) sigMap.set(s.politicianId, []);
+      sigMap.get(s.politicianId)!.push(s);
+    }
+
+    return politicians.map(p => {
+      const sigs = sigMap.get(p.id) || [];
+      const totalLobbyAmount = sigs.reduce((sum, s) => sum + (s.reportedAmount ?? 0), 0);
+      const sigAcronyms = sigs
+        .filter(s => s.acronym && s.relationshipType !== 'pledged_against')
+        .map(s => s.acronym as string);
+      const rejectsAIPAC = sigs.some(s => s.relationshipType === 'pledged_against');
+      return { ...p, totalLobbyAmount, sigAcronyms, rejectsAIPAC };
+    });
   }
 
   async getPoliticiansByPositionTitles(titles: string[]): Promise<any[]> {

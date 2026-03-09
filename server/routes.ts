@@ -2133,6 +2133,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Public endpoint: list all current politicians with SIG data, sorted by grade (A first)
+  app.get("/api/reps/list", async (req, res) => {
+    try {
+      const politicians = await storage.listPoliticiansWithSigs();
+      res.json(politicians);
+    } catch (error: any) {
+      console.error("Reps list error:", error);
+      res.status(500).json({ message: error.message || "Failed to load representatives" });
+    }
+  });
+
   // DB-backed zip code → congressional district → politician profiles lookup
   app.get("/api/representatives/by-zip/:zipCode", async (req, res) => {
     const { zipCode } = req.params;
