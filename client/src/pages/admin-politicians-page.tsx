@@ -77,6 +77,7 @@ type PoliticianProfile = {
   handle?: string;
   corruptionGrade?: string;
   corruptionScorecard?: string;
+  totalContributions?: number | null;
   isVerified?: boolean;
   claimRequestEmail?: string;
   claimRequestPhone?: string;
@@ -506,6 +507,7 @@ export default function AdminPoliticiansPage() {
       biography: formData.get("biography") as string || undefined,
       termStart: formData.get("termStart") as string || undefined,
       termEnd: formData.get("termEnd") as string || undefined,
+      totalContributions: formData.get("totalContributions") ? Number(formData.get("totalContributions")) : undefined,
       isCurrent: formData.get("isCurrent") === "true",
       positionId: positionIdValue === "none" ? undefined : positionIdValue || undefined,
     };
@@ -1856,6 +1858,18 @@ export default function AdminPoliticiansPage() {
                     data-testid="input-term-end"
                   />
                 </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="totalContributions">Grand Total Contributions (optional)</Label>
+                <Input
+                  id="totalContributions"
+                  name="totalContributions"
+                  type="number"
+                  defaultValue={editingProfile?.totalContributions != null ? Number(editingProfile.totalContributions) : undefined}
+                  placeholder="e.g. 152782583 (whole dollars, from BallotPedia)"
+                />
+                <p className="text-xs text-slate-400">Career total raised in dollars. Leave blank to auto-populate from Refresh Data.</p>
               </div>
 
               <div className="grid gap-2">
