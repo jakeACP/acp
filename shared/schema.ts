@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, json, decimal, real, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, bigint, boolean, json, decimal, real, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -1348,7 +1348,7 @@ export const politicianProfiles = pgTable("politician_profiles", {
   verifiedDate: timestamp("verified_date"), // When admin approved the claim
   claimToken: text("claim_token"), // Email-based claim verification token
   claimTokenExpiry: timestamp("claim_token_expiry"), // Token expiry (72h)
-  totalContributions: integer("total_contributions"), // Grand total contributions in cents, sourced from BallotPedia
+  totalContributions: bigint("total_contributions", { mode: "number" }), // Grand total contributions in dollars, sourced from BallotPedia
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
