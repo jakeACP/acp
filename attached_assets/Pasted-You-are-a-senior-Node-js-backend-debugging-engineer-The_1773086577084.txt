@@ -1,0 +1,151 @@
+You are a senior Node.js backend debugging engineer.
+
+The deployed application sometimes returns:
+
+502 Bad Gateway
+
+The frontend occasionally loads raw HTML without CSS.
+
+Environment:
+
+- Node.js + Express backend
+- Vite + React frontend
+- Replit hosting
+- Custom domain anticorruptionparty.us
+- 2FA was recently added using Twilio SMS
+- Twilio code located in server/twilio.ts and server/two-factor.ts
+- Auth logic in server/auth.ts
+- Routes defined in server/routes.ts
+
+The issue began shortly after implementing 2FA.
+
+Your task is to diagnose and fix the root cause.
+
+--------------------------------
+PHASE 1 — Server Stability
+--------------------------------
+
+Inspect server/index.ts.
+
+Verify:
+
+• server listens on process.env.PORT
+• server binds to 0.0.0.0
+• the server starts immediately before long async initialization
+
+If startup depends on database or external APIs, move them after server start.
+
+--------------------------------
+PHASE 2 — Twilio 2FA Error Handling
+--------------------------------
+
+Inspect:
+
+server/twilio.ts
+server/two-factor.ts
+server/auth.ts
+
+Find all calls to Twilio such as:
+
+client.messages.create()
+sendSMS()
+verifyOTP()
+
+Wrap every async call in try/catch blocks.
+
+Example:
+
+try {
+  await twilioClient.messages.create(...)
+} catch (error) {
+  console.error("Twilio error:", error)
+}
+
+Ensure no promise is left without catch.
+
+--------------------------------
+PHASE 3 — Express Async Route Protection
+--------------------------------
+
+Scan server/routes.ts for async route handlers.
+
+If a route looks like this:
+
+app.post("/login", async (req, res) => {
+  const result = await something()
+})
+
+Wrap it like:
+
+app.post("/login", async (req, res, next) => {
+  try {
+     const result = await something()
+     res.json(result)
+  } catch(err) {
+     next(err)
+  }
+})
+
+Ensure every async handler forwards errors to Express.
+
+--------------------------------
+PHASE 4 — Global Crash Protection
+--------------------------------
+
+Add process-level handlers in server/index.ts:
+
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Promise:", err)
+})
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err)
+})
+
+This prevents silent crashes.
+
+--------------------------------
+PHASE 5 — Session + Proxy Configuration
+--------------------------------
+
+Verify Express proxy configuration:
+
+app.set("trust proxy", 1)
+
+This is required when running behind a reverse proxy such as Replit.
+
+--------------------------------
+PHASE 6 — Vite Production Middleware
+--------------------------------
+
+Inspect server/vite.ts.
+
+Ensure production builds serve static assets from the built client directory instead of using development middleware.
+
+Broken middleware can cause missing CSS and jumbled HTML.
+
+--------------------------------
+PHASE 7 — Logging
+--------------------------------
+
+Add structured logging around:
+
+• login
+• 2FA verification
+• Twilio SMS send
+• session creation
+
+Example:
+
+console.log("2FA attempt", { userId, phone })
+
+--------------------------------
+OUTPUT REQUIRED
+--------------------------------
+
+Before implementing changes:
+
+1. Identify the exact failure point causing the 502.
+2. List the file and line number.
+3. Provide the patch needed to fix it.
+4. Then implement the fix.
