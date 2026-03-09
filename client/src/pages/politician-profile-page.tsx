@@ -607,20 +607,29 @@ export default function PoliticianProfilePage() {
             </CardHeader>
             <CardContent className="space-y-5">
 
-              {/* Grand Total Contributions (BallotPedia) */}
-              {profile.totalContributions != null && profile.totalContributions > 0 && (
-                <div className="rounded-lg border-2 border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-4 py-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-1">
-                    Grand Total Contributions (BallotPedia)
-                  </p>
-                  <p className="text-3xl font-bold text-red-700 dark:text-red-300">
-                    ${(profile.totalContributions).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-red-500 dark:text-red-400 mt-1">
-                    Career total raised, sourced from BallotPedia / FEC data
-                  </p>
-                </div>
-              )}
+              {/* Grand Total Contributions */}
+              {(() => {
+                const hasBp = profile.totalContributions != null && Number(profile.totalContributions) > 0;
+                const grandTotal = hasBp
+                  ? Number(profile.totalContributions)
+                  : totalLobbyAmount > 0 ? Math.round(totalLobbyAmount / 100) : null;
+                if (grandTotal == null) return null;
+                return (
+                  <div className="rounded-lg border-2 border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-1">
+                      Grand Total Contributions {hasBp ? "(BallotPedia)" : "(SIG Data)"}
+                    </p>
+                    <p className="text-3xl font-bold text-red-700 dark:text-red-300">
+                      ${grandTotal.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                      {hasBp
+                        ? "Career total raised, sourced from BallotPedia / FEC data"
+                        : "Sum of linked SuperPACs and special interest groups (BallotPedia data not yet available)"}
+                    </p>
+                  </div>
+                );
+              })()}
 
               {/* Pledged Against banners */}
               {pledgedAgainst.map(sponsor => (
@@ -651,8 +660,8 @@ export default function PoliticianProfilePage() {
                 </div>
               ))}
 
-              {/* Individual SIG/SuperPAC total */}
-              {totalLobbyAmount > 0 && (
+              {/* Individual SIG/SuperPAC total — only shown when BallotPedia grand total is also present */}
+              {totalLobbyAmount > 0 && profile.totalContributions != null && Number(profile.totalContributions) > 0 && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 dark:text-orange-400 mb-1">
                     Individual SuperPAC / SIG Total

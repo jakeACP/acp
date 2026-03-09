@@ -1401,7 +1401,7 @@ export default function AdminPoliticiansPage() {
                                 {position?.jurisdiction || "-"}
                               </TableCell>
                               <TableCell className="text-sm">
-                                {profile.totalContributions
+                                {profile.totalContributions && Number(profile.totalContributions) > 0
                                   ? <span className="text-red-600 dark:text-red-400 font-medium">${Number(profile.totalContributions).toLocaleString()}</span>
                                   : <span className="text-slate-400">-</span>}
                               </TableCell>

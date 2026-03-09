@@ -139,12 +139,16 @@ function RepCard({ rep, compact = false }: { rep: RepEntry; compact?: boolean })
               {rep.sigAcronyms.length > 4 && (
                 <span className="text-[10px] text-slate-400">+{rep.sigAcronyms.length - 4}</span>
               )}
-              {rep.totalContributions != null && rep.totalContributions > 0 && (
-                <span className="text-[10px] text-red-600 dark:text-red-400 font-semibold">
-                  Grand Total: ${(rep.totalContributions).toLocaleString()}
-                </span>
-              )}
-              {rep.totalLobbyAmount > 0 && (
+              {(() => {
+                const hasBp = rep.totalContributions != null && rep.totalContributions > 0;
+                const grandTotal = hasBp ? rep.totalContributions! : (rep.totalLobbyAmount > 0 ? Math.round(rep.totalLobbyAmount / 100) : null);
+                return grandTotal != null ? (
+                  <span className="text-[10px] text-red-600 dark:text-red-400 font-semibold">
+                    Grand Total: ${grandTotal.toLocaleString()}
+                  </span>
+                ) : null;
+              })()}
+              {rep.totalContributions != null && rep.totalContributions > 0 && rep.totalLobbyAmount > 0 && (
                 <span className="text-[10px] text-orange-600 dark:text-orange-400 font-medium">
                   SIG Total: ${(rep.totalLobbyAmount / 100).toLocaleString()}
                 </span>
@@ -197,14 +201,19 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
                 </span>
               )}
             </div>
-            {pol.totalContributions != null && pol.totalContributions > 0 && (
-              <div className="flex items-center gap-1 mt-1.5 text-xs text-red-600 dark:text-red-400">
-                <DollarSign className="w-3 h-3" />
-                <span className="font-bold">${(pol.totalContributions).toLocaleString()}</span>
-                <span className="text-slate-400">grand total (BallotPedia)</span>
-              </div>
-            )}
-            {pol.totalLobbyAmount > 0 && (
+            {(() => {
+              const hasBp = pol.totalContributions != null && pol.totalContributions > 0;
+              const grandTotal = hasBp ? pol.totalContributions! : (pol.totalLobbyAmount > 0 ? Math.round(pol.totalLobbyAmount / 100) : null);
+              const label = hasBp ? "grand total (BallotPedia)" : "grand total (SIG data)";
+              return grandTotal != null ? (
+                <div className="flex items-center gap-1 mt-1.5 text-xs text-red-600 dark:text-red-400">
+                  <DollarSign className="w-3 h-3" />
+                  <span className="font-bold">${grandTotal.toLocaleString()}</span>
+                  <span className="text-slate-400">{label}</span>
+                </div>
+              ) : null;
+            })()}
+            {pol.totalContributions != null && pol.totalContributions > 0 && pol.totalLobbyAmount > 0 && (
               <div className="flex items-center gap-1 mt-1 text-xs text-orange-600 dark:text-orange-400">
                 <DollarSign className="w-3 h-3" />
                 <span className="font-bold">${(pol.totalLobbyAmount / 100).toLocaleString()}</span>
