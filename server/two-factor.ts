@@ -10,7 +10,7 @@ if (!ENCRYPTION_KEY_HEX) {
   console.warn('WARNING: TOTP_ENCRYPTION_KEY not set. 2FA TOTP will not persist across restarts!');
   console.warn('Generate a stable key: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('TOTP_ENCRYPTION_KEY must be set in production');
+    console.error('CRITICAL: TOTP_ENCRYPTION_KEY not set in production. TOTP 2FA will not persist across restarts.');
   }
 }
 const ENCRYPTION_KEY = ENCRYPTION_KEY_HEX || randomBytes(32).toString('hex');
