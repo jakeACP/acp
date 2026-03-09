@@ -1,6 +1,7 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters } from "@shared/schema";
+import * as cheerio from "cheerio";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray, gte, ilike } from "drizzle-orm";
 import session from "express-session";
@@ -3612,8 +3613,9 @@ export class DatabaseStorage implements IStorage {
     website?: string;
     socialMedia?: Record<string, string>;
     biography?: string;
+    totalContributions?: number;
   }> {
-    const result: { photoUrl?: string; website?: string; socialMedia?: Record<string, string>; biography?: string } = {};
+    const result: { photoUrl?: string; website?: string; socialMedia?: Record<string, string>; biography?: string; totalContributions?: number } = {};
 
     // Try BallotPedia first
     if (profile.ballotpediaUrl) {
@@ -3650,6 +3652,56 @@ export class DatabaseStorage implements IStorage {
       } catch { /* ignore */ }
     }
 
+    // Scrape BallotPedia HTML for total contributions (career total raised)
+    try {
+      const bpTitle = profile.fullName.trim().replace(/\s+/g, "_");
+      const bpUrl = `https://ballotpedia.org/${encodeURIComponent(bpTitle)}`;
+      const bpHtmlRes = await fetch(bpUrl, {
+        headers: { "User-Agent": "ACPlatform/1.0 (contact@anticorruptionparty.us)", Accept: "text/html" },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (bpHtmlRes.ok) {
+        const html = await bpHtmlRes.text();
+        const $ = cheerio.load(html);
+        let grandTotal = 0;
+
+        // BallotPedia renders a "campaign contribution history" table with columns:
+        // Year | Office | Status | Contributions | Expenditures
+        // Some pages have an explicit "Grand total" row; others only list per-cycle rows.
+        $("table").each((_, tbl) => {
+          const tblText = $(tbl).text();
+          if (!tblText.includes("campaign contribution history") &&
+              !tblText.includes("ContributionsExpenditures")) return;
+
+          let cycleSum = 0;
+          let explicitTotal = 0;
+          $(tbl).find("tr").each((_, row) => {
+            const cells = $(row).find("td");
+            if (cells.length < 4) return;
+            const yearCell = $(cells[0]).text().trim();
+            const contribCell = $(cells[3]).text().trim();
+            const m = contribCell.match(/\$([\d,]+)/);
+            if (!m) return;
+            const v = parseInt(m[1].replace(/,/g, ""), 10);
+            if (isNaN(v)) return;
+
+            if (/grand total/i.test(yearCell)) {
+              explicitTotal = v; // Use the explicit Grand total row if present
+            } else if (/^\d{4}/.test(yearCell) || /\*/.test(yearCell)) {
+              cycleSum += v; // Sum per-cycle contribution rows
+            }
+          });
+
+          const best = explicitTotal > 0 ? explicitTotal : cycleSum;
+          if (best > grandTotal) grandTotal = best;
+        });
+
+        if (grandTotal > 10000) {
+          result.totalContributions = grandTotal * 100; // store in cents
+        }
+      }
+    } catch { /* ignore */ }
+
     // Try Wikipedia for photo fallback + biography
     try {
       const wikiName = profile.fullName.replace(/\s+/g, "_");
@@ -3683,6 +3735,10 @@ export class DatabaseStorage implements IStorage {
       const merged = { ...enriched.socialMedia, ...existing }; // don't overwrite existing
       if (JSON.stringify(merged) !== JSON.stringify(existing)) { patch.socialMedia = merged; fields.push("socialMedia"); }
     }
+    if (enriched.totalContributions != null) {
+      (patch as any).totalContributions = enriched.totalContributions;
+      fields.push("totalContributions");
+    }
 
     if (fields.length === 0) return { updated: false, fields: [] };
     await this.updatePoliticianProfile(id, patch);
@@ -3691,12 +3747,12 @@ export class DatabaseStorage implements IStorage {
 
   async refreshAllProfilesData(): Promise<{ updated: number; skipped: number }> {
     const allProfiles = await db
-      .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName, photoUrl: politicianProfiles.photoUrl, website: politicianProfiles.website, biography: politicianProfiles.biography, socialMedia: politicianProfiles.socialMedia })
+      .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName, photoUrl: politicianProfiles.photoUrl, website: politicianProfiles.website, biography: politicianProfiles.biography, socialMedia: politicianProfiles.socialMedia, totalContributions: politicianProfiles.totalContributions })
       .from(politicianProfiles);
 
     let updated = 0, skipped = 0;
     for (const p of allProfiles) {
-      if (p.photoUrl && p.website && p.biography) { skipped++; continue; }
+      if (p.photoUrl && p.website && p.biography && p.totalContributions != null) { skipped++; continue; }
       const result = await this.refreshProfileData(p.id);
       if (result.updated) updated++; else skipped++;
       await new Promise(r => setTimeout(r, 80)); // gentle rate-limit

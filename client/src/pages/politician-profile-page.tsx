@@ -607,6 +607,21 @@ export default function PoliticianProfilePage() {
             </CardHeader>
             <CardContent className="space-y-5">
 
+              {/* Grand Total Contributions (BallotPedia) */}
+              {profile.totalContributions != null && profile.totalContributions > 0 && (
+                <div className="rounded-lg border-2 border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-1">
+                    Grand Total Contributions (BallotPedia)
+                  </p>
+                  <p className="text-3xl font-bold text-red-700 dark:text-red-300">
+                    ${(profile.totalContributions / 100).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                    Career total raised, sourced from BallotPedia / FEC data
+                  </p>
+                </div>
+              )}
+
               {/* Pledged Against banners */}
               {pledgedAgainst.map(sponsor => (
                 <div
@@ -636,17 +651,17 @@ export default function PoliticianProfilePage() {
                 </div>
               ))}
 
-              {/* Total Israel lobby amount summary */}
-              {hasIsraelLobby && totalLobbyAmount > 0 && (
+              {/* Individual SIG/SuperPAC total */}
+              {totalLobbyAmount > 0 && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40 px-4 py-3">
-                  <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
-                    Total for All Lobbies
+                  <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 dark:text-orange-400 mb-1">
+                    Individual SuperPAC / SIG Total
                   </p>
                   <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">
                     ${(totalLobbyAmount / 100).toLocaleString()}
                   </p>
                   <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                    Combined reported amount from linked lobby groups
+                    Sum of individually linked SuperPACs and special interest groups
                   </p>
                 </div>
               )}

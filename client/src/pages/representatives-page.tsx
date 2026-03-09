@@ -18,6 +18,7 @@ type RepEntry = {
   party?: string;
   corruptionGrade?: string;
   totalLobbyAmount: number;
+  totalContributions?: number;
   sigAcronyms: string[];
   rejectsAIPAC: boolean;
   photoUrl?: string;
@@ -138,9 +139,14 @@ function RepCard({ rep, compact = false }: { rep: RepEntry; compact?: boolean })
               {rep.sigAcronyms.length > 4 && (
                 <span className="text-[10px] text-slate-400">+{rep.sigAcronyms.length - 4}</span>
               )}
+              {rep.totalContributions != null && rep.totalContributions > 0 && (
+                <span className="text-[10px] text-red-600 dark:text-red-400 font-semibold">
+                  Grand Total: ${(rep.totalContributions / 100).toLocaleString()}
+                </span>
+              )}
               {rep.totalLobbyAmount > 0 && (
                 <span className="text-[10px] text-orange-600 dark:text-orange-400 font-medium">
-                  ${(rep.totalLobbyAmount / 100).toLocaleString()}
+                  SIG Total: ${(rep.totalLobbyAmount / 100).toLocaleString()}
                 </span>
               )}
             </div>
@@ -191,11 +197,18 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
                 </span>
               )}
             </div>
+            {pol.totalContributions != null && pol.totalContributions > 0 && (
+              <div className="flex items-center gap-1 mt-1.5 text-xs text-red-600 dark:text-red-400">
+                <DollarSign className="w-3 h-3" />
+                <span className="font-bold">${(pol.totalContributions / 100).toLocaleString()}</span>
+                <span className="text-slate-400">grand total (BallotPedia)</span>
+              </div>
+            )}
             {pol.totalLobbyAmount > 0 && (
-              <div className="flex items-center gap-1 mt-1.5 text-xs text-orange-600 dark:text-orange-400">
+              <div className="flex items-center gap-1 mt-1 text-xs text-orange-600 dark:text-orange-400">
                 <DollarSign className="w-3 h-3" />
                 <span className="font-bold">${(pol.totalLobbyAmount / 100).toLocaleString()}</span>
-                <span className="text-slate-400">total lobbying</span>
+                <span className="text-slate-400">SIG contributions</span>
               </div>
             )}
             {pol.sigAcronyms.length > 0 && (
@@ -280,7 +293,9 @@ export default function RepresentativesPage() {
       const ga = GRADE_ORDER[a.corruptionGrade ?? ""] ?? 6;
       const gb = GRADE_ORDER[b.corruptionGrade ?? ""] ?? 6;
       if (ga !== gb) return ga - gb;
-      return a.totalLobbyAmount - b.totalLobbyAmount;
+      const amtA = a.totalContributions ?? a.totalLobbyAmount;
+      const amtB = b.totalContributions ?? b.totalLobbyAmount;
+      return amtB - amtA;
     });
   }, [allReps, searchQuery, gradeFilter]);
 
