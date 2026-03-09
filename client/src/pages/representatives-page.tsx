@@ -141,7 +141,7 @@ function RepCard({ rep, compact = false }: { rep: RepEntry; compact?: boolean })
               )}
               {rep.totalContributions != null && rep.totalContributions > 0 && (
                 <span className="text-[10px] text-red-600 dark:text-red-400 font-semibold">
-                  Grand Total: ${(rep.totalContributions / 100).toLocaleString()}
+                  Grand Total: ${(rep.totalContributions).toLocaleString()}
                 </span>
               )}
               {rep.totalLobbyAmount > 0 && (
@@ -200,7 +200,7 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
             {pol.totalContributions != null && pol.totalContributions > 0 && (
               <div className="flex items-center gap-1 mt-1.5 text-xs text-red-600 dark:text-red-400">
                 <DollarSign className="w-3 h-3" />
-                <span className="font-bold">${(pol.totalContributions / 100).toLocaleString()}</span>
+                <span className="font-bold">${(pol.totalContributions).toLocaleString()}</span>
                 <span className="text-slate-400">grand total (BallotPedia)</span>
               </div>
             )}

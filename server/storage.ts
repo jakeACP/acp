@@ -3697,7 +3697,7 @@ export class DatabaseStorage implements IStorage {
         });
 
         if (grandTotal > 10000) {
-          result.totalContributions = grandTotal * 100; // store in cents
+          result.totalContributions = grandTotal; // store in dollars
         }
       }
     } catch { /* ignore */ }

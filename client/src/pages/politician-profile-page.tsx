@@ -614,7 +614,7 @@ export default function PoliticianProfilePage() {
                     Grand Total Contributions (BallotPedia)
                   </p>
                   <p className="text-3xl font-bold text-red-700 dark:text-red-300">
-                    ${(profile.totalContributions / 100).toLocaleString()}
+                    ${(profile.totalContributions).toLocaleString()}
                   </p>
                   <p className="text-xs text-red-500 dark:text-red-400 mt-1">
                     Career total raised, sourced from BallotPedia / FEC data
