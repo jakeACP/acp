@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-tools": {
+      "source": "inf-sh/skills",
+      "sourceType": "github",
+      "computedHash": "220054a640e514d0bb5be4af7eb9b54f2205b2f6de6a85bd1561f0b0b06d6013"
+    },
+    "brainstorming": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "computedHash": "5cafa1558b0b6bd4d4c71f23d5567b7fcbbcdb4b0a50b0c5f69a80a3cebaf9b8"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "e688fcd4c5693e14ebd00d48e982dbd2be060fbea89f5f60531e79c704a1bc28"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+    }
+  }
+}
