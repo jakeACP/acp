@@ -1,4 +1,5 @@
 import { useParams, Link } from "wouter";
+import { Navigation } from "@/components/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -159,16 +160,22 @@ export default function PoliticianProfilePage() {
 
   if (profileLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Loading politician profile...</p>
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="flex items-center justify-center py-32">
+          <p>Loading politician profile...</p>
+        </div>
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Politician profile not found</p>
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="flex items-center justify-center py-32">
+          <p>Politician profile not found</p>
+        </div>
       </div>
     );
   }
@@ -198,7 +205,9 @@ export default function PoliticianProfilePage() {
   const canClaim = !profile.isVerified && !hasPendingClaim;
 
   return (
-    <div className="container mx-auto p-6 max-w-5xl" data-testid="politician-profile-page">
+    <div className="min-h-screen bg-background" data-testid="politician-profile-page">
+      <Navigation />
+      <div className="container mx-auto p-6 max-w-5xl">
       {/* Header Section */}
       <Card className="mb-6">
         <CardHeader>
@@ -785,6 +794,7 @@ export default function PoliticianProfilePage() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
