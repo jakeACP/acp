@@ -3691,7 +3691,7 @@ export class DatabaseStorage implements IStorage {
 
   async refreshAllProfilesData(): Promise<{ updated: number; skipped: number }> {
     const allProfiles = await db
-      .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName, photoUrl: politicianProfiles.photoUrl, website: politicianProfiles.website, biography: politicianProfiles.biography, socialMedia: politicianProfiles.socialMedia, ballotpediaUrl: (politicianProfiles as any).ballotpediaUrl })
+      .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName, photoUrl: politicianProfiles.photoUrl, website: politicianProfiles.website, biography: politicianProfiles.biography, socialMedia: politicianProfiles.socialMedia })
       .from(politicianProfiles);
 
     let updated = 0, skipped = 0;
