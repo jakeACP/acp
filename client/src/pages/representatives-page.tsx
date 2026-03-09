@@ -271,10 +271,16 @@ export default function RepresentativesPage() {
   }
 
   const filteredReps = useMemo(() => {
-    return allReps.filter(rep => {
+    const filtered = allReps.filter(rep => {
       if (gradeFilter !== "All" && rep.corruptionGrade !== gradeFilter) return false;
       if (searchQuery && !matchesSearch(rep, searchQuery)) return false;
       return true;
+    });
+    return filtered.sort((a, b) => {
+      const ga = GRADE_ORDER[a.corruptionGrade ?? ""] ?? 6;
+      const gb = GRADE_ORDER[b.corruptionGrade ?? ""] ?? 6;
+      if (ga !== gb) return ga - gb;
+      return a.totalLobbyAmount - b.totalLobbyAmount;
     });
   }, [allReps, searchQuery, gradeFilter]);
 
