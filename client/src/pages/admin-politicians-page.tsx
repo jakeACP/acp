@@ -597,7 +597,7 @@ export default function AdminPoliticiansPage() {
     setExportStatus("running");
     setExportProgress(0);
     try {
-      const data: any[] = await apiRequest("/api/admin/politicians/export-csv", "GET");
+      const data: any[] = await apiRequest("/api/admin/politicians/export-csv", "GET").then(r => r.json());
       setExportCount(data.length);
       const etaMs = Math.max(1500, data.length * 2);
       const start = Date.now();
