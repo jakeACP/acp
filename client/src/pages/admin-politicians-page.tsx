@@ -354,6 +354,7 @@ export default function AdminPoliticiansPage() {
 
   // Profile sub-filter (all, representatives, candidates, delegates)
   const [profileSubFilter, setProfileSubFilter] = useState("all");
+  const [profileDisplayLimit, setProfileDisplayLimit] = useState(100);
 
   // Candidate XLSX import
   const [candidateImportOpen, setCandidateImportOpen] = useState(false);
@@ -558,6 +559,38 @@ export default function AdminPoliticiansPage() {
       clearInterval(progInterval);
     };
   }, [importCandidatesMutation.isPending]);
+
+  // Reset display limit when any filter changes
+  useEffect(() => {
+    setProfileDisplayLimit(100);
+  }, [profileSearch, profileSubFilter, profileStatusFilter, profilePartyFilter, profileGradeFilter, profileStateFilter]);
+
+  // Client-side export of currently filtered profiles
+  function exportSelectionCsv() {
+    const headers = ["FULL_NAME","PROFILE_TYPE","OFFICE","OFFICE_LEVEL","STATE","DISTRICT","PARTY","INCUMBENT","STATUS","PRIMARY_DATE","GENERAL_DATE","FEC_CANDIDATE_ID","BALLOTPEDIA_URL","WEBSITE","EMAIL","PHONE","BIOGRAPHY","PHOTO_URL","NOTES"];
+    const escape = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [headers.join(",")];
+    for (const p of filteredProfiles) {
+      const pos = (p as any).position;
+      lines.push([
+        p.fullName, p.profileType || "candidate",
+        pos?.title || "", pos?.level || "", pos?.jurisdiction || "", pos?.district || "",
+        p.party || "", p.isCurrent ? "Yes" : "No", "",
+        p.termStart || "", p.termEnd || "", p.fecCandidateId || "",
+        (p as any).ballotpediaUrl || "", p.website || "", p.email || "",
+        p.phone || "", p.biography || "", p.photoUrl || "", p.notes || "",
+      ].map(escape).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `acp_selection_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   // Export handler
   async function handleExport() {
@@ -883,38 +916,52 @@ export default function AdminPoliticiansPage() {
       <AdminNavigation />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Politicians Management</h1>
-            <p className="text-slate-600 dark:text-slate-400 mt-2">
-              Manage political positions and politician profiles
-            </p>
-          </div>
+        <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Politicians Management</h1>
             <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setEditingProfile(null);
+                setUploadedPhotoUrl(undefined);
+                setProfileDialogOpen(true);
+              }}
+              data-testid="button-create-profile"
+              className="flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Create Profile
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
               variant="outline"
               onClick={() => downloadCsv(TEMPLATES.candidates.filename, TEMPLATES.candidates.headers, TEMPLATES.candidates.sample)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1.5"
               title="Download blank CSV template for candidate/politician import"
             >
-              <FileDown className="w-4 h-4" />
-              Download Template
+              <FileDown className="w-3.5 h-3.5" />
+              Template
             </Button>
             <Button
+              size="sm"
               variant="outline"
               onClick={() => { setExportStatus("idle"); setExportProgress(0); setExportDialogOpen(true); }}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1.5"
               title="Export all politicians and candidates as a CSV backup"
             >
-              <Download className="w-4 h-4" />
-              Export CSV
+              <Download className="w-3.5 h-3.5" />
+              Export All
             </Button>
             <Button
+              size="sm"
               onClick={() => setCandidateImportOpen(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
             >
-              <Upload className="w-4 h-4" />
-              Import from XLSX/CSV
+              <Upload className="w-3.5 h-3.5" />
+              Import XLSX/CSV
             </Button>
           </div>
         </div>
@@ -1255,62 +1302,19 @@ export default function AdminPoliticiansPage() {
           </DialogContent>
         </Dialog>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Total Positions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{positions.length}</div>
-                <Building2 className="h-8 w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Active Positions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{activePositions.length}</div>
-                <MapPin className="h-8 w-8 text-green-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Total Profiles
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{profiles.length}</div>
-                <Users className="h-8 w-8 text-purple-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Current Representatives
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{currentProfiles.length}</div>
-                <UserPlus className="h-8 w-8 text-amber-500" />
-              </div>
-            </CardContent>
-          </Card>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-5 px-1 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
+          {[
+            { label: "Total Positions", value: positions.length, icon: Building2, color: "text-blue-600 dark:text-blue-400" },
+            { label: "Active Positions", value: activePositions.length, icon: MapPin, color: "text-green-600 dark:text-green-400" },
+            { label: "Total Profiles", value: profiles.length, icon: Users, color: "text-purple-600 dark:text-purple-400" },
+            { label: "Current Reps", value: currentProfiles.length, icon: UserPlus, color: "text-amber-600 dark:text-amber-400" },
+          ].map(({ label, value, icon: Icon, color }, i, arr) => (
+            <div key={label} className={`flex items-center gap-2 px-4 py-1.5 ${i < arr.length - 1 ? "border-r border-slate-200 dark:border-slate-700" : ""}`}>
+              <Icon className={`h-4 w-4 ${color}`} />
+              <span className={`text-lg font-bold ${color}`}>{value}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+            </div>
+          ))}
         </div>
 
         <Card>
@@ -1484,22 +1488,6 @@ export default function AdminPoliticiansPage() {
 
               {/* ── PROFILES TAB ── */}
               <TabsContent value="profiles" className="space-y-4">
-                <div className="flex justify-between items-start gap-4 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Button
-                      onClick={() => {
-                        setEditingProfile(null);
-                        setUploadedPhotoUrl(undefined);
-                        setProfileDialogOpen(true);
-                      }}
-                      data-testid="button-create-profile"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Profile
-                    </Button>
-                  </div>
-                </div>
-
                 {/* ── External Data Tools ── */}
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">External Data Sources</p>
@@ -1677,11 +1665,16 @@ export default function AdminPoliticiansPage() {
                       <SelectItem value="acp-admins">ACP-Admins</SelectItem>
                     </SelectContent>
                   </Select>
-                  <span className="text-xs text-slate-500">
-                    {filteredProfiles.length > 100
-                      ? `Showing 100 of ${filteredProfiles.length} (refine filters or search to narrow)`
-                      : `${filteredProfiles.length} of ${profiles.length}`}
-                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={exportSelectionCsv}
+                    className="flex items-center gap-1.5 text-xs shrink-0"
+                    title={`Export ${filteredProfiles.length} filtered profiles as CSV`}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Export Selection ({filteredProfiles.length})
+                  </Button>
                 </div>
 
                 {profilesLoading ? (
@@ -1709,7 +1702,7 @@ export default function AdminPoliticiansPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredProfiles.slice(0, 100).map((profile) => {
+                        {filteredProfiles.slice(0, profileDisplayLimit).map((profile) => {
                           const position = positions.find(p => p.id === profile.positionId);
                           return (
                             <TableRow key={profile.id} data-testid={`row-profile-${profile.id}`}>
@@ -1864,6 +1857,19 @@ export default function AdminPoliticiansPage() {
                         })}
                       </TableBody>
                     </Table>
+                  </div>
+                )}
+                {filteredProfiles.length > profileDisplayLimit && (
+                  <div className="flex flex-col items-center gap-1 pt-2 pb-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setProfileDisplayLimit(l => l + 100)}
+                      className="flex items-center gap-2"
+                    >
+                      Load More ({filteredProfiles.length - profileDisplayLimit} remaining)
+                    </Button>
+                    <span className="text-xs text-slate-400">Showing {Math.min(profileDisplayLimit, filteredProfiles.length)} of {filteredProfiles.length}</span>
                   </div>
                 )}
               </TabsContent>
