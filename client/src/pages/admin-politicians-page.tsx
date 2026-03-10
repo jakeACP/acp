@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -346,6 +346,12 @@ export default function AdminPoliticiansPage() {
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
 
+  // Export CSV dialog
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportStatus, setExportStatus] = useState<"idle" | "running" | "done">("idle");
+  const [exportCount, setExportCount] = useState(0);
+
   // Profile sub-filter (all, representatives, candidates, delegates)
   const [profileSubFilter, setProfileSubFilter] = useState("all");
 
@@ -353,6 +359,13 @@ export default function AdminPoliticiansPage() {
   const [candidateImportOpen, setCandidateImportOpen] = useState(false);
   const [candidateImportRows, setCandidateImportRows] = useState<any[]>([]);
   const [candidateImportPreview, setCandidateImportPreview] = useState<Record<string, number>>({});
+  const [importDedupInfo, setImportDedupInfo] = useState<{ newCount: number; updateCount: number; updateNames: string[]; skipCount: number } | null>(null);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importEta, setImportEta] = useState(0);
+  const [importStatusMsg, setImportStatusMsg] = useState("");
+  // Elapsed time counters for long-running data tools
+  const [refreshElapsed, setRefreshElapsed] = useState(0);
+  const [regradeElapsed, setRegradeElapsed] = useState(0);
   const candidateFileRef = useRef<HTMLInputElement>(null);
 
   // Profiles CSV import
@@ -466,25 +479,128 @@ export default function AdminPoliticiansPage() {
     mutationFn: async () => apiRequest("/api/admin/politician-profiles/refresh-data", "POST"),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      setRefreshElapsed(0);
       toast({
         title: "Refresh complete",
         description: `${data.updated ?? 0} profiles updated, ${data.skipped ?? 0} skipped.`,
       });
     },
-    onError: (err: any) => toast({ title: "Refresh failed", description: err.message, variant: "destructive" }),
+    onError: (err: any) => {
+      setRefreshElapsed(0);
+      toast({ title: "Refresh failed", description: err.message, variant: "destructive" });
+    },
   });
 
   const regradeAllMutation = useMutation({
     mutationFn: async () => apiRequest("/api/admin/politician-profiles/regrade", "POST"),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      setRegradeElapsed(0);
       toast({
         title: "Regrade complete",
         description: `${data.regraded ?? 0} profiles regraded${data.errors?.length ? `, ${data.errors.length} errors` : ""}.`,
       });
     },
-    onError: (err: any) => toast({ title: "Regrade failed", description: err.message, variant: "destructive" }),
+    onError: (err: any) => {
+      setRegradeElapsed(0);
+      toast({ title: "Regrade failed", description: err.message, variant: "destructive" });
+    },
   });
+
+  // Elapsed time counters for long-running mutations
+  useEffect(() => {
+    if (!refreshDataMutation.isPending) return;
+    setRefreshElapsed(0);
+    const id = setInterval(() => setRefreshElapsed(s => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [refreshDataMutation.isPending]);
+
+  useEffect(() => {
+    if (!regradeAllMutation.isPending) return;
+    setRegradeElapsed(0);
+    const id = setInterval(() => setRegradeElapsed(s => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [regradeAllMutation.isPending]);
+
+  // Import progress simulation
+  useEffect(() => {
+    if (!importCandidatesMutation.isPending) {
+      setImportProgress(0);
+      setImportEta(0);
+      setImportStatusMsg("");
+      return;
+    }
+    const totalSecs = Math.min(candidateImportRows.length * 0.5, 120);
+    setImportEta(Math.round(totalSecs));
+    setImportProgress(0);
+    const msgs = [
+      "Checking for duplicates…",
+      "Fetching photos from Ballotpedia…",
+      "Searching Wikipedia for photos…",
+      "Generating @handles…",
+      "Saving profiles to database…",
+    ];
+    let msgIdx = 0;
+    setImportStatusMsg(msgs[0]);
+    const msgInterval = setInterval(() => {
+      msgIdx = (msgIdx + 1) % msgs.length;
+      setImportStatusMsg(msgs[msgIdx]);
+    }, 3000);
+    const startTime = Date.now();
+    const progInterval = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const pct = Math.min((elapsed / totalSecs) * 95, 95);
+      setImportProgress(pct);
+      setImportEta(Math.max(0, Math.round(totalSecs - elapsed)));
+    }, 500);
+    return () => {
+      clearInterval(msgInterval);
+      clearInterval(progInterval);
+    };
+  }, [importCandidatesMutation.isPending]);
+
+  // Export handler
+  async function handleExport() {
+    setExportStatus("running");
+    setExportProgress(0);
+    try {
+      const data: any[] = await apiRequest("/api/admin/politicians/export-csv", "GET");
+      setExportCount(data.length);
+      const etaMs = Math.max(1500, data.length * 2);
+      const start = Date.now();
+      const prog = setInterval(() => {
+        const pct = Math.min(((Date.now() - start) / etaMs) * 95, 95);
+        setExportProgress(pct);
+      }, 100);
+      // Build CSV matching template headers exactly
+      const headers = TEMPLATES.candidates.headers;
+      const csvRows = [headers.join(",")];
+      for (const row of data) {
+        const vals = headers.map(h => {
+          const v = String(row[h] ?? "").replace(/"/g, '""');
+          return `"${v}"`;
+        });
+        csvRows.push(vals.join(","));
+      }
+      clearInterval(prog);
+      setExportProgress(100);
+      const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `acp_politicians_export_${dateStr}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportStatus("done");
+    } catch (err: any) {
+      setExportStatus("idle");
+      setExportProgress(0);
+      toast({ title: "Export failed", description: err.message, variant: "destructive" });
+    }
+  }
 
   const handlePositionSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -694,6 +810,19 @@ export default function AdminPoliticiansPage() {
     }).filter(r => r.fullName);
     const preview: Record<string, number> = {};
     rows.forEach(r => { preview[r.profileType] = (preview[r.profileType] || 0) + 1; });
+
+    // Dedup analysis against loaded profiles
+    const existingNames = new Set(profiles.map((p: any) => p.fullName.toLowerCase()));
+    const skipCount = raw.length - rows.length;
+    const updateRows = rows.filter(r => existingNames.has(r.fullName.toLowerCase()));
+    const newRows = rows.filter(r => !existingNames.has(r.fullName.toLowerCase()));
+    setImportDedupInfo({
+      newCount: newRows.length,
+      updateCount: updateRows.length,
+      updateNames: updateRows.slice(0, 10).map(r => r.fullName),
+      skipCount,
+    });
+
     setCandidateImportRows(rows);
     setCandidateImportPreview(preview);
   }
@@ -753,11 +882,20 @@ export default function AdminPoliticiansPage() {
               Download Template
             </Button>
             <Button
-              onClick={() => setImportDialogOpen(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              variant="outline"
+              onClick={() => { setExportStatus("idle"); setExportProgress(0); setExportDialogOpen(true); }}
+              className="flex items-center gap-2"
+              title="Export all politicians and candidates as a CSV backup"
             >
               <Download className="w-4 h-4" />
-              Import Congress (TrackAIPAC)
+              Export CSV
+            </Button>
+            <Button
+              onClick={() => setCandidateImportOpen(true)}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Upload className="w-4 h-4" />
+              Import from XLSX/CSV
             </Button>
           </div>
         </div>
@@ -807,6 +945,73 @@ export default function AdminPoliticiansPage() {
           </DialogContent>
         </Dialog>
 
+        {/* ── Export CSV Dialog ── */}
+        <Dialog open={exportDialogOpen} onOpenChange={(open) => {
+          if (!open && exportStatus !== "running") { setExportDialogOpen(false); setExportStatus("idle"); setExportProgress(0); }
+        }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Export Politicians & Candidates</DialogTitle>
+              <DialogDescription>
+                Downloads all profiles as a CSV with the exact same columns as the import template — perfect for backup and re-import.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {exportStatus === "idle" && (
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3 text-sm text-slate-600 dark:text-slate-400">
+                  <p><strong>{profiles.length}</strong> profiles will be exported.</p>
+                  <p className="mt-1 text-xs">The file can be re-imported with no duplicate creates — all rows will update existing records.</p>
+                </div>
+              )}
+              {exportStatus === "running" && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-slate-500 mb-1">
+                    <span>Exporting {profiles.length} profiles…</span>
+                    <span>{Math.round(exportProgress)}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: `${exportProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 text-center">Building CSV…</p>
+                </div>
+              )}
+              {exportStatus === "done" && (
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800 p-3 flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+                  <p className="text-sm text-green-800 dark:text-green-200">
+                    <strong>{exportCount}</strong> profiles exported successfully. Check your downloads.
+                  </p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => { setExportDialogOpen(false); setExportStatus("idle"); setExportProgress(0); }}
+                disabled={exportStatus === "running"}
+              >
+                {exportStatus === "done" ? "Close" : "Cancel"}
+              </Button>
+              {exportStatus !== "done" && (
+                <Button
+                  onClick={handleExport}
+                  disabled={exportStatus === "running"}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {exportStatus === "running" ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Exporting…</>
+                  ) : (
+                    <><Download className="w-4 h-4 mr-2" />Start Export</>
+                  )}
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* ── Universal Profile Import Dialog ── */}
         <Dialog open={candidateImportOpen} onOpenChange={(open) => {
           setCandidateImportOpen(open);
@@ -838,26 +1043,70 @@ export default function AdminPoliticiansPage() {
                 </p>
               </div>
 
-              {candidateImportRows.length > 0 && (
-                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800 p-3 space-y-2">
-                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                    Found {candidateImportRows.length} profiles ready to import
+              {/* Dedup preview — shown before import starts */}
+              {candidateImportRows.length > 0 && !importCandidatesMutation.isPending && importDedupInfo && (
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3 space-y-2">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    Ready to import {candidateImportRows.length} rows
                   </p>
-                  <div className="space-y-0.5">
-                    {Object.entries(candidateImportPreview).map(([type, count]) => (
-                      <p key={type} className="text-xs text-green-700 dark:text-green-300">
-                        • {type.charAt(0).toUpperCase() + type.slice(1)}: {count as number}
+                  <div className="space-y-1">
+                    {importDedupInfo.newCount > 0 && (
+                      <p className="text-xs text-green-700 dark:text-green-400 font-medium">
+                        ✦ {importDedupInfo.newCount} new profiles will be created
                       </p>
+                    )}
+                    {importDedupInfo.updateCount > 0 && (
+                      <div>
+                        <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                          ↻ {importDedupInfo.updateCount} existing profiles will be updated
+                        </p>
+                        <ul className="ml-3 mt-0.5 space-y-0.5">
+                          {importDedupInfo.updateNames.map(n => (
+                            <li key={n} className="text-xs text-amber-600 dark:text-amber-500">• {n}</li>
+                          ))}
+                          {importDedupInfo.updateCount > 10 && (
+                            <li className="text-xs text-amber-500 dark:text-amber-600">+ {importDedupInfo.updateCount - 10} more</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    {importDedupInfo.skipCount > 0 && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        ✕ {importDedupInfo.skipCount} rows skipped (missing FULL_NAME)
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {Object.entries(candidateImportPreview).map(([type, count]) => (
+                      <span key={type} className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded px-1.5 py-0.5">
+                        {type}: {count as number}
+                      </span>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Photos will be fetched from Ballotpedia then Wikipedia. @handles will be auto-generated. This may take a moment.
+                </div>
+              )}
+
+              {/* Progress bar — shown while import is running */}
+              {importCandidatesMutation.isPending && (
+                <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-3 space-y-2">
+                  <div className="flex justify-between text-xs text-blue-700 dark:text-blue-300 mb-1">
+                    <span className="font-medium">{importStatusMsg}</span>
+                    <span>~{importEta}s remaining</span>
+                  </div>
+                  <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
+                      style={{ width: `${importProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 text-center">
+                    Importing {candidateImportRows.length} profiles — please don't close this window
                   </p>
                 </div>
               )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setCandidateImportOpen(false)} disabled={importCandidatesMutation.isPending}>
+              <Button variant="outline" onClick={() => { setCandidateImportOpen(false); setCandidateImportRows([]); setImportDedupInfo(null); }} disabled={importCandidatesMutation.isPending}>
                 Cancel
               </Button>
               <Button
@@ -866,7 +1115,7 @@ export default function AdminPoliticiansPage() {
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 {importCandidatesMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Importing & fetching photos...</>
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Importing…</>
                 ) : (
                   <><Upload className="w-4 h-4 mr-2" />Import {candidateImportRows.length > 0 ? `${candidateImportRows.length} Profiles` : "Profiles"}</>
                 )}
@@ -1222,40 +1471,6 @@ export default function AdminPoliticiansPage() {
                   </p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Button
-                      variant="outline"
-                      onClick={() => setCandidateImportOpen(true)}
-                      className="flex items-center gap-2"
-                    >
-                      <Upload className="h-4 w-4" />
-                      Import from XLSX/CSV
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => refreshDataMutation.mutate()}
-                      disabled={refreshDataMutation.isPending}
-                      className="flex items-center gap-2"
-                      title="Scan BallotPedia and Wikipedia to fill in missing photos, social media links, bios, and websites"
-                    >
-                      {refreshDataMutation.isPending ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" />Refreshing...</>
-                      ) : (
-                        <><RefreshCw className="h-4 w-4" />Refresh Data</>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => regradeAllMutation.mutate()}
-                      disabled={regradeAllMutation.isPending}
-                      className="flex items-center gap-2"
-                      title="Regrade all profiles using the configurable corruption grading algorithm"
-                    >
-                      {regradeAllMutation.isPending ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" />Regrading...</>
-                      ) : (
-                        <><RefreshCw className="h-4 w-4" />Regrade Profiles</>
-                      )}
-                    </Button>
-                    <Button
                       onClick={() => {
                         setEditingProfile(null);
                         setUploadedPhotoUrl(undefined);
@@ -1266,6 +1481,94 @@ export default function AdminPoliticiansPage() {
                       <Plus className="h-4 w-4 mr-2" />
                       Create Profile
                     </Button>
+                  </div>
+                </div>
+
+                {/* ── External Data Tools ── */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">External Data Sources</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+
+                    {/* TrackAIPAC */}
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
+                      <div className="flex items-start gap-2">
+                        <Shield className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Scan TrackAIPAC</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Sync AIPAC donation data for all 535 Congress members</p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setImportDialogOpen(true)}
+                        disabled={importCongressMutation.isPending}
+                        className="mt-auto w-full text-xs"
+                      >
+                        {importCongressMutation.isPending ? (
+                          <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Syncing…</>
+                        ) : (
+                          <><Download className="h-3 w-3 mr-1.5" />Run Scan</>
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* Refresh from Web */}
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
+                      <div className="flex items-start gap-2">
+                        <RefreshCw className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Refresh from Web</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Fill missing photos, bios, and websites from Ballotpedia & Wikipedia</p>
+                        </div>
+                      </div>
+                      {refreshDataMutation.isPending ? (
+                        <div className="space-y-1.5 mt-auto">
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-blue-500 h-1.5 rounded-full animate-pulse" style={{ width: "100%" }} />
+                          </div>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 text-center">Running… {refreshElapsed}s</p>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => refreshDataMutation.mutate()}
+                          className="mt-auto w-full text-xs"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1.5" />Run Refresh
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Regrade Profiles */}
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
+                      <div className="flex items-start gap-2">
+                        <Calculator className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Regrade All Profiles</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Recalculate corruption grades using current weighting formula</p>
+                        </div>
+                      </div>
+                      {regradeAllMutation.isPending ? (
+                        <div className="space-y-1.5 mt-auto">
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-purple-500 h-1.5 rounded-full animate-pulse" style={{ width: "100%" }} />
+                          </div>
+                          <p className="text-xs text-purple-600 dark:text-purple-400 text-center">Running… {regradeElapsed}s</p>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => regradeAllMutation.mutate()}
+                          className="mt-auto w-full text-xs"
+                        >
+                          <Calculator className="h-3 w-3 mr-1.5" />Run Regrade
+                        </Button>
+                      )}
+                    </div>
+
                   </div>
                 </div>
 

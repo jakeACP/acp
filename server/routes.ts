@@ -4649,6 +4649,40 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.get("/api/admin/politicians/export-csv", ensureAdmin, async (req, res) => {
+    try {
+      const rows = await db.execute(sql`
+        SELECT
+          pol.full_name        AS "FULL_NAME",
+          COALESCE(pol.profile_type, 'candidate') AS "PROFILE_TYPE",
+          COALESCE(pos.title, '')                 AS "OFFICE",
+          COALESCE(pos.level, '')                 AS "OFFICE_LEVEL",
+          COALESCE(pos.jurisdiction, '')          AS "STATE",
+          COALESCE(pos.district, '')              AS "DISTRICT",
+          COALESCE(pol.party, '')                 AS "PARTY",
+          CASE WHEN pol.is_current THEN 'Yes' ELSE 'No' END AS "INCUMBENT",
+          COALESCE(pol.notes, '')                 AS "STATUS",
+          COALESCE(pol.term_start, '')            AS "PRIMARY_DATE",
+          COALESCE(pol.term_end, '')              AS "GENERAL_DATE",
+          COALESCE(pol.fec_candidate_id, '')      AS "FEC_CANDIDATE_ID",
+          COALESCE(pol.ballotpedia_url, '')       AS "BALLOTPEDIA_URL",
+          COALESCE(pol.website, '')               AS "WEBSITE",
+          COALESCE(pol.email, '')                 AS "EMAIL",
+          COALESCE(pol.phone, '')                 AS "PHONE",
+          COALESCE(pol.biography, '')             AS "BIOGRAPHY",
+          COALESCE(pol.photo_url, '')             AS "PHOTO_URL",
+          ''                                      AS "NOTES"
+        FROM politician_profiles pol
+        LEFT JOIN political_positions pos ON pol.position_id = pos.id
+        ORDER BY pol.full_name
+      `);
+      res.json(rows.rows);
+    } catch (error: any) {
+      console.error("Export CSV error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/admin/politicians/fetch-photos", ensureAdmin, async (req, res) => {
     try {
       const allProfiles = await storage.listPoliticianProfiles();
