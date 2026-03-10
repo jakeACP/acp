@@ -1,5 +1,4 @@
 import { useLocation, useSearch } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
 import { Navigation } from "@/components/navigation";
 import { DistrictMap } from "@/components/elections/district-map";
 import { Button } from "@/components/ui/button";
@@ -9,84 +8,91 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ChevronRight, MapPin, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 
-interface Office {
-  name: string;
-  officialIndices: number[];
-  levels?: string[];
-  roles?: string[];
-  divisionId?: string;
+interface Politician {
+  id: string;
+  fullName: string;
+  party: string | null;
+  isCurrent: boolean;
+  photoUrl: string | null;
+  handle: string | null;
+  corruptionGrade: string | null;
+  totalContributions: number | null;
+  isVerified: boolean;
+  profileType: string | null;
 }
 
-interface Official {
-  name: string;
-  party?: string;
-  phones?: string[];
-  urls?: string[];
-  photoUrl?: string;
-  address?: Array<{ line1?: string; city?: string; state?: string; zip?: string }>;
+interface Seat {
+  positionId: string;
+  title: string;
+  officeType: string;
+  level: string;
+  jurisdiction: string;
+  district: string | null;
+  displayOrder: number | null;
+  incumbents: Politician[];
+  candidates: Politician[];
 }
 
-interface CivicResponse {
-  offices: Office[];
-  officials: Official[];
-  normalizedInput?: { locationName?: string };
-  kind?: string;
+interface LookupResponse {
+  stateName: string;
+  stateCode: string;
+  seats: Seat[];
 }
 
-function getStateCode(response: CivicResponse): string {
-  const addr = response.normalizedInput?.locationName ?? "";
-  const match = addr.match(/\b([A-Z]{2})\b/);
-  return match?.[1] ?? "";
-}
-
-function getLevelLabel(levels?: string[]): string {
-  if (!levels) return "Unknown";
-  if (levels.includes("country")) return "Federal";
-  if (levels.includes("administrativeArea1")) return "State";
-  if (levels.includes("administrativeArea2")) return "County";
-  if (levels.includes("locality")) return "Local";
+function getLevelLabel(level: string): string {
+  const l = level?.toLowerCase();
+  if (l === "country" || l === "national" || l === "federal") return "Federal";
+  if (l === "state") return "State";
+  if (l === "local") return "Local";
   return "Other";
 }
 
-function getLevelBadgeColor(levels?: string[]): string {
-  if (!levels) return "secondary";
-  if (levels.includes("country")) return "default";
-  if (levels.includes("administrativeArea1")) return "secondary";
+function getLevelBadgeVariant(level: string): "default" | "secondary" | "outline" {
+  const l = level?.toLowerCase();
+  if (l === "country" || l === "national" || l === "federal") return "default";
+  if (l === "state") return "secondary";
   return "outline";
 }
 
-function PositionCard({
-  office,
-  officials,
+function SeatCard({
+  seat,
   stateCode,
+  stateName,
   onViewRace,
 }: {
-  office: Office;
-  officials: Official[];
+  seat: Seat;
   stateCode: string;
+  stateName: string;
   onViewRace: () => void;
 }) {
-  const levelLabel = getLevelLabel(office.levels);
-  const incumbent = officials[0];
+  const incumbent = seat.incumbents[0] ?? null;
+  const totalCount = seat.incumbents.length + seat.candidates.length;
 
   return (
     <Card className="flex flex-col hover:shadow-md transition-shadow">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base leading-snug">{office.name}</CardTitle>
-          <Badge variant={getLevelBadgeColor(office.levels) as any} className="shrink-0 text-xs">
-            {levelLabel}
+          <CardTitle className="text-base leading-snug">{seat.title}</CardTitle>
+          <Badge variant={getLevelBadgeVariant(seat.level)} className="shrink-0 text-xs">
+            {getLevelLabel(seat.level)}
           </Badge>
         </div>
-        {incumbent && (
+        {incumbent ? (
           <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{incumbent.name}</span>
+            <span className="font-medium text-foreground">{incumbent.fullName}</span>
             {incumbent.party && ` · ${incumbent.party}`}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">No incumbent in ACP database</p>
+        )}
+        {seat.candidates.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {seat.candidates.length} candidate{seat.candidates.length !== 1 ? "s" : ""} running
           </p>
         )}
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-3 pt-0">
-        <DistrictMap officeName={office.name} state={stateCode} />
+        <DistrictMap officeName={seat.title} state={stateCode} />
         <Button size="sm" className="w-full mt-auto" onClick={onViewRace}>
           View Race
           <ChevronRight className="h-4 w-4 ml-1" />
@@ -102,7 +108,7 @@ export default function ElectionPositionsPage() {
   const params = new URLSearchParams(search);
   const address = params.get("address") ?? "";
 
-  const [civicData, setCivicData] = useState<CivicResponse | null>(null);
+  const [lookupData, setLookupData] = useState<LookupResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,19 +116,22 @@ export default function ElectionPositionsPage() {
     if (!address) return;
     setIsLoading(true);
     setError(null);
-    apiRequest("/api/representatives/search", "POST", { address })
-      .then(res => res.json())
-      .then((data: CivicResponse) => setCivicData(data))
-      .catch((err: any) => setError(err.message ?? "Failed to load representatives"))
+    fetch(`/api/elections/lookup?address=${encodeURIComponent(address)}`, { credentials: "include" })
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message ?? "Failed to load seats");
+        return data as LookupResponse;
+      })
+      .then(data => setLookupData(data))
+      .catch((err: any) => setError(err.message ?? "Failed to load seats"))
       .finally(() => setIsLoading(false));
   }, [address]);
 
-  const stateCode = civicData ? getStateCode(civicData) : "";
-
-  const handleViewRace = (office: Office) => {
+  const handleViewRace = (seat: Seat, stateName: string) => {
     const query = new URLSearchParams({
-      office: office.name,
-      state: stateCode,
+      positionId: seat.positionId,
+      title: seat.title,
+      state: stateName,
     });
     navigate(`/elections/race?${query.toString()}`);
   };
@@ -146,11 +155,16 @@ export default function ElectionPositionsPage() {
               <span className="text-sm">{address}</span>
             </div>
           )}
+          {lookupData && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Showing seats for <strong>{lookupData.stateName}</strong>
+            </p>
+          )}
         </div>
 
         {isLoading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {[...Array(6)].map((_, i) => (
+            {[...Array(8)].map((_, i) => (
               <Card key={i}>
                 <CardHeader className="pb-2">
                   <Skeleton className="h-5 w-3/4" />
@@ -169,38 +183,33 @@ export default function ElectionPositionsPage() {
           <div className="flex items-center gap-3 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg p-4 mb-6">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <div>
-              <p className="font-medium">Could not load representatives</p>
+              <p className="font-medium">Could not load seats</p>
               <p className="text-sm">{error}</p>
             </div>
           </div>
         )}
 
-        {civicData && !isLoading && (
+        {lookupData && !isLoading && (
           <>
             <p className="text-sm text-muted-foreground mb-4">
-              Found {civicData.offices?.length ?? 0} elected positions for your address.
+              Found {lookupData.seats.length} elected positions in the ACP database for your area.
               Click <strong>View Race</strong> on any seat to see candidates and ACP grades.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {(civicData.offices ?? []).map((office, idx) => {
-                const officeOfficials = (office.officialIndices ?? []).map(
-                  (i: number) => civicData.officials[i]
-                ).filter(Boolean);
-                return (
-                  <PositionCard
-                    key={idx}
-                    office={office}
-                    officials={officeOfficials}
-                    stateCode={stateCode}
-                    onViewRace={() => handleViewRace(office)}
-                  />
-                );
-              })}
+              {lookupData.seats.map(seat => (
+                <SeatCard
+                  key={seat.positionId}
+                  seat={seat}
+                  stateCode={lookupData.stateCode}
+                  stateName={lookupData.stateName}
+                  onViewRace={() => handleViewRace(seat, lookupData.stateName)}
+                />
+              ))}
             </div>
           </>
         )}
 
-        {!isLoading && !error && !civicData && address && (
+        {!isLoading && !error && !lookupData && address && (
           <div className="text-center py-16 text-muted-foreground">
             <p>No data returned. Please try a different address.</p>
           </div>

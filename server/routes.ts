@@ -6,7 +6,7 @@ import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
 import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertLiveStreamSchema, insertNotificationSchema, comments } from "@shared/schema";
-import { eq, inArray, or } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
 import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle } from "./openai";
@@ -4279,68 +4279,220 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Elections — Race lookup: returns politicians from DB matching an office name + state
-  app.get("/api/elections/race", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    const office = (req.query.office as string || "").trim();
-    const state = (req.query.state as string || "").trim();
+  // STATE CODE → NAME mapping used by elections lookup
+  const STATE_CODE_TO_NAME: Record<string, string> = {
+    al: 'Alabama', ak: 'Alaska', az: 'Arizona', ar: 'Arkansas', ca: 'California',
+    co: 'Colorado', ct: 'Connecticut', de: 'Delaware', fl: 'Florida', ga: 'Georgia',
+    hi: 'Hawaii', id: 'Idaho', il: 'Illinois', in: 'Indiana', ia: 'Iowa',
+    ks: 'Kansas', ky: 'Kentucky', la: 'Louisiana', me: 'Maine', md: 'Maryland',
+    ma: 'Massachusetts', mi: 'Michigan', mn: 'Minnesota', ms: 'Mississippi', mo: 'Missouri',
+    mt: 'Montana', ne: 'Nebraska', nv: 'Nevada', nh: 'New Hampshire', nj: 'New Jersey',
+    nm: 'New Mexico', ny: 'New York', nc: 'North Carolina', nd: 'North Dakota', oh: 'Ohio',
+    ok: 'Oklahoma', or: 'Oregon', pa: 'Pennsylvania', ri: 'Rhode Island', sc: 'South Carolina',
+    sd: 'South Dakota', tn: 'Tennessee', tx: 'Texas', ut: 'Utah', vt: 'Vermont',
+    va: 'Virginia', wa: 'Washington', wv: 'West Virginia', wi: 'Wisconsin', wy: 'Wyoming',
+    dc: 'District of Columbia',
+  };
 
-    if (!office) {
-      return res.status(400).json({ message: "office is required" });
-    }
+  // Elections — Address lookup: queries politician_profiles DB grouped by position
+  app.get("/api/elections/lookup", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const address = (req.query.address as string || "").trim();
+    if (!address) return res.status(400).json({ message: "address is required" });
 
     try {
-      // Determine what kind of office this is
-      const officeLower = office.toLowerCase();
-      const isSenate = officeLower.includes("senator") || officeLower.includes("senate");
-      const isHouse = officeLower.includes("representative") || officeLower.includes("house");
-      const isGovernor = officeLower.includes("governor");
-      const isPresident = officeLower.includes("president");
-      const isVicePresident = officeLower.includes("vice president");
+      // Step 1: Get state code via Google Civic Divisions API
+      const civicApiKey = process.env.GOOGLE_CIVIC_API_KEY;
+      let stateCode: string | null = null;
 
-      let politicians: any[] = [];
-
-      if (isPresident || isVicePresident) {
-        // Return all presidential-level profiles
-        politicians = await storage.getPoliticiansByPositionTitles(["President of the United States", "Vice President of the United States"]);
-      } else if (isSenate && state) {
-        politicians = await storage.getPoliticiansByStateAndDistrict(state, []);
-        politicians = politicians.filter((p: any) => {
-          const posTitle = (p.position?.title ?? "").toLowerCase();
-          return posTitle.includes("senator") || posTitle.includes("senate");
-        });
-      } else if (isHouse && state) {
-        politicians = await storage.getPoliticiansByStateAndDistrict(state, []);
-        politicians = politicians.filter((p: any) => {
-          const posTitle = (p.position?.title ?? "").toLowerCase();
-          return posTitle.includes("representative") || posTitle.includes("house");
-        });
-      } else if (isGovernor && state) {
-        politicians = await storage.getPoliticiansByPositionTitles([`Governor of ${state}`, `Governor`]);
-        if (politicians.length === 0 && state) {
-          // Broad search
-          politicians = await storage.getPoliticiansByStateAndDistrict(state, []);
-          politicians = politicians.filter((p: any) => {
-            const posTitle = (p.position?.title ?? "").toLowerCase();
-            return posTitle.includes("governor");
-          });
-        }
-      } else if (state) {
-        // Generic fallback: search by state
-        politicians = await storage.getPoliticiansByStateAndDistrict(state, []);
-      } else {
-        politicians = await storage.getPoliticiansByPositionTitles([office]);
+      if (civicApiKey) {
+        try {
+          const divisionsUrl = `https://www.googleapis.com/civicinfo/v2/divisions?query=${encodeURIComponent(address)}&key=${civicApiKey}`;
+          const response = await fetch(divisionsUrl);
+          if (response.ok) {
+            const data = await response.json();
+            for (const division of (data.results || [])) {
+              if (division.ocdId?.includes('state:')) {
+                stateCode = division.ocdId.split('state:')[1].split('/')[0].toLowerCase();
+                break;
+              }
+            }
+          }
+        } catch (_) { /* ignore */ }
       }
 
-      // Deduplicate by id
-      const seen = new Set<string>();
-      politicians = politicians.filter((p: any) => {
-        if (seen.has(p.id)) return false;
-        seen.add(p.id);
-        return true;
+      // Fallback: scan address string for a 2-letter state abbreviation
+      if (!stateCode) {
+        const m = address.toUpperCase().match(/\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/);
+        if (m) stateCode = m[1].toLowerCase();
+      }
+
+      const stateName = stateCode ? STATE_CODE_TO_NAME[stateCode] : null;
+      if (!stateName) {
+        return res.status(400).json({
+          message: "Could not determine state from address. Try including a state abbreviation (e.g. \"55376 MN\" or \"Minneapolis, Minnesota\").",
+        });
+      }
+
+      // Step 2: Query politician_profiles for this state (+ national positions)
+      const rows = await db.execute(sql`
+        SELECT pol.id, pol.full_name, pol.party, pol.is_current, pol.profile_type,
+               pol.photo_url, pol.handle, pol.corruption_grade, pol.total_contributions, pol.is_verified,
+               pos.id as pos_id, pos.title as pos_title, pos.office_type,
+               pos.level, pos.jurisdiction, pos.district, pos.display_order
+        FROM politician_profiles pol
+        JOIN political_positions pos ON pol.position_id = pos.id
+        WHERE pos.jurisdiction ILIKE ${stateName}
+           OR pos.jurisdiction ILIKE ${'%' + stateName + '%'}
+           OR pos.level IN ('country', 'national')
+        ORDER BY pos.display_order NULLS LAST, pol.is_current DESC, pos.title, pol.full_name
+      `);
+
+      // Step 3: Group rows into seats keyed by position id
+      const seatsMap = new Map<string, any>();
+      for (const row of (rows.rows as any[])) {
+        const posId = row.pos_id;
+        if (!seatsMap.has(posId)) {
+          seatsMap.set(posId, {
+            positionId: posId,
+            title: row.pos_title,
+            officeType: row.office_type,
+            level: row.level,
+            jurisdiction: row.jurisdiction,
+            district: row.district,
+            displayOrder: row.display_order,
+            incumbents: [],
+            candidates: [],
+          });
+        }
+        const seat = seatsMap.get(posId)!;
+        const politician = {
+          id: row.id,
+          fullName: row.full_name,
+          party: row.party,
+          isCurrent: row.is_current,
+          profileType: row.profile_type,
+          photoUrl: row.photo_url,
+          handle: row.handle,
+          corruptionGrade: row.corruption_grade,
+          totalContributions: row.total_contributions,
+          isVerified: row.is_verified,
+        };
+        if (row.is_current) seat.incumbents.push(politician);
+        else seat.candidates.push(politician);
+      }
+
+      // Sort: national first, then by displayOrder
+      const seats = Array.from(seatsMap.values()).sort((a, b) => {
+        const aIsNational = ['country', 'national'].includes(a.level);
+        const bIsNational = ['country', 'national'].includes(b.level);
+        if (aIsNational && !bIsNational) return -1;
+        if (bIsNational && !aIsNational) return 1;
+        return (a.displayOrder ?? 999) - (b.displayOrder ?? 999);
       });
 
-      res.json({ office, state, politicians });
+      res.json({ stateName, stateCode: stateCode!.toUpperCase(), seats });
+    } catch (error: any) {
+      console.error("Elections lookup error:", error);
+      res.status(500).json({ message: error.message || "Failed to lookup elections" });
+    }
+  });
+
+  // Elections — Race lookup: all politicians for a given position (positionId-first)
+  app.get("/api/elections/race", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const positionId = (req.query.positionId as string || "").trim();
+    const state = (req.query.state as string || "").trim();
+    const office = (req.query.office as string || "").trim();
+
+    try {
+      let politicians: any[] = [];
+
+      if (positionId) {
+        // Primary lookup: all politicians with this exact position
+        // + related politicians (same district number + same office type in same state)
+        const rows = await db.execute(sql`
+          SELECT pol.id, pol.full_name, pol.party, pol.is_current, pol.profile_type,
+                 pol.photo_url, pol.handle, pol.corruption_grade, pol.total_contributions, pol.is_verified,
+                 pos.id as pos_id, pos.title as pos_title, pos.office_type,
+                 pos.level, pos.jurisdiction, pos.district
+          FROM politician_profiles pol
+          JOIN political_positions pos ON pol.position_id = pos.id
+          WHERE pol.position_id = ${positionId}
+        `);
+
+        // Get the anchor position details to find related candidates
+        const anchorRows = await db.execute(sql`
+          SELECT title, office_type, jurisdiction, district, level
+          FROM political_positions WHERE id = ${positionId}
+        `);
+        const anchor = (anchorRows.rows as any[])[0];
+
+        let relatedRows: any[] = [];
+        if (anchor) {
+          // Extract the district number from the district field
+          const districtNumMatch = (anchor.district ?? '').match(/(\d+)/);
+          const districtNum = districtNumMatch ? districtNumMatch[1] : null;
+          const stateName = state;
+          const officeType = anchor.office_type;
+
+          if (districtNum && stateName) {
+            // Find candidates in related positions (same state, same district number, same office type)
+            const related = await db.execute(sql`
+              SELECT pol.id, pol.full_name, pol.party, pol.is_current, pol.profile_type,
+                     pol.photo_url, pol.handle, pol.corruption_grade, pol.total_contributions, pol.is_verified,
+                     pos.id as pos_id, pos.title as pos_title, pos.office_type,
+                     pos.level, pos.jurisdiction, pos.district
+              FROM politician_profiles pol
+              JOIN political_positions pos ON pol.position_id = pos.id
+              WHERE pol.position_id != ${positionId}
+                AND pos.office_type = ${officeType}
+                AND pos.level = ${anchor.level}
+                AND pos.district ~ ${`\\m${districtNum}\\M`}
+              ORDER BY pol.is_current DESC, pol.full_name
+            `);
+            relatedRows = related.rows as any[];
+          } else if (stateName && !districtNum) {
+            // No district: match by state jurisdiction + office type (e.g. senate race)
+            const related = await db.execute(sql`
+              SELECT pol.id, pol.full_name, pol.party, pol.is_current, pol.profile_type,
+                     pol.photo_url, pol.handle, pol.corruption_grade, pol.total_contributions, pol.is_verified,
+                     pos.id as pos_id, pos.title as pos_title, pos.office_type,
+                     pos.level, pos.jurisdiction, pos.district
+              FROM politician_profiles pol
+              JOIN political_positions pos ON pol.position_id = pos.id
+              WHERE pol.position_id != ${positionId}
+                AND pos.office_type = ${officeType}
+                AND (pos.jurisdiction ILIKE ${stateName} OR pos.jurisdiction ILIKE ${'%' + stateName + '%'})
+              ORDER BY pol.is_current DESC, pol.full_name
+            `);
+            relatedRows = related.rows as any[];
+          }
+        }
+
+        const mapRow = (row: any) => ({
+          id: row.id,
+          fullName: row.full_name,
+          party: row.party,
+          isCurrent: row.is_current,
+          profileType: row.profile_type,
+          photoUrl: row.photo_url,
+          handle: row.handle,
+          corruptionGrade: row.corruption_grade,
+          totalContributions: row.total_contributions,
+          isVerified: row.is_verified,
+        });
+
+        const seen = new Set<string>();
+        politicians = [...(rows.rows as any[]), ...relatedRows]
+          .filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; })
+          .map(mapRow);
+      } else if (office) {
+        // Fallback: match by office name (legacy)
+        politicians = await storage.getPoliticiansByStateAndDistrict(state || '', []);
+      }
+
+      res.json({ office: office || '', state, politicians });
     } catch (error: any) {
       console.error("Elections race lookup error:", error);
       res.status(500).json({ message: error.message || "Failed to load race data" });

@@ -106,16 +106,17 @@ export default function ElectionRacePage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
-  const office = params.get("office") ?? "";
+  const positionId = params.get("positionId") ?? "";
+  const title = params.get("title") ?? params.get("office") ?? "";
   const state = params.get("state") ?? "";
 
   const { data, isLoading, error } = useQuery<RaceData>({
-    queryKey: ["/api/elections/race", office, state],
+    queryKey: ["/api/elections/race", positionId, state],
     queryFn: () => {
-      const q = new URLSearchParams({ office, state });
+      const q = new URLSearchParams({ positionId, state, office: title });
       return fetch(`/api/elections/race?${q.toString()}`, { credentials: "include" }).then(r => r.json());
     },
-    enabled: !!office,
+    enabled: !!(positionId || title),
   });
 
   const groups = data?.politicians ? groupByParty(data.politicians) : {};
@@ -143,7 +144,7 @@ export default function ElectionRacePage() {
               <Award className="h-7 w-7 text-white/80" />
             </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold leading-tight mb-1">{office || "Race"}</h1>
+              <h1 className="text-2xl font-bold leading-tight mb-1">{title || "Race"}</h1>
               {state && (
                 <p className="text-slate-300 text-sm mb-2">{state}</p>
               )}
@@ -195,7 +196,6 @@ export default function ElectionRacePage() {
 
         {!isLoading && !error && data && (
           <>
-            {/* LEVEL 2 + 3 — Party Lanes with candidates */}
             {parties.length > 0 ? (
               <>
                 <div className="flex items-center gap-2 mb-4">
@@ -215,7 +215,7 @@ export default function ElectionRacePage() {
                 <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                 <h3 className="font-semibold mb-1">No Profiles Found</h3>
                 <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-                  No candidates for <strong>{office}</strong> are currently in the ACP database.
+                  No candidates for <strong>{title}</strong> are currently in the ACP database.
                   Profiles are added as candidates file and data becomes available.
                 </p>
               </div>
