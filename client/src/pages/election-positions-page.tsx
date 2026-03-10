@@ -1,11 +1,10 @@
 import { useLocation, useSearch } from "wouter";
 import { Navigation } from "@/components/navigation";
-import { DistrictMap } from "@/components/elections/district-map";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, ChevronRight, MapPin, AlertCircle } from "lucide-react";
+import { ArrowLeft, ChevronRight, MapPin, AlertCircle, User, DollarSign } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface Politician {
@@ -17,6 +16,7 @@ interface Politician {
   handle: string | null;
   corruptionGrade: string | null;
   totalContributions: number | null;
+  superpacTotal: number;
   isVerified: boolean;
   profileType: string | null;
 }
@@ -54,45 +54,101 @@ function getLevelBadgeVariant(level: string): "default" | "secondary" | "outline
   return "outline";
 }
 
+function gradeColor(grade: string | null): string {
+  if (!grade) return "bg-slate-500";
+  const g = grade.toUpperCase();
+  if (g === "A+" || g === "A") return "bg-emerald-500";
+  if (g === "A-" || g === "B+") return "bg-green-500";
+  if (g === "B" || g === "B-") return "bg-lime-500";
+  if (g === "C+" || g === "C") return "bg-yellow-500";
+  if (g === "C-" || g === "D+") return "bg-orange-400";
+  if (g === "D" || g === "D-") return "bg-orange-500";
+  return "bg-red-600";
+}
+
+function formatDollars(cents: number): string {
+  if (!cents || cents === 0) return "$0";
+  const dollars = cents / 100;
+  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
+  if (dollars >= 1_000) return `$${(dollars / 1_000).toFixed(0)}K`;
+  return `$${dollars.toFixed(0)}`;
+}
+
 function SeatCard({
   seat,
-  stateCode,
   stateName,
   onViewRace,
 }: {
   seat: Seat;
-  stateCode: string;
   stateName: string;
   onViewRace: () => void;
 }) {
   const incumbent = seat.incumbents[0] ?? null;
-  const totalCount = seat.incumbents.length + seat.candidates.length;
+  const [imgError, setImgError] = useState(false);
 
   return (
-    <Card className="flex flex-col hover:shadow-md transition-shadow">
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base leading-snug">{seat.title}</CardTitle>
-          <Badge variant={getLevelBadgeVariant(seat.level)} className="shrink-0 text-xs">
-            {getLevelLabel(seat.level)}
-          </Badge>
-        </div>
-        {incumbent ? (
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{incumbent.fullName}</span>
-            {incumbent.party && ` · ${incumbent.party}`}
-          </p>
+    <Card className="flex flex-col hover:shadow-md transition-shadow overflow-hidden">
+      {/* Photo section */}
+      <div className="relative w-full h-36 bg-muted flex items-center justify-center shrink-0">
+        {incumbent?.photoUrl && !imgError ? (
+          <img
+            src={incumbent.photoUrl}
+            alt={incumbent.fullName}
+            className="w-full h-full object-cover object-top"
+            onError={() => setImgError(true)}
+          />
         ) : (
-          <p className="text-sm text-muted-foreground italic">No incumbent in ACP database</p>
+          <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
+            <User className="h-12 w-12 text-slate-400 dark:text-slate-500" />
+          </div>
+        )}
+        {/* Level badge — top left */}
+        <Badge
+          variant={getLevelBadgeVariant(seat.level)}
+          className="absolute top-2 left-2 text-xs shadow"
+        >
+          {getLevelLabel(seat.level)}
+        </Badge>
+        {/* Grade badge — top right */}
+        {incumbent?.corruptionGrade && (
+          <div className={`absolute top-2 right-2 rounded-md px-2 py-0.5 text-white font-bold text-sm shadow ${gradeColor(incumbent.corruptionGrade)}`}>
+            {incumbent.corruptionGrade}
+          </div>
+        )}
+      </div>
+
+      <CardHeader className="pb-1 pt-3">
+        <CardTitle className="text-sm leading-snug line-clamp-2">{seat.title}</CardTitle>
+        {incumbent ? (
+          <div className="space-y-0.5 mt-0.5">
+            <p className="text-sm font-medium text-foreground">{incumbent.fullName}</p>
+            {incumbent.party && (
+              <p className="text-xs text-muted-foreground">{incumbent.party}</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic mt-0.5">No incumbent in ACP database</p>
+        )}
+      </CardHeader>
+
+      <CardContent className="flex-1 flex flex-col gap-2 pt-0 pb-3">
+        {/* SuperPAC row */}
+        {incumbent && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <DollarSign className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <span>
+              SuperPAC:{" "}
+              <span className={`font-semibold ${incumbent.superpacTotal > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                {incumbent.superpacTotal > 0 ? formatDollars(incumbent.superpacTotal) : "No data"}
+              </span>
+            </span>
+          </div>
         )}
         {seat.candidates.length > 0 && (
           <p className="text-xs text-muted-foreground">
-            {seat.candidates.length} candidate{seat.candidates.length !== 1 ? "s" : ""} running
+            {seat.candidates.length} challenger{seat.candidates.length !== 1 ? "s" : ""} in ACP database
           </p>
         )}
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col gap-3 pt-0">
-        <DistrictMap officeName={seat.title} state={stateCode} />
         <Button size="sm" className="w-full mt-auto" onClick={onViewRace}>
           View Race
           <ChevronRight className="h-4 w-4 ml-1" />
@@ -165,14 +221,14 @@ export default function ElectionPositionsPage() {
         {isLoading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-5 w-3/4" />
-                  <Skeleton className="h-4 w-1/2 mt-1" />
+              <Card key={i} className="overflow-hidden">
+                <Skeleton className="h-36 w-full" />
+                <CardHeader className="pb-1">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2 mt-1" />
                 </CardHeader>
                 <CardContent>
-                  <Skeleton className="h-24 w-full rounded-lg" />
-                  <Skeleton className="h-8 w-full mt-3 rounded" />
+                  <Skeleton className="h-8 w-full rounded" />
                 </CardContent>
               </Card>
             ))}
@@ -193,14 +249,13 @@ export default function ElectionPositionsPage() {
           <>
             <p className="text-sm text-muted-foreground mb-4">
               Found {lookupData.seats.length} elected positions in the ACP database for your area.
-              Click <strong>View Race</strong> on any seat to see candidates and ACP grades.
+              Click <strong>View Race</strong> on any seat to see all candidates and ACP grades.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {lookupData.seats.map(seat => (
                 <SeatCard
                   key={seat.positionId}
                   seat={seat}
-                  stateCode={lookupData.stateCode}
                   stateName={lookupData.stateName}
                   onViewRace={() => handleViewRace(seat, lookupData.stateName)}
                 />

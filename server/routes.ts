@@ -4321,10 +4321,41 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         } catch (_) { /* ignore */ }
       }
 
-      // Fallback: scan address string for a 2-letter state abbreviation
+      // Fallback 1: scan address string for a 2-letter state abbreviation
       if (!stateCode) {
         const m = address.toUpperCase().match(/\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/);
         if (m) stateCode = m[1].toLowerCase();
+      }
+
+      // Fallback 2: if input looks like a ZIP code, map via known ZIP ranges
+      if (!stateCode) {
+        const zipMatch = address.match(/\b(\d{5})\b/);
+        if (zipMatch) {
+          const ZIP_RANGES: [number, number, string][] = [
+            [1001, 2791, 'ma'], [2801, 2940, 'ri'], [3031, 3897, 'nh'],
+            [3901, 4992, 'me'], [5001, 5907, 'vt'], [6001, 6928, 'ct'],
+            [7001, 8989, 'nj'], [10001, 14975, 'ny'], [15001, 19640, 'pa'],
+            [19701, 19980, 'de'], [20001, 20599, 'dc'], [20601, 21930, 'md'],
+            [22001, 24658, 'va'], [24701, 26886, 'wv'], [27006, 28909, 'nc'],
+            [29001, 29948, 'sc'], [30001, 31999, 'ga'], [32004, 34997, 'fl'],
+            [35004, 36925, 'al'], [37010, 38589, 'tn'], [38601, 39776, 'ms'],
+            [39800, 39901, 'ga'], [40003, 42788, 'ky'], [43001, 45999, 'oh'],
+            [46001, 47997, 'in'], [48001, 49971, 'mi'], [50001, 52809, 'ia'],
+            [53001, 54990, 'wi'], [55001, 56763, 'mn'], [57001, 57799, 'sd'],
+            [58001, 58856, 'nd'], [59001, 59937, 'mt'], [60001, 62999, 'il'],
+            [63001, 65899, 'mo'], [66002, 67954, 'ks'], [68001, 69367, 'ne'],
+            [70001, 71497, 'la'], [71601, 72959, 'ar'], [73001, 74966, 'ok'],
+            [75001, 79999, 'tx'], [80001, 81658, 'co'], [82001, 83128, 'wy'],
+            [83200, 83876, 'id'], [84001, 84784, 'ut'], [85001, 86556, 'az'],
+            [87001, 88441, 'nm'], [88901, 89883, 'nv'], [90001, 96162, 'ca'],
+            [96701, 96898, 'hi'], [97001, 97920, 'or'], [98001, 99403, 'wa'],
+            [99501, 99950, 'ak'],
+          ];
+          const zipNum = parseInt(zipMatch[1], 10);
+          for (const [min, max, code] of ZIP_RANGES) {
+            if (zipNum >= min && zipNum <= max) { stateCode = code; break; }
+          }
+        }
       }
 
       const stateName = stateCode ? STATE_CODE_TO_NAME[stateCode] : null;
@@ -4339,7 +4370,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         SELECT pol.id, pol.full_name, pol.party, pol.is_current, pol.profile_type,
                pol.photo_url, pol.handle, pol.corruption_grade, pol.total_contributions, pol.is_verified,
                pos.id as pos_id, pos.title as pos_title, pos.office_type,
-               pos.level, pos.jurisdiction, pos.district, pos.display_order
+               pos.level, pos.jurisdiction, pos.district, pos.display_order,
+               COALESCE((
+                 SELECT SUM(ss.reported_amount)
+                 FROM politician_sig_sponsorships ss
+                 WHERE ss.politician_id = pol.id
+               ), 0) as superpac_total
         FROM politician_profiles pol
         JOIN political_positions pos ON pol.position_id = pos.id
         WHERE pos.jurisdiction ILIKE ${stateName}
@@ -4377,6 +4413,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           corruptionGrade: row.corruption_grade,
           totalContributions: row.total_contributions,
           isVerified: row.is_verified,
+          superpacTotal: Number(row.superpac_total ?? 0),
         };
         if (row.is_current) seat.incumbents.push(politician);
         else seat.candidates.push(politician);
