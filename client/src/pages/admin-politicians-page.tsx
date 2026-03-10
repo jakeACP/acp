@@ -762,7 +762,7 @@ export default function AdminPoliticiansPage() {
   };
   const DERIVED_TAG_COLORS: Record<string, string> = {
     incumbent: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-    former: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+    inactive: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
   };
   function getProfileTags(profile: { profileType?: string | null; isCurrent?: boolean | null }) {
     const primary = profile.profileType || "representative";
@@ -773,7 +773,7 @@ export default function AdminPoliticiansPage() {
       tags.push({ label: "Incumbent", color: DERIVED_TAG_COLORS.incumbent });
     }
     if (!profile.isCurrent) {
-      tags.push({ label: "Former", color: DERIVED_TAG_COLORS.former });
+      tags.push({ label: "Inactive", color: DERIVED_TAG_COLORS.inactive });
     }
     return tags;
   }
@@ -1597,7 +1597,7 @@ export default function AdminPoliticiansPage() {
                     { key: "representatives", label: "Representatives" },
                     { key: "candidates", label: "Candidates" },
                     { key: "delegates", label: "Delegates" },
-                    { key: "former", label: "Former" },
+                    { key: "former", label: "Inactive" },
                   ].map(({ key, label }) => (
                     <button
                       key={key}
