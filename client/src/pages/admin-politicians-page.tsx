@@ -1485,9 +1485,6 @@ export default function AdminPoliticiansPage() {
               {/* ── PROFILES TAB ── */}
               <TabsContent value="profiles" className="space-y-4">
                 <div className="flex justify-between items-start gap-4 flex-wrap">
-                  <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
-                    All politician and candidate profiles — Representatives (current elected officials), Candidates (running for office), and Delegates. Import any type using the universal XLSX importer.
-                  </p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Button
                       onClick={() => {
