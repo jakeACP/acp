@@ -304,7 +304,7 @@ export default function RepresentativesPage() {
       if (ga !== gb) return ga - gb;
       const amtA = a.totalContributions ?? a.totalLobbyAmount;
       const amtB = b.totalContributions ?? b.totalLobbyAmount;
-      return amtB - amtA;
+      return amtA - amtB;
     });
   }, [allReps, searchQuery, gradeFilter]);
 
