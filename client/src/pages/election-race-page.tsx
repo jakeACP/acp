@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Navigation } from "@/components/navigation";
 import { CandidateCard } from "@/components/elections/candidate-card";
@@ -103,8 +103,9 @@ function PartyLane({ party, politicians }: { party: string; politicians: Politic
 }
 
 export default function ElectionRacePage() {
-  const [location, navigate] = useLocation();
-  const params = new URLSearchParams(location.split("?")[1] ?? "");
+  const [, navigate] = useLocation();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
   const office = params.get("office") ?? "";
   const state = params.get("state") ?? "";
 

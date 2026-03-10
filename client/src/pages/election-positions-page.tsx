@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { Navigation } from "@/components/navigation";
 import { DistrictMap } from "@/components/elections/district-map";
@@ -97,8 +97,9 @@ function PositionCard({
 }
 
 export default function ElectionPositionsPage() {
-  const [location, navigate] = useLocation();
-  const params = new URLSearchParams(location.split("?")[1] ?? "");
+  const [, navigate] = useLocation();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
   const address = params.get("address") ?? "";
 
   const [civicData, setCivicData] = useState<CivicResponse | null>(null);
