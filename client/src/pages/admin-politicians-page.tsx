@@ -1677,7 +1677,11 @@ export default function AdminPoliticiansPage() {
                       <SelectItem value="acp-admins">ACP-Admins</SelectItem>
                     </SelectContent>
                   </Select>
-                  <span className="text-xs text-slate-500">{filteredProfiles.length} of {profiles.length}</span>
+                  <span className="text-xs text-slate-500">
+                    {filteredProfiles.length > 100
+                      ? `Showing 100 of ${filteredProfiles.length} (refine filters or search to narrow)`
+                      : `${filteredProfiles.length} of ${profiles.length}`}
+                  </span>
                 </div>
 
                 {profilesLoading ? (
@@ -1705,7 +1709,7 @@ export default function AdminPoliticiansPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredProfiles.map((profile) => {
+                        {filteredProfiles.slice(0, 100).map((profile) => {
                           const position = positions.find(p => p.id === profile.positionId);
                           return (
                             <TableRow key={profile.id} data-testid={`row-profile-${profile.id}`}>
@@ -1728,17 +1732,25 @@ export default function AdminPoliticiansPage() {
                                 </Button>
                               </TableCell>
                               <TableCell>
-                                {profile.photoUrl ? (
-                                  <img
-                                    src={profile.photoUrl}
-                                    alt={profile.fullName}
-                                    className="w-10 h-10 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                                    <Users className="h-5 w-5 text-slate-400" />
-                                  </div>
-                                )}
+                                <a
+                                  href={`/politicians/${profile.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block hover:opacity-80 transition-opacity"
+                                  title={`Open ${profile.fullName}'s profile`}
+                                >
+                                  {profile.photoUrl ? (
+                                    <img
+                                      src={profile.photoUrl}
+                                      alt={profile.fullName}
+                                      className="w-10 h-10 rounded-full object-cover ring-2 ring-transparent hover:ring-blue-400 transition-all"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center hover:ring-2 hover:ring-blue-400 transition-all">
+                                      <Users className="h-5 w-5 text-slate-400" />
+                                    </div>
+                                  )}
+                                </a>
                               </TableCell>
                               <TableCell className="font-medium">
                                 {profile.fullName}
