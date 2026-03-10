@@ -4301,9 +4301,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     if (!address) return res.status(400).json({ message: "address is required" });
 
     try {
-      // Step 1: Get state code via Google Civic Divisions API
+      // Step 1: Get state code + district info via Google Civic Divisions API
       const civicApiKey = process.env.GOOGLE_CIVIC_API_KEY;
       let stateCode: string | null = null;
+      let cdDistrict: string | null = null;   // congressional district number e.g. "6"
+      let slduDistrict: string | null = null; // state senate district
+      let sldsDistrict: string | null = null; // state house district
 
       if (civicApiKey) {
         try {
@@ -4312,9 +4315,25 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           if (response.ok) {
             const data = await response.json();
             for (const division of (data.results || [])) {
-              if (division.ocdId?.includes('state:')) {
-                stateCode = division.ocdId.split('state:')[1].split('/')[0].toLowerCase();
-                break;
+              const ocd: string = division.ocdId ?? '';
+              // state
+              if (!stateCode && ocd.includes('/state:')) {
+                stateCode = ocd.split('/state:')[1].split('/')[0].toLowerCase();
+              }
+              // congressional district: ocd-division/country:us/state:mn/cd:6
+              if (!cdDistrict) {
+                const cdMatch = ocd.match(/\/cd:(\d+)/);
+                if (cdMatch) cdDistrict = cdMatch[1];
+              }
+              // state senate (upper)
+              if (!slduDistrict) {
+                const slduMatch = ocd.match(/\/sldu:(\w+)/);
+                if (slduMatch) slduDistrict = slduMatch[1];
+              }
+              // state house (lower)
+              if (!sldsDistrict) {
+                const sldsMatch = ocd.match(/\/sldl:(\w+)/);
+                if (sldsMatch) sldsDistrict = sldsMatch[1];
               }
             }
           }
@@ -4366,6 +4385,15 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       }
 
       // Step 2: Query politician_profiles for this state (+ national positions)
+      // When cdDistrict is known, filter House seats to that specific district only.
+      // State-wide races (Senate, Governor) and national races (President, VP) are always shown.
+      const ordinalMap: Record<string, string> = {
+        '1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','6':'6th','7':'7th',
+        '8':'8th','9':'9th','10':'10th','11':'11th','12':'12th','13':'13th',
+        '14':'14th','15':'15th','16':'16th',
+      };
+      const cdOrdinal = cdDistrict ? (ordinalMap[cdDistrict] ?? `${cdDistrict}th`) : null;
+
       const rows = await db.execute(sql`
         SELECT pol.id, pol.full_name, pol.party, pol.is_current, pol.profile_type,
                pol.photo_url, pol.handle, pol.corruption_grade, pol.total_contributions, pol.is_verified,
@@ -4378,9 +4406,23 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
                ), 0) as superpac_total
         FROM politician_profiles pol
         JOIN political_positions pos ON pol.position_id = pos.id
-        WHERE pos.jurisdiction ILIKE ${stateName}
-           OR pos.jurisdiction ILIKE ${'%' + stateName + '%'}
-           OR pos.level IN ('country', 'national')
+        WHERE (
+          -- National/country-wide races (President, VP): jurisdiction = 'United States'
+          pos.jurisdiction ILIKE 'United States'
+          OR pos.jurisdiction ILIKE '%United States%'
+          OR (
+            -- State-scoped races
+            (pos.jurisdiction ILIKE ${stateName} OR pos.jurisdiction ILIKE ${'%' + stateName + '%'})
+            AND (
+              -- Always show state-wide seats (Senate, Governor, etc. — no district)
+              -- For legislative/house seats: only show if district matches when we know it
+              pos.office_type NOT ILIKE '%legislat%'
+              OR pos.district IS NULL
+              OR pos.district = ''
+              OR ${cdOrdinal === null ? sql`TRUE` : sql`pos.district ILIKE ${'%' + cdOrdinal + '%'} OR pos.district ILIKE ${'%' + (cdDistrict ?? '') + '%'}`}
+            )
+          )
+        )
         ORDER BY pos.display_order NULLS LAST, pol.is_current DESC, pos.title, pol.full_name
       `);
 
@@ -4428,7 +4470,15 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         return (a.displayOrder ?? 999) - (b.displayOrder ?? 999);
       });
 
-      res.json({ stateName, stateCode: stateCode!.toUpperCase(), seats });
+      res.json({
+        stateName,
+        stateCode: stateCode!.toUpperCase(),
+        cdDistrict,
+        slduDistrict,
+        sldsDistrict,
+        districtKnown: cdDistrict !== null,
+        seats,
+      });
     } catch (error: any) {
       console.error("Elections lookup error:", error);
       res.status(500).json({ message: error.message || "Failed to lookup elections" });

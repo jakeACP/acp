@@ -63,8 +63,12 @@ export default function ElectionsPage() {
           </div>
 
           <h1 className="text-4xl font-bold tracking-tight mb-2">Find Your Elections</h1>
-          <p className="text-muted-foreground text-lg mb-10">
+          <p className="text-muted-foreground text-lg mb-2">
             Enter your address to see the elected offices representing you and the candidates running for each seat.
+          </p>
+          <p className="text-sm text-muted-foreground mb-8">
+            For the most accurate results — including your specific congressional district — enter a full street address.
+            A ZIP code alone will show all seats for your state.
           </p>
 
           <form onSubmit={handleSearch} className="space-y-3">

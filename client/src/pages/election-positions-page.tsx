@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, ChevronRight, MapPin, AlertCircle, User, DollarSign } from "lucide-react";
+import { ArrowLeft, ChevronRight, MapPin, AlertCircle, User, DollarSign, Info, Navigation2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useLocation as useWouterLocation } from "wouter";
 
 interface Politician {
   id: string;
@@ -36,11 +37,17 @@ interface Seat {
 interface LookupResponse {
   stateName: string;
   stateCode: string;
+  cdDistrict: string | null;
+  slduDistrict: string | null;
+  sldsDistrict: string | null;
+  districtKnown: boolean;
   seats: Seat[];
 }
 
-function getLevelLabel(level: string): string {
+function getLevelLabel(level: string, officeType?: string): string {
   const l = level?.toLowerCase();
+  const o = officeType?.toLowerCase() ?? '';
+  if (o.includes('executive') || o.includes('governor')) return "Governor";
   if (l === "country" || l === "national" || l === "federal") return "Federal";
   if (l === "state") return "State";
   if (l === "local") return "Local";
@@ -88,7 +95,7 @@ function SeatCard({
 
   return (
     <Card className="flex flex-col hover:shadow-md transition-shadow overflow-hidden">
-      {/* Photo section — portrait aspect ratio */}
+      {/* Photo — portrait aspect ratio */}
       <div className="relative w-full aspect-[3/4] bg-muted shrink-0">
         {incumbent?.photoUrl && !imgError ? (
           <img
@@ -107,7 +114,7 @@ function SeatCard({
           variant={getLevelBadgeVariant(seat.level)}
           className="absolute top-2 left-2 text-xs shadow"
         >
-          {getLevelLabel(seat.level)}
+          {getLevelLabel(seat.level, seat.officeType)}
         </Badge>
         {/* Grade badge — top right */}
         {incumbent?.corruptionGrade && (
@@ -132,7 +139,6 @@ function SeatCard({
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col gap-2 pt-0 pb-3">
-        {/* SuperPAC row */}
         {incumbent && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <DollarSign className="h-3.5 w-3.5 shrink-0 text-amber-500" />
@@ -192,6 +198,15 @@ export default function ElectionPositionsPage() {
     navigate(`/elections/race?${query.toString()}`);
   };
 
+  const ordinalLabel = (n: string | null) => {
+    if (!n) return null;
+    const ordinals: Record<string, string> = {
+      '1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','6':'6th',
+      '7':'7th','8':'8th','9':'9th','10':'10th','11':'11th','12':'12th',
+    };
+    return ordinals[n] ?? `${n}th`;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -203,7 +218,7 @@ export default function ElectionPositionsPage() {
           </Button>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-4">
           <h1 className="text-3xl font-bold">Your Elected Seats</h1>
           {address && (
             <div className="flex items-center gap-1.5 text-muted-foreground mt-1">
@@ -212,11 +227,36 @@ export default function ElectionPositionsPage() {
             </div>
           )}
           {lookupData && (
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-0.5">
               Showing seats for <strong>{lookupData.stateName}</strong>
+              {lookupData.cdDistrict && (
+                <span> · Congressional District <strong>{ordinalLabel(lookupData.cdDistrict)}</strong></span>
+              )}
             </p>
           )}
         </div>
+
+        {/* District-awareness banner */}
+        {lookupData && !lookupData.districtKnown && !isLoading && (
+          <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-5">
+            <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-blue-800 dark:text-blue-300">Showing all {lookupData.stateName} districts</p>
+              <p className="text-blue-700 dark:text-blue-400 mt-0.5">
+                Enter a full street address (e.g. <em>123 Main St, Minneapolis, MN 55401</em>) to see only the races for your specific district.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 h-7 text-xs border-blue-300 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900"
+                onClick={() => navigate("/elections")}
+              >
+                <Navigation2 className="h-3 w-3 mr-1" />
+                Refine my address
+              </Button>
+            </div>
+          </div>
+        )}
 
         {isLoading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -248,8 +288,8 @@ export default function ElectionPositionsPage() {
         {lookupData && !isLoading && (
           <>
             <p className="text-sm text-muted-foreground mb-4">
-              Found {lookupData.seats.length} elected positions in the ACP database for your area.
-              Click <strong>View Race</strong> on any seat to see all candidates and ACP grades.
+              Found {lookupData.seats.length} position{lookupData.seats.length !== 1 ? "s" : ""} in the ACP database for your area.
+              Click <strong>View Race</strong> to see candidates and ACP grades.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {lookupData.seats.map(seat => (
