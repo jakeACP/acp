@@ -88,18 +88,18 @@ function SeatCard({
 
   return (
     <Card className="flex flex-col hover:shadow-md transition-shadow overflow-hidden">
-      {/* Photo section */}
-      <div className="relative w-full h-36 bg-muted flex items-center justify-center shrink-0">
+      {/* Photo section — portrait aspect ratio */}
+      <div className="relative w-full aspect-[3/4] bg-muted shrink-0">
         {incumbent?.photoUrl && !imgError ? (
           <img
             src={incumbent.photoUrl}
             alt={incumbent.fullName}
-            className="w-full h-full object-cover object-top"
+            className="absolute inset-0 w-full h-full object-cover object-top"
             onError={() => setImgError(true)}
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
-            <User className="h-12 w-12 text-slate-400 dark:text-slate-500" />
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
+            <User className="h-16 w-16 text-slate-400 dark:text-slate-500" />
           </div>
         )}
         {/* Level badge — top left */}
@@ -219,10 +219,10 @@ export default function ElectionPositionsPage() {
         </div>
 
         {isLoading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {[...Array(8)].map((_, i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {[...Array(10)].map((_, i) => (
               <Card key={i} className="overflow-hidden">
-                <Skeleton className="h-36 w-full" />
+                <Skeleton className="w-full aspect-[3/4]" />
                 <CardHeader className="pb-1">
                   <Skeleton className="h-4 w-3/4" />
                   <Skeleton className="h-3 w-1/2 mt-1" />
@@ -251,7 +251,7 @@ export default function ElectionPositionsPage() {
               Found {lookupData.seats.length} elected positions in the ACP database for your area.
               Click <strong>View Race</strong> on any seat to see all candidates and ACP grades.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {lookupData.seats.map(seat => (
                 <SeatCard
                   key={seat.positionId}
