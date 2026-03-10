@@ -1,10 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   Loader2, 
   ArrowLeft, 
@@ -13,7 +17,11 @@ import {
   AlertTriangle, 
   CheckCircle,
   DollarSign,
-  Info
+  Info,
+  Network,
+  TrendingDown,
+  TrendingUp,
+  Vote
 } from "lucide-react";
 
 type SIG = {
@@ -42,6 +50,26 @@ type Politician = {
   reportedAmount?: number;
   disclosureUrl?: string;
   disclosureSource?: string;
+};
+
+type ConnectedLobby = {
+  id: string;
+  name: string;
+  tag: string;
+  category: string;
+  sentiment?: string;
+  isAce?: boolean;
+  sharedCount: number;
+};
+
+type SigProfileData = {
+  sig: SIG;
+  politicians: Politician[];
+  totalContributions: number;
+  communityScore: number | null;
+  voteCount: number;
+  userVote: number | null;
+  connectedLobbies: ConnectedLobby[];
 };
 
 function sentimentBadgeClass(s?: string) {
@@ -93,16 +121,62 @@ function relationshipBadge(rel: string) {
   return "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950 dark:text-orange-200";
 }
 
+function lobbySentimentClass(s?: string) {
+  if (s === "negative") return "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200";
+  if (s === "positive") return "border-green-300 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200";
+  return "border-border bg-muted/40 text-foreground";
+}
+
+function scoreLabel(score: number): string {
+  if (score <= -35) return "Highly Corrupt";
+  if (score <= -15) return "Likely Corrupt";
+  if (score < 15) return "Mixed / Neutral";
+  if (score < 35) return "Likely Clean";
+  return "Community Trusted";
+}
+
+function scoreColor(score: number): string {
+  if (score <= -20) return "text-red-600 dark:text-red-400";
+  if (score < 0) return "text-orange-500 dark:text-orange-400";
+  if (score === 0) return "text-muted-foreground";
+  if (score < 20) return "text-blue-500 dark:text-blue-400";
+  return "text-green-600 dark:text-green-400";
+}
+
 export default function SigProfilePage() {
   const { tag } = useParams<{ tag: string }>();
+  const { toast } = useToast();
+  const [sliderValue, setSliderValue] = useState<number>(0);
+  const [hasVoted, setHasVoted] = useState(false);
 
-  const { data, isLoading, error } = useQuery<{ sig: SIG; politicians: Politician[] }>({
+  const { data, isLoading, error } = useQuery<SigProfileData>({
     queryKey: ["/api/sigs", tag],
     queryFn: () => fetch(`/api/sigs/${tag}`).then(r => {
       if (!r.ok) throw new Error("SIG not found");
       return r.json();
     }),
     enabled: !!tag,
+  });
+
+  useEffect(() => {
+    if (data?.userVote !== null && data?.userVote !== undefined) {
+      setSliderValue(data.userVote);
+      setHasVoted(true);
+    }
+  }, [data?.userVote]);
+
+  const voteMutation = useMutation({
+    mutationFn: (vote: number) =>
+      apiRequest("POST", `/api/sigs/${tag}/community-vote`, { vote }),
+    onSuccess: () => {
+      setHasVoted(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/sigs", tag] });
+      toast({ title: "Vote submitted", description: "Your community rating has been recorded." });
+    },
+    onError: (err: any) => {
+      const msg = err?.message || "You may need to log in to vote.";
+      toast({ title: "Could not submit vote", description: msg, variant: "destructive" });
+    },
   });
 
   if (isLoading) {
@@ -129,14 +203,18 @@ export default function SigProfilePage() {
     );
   }
 
-  const { sig, politicians } = data;
+  const { sig, politicians, totalContributions, communityScore, voteCount, userVote, connectedLobbies } = data;
   const pledged = politicians.filter(p => p.relationshipType === "pledged_against");
   const donors = politicians.filter(p => p.relationshipType !== "pledged_against");
+
+  const displayScore = communityScore !== null ? Math.round(communityScore * 10) / 10 : null;
+  const communityBarPct = displayScore !== null ? ((displayScore + 50) / 100) * 100 : 50;
 
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+
         {/* Back */}
         <Link href="/sigs">
           <Button variant="ghost" size="sm" className="gap-2">
@@ -165,6 +243,110 @@ export default function SigProfilePage() {
             </p>
           )}
         </div>
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <span className="text-2xl font-bold">{politicians.length}</span>
+              <span className="text-xs text-muted-foreground">Politicians Linked</span>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+              <DollarSign className="h-5 w-5 text-orange-500" />
+              <span className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                {totalContributions > 0
+                  ? `$${((totalContributions / 100) >= 1_000_000
+                      ? ((totalContributions / 100) / 1_000_000).toFixed(1) + "M"
+                      : (totalContributions / 100) >= 1_000
+                      ? Math.round(totalContributions / 100 / 1_000) + "K"
+                      : (totalContributions / 100).toLocaleString())}`
+                  : "—"}
+              </span>
+              <span className="text-xs text-muted-foreground">Total Reported Contributions</span>
+            </CardContent>
+          </Card>
+          <Card className="col-span-2 sm:col-span-1">
+            <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+              <Vote className="h-5 w-5 text-blue-500" />
+              <span className={`text-2xl font-bold ${displayScore !== null ? scoreColor(displayScore) : "text-muted-foreground"}`}>
+                {displayScore !== null ? (displayScore > 0 ? `+${displayScore}` : `${displayScore}`) : "—"}
+              </span>
+              <span className="text-xs text-muted-foreground">Community Score ({voteCount} {voteCount === 1 ? "vote" : "votes"})</span>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Community Slide Scale */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Vote className="h-4 w-4 text-blue-500" />
+              Community Corruption Rating
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Community average bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                <span className="flex items-center gap-1"><TrendingDown className="h-3.5 w-3.5 text-red-500" /> Corrupt (-50)</span>
+                <span>Neutral (0)</span>
+                <span className="flex items-center gap-1">Clean (+50) <TrendingUp className="h-3.5 w-3.5 text-green-500" /></span>
+              </div>
+              <div className="relative h-4 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500">
+                {/* Community average needle */}
+                {displayScore !== null && (
+                  <div
+                    className="absolute top-0 h-full w-1 bg-white border-x border-white/50 shadow-sm transition-all"
+                    style={{ left: `calc(${communityBarPct}% - 2px)` }}
+                  />
+                )}
+                {/* Center line */}
+                <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: "50%" }} />
+              </div>
+              {displayScore !== null ? (
+                <p className={`text-sm font-semibold text-center ${scoreColor(displayScore)}`}>
+                  Community Average: {displayScore > 0 ? "+" : ""}{displayScore} — {scoreLabel(displayScore)}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center">No community votes yet. Be the first to rate this group.</p>
+              )}
+            </div>
+
+            {/* Voting slider */}
+            <div className="border rounded-lg p-4 bg-muted/30 space-y-4">
+              <p className="text-sm font-medium text-center">Your Rating: <span className={`font-bold ${scoreColor(sliderValue)}`}>{sliderValue > 0 ? `+${sliderValue}` : sliderValue}</span> — {scoreLabel(sliderValue)}</p>
+              <Slider
+                min={-50}
+                max={50}
+                step={1}
+                value={[sliderValue]}
+                onValueChange={(v) => setSliderValue(v[0])}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Highly Corrupt</span>
+                <span>Neutral</span>
+                <span>Community Trusted</span>
+              </div>
+              <Button
+                onClick={() => voteMutation.mutate(sliderValue)}
+                disabled={voteMutation.isPending}
+                className="w-full"
+                variant={hasVoted ? "outline" : "default"}
+              >
+                {voteMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                {hasVoted ? (
+                  `Update My Vote (currently ${userVote !== null ? (userVote > 0 ? `+${userVote}` : userVote) : sliderValue})`
+                ) : "Submit Community Rating"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Info strip */}
         <div className="flex flex-wrap gap-4 p-4 bg-muted/50 rounded-lg border">
@@ -203,6 +385,36 @@ export default function SigProfilePage() {
           )}
         </div>
 
+        {/* Connected Lobbies */}
+        {connectedLobbies.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Network className="h-4 w-4 text-purple-500" />
+                Connected Lobbies
+                <Badge variant="outline" className="text-xs ml-auto">{connectedLobbies.length}</Badge>
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Other organizations that fund the same politicians as this group.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {connectedLobbies.map(lobby => (
+                  <Link key={lobby.id} href={`/sigs/${lobby.tag}`}>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 ${lobbySentimentClass(lobby.sentiment)}`}
+                    >
+                      {lobby.name}
+                      <span className="text-xs opacity-60 font-normal">×{lobby.sharedCount}</span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Politicians section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -221,7 +433,6 @@ export default function SigProfilePage() {
             </Card>
           ) : (
             <div className="space-y-6">
-              {/* Pledged Against */}
               {pledged.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide flex items-center gap-1.5">
@@ -236,7 +447,6 @@ export default function SigProfilePage() {
                 </div>
               )}
 
-              {/* Donors / linked */}
               {donors.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold text-orange-700 dark:text-orange-400 uppercase tracking-wide flex items-center gap-1.5">

@@ -1439,6 +1439,22 @@ export const politicianSigSponsorships = pgTable("politician_sig_sponsorships", 
   uniquePoliticianSig: sql`UNIQUE(${table.politicianId}, ${table.sigId})`,
 }));
 
+// SIG Community Votes — tug-of-war rating (-50 corrupt to +50 clean) by authenticated users
+export const sigCommunityVotes = pgTable("sig_community_votes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sigId: varchar("sig_id").notNull().references(() => specialInterestGroups.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  vote: integer("vote").notNull(), // -50 to 50
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  sigUserUnique: sql`UNIQUE(${table.sigId}, ${table.userId})`,
+  sigIndex: index("sig_community_votes_sig_idx").on(table.sigId),
+  userIndex: index("sig_community_votes_user_idx").on(table.userId),
+}));
+
+export type SigCommunityVote = typeof sigCommunityVotes.$inferSelect;
+
 // Grading Algorithm Settings — configurable weights for the corruption grading formula
 export const gradingAlgorithmSettings = pgTable("grading_algorithm_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

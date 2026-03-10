@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { gradingAlgorithmSettings, fecCandidateTotals, type GradingAlgorithmSettings, type FecCandidateTotals } from "@shared/schema";
+import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
@@ -230,7 +230,8 @@ export interface IStorage {
   getSigCategories(): Promise<string[]>;
   getSigIndustries(): Promise<string[]>;
   getPublicSigs(filters?: { category?: string; sentiment?: string }): Promise<SpecialInterestGroup[]>;
-  getPublicSigByTag(tag: string): Promise<{ sig: SpecialInterestGroup; politicians: any[] } | null>;
+  getPublicSigByTag(tag: string, userId?: string): Promise<{ sig: SpecialInterestGroup; politicians: any[]; totalContributions: number; communityScore: number | null; voteCount: number; userVote: number | null; connectedLobbies: any[] } | null>;
+  submitSigCommunityVote(sigId: string, userId: string, vote: number): Promise<SigCommunityVote>;
   seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number>;
   
   importCongress(): Promise<{ profiles_created: number; profiles_updated: number; positions_created: number; sigs_created: number; sponsorships_created: number }>;
@@ -3978,7 +3979,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(specialInterestGroups.name);
   }
 
-  async getPublicSigByTag(tag: string): Promise<{ sig: SpecialInterestGroup; politicians: any[] } | null> {
+  async getPublicSigByTag(tag: string, userId?: string): Promise<{ sig: SpecialInterestGroup; politicians: any[]; totalContributions: number; communityScore: number | null; voteCount: number; userVote: number | null; connectedLobbies: any[] } | null> {
     const [sig] = await db
       .select()
       .from(specialInterestGroups)
@@ -4002,7 +4003,65 @@ export class DatabaseStorage implements IStorage {
       disclosureSource: r.sponsorship.disclosureSource,
     }));
 
-    return { sig, politicians };
+    // Total contributions (sum of all linked politician sponsorship amounts, in cents)
+    const totalContributions = sponsorships.reduce((sum, r) => sum + (r.sponsorship.reportedAmount ?? 0), 0);
+
+    // Community vote aggregates
+    const voteRows = await db
+      .select({ vote: sigCommunityVotes.vote })
+      .from(sigCommunityVotes)
+      .where(eq(sigCommunityVotes.sigId, sig.id));
+    const voteCount = voteRows.length;
+    const communityScore = voteCount > 0 ? voteRows.reduce((s, v) => s + v.vote, 0) / voteCount : null;
+
+    // Current user's vote (if logged in)
+    let userVote: number | null = null;
+    if (userId) {
+      const [myVote] = await db
+        .select({ vote: sigCommunityVotes.vote })
+        .from(sigCommunityVotes)
+        .where(and(eq(sigCommunityVotes.sigId, sig.id), eq(sigCommunityVotes.userId, userId)));
+      if (myVote) userVote = myVote.vote;
+    }
+
+    // Connected lobbies — other SIGs that share at least one politician with this one
+    const politicianIds = sponsorships.map(r => r.politician.id);
+    let connectedLobbies: any[] = [];
+    if (politicianIds.length > 0) {
+      const connected = await db.execute(sql`
+        SELECT s.id, s.name, s.tag, s.category, s.sentiment, s.is_ace,
+               COUNT(DISTINCT pss.politician_id) AS shared_count
+        FROM politician_sig_sponsorships pss
+        JOIN special_interest_groups s ON s.id = pss.sig_id
+        WHERE pss.politician_id = ANY(${politicianIds}::varchar[])
+          AND pss.sig_id != ${sig.id}
+        GROUP BY s.id, s.name, s.tag, s.category, s.sentiment, s.is_ace
+        ORDER BY shared_count DESC
+        LIMIT 12
+      `);
+      connectedLobbies = (connected.rows as any[]).map(r => ({
+        id: r.id,
+        name: r.name,
+        tag: r.tag,
+        category: r.category,
+        sentiment: r.sentiment,
+        isAce: r.is_ace,
+        sharedCount: Number(r.shared_count),
+      }));
+    }
+
+    return { sig, politicians, totalContributions, communityScore, voteCount, userVote, connectedLobbies };
+  }
+
+  async submitSigCommunityVote(sigId: string, userId: string, vote: number): Promise<SigCommunityVote> {
+    const clamped = Math.max(-50, Math.min(50, Math.round(vote)));
+    const result = await db.execute(sql`
+      INSERT INTO sig_community_votes (id, sig_id, user_id, vote, created_at, updated_at)
+      VALUES (gen_random_uuid(), ${sigId}, ${userId}, ${clamped}, NOW(), NOW())
+      ON CONFLICT (sig_id, user_id) DO UPDATE SET vote = ${clamped}, updated_at = NOW()
+      RETURNING *
+    `);
+    return (result.rows[0] as any) as SigCommunityVote;
   }
 
   async seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number> {

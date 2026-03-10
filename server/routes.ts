@@ -4590,12 +4590,31 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.get("/api/sigs/:tag", async (req, res) => {
     try {
-      const result = await storage.getPublicSigByTag(req.params.tag);
+      const userId = (req.user as any)?.id as string | undefined;
+      const result = await storage.getPublicSigByTag(req.params.tag, userId);
       if (!result) return res.status(404).json({ message: "SIG not found" });
       res.json(result);
     } catch (e) {
       console.error("Error fetching SIG by tag:", e);
       res.status(500).json({ message: "Failed to fetch SIG" });
+    }
+  });
+
+  app.post("/api/sigs/:tag/community-vote", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required to vote" });
+      const userId = (req.user as any)?.id as string;
+      const { vote } = req.body;
+      if (typeof vote !== "number" || vote < -50 || vote > 50) {
+        return res.status(400).json({ message: "Vote must be an integer between -50 and 50" });
+      }
+      const sigResult = await storage.getPublicSigByTag(req.params.tag);
+      if (!sigResult) return res.status(404).json({ message: "SIG not found" });
+      const record = await storage.submitSigCommunityVote(sigResult.sig.id, userId, vote);
+      res.json(record);
+    } catch (e) {
+      console.error("Error submitting SIG community vote:", e);
+      res.status(500).json({ message: "Failed to submit vote" });
     }
   });
 
