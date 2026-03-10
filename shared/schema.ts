@@ -1350,6 +1350,7 @@ export const politicianProfiles = pgTable("politician_profiles", {
   claimTokenExpiry: timestamp("claim_token_expiry"), // Token expiry (72h)
   totalContributions: bigint("total_contributions", { mode: "number" }), // Grand total contributions in dollars, sourced from BallotPedia
   fecCandidateId: text("fec_candidate_id"), // FEC candidate ID, e.g. H8MN06059
+  ballotpediaUrl: text("ballotpedia_url"), // Direct Ballotpedia profile URL for scraping
   numericScore: real("numeric_score"), // 0–100 computed corruption score
   communityAdj: real("community_adj").default(0), // Manual admin adjustment, capped ±5 pts
   gradeExplanation: json("grade_explanation"), // Metric values, weights, sources used

@@ -675,12 +675,19 @@ export default function AdminPoliticiansPage() {
         office: String(r["OFFICE"] || r["Office"] || r["office"] || "").trim(),
         officeLevel: String(r["OFFICE_LEVEL"] || r["Office Level"] || r["officeLevel"] || "State").trim(),
         district: String(r["DISTRICT"] || r["District"] || r["district"] || "").trim(),
+        state: String(r["STATE"] || r["State"] || r["state"] || "").trim(),
         party: String(r["PARTY"] || r["Party"] || r["party"] || "").trim(),
         isIncumbent: String(r["INCUMBENT"] || r["Incumbent"] || r["isIncumbent"] || "No").trim(),
         status: String(r["STATUS"] || r["Status"] || r["status"] || "").trim(),
         primaryDate: String(r["PRIMARY_DATE"] || r["Primary Date"] || r["primaryDate"] || "").trim(),
         generalDate: String(r["GENERAL_DATE"] || r["General Date"] || r["generalDate"] || "").trim(),
         ballotpediaUrl: String(r["BALLOTPEDIA_URL"] || r["Ballotpedia URL"] || r["ballotpediaUrl"] || "").trim(),
+        fecCandidateId: String(r["FEC_CANDIDATE_ID"] || r["FEC ID"] || r["fecCandidateId"] || "").trim(),
+        website: String(r["WEBSITE"] || r["Website"] || r["website"] || "").trim(),
+        email: String(r["EMAIL"] || r["Email"] || r["email"] || "").trim(),
+        phone: String(r["PHONE"] || r["Phone"] || r["phone"] || "").trim(),
+        biography: String(r["BIOGRAPHY"] || r["Biography"] || r["biography"] || "").trim(),
+        photoUrl: String(r["PHOTO_URL"] || r["Photo URL"] || r["photoUrl"] || "").trim(),
         notes: String(r["NOTES"] || r["Notes"] || r["notes"] || "").trim(),
         profileType,
       };
@@ -809,7 +816,7 @@ export default function AdminPoliticiansPage() {
             <DialogHeader>
               <DialogTitle>Import Profiles (Universal)</DialogTitle>
               <DialogDescription>
-                Upload an XLSX or CSV file with any combination of Representatives, Candidates, or Delegates. The PROFILE_TYPE column determines how each row is categorized. Photos and @handles are automatically fetched and generated during import.
+                Upload an XLSX or CSV file with any combination of Representatives, Candidates, or Delegates. The PROFILE_TYPE column determines how each row is categorized. Photos and @handles are automatically fetched/generated during import. Providing FEC_CANDIDATE_ID and BALLOTPEDIA_URL up-front enables future automated data scraping.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
@@ -826,7 +833,8 @@ export default function AdminPoliticiansPage() {
                   }}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  Columns: FULL_NAME, OFFICE, OFFICE_LEVEL, DISTRICT, PARTY, INCUMBENT (Yes/No), <strong>PROFILE_TYPE</strong> (Representative / Candidate / Delegate), PRIMARY_DATE, GENERAL_DATE, BALLOTPEDIA_URL, NOTES
+                  Required: FULL_NAME, OFFICE, OFFICE_LEVEL, STATE, PARTY, <strong>PROFILE_TYPE</strong> (representative / candidate / delegate)<br/>
+                  Optional: DISTRICT, INCUMBENT (Yes/No), STATUS, PRIMARY_DATE, GENERAL_DATE, FEC_CANDIDATE_ID, BALLOTPEDIA_URL, WEBSITE, EMAIL, PHONE, BIOGRAPHY, PHOTO_URL, NOTES
                 </p>
               </div>
 

@@ -236,7 +236,7 @@ export interface IStorage {
   seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number>;
   
   importCongress(): Promise<{ profiles_created: number; profiles_updated: number; positions_created: number; sigs_created: number; sponsorships_created: number }>;
-  importCandidates(candidates: Array<{ fullName: string; office: string; officeLevel: string; district: string; party: string; isIncumbent: string; status: string; primaryDate: string; generalDate: string; ballotpediaUrl: string; notes: string; profileType?: string }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number }>;
+  importCandidates(candidates: Array<{ fullName: string; office: string; officeLevel: string; district: string; state: string; party: string; isIncumbent: string; status: string; primaryDate: string; generalDate: string; ballotpediaUrl: string; fecCandidateId: string; website: string; email: string; phone: string; biography: string; photoUrl: string; notes: string; profileType?: string }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number }>;
   importProfilesCsv(profiles: Array<{ fullName: string; party: string; email: string; phone: string; website: string; biography: string; termStart: string; termEnd: string; isCurrent: string; officeAddress: string }>): Promise<{ created: number; updated: number }>;
   importPositionsCsv(positions: Array<{ title: string; officeType: string; level: string; jurisdiction: string; district: string; termLength: string; isElected: string; isActive: string }>): Promise<{ created: number; updated: number }>;
 
@@ -4686,9 +4686,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async importCandidates(candidates: Array<{
-    fullName: string; office: string; officeLevel: string; district: string;
+    fullName: string; office: string; officeLevel: string; district: string; state: string;
     party: string; isIncumbent: string; status: string; primaryDate: string;
-    generalDate: string; ballotpediaUrl: string; notes: string; profileType?: string;
+    generalDate: string; ballotpediaUrl: string; fecCandidateId: string;
+    website: string; email: string; phone: string; biography: string; photoUrl: string;
+    notes: string; profileType?: string;
   }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number }> {
     let created = 0;
     let updated = 0;
@@ -4723,14 +4725,14 @@ export class DatabaseStorage implements IStorage {
       return (first + last + stateAbbr).replace(/[^a-zA-Z0-9]/g, "");
     }
 
-    function getStateAbbrFromDistrict(district: string): string | null {
-      if (!district) return null;
-      const upper = district.trim().toUpperCase();
+    function getStateAbbrFromText(text: string): string | null {
+      if (!text) return null;
+      const upper = text.trim().toUpperCase();
       if (US_STATE_ABBRS.has(upper)) return upper;
       for (const [name, abbr] of Object.entries(STATE_NAME_TO_ABBR)) {
-        if (district.toLowerCase().includes(name.toLowerCase())) return abbr;
+        if (text.toLowerCase().includes(name.toLowerCase())) return abbr;
       }
-      const match = district.match(/\b([A-Z]{2})\b/);
+      const match = text.match(/\b([A-Z]{2})\b/);
       if (match && US_STATE_ABBRS.has(match[1])) return match[1];
       return null;
     }
@@ -4769,6 +4771,8 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Load ALL existing positions once — avoids N+1 queries and enables multi-field dedup
+    const allExistingPositions = await db.select().from(politicalPositions);
     const positionCache = new Map<string, string>();
     const usedHandles = new Set<string>();
 
@@ -4780,7 +4784,11 @@ export class DatabaseStorage implements IStorage {
     for (const row of candidates) {
       const office = (row.office || "").trim();
       const district = (row.district || "").trim();
+      const state = (row.state || "").trim();
       const level = (row.officeLevel || "State").trim();
+
+      // Determine the jurisdiction: prefer the explicit STATE column, fall back to district text parsing
+      const jurisdiction = state || district || "Statewide";
 
       let positionTitle: string;
       if (district && district !== "Statewide") {
@@ -4790,14 +4798,16 @@ export class DatabaseStorage implements IStorage {
       }
 
       let positionId: string | null = null;
-      const cacheKey = positionTitle.toLowerCase();
+      // Cache key includes jurisdiction to prevent cross-state collisions (e.g. same district number in two states)
+      const cacheKey = `${positionTitle.toLowerCase()}|${jurisdiction.toLowerCase()}`;
 
       if (positionCache.has(cacheKey)) {
         positionId = positionCache.get(cacheKey)!;
       } else {
-        const existingPositions = await db.select().from(politicalPositions);
-        const existing = existingPositions.find(
-          p => p.title.toLowerCase() === positionTitle.toLowerCase()
+        // Match by title + jurisdiction + district (all three) to prevent duplicates across states/cycles
+        const existing = allExistingPositions.find(p =>
+          p.title.toLowerCase() === positionTitle.toLowerCase() &&
+          (p.jurisdiction || "").toLowerCase() === jurisdiction.toLowerCase()
         );
         if (existing) {
           positionId = existing.id;
@@ -4810,12 +4820,14 @@ export class DatabaseStorage implements IStorage {
             title: positionTitle,
             officeType,
             level: level.toLowerCase() === "federal" ? "federal" : "state",
-            jurisdiction: district || "Statewide",
+            jurisdiction,
             district: district !== "Statewide" ? district : undefined,
             isElected: true,
             isActive: true,
           }).returning();
           positionId = newPos.id;
+          // Add to in-memory list so subsequent rows in the same batch find it
+          allExistingPositions.push(newPos);
           positionCache.set(cacheKey, positionId);
           positions_created++;
         }
@@ -4846,7 +4858,12 @@ export class DatabaseStorage implements IStorage {
         await db.update(politicianProfiles).set({
           party: row.party || undefined,
           isCurrent: row.isIncumbent === "Yes",
-          website: row.ballotpediaUrl || undefined,
+          ballotpediaUrl: row.ballotpediaUrl || undefined,
+          website: row.website || undefined,
+          email: row.email || undefined,
+          phone: row.phone || undefined,
+          biography: row.biography || undefined,
+          fecCandidateId: row.fecCandidateId || undefined,
           termStart: row.primaryDate || undefined,
           termEnd: row.generalDate || undefined,
           notes: notesText,
@@ -4860,7 +4877,12 @@ export class DatabaseStorage implements IStorage {
           fullName,
           party: row.party || null,
           isCurrent: row.isIncumbent === "Yes",
-          website: row.ballotpediaUrl || null,
+          ballotpediaUrl: row.ballotpediaUrl || null,
+          website: row.website || null,
+          email: row.email || null,
+          phone: row.phone || null,
+          biography: row.biography || null,
+          fecCandidateId: row.fecCandidateId || null,
           termStart: row.primaryDate || null,
           termEnd: row.generalDate || null,
           notes: notesText,
@@ -4871,9 +4893,10 @@ export class DatabaseStorage implements IStorage {
         created++;
       }
 
+      // Photo: use PHOTO_URL from sheet first, then auto-fetch from Ballotpedia/Wikipedia
       if (!existingPhotoUrl) {
-        let photoUrl: string | null = null;
-        if (row.ballotpediaUrl) {
+        let photoUrl: string | null = row.photoUrl || null;
+        if (!photoUrl && row.ballotpediaUrl) {
           photoUrl = await fetchBallotpediaPhoto(row.ballotpediaUrl);
         }
         if (!photoUrl) {
@@ -4887,7 +4910,8 @@ export class DatabaseStorage implements IStorage {
         await new Promise(r => setTimeout(r, 50));
       }
 
-      const stateAbbr = getStateAbbrFromDistrict(district);
+      // Generate @handle from name + state abbreviation
+      const stateAbbr = getStateAbbrFromText(state) || getStateAbbrFromText(district);
       if (stateAbbr) {
         let handle = buildHandle(fullName, stateAbbr);
         if (handle) {

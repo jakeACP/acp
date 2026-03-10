@@ -27,8 +27,8 @@ export const TEMPLATES = {
   },
   candidates: {
     filename: "candidates_template.csv",
-    headers: ["FULL_NAME","OFFICE","OFFICE_LEVEL","DISTRICT","PARTY","INCUMBENT","STATUS","ELECTION_TYPE","PRIMARY_DATE","GENERAL_DATE","BALLOTPEDIA_URL","NOTES"],
-    sample: ["Jane Smith","U.S. Senate","Federal","Minnesota","Democratic","No","Candidacy Declared","General","August 11, 2026","November 3, 2026","https://ballotpedia.org/Jane_Smith",""],
+    headers: ["FULL_NAME","PROFILE_TYPE","OFFICE","OFFICE_LEVEL","STATE","DISTRICT","PARTY","INCUMBENT","STATUS","PRIMARY_DATE","GENERAL_DATE","FEC_CANDIDATE_ID","BALLOTPEDIA_URL","WEBSITE","EMAIL","PHONE","BIOGRAPHY","PHOTO_URL","NOTES"],
+    sample: ["Jane Smith","candidate","U.S. Senate","Federal","Minnesota","","Democratic","No","Candidacy Declared","August 11, 2026","November 3, 2026","S0MN00123","https://ballotpedia.org/Jane_Smith","https://janesmith.com","jane@janesmith.com","651-555-0100","Brief bio here","",""],
   },
   representatives: {
     filename: "representatives_template.csv",
