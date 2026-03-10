@@ -915,7 +915,7 @@ export default function AdminPoliticiansPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <AdminNavigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full px-4 sm:px-6 lg:px-10 py-8">
         <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Politicians Management</h1>
