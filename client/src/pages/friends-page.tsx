@@ -284,11 +284,11 @@ export default function FriendsPage() {
                   <DialogTrigger asChild>
                     <Button 
                       variant="outline" 
-                      className="w-full justify-start"
+                      className="w-full justify-start truncate"
                       data-testid="button-search-by-email"
                     >
-                      <Search className="h-4 w-4 mr-2 text-primary" />
-                      Search by Email/Phone/Username
+                      <Search className="h-4 w-4 mr-2 shrink-0 text-primary" />
+                      <span className="truncate">Search by Email / Username</span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-lg">
