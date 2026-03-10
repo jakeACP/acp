@@ -1349,6 +1349,10 @@ export const politicianProfiles = pgTable("politician_profiles", {
   claimToken: text("claim_token"), // Email-based claim verification token
   claimTokenExpiry: timestamp("claim_token_expiry"), // Token expiry (72h)
   totalContributions: bigint("total_contributions", { mode: "number" }), // Grand total contributions in dollars, sourced from BallotPedia
+  fecCandidateId: text("fec_candidate_id"), // FEC candidate ID, e.g. H8MN06059
+  numericScore: real("numeric_score"), // 0–100 computed corruption score
+  communityAdj: real("community_adj").default(0), // Manual admin adjustment, capped ±5 pts
+  gradeExplanation: json("grade_explanation"), // Metric values, weights, sources used
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -1433,6 +1437,46 @@ export const politicianSigSponsorships = pgTable("politician_sig_sponsorships", 
   sigIndex: index("sig_sponsorship_sig_idx").on(table.sigId),
   relationshipIndex: index("sig_sponsorship_relationship_idx").on(table.relationshipType),
   uniquePoliticianSig: sql`UNIQUE(${table.politicianId}, ${table.sigId})`,
+}));
+
+// Grading Algorithm Settings — configurable weights for the corruption grading formula
+export const gradingAlgorithmSettings = pgTable("grading_algorithm_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // Top-level formula weights (should sum to 1.0)
+  dataScoreWeight: real("data_score_weight").default(0.85).notNull(),
+  pledgeScoreWeight: real("pledge_score_weight").default(0.10).notNull(),
+  communityAdjWeight: real("community_adj_weight").default(0.05).notNull(),
+  // DataScore sub-weights (each 0–50, controls how much each metric influences DataScore)
+  committeeSharePenalty: real("committee_share_penalty").default(40.0).notNull(),
+  smallDollarBonus: real("small_dollar_bonus").default(25.0).notNull(),
+  individualShareBonus: real("individual_share_bonus").default(20.0).notNull(),
+  sigMoneyWeight: real("sig_money_weight").default(15.0).notNull(),
+  // Grade cutoffs on 0–100 scale
+  gradeACutoff: real("grade_a_cutoff").default(80).notNull(),
+  gradeBCutoff: real("grade_b_cutoff").default(60).notNull(),
+  gradeCCutoff: real("grade_c_cutoff").default(40).notNull(),
+  gradeDCutoff: real("grade_d_cutoff").default(20).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+});
+
+// FEC Candidate Totals — caches raw FEC API responses to avoid hammering rate limits
+export const fecCandidateTotals = pgTable("fec_candidate_totals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fecCandidateId: text("fec_candidate_id").notNull(),
+  cycle: integer("cycle"), // election cycle year e.g. 2024
+  receipts: real("receipts"), // total receipts
+  individualContributions: real("individual_contributions"),
+  individualUnitemized: real("individual_unitemized"), // small-dollar (<$200)
+  partyContributions: real("party_contributions"),
+  otherCommitteeContributions: real("other_committee_contributions"),
+  candidateContribution: real("candidate_contribution"), // self-funding
+  loansFromCandidate: real("loans_from_candidate"),
+  payloadJson: json("payload_json"), // raw FEC API response
+  fetchedAt: timestamp("fetched_at").defaultNow(),
+}, (table) => ({
+  fecCandidateIdIndex: index("fec_candidate_totals_candidate_idx").on(table.fecCandidateId),
+  cycleIndex: index("fec_candidate_totals_cycle_idx").on(table.cycle),
 }));
 
 // Voter Verification Requests - Secure storage of voter verification data
@@ -2240,6 +2284,11 @@ export type SignalComment = typeof signalComments.$inferSelect;
 export type InsertSignalComment = z.infer<typeof insertSignalCommentSchema>;
 
 // Signal with author info for feed display
+export type GradingAlgorithmSettings = typeof gradingAlgorithmSettings.$inferSelect;
+export type FecCandidateTotals = typeof fecCandidateTotals.$inferSelect;
+export type InsertFecCandidateTotals = typeof fecCandidateTotals.$inferInsert;
+export type PoliticianProfile = typeof politicianProfiles.$inferSelect;
+
 export type SignalWithAuthor = Signal & {
   author: {
     id: string;

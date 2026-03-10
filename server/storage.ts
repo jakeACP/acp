@@ -1,5 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
+import { gradingAlgorithmSettings, fecCandidateTotals, type GradingAlgorithmSettings, type FecCandidateTotals } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
@@ -243,6 +244,13 @@ export interface IStorage {
   updatePoliticianSponsorship(id: string, patch: Partial<PoliticianSigSponsorship>): Promise<PoliticianSigSponsorship>;
   recalculateGradeFromSigs(politicianId: string): Promise<string>;
   unlinkSponsorFromPolitician(politicianId: string, sigId: string): Promise<void>;
+  getGradingConfig(): Promise<GradingAlgorithmSettings>;
+  updateGradingConfig(patch: Partial<GradingAlgorithmSettings>): Promise<GradingAlgorithmSettings>;
+  fetchFecCandidateTotals(fecCandidateId: string): Promise<{ individualShare: number; smallDollarShare: number; committeeShare: number; selfFundingShare: number; receipts: number } | null>;
+  lookupFecCandidateId(name: string, state?: string, office?: string): Promise<string | null>;
+  computePoliticianGrade(politicianId: string): Promise<{ grade: string; numericScore: number; explanation: any }>;
+  regradeAllProfiles(): Promise<{ regraded: number; errors: string[] }>;
+  setCommunityAdj(politicianId: string, adj: number): Promise<void>;
   getPoliticiansBySig(sigId: string): Promise<any[]>;
 
   // Boycotts
@@ -3608,14 +3616,15 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Shared BallotPedia / Wikipedia helpers ──────────────────────────────
 
-  private async _fetchEnrichedData(profile: { fullName: string; website?: string | null; ballotpediaUrl?: string | null }): Promise<{
+  private async _fetchEnrichedData(profile: { id?: string; fullName: string; website?: string | null; ballotpediaUrl?: string | null; state?: string | null }): Promise<{
     photoUrl?: string;
     website?: string;
     socialMedia?: Record<string, string>;
     biography?: string;
     totalContributions?: number;
+    fecCandidateId?: string;
   }> {
-    const result: { photoUrl?: string; website?: string; socialMedia?: Record<string, string>; biography?: string; totalContributions?: number } = {};
+    const result: { photoUrl?: string; website?: string; socialMedia?: Record<string, string>; biography?: string; totalContributions?: number; fecCandidateId?: string } = {};
 
     // Try BallotPedia first
     if (profile.ballotpediaUrl) {
@@ -3716,6 +3725,14 @@ export class DatabaseStorage implements IStorage {
       }
     } catch { /* ignore */ }
 
+    // FEC candidate ID lookup if not already known
+    if (profile.id && !(profile as any).fecCandidateId) {
+      try {
+        const fecId = await this.lookupFecCandidateId(profile.fullName, profile.state ?? undefined);
+        if (fecId) result.fecCandidateId = fecId;
+      } catch { /* ignore */ }
+    }
+
     return result;
   }
 
@@ -3723,7 +3740,7 @@ export class DatabaseStorage implements IStorage {
     const profile = await this.getPoliticianProfile(id);
     if (!profile) return { updated: false, fields: [] };
 
-    const enriched = await this._fetchEnrichedData(profile);
+    const enriched = await this._fetchEnrichedData(profile as any);
     const patch: Partial<PoliticianProfile> = {};
     const fields: string[] = [];
 
@@ -3738,6 +3755,10 @@ export class DatabaseStorage implements IStorage {
     if (enriched.totalContributions != null) {
       (patch as any).totalContributions = enriched.totalContributions;
       fields.push("totalContributions");
+    }
+    if (enriched.fecCandidateId && !(profile as any).fecCandidateId) {
+      (patch as any).fecCandidateId = enriched.fecCandidateId;
+      fields.push("fecCandidateId");
     }
 
     if (fields.length === 0) return { updated: false, fields: [] };
@@ -4063,6 +4084,235 @@ export class DatabaseStorage implements IStorage {
       .set({ corruptionGrade: grade })
       .where(eq(politicianProfiles.id, politicianId));
     return grade;
+  }
+
+  // ─── Grading Config ───────────────────────────────────────────────────────
+
+  async getGradingConfig(): Promise<GradingAlgorithmSettings> {
+    const [row] = await db.select().from(gradingAlgorithmSettings).limit(1);
+    if (row) return row;
+    // Seed defaults
+    const [created] = await db.insert(gradingAlgorithmSettings).values({}).returning();
+    return created;
+  }
+
+  async updateGradingConfig(patch: Partial<GradingAlgorithmSettings>): Promise<GradingAlgorithmSettings> {
+    const existing = await this.getGradingConfig();
+    const [updated] = await db
+      .update(gradingAlgorithmSettings)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(gradingAlgorithmSettings.id, existing.id))
+      .returning();
+    return updated;
+  }
+
+  // ─── FEC Data Fetching ─────────────────────────────────────────────────────
+
+  async lookupFecCandidateId(name: string, state?: string, office?: string): Promise<string | null> {
+    try {
+      const params = new URLSearchParams({ q: name, api_key: process.env.FEC_API_KEY ?? '', per_page: '5' });
+      if (state) params.set('state', state);
+      if (office) params.set('office', office);
+      const res = await fetch(`https://api.open.fec.gov/v1/candidates/search/?${params}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return null;
+      const data: any = await res.json();
+      const results: any[] = data?.results ?? [];
+      if (results.length === 0) return null;
+      // Prefer active candidate (has_raised_funds) with name closest to query
+      const sorted = results.sort((a: any, b: any) => {
+        const aActive = a.has_raised_funds ? 0 : 1;
+        const bActive = b.has_raised_funds ? 0 : 1;
+        return aActive - bActive;
+      });
+      return sorted[0]?.candidate_id ?? null;
+    } catch { return null; }
+  }
+
+  async fetchFecCandidateTotals(fecCandidateId: string): Promise<{ individualShare: number; smallDollarShare: number; committeeShare: number; selfFundingShare: number; receipts: number } | null> {
+    // Check cache — skip if fetched within 48 hours
+    const [cached] = await db
+      .select()
+      .from(fecCandidateTotals)
+      .where(eq(fecCandidateTotals.fecCandidateId, fecCandidateId))
+      .orderBy(desc(fecCandidateTotals.fetchedAt))
+      .limit(1);
+
+    const cacheExpiry = 48 * 60 * 60 * 1000; // 48 hours in ms
+    if (cached && cached.fetchedAt && (Date.now() - new Date(cached.fetchedAt).getTime()) < cacheExpiry) {
+      return this._computeFecMetrics(cached);
+    }
+
+    // Fetch fresh from FEC
+    try {
+      const params = new URLSearchParams({
+        api_key: process.env.FEC_API_KEY ?? '',
+        sort: '-cycle',
+        per_page: '1',
+      });
+      const res = await fetch(`https://api.open.fec.gov/v1/candidate/${fecCandidateId}/totals/?${params}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return cached ? this._computeFecMetrics(cached) : null;
+      const data: any = await res.json();
+      const result = data?.results?.[0];
+      if (!result) return null;
+
+      const [saved] = await db.insert(fecCandidateTotals).values({
+        fecCandidateId,
+        cycle: result.cycle ?? null,
+        receipts: result.receipts ?? null,
+        individualContributions: result.individual_contributions ?? null,
+        individualUnitemized: result.individual_unitemized_contributions ?? null,
+        partyContributions: result.party_full ?? null,
+        otherCommitteeContributions: result.other_political_committee_contributions ?? null,
+        candidateContribution: result.candidate_contribution ?? null,
+        loansFromCandidate: result.loans_from_candidate ?? null,
+        payloadJson: result,
+        fetchedAt: new Date(),
+      }).returning();
+      return this._computeFecMetrics(saved);
+    } catch { return cached ? this._computeFecMetrics(cached) : null; }
+  }
+
+  private _computeFecMetrics(row: FecCandidateTotals): { individualShare: number; smallDollarShare: number; committeeShare: number; selfFundingShare: number; receipts: number } {
+    const receipts = row.receipts ?? 0;
+    if (receipts === 0) return { individualShare: 0, smallDollarShare: 0, committeeShare: 0, selfFundingShare: 0, receipts: 0 };
+    const individual = row.individualContributions ?? 0;
+    const unitemized = row.individualUnitemized ?? 0;
+    const committee = row.otherCommitteeContributions ?? 0;
+    const selfFunding = (row.candidateContribution ?? 0) + (row.loansFromCandidate ?? 0);
+    return {
+      receipts,
+      individualShare: individual / receipts,
+      smallDollarShare: individual > 0 ? unitemized / individual : 0,
+      committeeShare: committee / receipts,
+      selfFundingShare: selfFunding / receipts,
+    };
+  }
+
+  // ─── Grading Algorithm ─────────────────────────────────────────────────────
+
+  async computePoliticianGrade(politicianId: string): Promise<{ grade: string; numericScore: number; explanation: any }> {
+    const config = await this.getGradingConfig();
+    const profile = await this.getPoliticianProfile(politicianId);
+    if (!profile) throw new Error(`Profile ${politicianId} not found`);
+
+    const explanation: any = { sources: [], metrics: {} };
+
+    // ── DataScore ──────────────────────────────────────────────────────────
+    let dataScore = 100;
+    const fecId = (profile as any).fecCandidateId as string | null;
+    if (fecId) {
+      const fec = await this.fetchFecCandidateTotals(fecId);
+      if (fec) {
+        explanation.sources.push('FEC');
+        explanation.metrics.fec = fec;
+        const committeePenalty = config.committeeSharePenalty * fec.committeeShare;
+        const smallDollarBonusAmt = config.smallDollarBonus * fec.smallDollarShare;
+        const indivBonus = fec.individualShare > 0.5 ? config.individualShareBonus * (fec.individualShare - 0.5) * 2 : 0;
+        dataScore -= committeePenalty;
+        dataScore += smallDollarBonusAmt;
+        dataScore += indivBonus;
+        explanation.metrics.committeePenalty = committeePenalty;
+        explanation.metrics.smallDollarBonus = smallDollarBonusAmt;
+        explanation.metrics.individualBonus = indivBonus;
+      }
+    }
+
+    // SIG money penalty within DataScore
+    const sponsorships = await this.listPoliticianSponsors(politicianId);
+    let sigWeightedScore = 0;
+    for (const s of sponsorships) {
+      if (!s.sig || s.sig.isAce) continue;
+      const rankMult = s.sigRank ? 1 / s.sigRank : 1.0;
+      sigWeightedScore += (s.reportedAmount ?? 0) * (s.sig.gradeWeight ?? 1.0) * rankMult;
+    }
+    // Normalize: $1M+ in SIG money → full penalty; map to 0–1 scale
+    const sigNorm = Math.min(sigWeightedScore / 1_000_000, 1.0);
+    const sigPenalty = config.sigMoneyWeight * sigNorm;
+    dataScore -= sigPenalty;
+    explanation.sources.push('SIG');
+    explanation.metrics.sigWeightedScore = sigWeightedScore;
+    explanation.metrics.sigPenalty = sigPenalty;
+    dataScore = Math.max(0, Math.min(100, dataScore));
+
+    // ── PledgeScore ───────────────────────────────────────────────────────
+    let pledgeScore = 100; // start optimistic
+    let aceCount = 0;
+    for (const s of sponsorships) {
+      if (!s.sig) continue;
+      if (s.sig.isAce) {
+        aceCount++;
+      } else {
+        // Non-ACE SIG money reduces pledge score
+        const tierPenalty = sigWeightedScore > 1_000_000 ? 80 : sigWeightedScore > 500_000 ? 60 : sigWeightedScore > 100_000 ? 40 : sigWeightedScore > 0 ? 20 : 0;
+        pledgeScore = Math.max(0, 100 - tierPenalty);
+        break;
+      }
+    }
+    if (aceCount > 0) pledgeScore = Math.min(100, pledgeScore + aceCount * 20);
+    pledgeScore = Math.max(0, Math.min(100, pledgeScore));
+    explanation.metrics.aceCount = aceCount;
+    explanation.metrics.pledgeScore = pledgeScore;
+
+    // ── CommunityAdj ──────────────────────────────────────────────────────
+    const communityAdj = Math.max(-5, Math.min(5, (profile as any).communityAdj ?? 0));
+    const communityAdjNorm = communityAdj * 20; // map ±5 → ±100
+
+    // ── FinalScore ────────────────────────────────────────────────────────
+    const finalScore = Math.max(0, Math.min(100,
+      config.dataScoreWeight * dataScore +
+      config.pledgeScoreWeight * pledgeScore +
+      config.communityAdjWeight * communityAdjNorm
+    ));
+
+    explanation.metrics.dataScore = dataScore;
+    explanation.metrics.finalScore = finalScore;
+    explanation.weights = {
+      dataScoreWeight: config.dataScoreWeight,
+      pledgeScoreWeight: config.pledgeScoreWeight,
+      communityAdjWeight: config.communityAdjWeight,
+    };
+
+    // ── Letter Grade ──────────────────────────────────────────────────────
+    let grade: string;
+    if (finalScore >= config.gradeACutoff) grade = 'A';
+    else if (finalScore >= config.gradeBCutoff) grade = 'B';
+    else if (finalScore >= config.gradeCCutoff) grade = 'C';
+    else if (finalScore >= config.gradeDCutoff) grade = 'D';
+    else grade = 'F';
+
+    // Persist
+    await db.update(politicianProfiles).set({
+      corruptionGrade: grade,
+      numericScore: finalScore,
+      gradeExplanation: explanation,
+    } as any).where(eq(politicianProfiles.id, politicianId));
+
+    return { grade, numericScore: finalScore, explanation };
+  }
+
+  async regradeAllProfiles(): Promise<{ regraded: number; errors: string[] }> {
+    const all = await db.select({ id: politicianProfiles.id }).from(politicianProfiles);
+    let regraded = 0;
+    const errors: string[] = [];
+    for (const p of all) {
+      try {
+        await this.computePoliticianGrade(p.id);
+        regraded++;
+      } catch (e: any) {
+        errors.push(`${p.id}: ${e?.message ?? 'unknown error'}`);
+      }
+      await new Promise(r => setTimeout(r, 50)); // avoid hammering FEC/DB
+    }
+    return { regraded, errors };
+  }
+
+  async setCommunityAdj(politicianId: string, adj: number): Promise<void> {
+    const clamped = Math.max(-5, Math.min(5, adj));
+    await db.update(politicianProfiles).set({ communityAdj: clamped } as any).where(eq(politicianProfiles.id, politicianId));
   }
 
   async importCongress(): Promise<{

@@ -4,9 +4,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Save, RotateCcw } from "lucide-react";
 import { useState, useEffect } from "react";
+
+interface GradingSettings {
+  id: string;
+  dataScoreWeight: number;
+  pledgeScoreWeight: number;
+  communityAdjWeight: number;
+  committeeSharePenalty: number;
+  smallDollarBonus: number;
+  individualShareBonus: number;
+  sigMoneyWeight: number;
+  gradeACutoff: number;
+  gradeBCutoff: number;
+  gradeCCutoff: number;
+  gradeDCutoff: number;
+  updatedAt: string | null;
+}
 
 interface AlgorithmSettings {
   id: string;
@@ -30,6 +47,10 @@ export default function AdminAlgorithmSettingsPage() {
   const { toast } = useToast();
   const [settings, setSettings] = useState<Partial<AlgorithmSettings>>({});
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Grading settings state
+  const [gradingSettings, setGradingSettings] = useState<Partial<GradingSettings>>({});
+  const [hasGradingChanges, setHasGradingChanges] = useState(false);
 
   const { data: currentSettings, isLoading } = useQuery<AlgorithmSettings>({
     queryKey: ["/api/admin/algorithm-settings"],
@@ -61,6 +82,44 @@ export default function AdminAlgorithmSettingsPage() {
       });
     },
   });
+
+  // Grading settings query + mutations
+  const { data: currentGradingSettings } = useQuery<GradingSettings>({
+    queryKey: ["/api/admin/grading-settings"],
+  });
+
+  useEffect(() => {
+    if (currentGradingSettings) {
+      setGradingSettings(currentGradingSettings);
+    }
+  }, [currentGradingSettings]);
+
+  const saveGradingMutation = useMutation({
+    mutationFn: async (data: Partial<GradingSettings>) => {
+      return await apiRequest("/api/admin/grading-settings", "POST", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/grading-settings"] });
+      toast({ title: "Grade Settings Saved", description: "Corruption grading algorithm updated." });
+      setHasGradingChanges(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleGradingSliderChange = (field: keyof GradingSettings, value: number[]) => {
+    setGradingSettings((prev) => ({ ...prev, [field]: value[0] }));
+    setHasGradingChanges(true);
+  };
+
+  const handleGradingNumberChange = (field: keyof GradingSettings, value: string) => {
+    const num = parseFloat(value);
+    if (!isNaN(num)) {
+      setGradingSettings((prev) => ({ ...prev, [field]: num }));
+      setHasGradingChanges(true);
+    }
+  };
 
   const handleSliderChange = (field: keyof AlgorithmSettings, value: number[]) => {
     setSettings((prev) => ({ ...prev, [field]: value[0] }));
@@ -388,6 +447,124 @@ export default function AdminAlgorithmSettingsPage() {
               </>
             )}
           </Button>
+        </div>
+
+        {/* ── Corruption Grading Algorithm ── */}
+        <div className="mt-10">
+          <div className="mb-4">
+            <h2 className="text-2xl font-bold mb-1">Corruption Grading Algorithm</h2>
+            <p className="text-muted-foreground text-sm">
+              Configure how politician corruption grades (A–F) are computed from FEC financial data, SIG sponsorships, and community input.
+            </p>
+            <div className="mt-2 rounded bg-muted px-3 py-2 text-sm font-mono text-muted-foreground">
+              FinalScore = <strong>{Math.round((gradingSettings.dataScoreWeight ?? 0.85) * 100)}%</strong> × DataScore
+              + <strong>{Math.round((gradingSettings.pledgeScoreWeight ?? 0.10) * 100)}%</strong> × PledgeScore
+              + <strong>{Math.round((gradingSettings.communityAdjWeight ?? 0.05) * 100)}%</strong> × CommunityAdj
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {/* Top-level weights */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Formula Weights</CardTitle>
+                <CardDescription>How much each component contributes to the final score (should sum to 100%)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {[
+                  { field: "dataScoreWeight" as const, label: "DataScore Weight", desc: "FEC financial data & SIG money signals", max: 1, step: 0.01, pct: true },
+                  { field: "pledgeScoreWeight" as const, label: "PledgeScore Weight", desc: "ACE sponsors and non-ACE SIG penalties", max: 1, step: 0.01, pct: true },
+                  { field: "communityAdjWeight" as const, label: "Community Adj Weight", desc: "Manual per-politician adjustment (±5 range)", max: 1, step: 0.01, pct: true },
+                ].map(({ field, label, desc, max, step, pct }) => (
+                  <div key={field} className="space-y-2">
+                    <div className="flex justify-between">
+                      <Label>{label}</Label>
+                      <span className="text-sm font-medium">
+                        {pct ? `${Math.round((gradingSettings[field] as number ?? 0) * 100)}%` : (gradingSettings[field] as number ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <Slider
+                      min={0} max={max} step={step}
+                      value={[gradingSettings[field] as number ?? 0]}
+                      onValueChange={(v) => handleGradingSliderChange(field, v)}
+                    />
+                    <p className="text-xs text-muted-foreground">{desc}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* DataScore sub-weights */}
+            <Card>
+              <CardHeader>
+                <CardTitle>DataScore Sub-Weights</CardTitle>
+                <CardDescription>Controls how FEC and SIG metrics influence the DataScore (starts at 100, then adjustments applied)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {[
+                  { field: "committeeSharePenalty" as const, label: "Committee Share Penalty", desc: "How much PAC/committee money hurts the score (per 100% of receipts)", max: 100 },
+                  { field: "smallDollarBonus" as const, label: "Small Dollar Bonus", desc: "Reward for small individual donors (<$200 unitemized)", max: 50 },
+                  { field: "individualShareBonus" as const, label: "Individual Share Bonus", desc: "Bonus when >50% of receipts come from individuals", max: 50 },
+                  { field: "sigMoneyWeight" as const, label: "SIG Money Weight", desc: "Penalty from linked special-interest group money (normalized to $1M)", max: 50 },
+                ].map(({ field, label, desc, max }) => (
+                  <div key={field} className="space-y-2">
+                    <div className="flex justify-between">
+                      <Label>{label}</Label>
+                      <span className="text-sm font-medium">{(gradingSettings[field] as number ?? 0).toFixed(1)}</span>
+                    </div>
+                    <Slider
+                      min={0} max={max} step={0.5}
+                      value={[gradingSettings[field] as number ?? 0]}
+                      onValueChange={(v) => handleGradingSliderChange(field, v)}
+                    />
+                    <p className="text-xs text-muted-foreground">{desc}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Grade cutoffs */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Grade Thresholds (0–100)</CardTitle>
+                <CardDescription>Minimum score required for each letter grade</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { field: "gradeACutoff" as const, label: "A cutoff" },
+                    { field: "gradeBCutoff" as const, label: "B cutoff" },
+                    { field: "gradeCCutoff" as const, label: "C cutoff" },
+                    { field: "gradeDCutoff" as const, label: "D cutoff" },
+                  ].map(({ field, label }) => (
+                    <div key={field} className="space-y-1">
+                      <Label>{label}</Label>
+                      <Input
+                        type="number"
+                        min={0} max={100} step={1}
+                        value={gradingSettings[field] ?? ""}
+                        onChange={(e) => handleGradingNumberChange(field, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Scores below D cutoff receive an F.</p>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={() => saveGradingMutation.mutate(gradingSettings)}
+                disabled={!hasGradingChanges || saveGradingMutation.isPending}
+              >
+                {saveGradingMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+                ) : (
+                  <><Save className="w-4 h-4 mr-2" />Save Grade Settings</>
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

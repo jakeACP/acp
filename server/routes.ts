@@ -4149,6 +4149,48 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Bulk regrade all profiles using the new configurable algorithm
+  app.post("/api/admin/politician-profiles/regrade", ensureAdmin, async (req, res) => {
+    try {
+      const result = await storage.regradeAllProfiles();
+      res.json(result);
+    } catch (error: any) {
+      console.error("Regrade all profiles error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Set community adjustment on a single profile
+  app.patch("/api/admin/politician-profiles/:id/community-adj", ensureAdmin, async (req, res) => {
+    try {
+      const { communityAdj } = req.body;
+      if (typeof communityAdj !== "number") return res.status(400).json({ message: "communityAdj must be a number" });
+      await storage.setCommunityAdj(req.params.id, communityAdj);
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Grading algorithm settings
+  app.get("/api/admin/grading-settings", ensureAdmin, async (req, res) => {
+    try {
+      const config = await storage.getGradingConfig();
+      res.json(config);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/grading-settings", ensureAdmin, async (req, res) => {
+    try {
+      const updated = await storage.updateGradingConfig(req.body);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Bulk import all Congress members from the XLSX file
   app.post("/api/admin/politicians/generate-handles", ensureAdmin, async (req, res) => {
     const STATE_NAME_TO_ABBR: Record<string, string> = {

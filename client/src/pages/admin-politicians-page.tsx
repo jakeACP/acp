@@ -78,6 +78,10 @@ type PoliticianProfile = {
   corruptionGrade?: string;
   corruptionScorecard?: string;
   totalContributions?: number | null;
+  numericScore?: number | null;
+  fecCandidateId?: string | null;
+  communityAdj?: number | null;
+  gradeExplanation?: any;
   isVerified?: boolean;
   claimRequestEmail?: string;
   claimRequestPhone?: string;
@@ -470,6 +474,18 @@ export default function AdminPoliticiansPage() {
     onError: (err: any) => toast({ title: "Refresh failed", description: err.message, variant: "destructive" }),
   });
 
+  const regradeAllMutation = useMutation({
+    mutationFn: async () => apiRequest("/api/admin/politician-profiles/regrade", "POST"),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({
+        title: "Regrade complete",
+        description: `${data.regraded ?? 0} profiles regraded${data.errors?.length ? `, ${data.errors.length} errors` : ""}.`,
+      });
+    },
+    onError: (err: any) => toast({ title: "Regrade failed", description: err.message, variant: "destructive" }),
+  });
+
   const handlePositionSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -508,6 +524,7 @@ export default function AdminPoliticiansPage() {
       termStart: formData.get("termStart") as string || undefined,
       termEnd: formData.get("termEnd") as string || undefined,
       totalContributions: formData.get("totalContributions") ? Number(formData.get("totalContributions")) : undefined,
+      fecCandidateId: (formData.get("fecCandidateId") as string) || undefined,
       isCurrent: formData.get("isCurrent") === "true",
       positionId: positionIdValue === "none" ? undefined : positionIdValue || undefined,
     };
@@ -1218,6 +1235,19 @@ export default function AdminPoliticiansPage() {
                       )}
                     </Button>
                     <Button
+                      variant="outline"
+                      onClick={() => regradeAllMutation.mutate()}
+                      disabled={regradeAllMutation.isPending}
+                      className="flex items-center gap-2"
+                      title="Regrade all profiles using the configurable corruption grading algorithm"
+                    >
+                      {regradeAllMutation.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" />Regrading...</>
+                      ) : (
+                        <><RefreshCw className="h-4 w-4" />Regrade Profiles</>
+                      )}
+                    </Button>
+                    <Button
                       onClick={() => {
                         setEditingProfile(null);
                         setUploadedPhotoUrl(undefined);
@@ -1408,6 +1438,7 @@ export default function AdminPoliticiansPage() {
                                   : <span className="text-slate-400">-</span>}
                               </TableCell>
                               <TableCell>
+                                <div className="flex items-center gap-1">
                                 <Select
                                   value={profile.corruptionGrade || "none"}
                                   onValueChange={(value) => {
@@ -1429,6 +1460,10 @@ export default function AdminPoliticiansPage() {
                                     <SelectItem value="F">F</SelectItem>
                                   </SelectContent>
                                 </Select>
+                                {profile.numericScore != null && (
+                                  <span className="text-xs text-slate-400">({Math.round(profile.numericScore)})</span>
+                                )}
+                                </div>
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
@@ -1870,6 +1905,17 @@ export default function AdminPoliticiansPage() {
                   placeholder="e.g. 152782583 (whole dollars, from BallotPedia)"
                 />
                 <p className="text-xs text-slate-400">Career total raised in dollars. Leave blank to auto-populate from Refresh Data.</p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="fecCandidateId">FEC Candidate ID (optional)</Label>
+                <Input
+                  id="fecCandidateId"
+                  name="fecCandidateId"
+                  defaultValue={editingProfile?.fecCandidateId ?? ""}
+                  placeholder="e.g. H8MN06059"
+                />
+                <p className="text-xs text-slate-400">FEC.gov candidate ID for financial data. Auto-looked up during Refresh Data if blank.</p>
               </div>
 
               <div className="grid gap-2">

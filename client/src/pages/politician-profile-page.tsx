@@ -442,12 +442,17 @@ export default function PoliticianProfilePage() {
                 <div className="text-center">
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Admin</p>
                   {profile.corruptionGrade ? (
+                    <>
                     <div 
                       className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl font-bold ${getCorruptionGradeColor(profile.corruptionGrade)}`}
                       data-testid="badge-admin-grade"
                     >
                       {profile.corruptionGrade}
                     </div>
+                    {(profile as any).numericScore != null && (
+                      <p className="text-xs text-gray-500 mt-1">{Math.round((profile as any).numericScore)}/100</p>
+                    )}
+                    </>
                   ) : (
                     <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-400">
                       N/A
@@ -562,6 +567,40 @@ export default function PoliticianProfilePage() {
                 {profile.biography}
               </p>
             </div>
+          )}
+
+          {(profile as any).gradeExplanation && (profile as any).numericScore != null && (
+            <details className="mt-6 border rounded-lg p-3 bg-gray-50 dark:bg-gray-800">
+              <summary className="text-sm font-medium cursor-pointer text-gray-700 dark:text-gray-300 select-none">
+                How was this grade calculated? ({Math.round((profile as any).numericScore)}/100)
+              </summary>
+              <div className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-400">
+                {(() => {
+                  const expl = (profile as any).gradeExplanation as any;
+                  const m = expl?.metrics ?? {};
+                  const w = expl?.weights ?? {};
+                  return (
+                    <div className="space-y-1">
+                      <p className="font-medium text-gray-700 dark:text-gray-300">Sources: {(expl?.sources ?? []).join(', ') || 'SIG data'}</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                        {m.dataScore != null && <><span>Data Score:</span><span className="font-mono">{m.dataScore.toFixed(1)}/100</span></>}
+                        {m.pledgeScore != null && <><span>Pledge Score:</span><span className="font-mono">{m.pledgeScore.toFixed(1)}/100</span></>}
+                        {m.aceCount != null && <><span>ACE sponsors:</span><span className="font-mono">{m.aceCount}</span></>}
+                        {m.fec?.receipts != null && <><span>FEC receipts:</span><span className="font-mono">${Math.round(m.fec.receipts).toLocaleString()}</span></>}
+                        {m.fec?.committeeShare != null && <><span>PAC/committee share:</span><span className="font-mono">{(m.fec.committeeShare * 100).toFixed(1)}%</span></>}
+                        {m.fec?.smallDollarShare != null && <><span>Small-dollar share:</span><span className="font-mono">{(m.fec.smallDollarShare * 100).toFixed(1)}%</span></>}
+                        {m.fec?.individualShare != null && <><span>Individual share:</span><span className="font-mono">{(m.fec.individualShare * 100).toFixed(1)}%</span></>}
+                      </div>
+                      {w.dataScoreWeight != null && (
+                        <p className="text-gray-500 pt-1">
+                          Formula: {Math.round(w.dataScoreWeight * 100)}% Data + {Math.round(w.pledgeScoreWeight * 100)}% Pledge + {Math.round(w.communityAdjWeight * 100)}% Community
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </details>
           )}
         </CardContent>
       </Card>
