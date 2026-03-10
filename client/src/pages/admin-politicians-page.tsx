@@ -744,6 +744,7 @@ export default function AdminPoliticiansPage() {
       || (profileSubFilter === "representatives" ? (p.profileType === "representative" || !p.profileType) : false)
       || (profileSubFilter === "candidates" ? p.profileType === "candidate" : false)
       || (profileSubFilter === "delegates" ? p.profileType === "delegate" : false)
+      || (profileSubFilter === "active" ? !!p.isCurrent : false)
       || (profileSubFilter === "former" ? !p.isCurrent : false);
     return matchSearch && matchParty && matchGrade && matchStatus && matchState && matchSubFilter;
   });
@@ -1597,6 +1598,7 @@ export default function AdminPoliticiansPage() {
                     { key: "representatives", label: "Representatives" },
                     { key: "candidates", label: "Candidates" },
                     { key: "delegates", label: "Delegates" },
+                    { key: "active", label: "Active" },
                     { key: "former", label: "Inactive" },
                   ].map(({ key, label }) => (
                     <button
@@ -1614,6 +1616,7 @@ export default function AdminPoliticiansPage() {
                         {key === "representatives" && profiles.filter(p => p.profileType === "representative" || !p.profileType).length}
                         {key === "candidates" && profiles.filter(p => p.profileType === "candidate").length}
                         {key === "delegates" && profiles.filter(p => p.profileType === "delegate").length}
+                        {key === "active" && profiles.filter(p => p.isCurrent).length}
                         {key === "former" && profiles.filter(p => !p.isCurrent).length}
                       </span>
                     </button>
