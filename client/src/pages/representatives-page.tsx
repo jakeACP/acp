@@ -23,6 +23,7 @@ type RepEntry = {
   rejectsAIPAC: boolean;
   photoUrl?: string;
   isVerified?: boolean;
+  isCurrent?: boolean;
   profileType?: string;
   position?: {
     title: string;
@@ -192,6 +193,11 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{pol.fullName}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{pol.position?.title}</p>
             <div className="flex flex-wrap gap-1.5 mt-2">
+              {pol.isCurrent !== false ? (
+                <span className="text-xs font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">Incumbent</span>
+              ) : (
+                <span className="text-xs font-medium px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Candidate</span>
+              )}
               {pol.party && (
                 <span className={`text-xs font-medium px-2 py-0.5 rounded ${partyBadgeClass(pol.party)}`}>{pol.party}</span>
               )}
@@ -372,13 +378,26 @@ export default function RepresentativesPage() {
                 {zipData && !zipFetching && (
                   <div className="mt-3">
                     <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                      Showing reps for <strong>{zipData.zipCode}</strong> — <strong>{zipData.state}</strong>, {zipData.districtLabel}
+                      <strong>{zipData.state}</strong> — {zipData.districtLabel} &middot; {zipData.politicians.length} found
                     </p>
                     {zipData.politicians.length === 0 ? (
                       <p className="text-xs text-slate-400 italic">No profiles found for this district yet.</p>
                     ) : (
-                      <div className="flex flex-col gap-2">
-                        {zipData.politicians.map(p => <ZipRepCard key={p.id} pol={p} />)}
+                      <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                        {/* Incumbents first */}
+                        {zipData.politicians.filter(p => p.isCurrent !== false).length > 0 && (
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400 mt-1">
+                            Current Officeholders
+                          </p>
+                        )}
+                        {zipData.politicians.filter(p => p.isCurrent !== false).map(p => <ZipRepCard key={p.id} pol={p} />)}
+                        {/* Candidates */}
+                        {zipData.politicians.filter(p => p.isCurrent === false).length > 0 && (
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 mt-2">
+                            Candidates &amp; Challengers
+                          </p>
+                        )}
+                        {zipData.politicians.filter(p => p.isCurrent === false).map(p => <ZipRepCard key={p.id} pol={p} />)}
                       </div>
                     )}
                   </div>

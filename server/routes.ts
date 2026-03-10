@@ -2258,7 +2258,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         }
       }
 
-      const politicians = await storage.getPoliticiansByPositionTitles(positionTitles);
+      // Use the broader query: match all federal Senate/House politicians by state,
+      // including both incumbents (is_current=true) and candidates/challengers.
+      const politicians = await storage.getPoliticiansByStateAndDistrict(
+        primaryState,
+        locations.map(l => l.districtNum)
+      );
 
       // Attach SIG sponsor summary to each politician
       const politiciansWithSponsors = await Promise.all(politicians.map(async (p) => {

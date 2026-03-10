@@ -201,6 +201,7 @@ export interface IStorage {
   listPoliticianProfiles(filters?: { positionId?: string; isCurrent?: boolean }): Promise<any[]>;
   listPoliticiansWithSigs(): Promise<any[]>;
   getPoliticiansByPositionTitles(titles: string[]): Promise<any[]>;
+  getPoliticiansByStateAndDistrict(stateName: string, congressionalDistricts: number[]): Promise<any[]>;
   getPoliticianProfile(id: string): Promise<any>;
   createPoliticianProfile(data: InsertPoliticianProfile): Promise<PoliticianProfile>;
   updatePoliticianProfile(id: string, patch: Partial<PoliticianProfile>): Promise<PoliticianProfile>;
@@ -3475,6 +3476,58 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(politicalPositions.title);
     return results.map(r => ({ ...r.politician, position: r.position }));
+  }
+
+  async getPoliticiansByStateAndDistrict(stateName: string, congressionalDistricts: number[]): Promise<any[]> {
+    // Return ALL politicians (incumbents + candidates) whose position jurisdiction matches the state
+    // and whose position is a federal Senate or House office.
+    // Ordered: incumbents first, then candidates alphabetically.
+    const results = await db.execute(sql`
+      SELECT pol.*, pos.title as pos_title, pos.office_type as pos_office_type,
+             pos.level as pos_level, pos.jurisdiction as pos_jurisdiction,
+             pos.district as pos_district, pos.term_length as pos_term_length,
+             pos.is_elected as pos_is_elected, pos.display_order as pos_display_order,
+             pos.id as pos_id
+      FROM politician_profiles pol
+      JOIN political_positions pos ON pol.position_id = pos.id
+      WHERE pos.level = 'federal'
+        AND (
+          pos.jurisdiction ILIKE ${'%' + stateName + '%'}
+          OR pos.title ILIKE ${'%' + stateName + '%'}
+        )
+        AND (
+          pos.title ILIKE '%senator%'
+          OR pos.title ILIKE '%senate%'
+          OR pos.title ILIKE '%representative%'
+          OR pos.office_type ILIKE '%house%'
+          OR pos.office_type ILIKE '%senate%'
+        )
+      ORDER BY pol.is_current DESC, pol.full_name ASC
+    `);
+    return (results.rows as any[]).map(r => ({
+      id: r.id,
+      fullName: r.full_name,
+      party: r.party,
+      state: r.state,
+      photoUrl: r.photo_url,
+      handle: r.handle,
+      corruptionGrade: r.corruption_grade,
+      numericScore: r.numeric_score,
+      isCurrent: r.is_current,
+      isVerified: r.is_verified,
+      profileType: r.profile_type,
+      position: {
+        id: r.pos_id,
+        title: r.pos_title,
+        officeType: r.pos_office_type,
+        level: r.pos_level,
+        jurisdiction: r.pos_jurisdiction,
+        district: r.pos_district,
+        termLength: r.pos_term_length,
+        isElected: r.pos_is_elected,
+        displayOrder: r.pos_display_order,
+      },
+    }));
   }
 
   async getPoliticianProfile(id: string): Promise<any> {
