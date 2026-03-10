@@ -745,9 +745,9 @@ export default function AdminPoliticiansPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <Button
               variant="outline"
-              onClick={() => downloadCsv(TEMPLATES.politicians.filename, TEMPLATES.politicians.headers, TEMPLATES.politicians.sample)}
+              onClick={() => downloadCsv(TEMPLATES.candidates.filename, TEMPLATES.candidates.headers, TEMPLATES.candidates.sample)}
               className="flex items-center gap-2"
-              title="Download blank CSV template for politician data"
+              title="Download blank CSV template for candidate/politician import"
             >
               <FileDown className="w-4 h-4" />
               Download Template
