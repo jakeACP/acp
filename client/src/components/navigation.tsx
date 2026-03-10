@@ -37,7 +37,7 @@ export function Navigation() {
     { href: "/messages", label: "Messages" },
     { href: "/representatives", label: "Current Reps" },
     { href: "/sigs", label: "Interest Groups" },
-    { href: "/candidates", label: "Candidates" },
+    { href: "/elections", label: "Elections" },
   ];
 
   const handleLogout = () => {

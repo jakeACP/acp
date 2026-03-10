@@ -14,6 +14,9 @@ import GroupsPage from "@/pages/groups-page";
 import PollsPage from "@/pages/polls-page";
 import CandidatesPage from "@/pages/candidates-page";
 import CandidateProfilePage from "@/pages/candidate-profile-page";
+import ElectionsPage from "@/pages/elections-page";
+import ElectionPositionsPage from "@/pages/election-positions-page";
+import ElectionRacePage from "@/pages/election-race-page";
 import PoliticianProfilePage from "@/pages/politician-profile-page";
 import MessagesPage from "@/pages/messages-page";
 import RepresentativesPage from "@/pages/representatives-page";
@@ -131,6 +134,9 @@ function Router() {
       <ProtectedRoute path="/groups" component={GroupsPage} />
       <ProtectedRoute path="/polls" component={PollsPage} />
       <ProtectedRoute path="/polls/:id" component={PollDetailPage} />
+      <ProtectedRoute path="/elections" component={ElectionsPage} />
+      <ProtectedRoute path="/elections/positions" component={ElectionPositionsPage} />
+      <ProtectedRoute path="/elections/race" component={ElectionRacePage} />
       <ProtectedRoute path="/candidates" component={CandidatesPage} />
       <ProtectedRoute path="/candidates/:id" component={CandidateProfilePage} />
       <ProtectedRoute path="/politicians/handle/:handle" component={PoliticianHandleRedirect} />

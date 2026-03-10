@@ -4279,6 +4279,74 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Elections — Race lookup: returns politicians from DB matching an office name + state
+  app.get("/api/elections/race", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const office = (req.query.office as string || "").trim();
+    const state = (req.query.state as string || "").trim();
+
+    if (!office) {
+      return res.status(400).json({ message: "office is required" });
+    }
+
+    try {
+      // Determine what kind of office this is
+      const officeLower = office.toLowerCase();
+      const isSenate = officeLower.includes("senator") || officeLower.includes("senate");
+      const isHouse = officeLower.includes("representative") || officeLower.includes("house");
+      const isGovernor = officeLower.includes("governor");
+      const isPresident = officeLower.includes("president");
+      const isVicePresident = officeLower.includes("vice president");
+
+      let politicians: any[] = [];
+
+      if (isPresident || isVicePresident) {
+        // Return all presidential-level profiles
+        politicians = await storage.getPoliticiansByPositionTitles(["President of the United States", "Vice President of the United States"]);
+      } else if (isSenate && state) {
+        politicians = await storage.getPoliticiansByStateAndDistrict(state, []);
+        politicians = politicians.filter((p: any) => {
+          const posTitle = (p.position?.title ?? "").toLowerCase();
+          return posTitle.includes("senator") || posTitle.includes("senate");
+        });
+      } else if (isHouse && state) {
+        politicians = await storage.getPoliticiansByStateAndDistrict(state, []);
+        politicians = politicians.filter((p: any) => {
+          const posTitle = (p.position?.title ?? "").toLowerCase();
+          return posTitle.includes("representative") || posTitle.includes("house");
+        });
+      } else if (isGovernor && state) {
+        politicians = await storage.getPoliticiansByPositionTitles([`Governor of ${state}`, `Governor`]);
+        if (politicians.length === 0 && state) {
+          // Broad search
+          politicians = await storage.getPoliticiansByStateAndDistrict(state, []);
+          politicians = politicians.filter((p: any) => {
+            const posTitle = (p.position?.title ?? "").toLowerCase();
+            return posTitle.includes("governor");
+          });
+        }
+      } else if (state) {
+        // Generic fallback: search by state
+        politicians = await storage.getPoliticiansByStateAndDistrict(state, []);
+      } else {
+        politicians = await storage.getPoliticiansByPositionTitles([office]);
+      }
+
+      // Deduplicate by id
+      const seen = new Set<string>();
+      politicians = politicians.filter((p: any) => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
+
+      res.json({ office, state, politicians });
+    } catch (error: any) {
+      console.error("Elections race lookup error:", error);
+      res.status(500).json({ message: error.message || "Failed to load race data" });
+    }
+  });
+
   // Lookup politician by handle (public)
   app.get("/api/politicians/by-handle/:handle", async (req, res) => {
     try {

@@ -1,0 +1,93 @@
+I need you to redesign the "Candidates" page into a new "Elections" page for the Anti Corruption Party app. Here is the full vision:
+
+---
+
+## NAVIGATION CHANGE
+- Rename "Candidates" to "Elections" everywhere in the nav bar and routing.
+
+---
+
+## PAGE FLOW (3 Steps)
+
+### STEP 1 — Address Search
+When a user clicks "Elections" in the top nav, they land on a clean page with:
+- A centered headline: "Find Your Elections"
+- A single address search bar with autocomplete (use Google Places Autocomplete API or a geocoding fallback)
+- A "Find My Elections" button
+- Optionally detect location automatically with a "Use My Location" button
+
+### STEP 2 — Positions View (Your Seats)
+After address submission, use the Google Civic Information API (or equivalent like the Cicero API) to look up all elected positions for that address. Display them as cards in a responsive grid. Each card shows:
+- Position/Seat title (e.g. "U.S. Senate — Minnesota", "State House District 47B")
+- Incumbent's name and party beneath the title
+- A small district map thumbnail or embeds a Mapbox/Google Maps iframe showing the district boundary
+- A "View Race" button to drill into that seat
+
+### STEP 3 — Race Pyramid View (Clicked Seat)
+When a user clicks "View Race" on any position, show a hierarchical pyramid layout:
+
+**LEVEL 1 — THE SEAT (Top)**
+- Large banner showing the seat title
+- Incumbent's name, photo (if available), party, and years in office
+
+**LEVEL 2 — PARTY LANES**
+- Side-by-side columns for Democrat, Republican, and any third parties running
+- Each column has a party label and color header
+
+**LEVEL 3 — PRIMARY CANDIDATES (Bottom)**
+- Within each party column, show all candidates running in that party's primary
+- Each candidate is shown as a card (see card spec below)
+
+---
+
+## CANDIDATE CARD SPEC
+Each candidate card must include:
+- Candidate photo (placeholder avatar if not available)
+- Full name
+- Party affiliation badge
+- Letter grade (A–F) from the ACP scoring system — pull from existing candidate data in the app
+- SuperPAC total (formatted as $X,XXX,XXX) — pull from existing FEC/finance data in the app
+- ACP Endorsement badge (show "ACP Endorsed ✓" in gold if endorsed, or leave empty)
+- A "View Profile" button that opens the candidate's full profile page in a new tab
+- Card should be visually clean, color-coded subtly by party
+
+---
+
+## DATA ARCHITECTURE
+- The system should use live data from the existing candidates database in the app
+- Wire up the Google Civic Information API for district/seat lookups by address (API key should go in environment variables as GOOGLE_CIVIC_API_KEY)
+- For district boundary maps, use the Google Maps Embed API or Mapbox GL JS
+- All candidate finance and scoring data should be pulled dynamically from the existing app database — do not hardcode
+- The page should be fully reactive: if new candidates are added to the database, they appear automatically
+
+---
+
+## ROUTING
+- `/elections` — Address search landing
+- `/elections/[stateCode]/[address]` — Positions view for that address
+- `/elections/race/[raceId]` — Pyramid view for a specific race
+- Existing candidate profile pages open in a new tab at their current route
+
+---
+
+## TECH STACK NOTES
+This is a React + TypeScript frontend (Vite), Express backend, Drizzle ORM with PostgreSQL, and Tailwind CSS. Use the existing component patterns and shadcn/ui components already in the project. Do not create new conflicting dependencies. Add any new API routes to the existing Express server in /server/routes.ts.
+
+---
+
+## RESPONSIVE DESIGN
+- Mobile: stacked single-column layout throughout
+- Tablet: 2-column grid for positions, stacked pyramid
+- Desktop: full 3-column pyramid side by side, multi-column positions grid
+
+---
+
+## SUMMARY OF FILES TO CREATE/MODIFY
+1. Update nav component to rename "Candidates" → "Elections" and update the route
+2. Create `/client/src/pages/Elections.tsx` — address search page
+3. Create `/client/src/pages/ElectionPositions.tsx` — seats grid view
+4. Create `/client/src/pages/ElectionRace.tsx` — pyramid race view
+5. Create `/client/src/components/CandidateCard.tsx` — reusable candidate card
+6. Create `/client/src/components/DistrictMap.tsx` — district map embed component
+7. Add server routes in `/server/routes.ts` for `/api/elections/lookup` (takes address, returns seats) and `/api/elections/race/:raceId` (returns candidates for a race)
+8. Add GOOGLE_CIVIC_API_KEY to .env and reference it server-side only
