@@ -743,7 +743,8 @@ export default function AdminPoliticiansPage() {
     const matchSubFilter = profileSubFilter === "all"
       || (profileSubFilter === "representatives" ? (p.profileType === "representative" || !p.profileType) : false)
       || (profileSubFilter === "candidates" ? p.profileType === "candidate" : false)
-      || (profileSubFilter === "delegates" ? p.profileType === "delegate" : false);
+      || (profileSubFilter === "delegates" ? p.profileType === "delegate" : false)
+      || (profileSubFilter === "former" ? !p.isCurrent : false);
     return matchSearch && matchParty && matchGrade && matchStatus && matchState && matchSubFilter;
   });
 
@@ -759,6 +760,23 @@ export default function AdminPoliticiansPage() {
     candidate: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     delegate: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   };
+  const DERIVED_TAG_COLORS: Record<string, string> = {
+    incumbent: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+    former: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+  };
+  function getProfileTags(profile: { profileType?: string | null; isCurrent?: boolean | null }) {
+    const primary = profile.profileType || "representative";
+    const tags: Array<{ label: string; color: string }> = [
+      { label: primary.charAt(0).toUpperCase() + primary.slice(1), color: PROFILE_TYPE_COLORS[primary] || "bg-blue-100 text-blue-800" },
+    ];
+    if (primary === "candidate" && profile.isCurrent) {
+      tags.push({ label: "Incumbent", color: DERIVED_TAG_COLORS.incumbent });
+    }
+    if (!profile.isCurrent) {
+      tags.push({ label: "Former", color: DERIVED_TAG_COLORS.former });
+    }
+    return tags;
+  }
 
   function parseFileToRows(file: File): Promise<any[]> {
     return new Promise((resolve, reject) => {
@@ -1579,6 +1597,7 @@ export default function AdminPoliticiansPage() {
                     { key: "representatives", label: "Representatives" },
                     { key: "candidates", label: "Candidates" },
                     { key: "delegates", label: "Delegates" },
+                    { key: "former", label: "Former" },
                   ].map(({ key, label }) => (
                     <button
                       key={key}
@@ -1590,13 +1609,13 @@ export default function AdminPoliticiansPage() {
                       }`}
                     >
                       {label}
-                      {key !== "all" && (
-                        <span className="ml-1.5 text-xs opacity-70">
-                          {key === "representatives" && profiles.filter(p => p.profileType === "representative" || !p.profileType).length}
-                          {key === "candidates" && profiles.filter(p => p.profileType === "candidate").length}
-                          {key === "delegates" && profiles.filter(p => p.profileType === "delegate").length}
-                        </span>
-                      )}
+                      <span className="ml-1.5 text-xs opacity-70">
+                        {key === "all" && profiles.length}
+                        {key === "representatives" && profiles.filter(p => p.profileType === "representative" || !p.profileType).length}
+                        {key === "candidates" && profiles.filter(p => p.profileType === "candidate").length}
+                        {key === "delegates" && profiles.filter(p => p.profileType === "delegate").length}
+                        {key === "former" && profiles.filter(p => !p.isCurrent).length}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -1728,13 +1747,13 @@ export default function AdminPoliticiansPage() {
                                 )}
                               </TableCell>
                               <TableCell>
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                  PROFILE_TYPE_COLORS[profile.profileType || "representative"] || "bg-blue-100 text-blue-800"
-                                }`}>
-                                  {profile.profileType
-                                    ? profile.profileType.charAt(0).toUpperCase() + profile.profileType.slice(1)
-                                    : "Representative"}
-                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {getProfileTags(profile).map(tag => (
+                                    <span key={tag.label} className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${tag.color}`}>
+                                      {tag.label}
+                                    </span>
+                                  ))}
+                                </div>
                               </TableCell>
                               <TableCell className="text-sm">{profile.party || "-"}</TableCell>
                               <TableCell className="text-sm">
