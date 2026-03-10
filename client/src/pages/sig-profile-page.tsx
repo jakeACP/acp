@@ -167,7 +167,7 @@ export default function SigProfilePage() {
 
   const voteMutation = useMutation({
     mutationFn: (vote: number) =>
-      apiRequest("POST", `/api/sigs/${tag}/community-vote`, { vote }),
+      apiRequest(`/api/sigs/${tag}/community-vote`, "POST", { vote }),
     onSuccess: () => {
       setHasVoted(true);
       queryClient.invalidateQueries({ queryKey: ["/api/sigs", tag] });
