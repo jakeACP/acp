@@ -188,11 +188,11 @@ function Router() {
 
 function BetaBanner() {
   return (
-    <div className="bg-amber-500 dark:bg-amber-600 text-white py-2 px-4 text-center text-sm font-medium sticky top-0 z-[100] shadow-md">
-      <div className="flex items-center justify-center gap-2 max-w-7xl mx-auto">
-        <AlertTriangle className="h-4 w-4" />
+    <div className="bg-amber-500 dark:bg-amber-600 text-white py-1 px-4 text-center text-xs sticky bottom-0 z-[100]">
+      <div className="flex items-center justify-center gap-1.5 max-w-7xl mx-auto">
+        <AlertTriangle className="h-3 w-3 shrink-0" />
         <span>
-          <strong>Beta Testing Mode:</strong> This app is currently in testing. All data and users will be wiped when the final version is published.
+          <strong>Beta Testing Mode:</strong> Data and users may be wiped when the final version is published. &copy; Copyright 2026
         </span>
       </div>
     </div>
@@ -216,12 +216,12 @@ function AppContent() {
 
   return (
     <>
-      <BetaBanner />
       <Toaster />
       <TwoFactorReminder />
       <ErrorBoundary>
         <Router />
       </ErrorBoundary>
+      <BetaBanner />
     </>
   );
 }
