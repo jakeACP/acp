@@ -1,0 +1,63 @@
+You are building a production-grade “Politician Corruption Grading” module for an existing full-stack TypeScript app (React + Express + Drizzle ORM + PostgreSQL) in the repo. Implement an evidence-first, deterministic grading system that updates every 48 hours using OpenFEC (FEC) data.
+
+Goals
+- Compute a letter grade (A–F) + 0–100 numeric score for every candidate with an FEC candidate_id; grade must be computable with zero user input.
+- Build a money-source pie chart dataset: Individuals vs Party Committees vs Other Committees vs Candidate Self-Funding (and optionally Other Receipts/Offsets).
+- Add benchmarks including:
+  - individual_share
+  - small_dollar_share (unitemized_individual / individual_total)
+  - committee_share (party + other committees)
+  - self_funding_share (candidate_contribution + loans_from_candidate) / receipts
+  - average_itemized_individual_donation (requires Schedule A)
+  - median_itemized_individual_donation (requires Schedule A)
+  - committee_contribution_concentration (HHI + top-10 share) using committee contributor IDs
+- Add “pledge tiers” (ACE) as verifiable rules. Example tiers:
+  - ACE-1: $ from lobbyist/registrant PACs = 0 (requires committee metadata join)
+  - ACE-2: ACE-1 + corporate/trade PAC $ = 0 (ORG_TP codes)
+  - ACE-3: ACE-2 + party committee $ = 0
+  - ACE-4: ACE-3 + other committee $ = 0
+- ACP Endorsement: for each race, award to top-ranked candidate as-of Sept 1 (store a snapshot record to prevent later data updates from rewriting history).
+
+Data sources (OpenFEC)
+- Candidate totals endpoint: /v1/candidate/{candidate_id}/totals/ (per-cycle aggregates; use for 48-hour refresh)
+- Schedule A endpoint: /v1/schedules/schedule_a/ with keyset pagination + is_individual=true (use for distribution stats; compute incrementally)
+- Schedule E endpoint: /v1/schedules/schedule_e/ and/or totals by candidate (compute outside spending context separately)
+
+Hard requirements
+- Respect api.data.gov rate limits (default 1000 req/hour). Implement exponential backoff and a job queue.
+- Persist raw API responses for audit (at least for totals) with fetched_at timestamps and query params.
+- Do NOT store individual donor PII unless strictly required; prefer computing aggregates and discarding donor-identifying fields.
+- Implement deterministic scoring:
+  FinalScore = 0.85*DataScore + 0.10*PledgeScore + 0.05*CommunityAdj
+  CommunityAdj defaults to 0 and is capped to ±5 points using Bayesian weighting; grade must work without it.
+- Provide an explanation JSON for each grade showing metric values, weights, and which data sources were used.
+
+Implementation tasks
+1) DB schema (Drizzle):
+   - fec_candidates (candidate_id, name, office, state, district, etc)
+   - fec_candidate_totals_snapshots (candidate_id, cycle, payload_json, fetched_at, coverage_dates)
+   - fec_schedule_a_metrics (candidate_id, cycle, computed_at, avg_itemized, median_itemized, hhi_committee, top10_committee_share, totals_used)
+   - fec_schedule_e_metrics (candidate_id, cycle, computed_at, outside_support, outside_oppose, top_spender_share)
+   - candidate_grades (candidate_id, cycle, score, letter, data_score, pledge_score, community_adj, explanation_json, computed_at)
+   - candidate_pledges (candidate_id, pledge_type, tier, source_url, verified_status, verified_at)
+   - acp_endorsements (race_id, election_year, stage, awarded_candidate_id, awarded_at, snapshot_grade_json)
+2) Server jobs:
+   - cron job every 48 hours:
+     a) refresh candidate totals for all tracked candidates
+     b) recompute DataScore from totals
+     c) recompute pledge compliance from totals + committee metadata
+     d) write candidate_grades
+   - weekly job to compute Schedule A distribution stats for priority candidates (or all if budget permits)
+3) API endpoints:
+   - GET /api/candidates/:candidateId/grade (returns grade + explanation + pie chart data)
+   - GET /api/candidates/:candidateId/finance-summary (returns totals for charting)
+4) Frontend:
+   - Candidate profile widget: letter grade, score, “data as of”, pie chart breakdown, benchmarks, links to FEC and Ballotpedia URLs stored in DB.
+5) Tests:
+   - Unit tests for score computation (edge cases: zero receipts, missing fields, new candidates)
+   - Integration test with mocked OpenFEC responses ensuring deterministic results
+
+Deliverables
+- PR-ready code changes across server/shared/client
+- Migration scripts
+- Clear README explaining the grading model and how to run the sync jobs locally
