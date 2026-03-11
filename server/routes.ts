@@ -6562,7 +6562,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const stateName = US_STATES[code];
       if (!stateName) return res.status(400).json({ message: `Unknown state code: ${code}` });
 
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_PROFILES });
       const likePattern = `%${stateName}%`;
 
       // 1. Profiles with missing data (limit 50)
