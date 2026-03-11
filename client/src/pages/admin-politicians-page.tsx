@@ -1667,7 +1667,12 @@ export default function AdminPoliticiansPage() {
                           <p className="font-semibold text-blue-700 dark:text-blue-400">Scan complete</p>
                           <p className="text-slate-600 dark:text-slate-400">{scanResult.updatedProfiles} profiles updated</p>
                           <p className="text-slate-600 dark:text-slate-400">{scanResult.createdProfiles} profiles created</p>
-                          {scanResult.errors.length > 0 && <p className="text-orange-600 dark:text-orange-400">{scanResult.errors.length} batch error(s)</p>}
+                          {scanResult.errors.length > 0 && (
+                            <div>
+                              <p className="text-orange-600 dark:text-orange-400">{scanResult.errors.length} batch error(s)</p>
+                              <p className="text-orange-500 dark:text-orange-400 break-all">{scanResult.errors[0]}</p>
+                            </div>
+                          )}
                         </div>
                       )}
 
