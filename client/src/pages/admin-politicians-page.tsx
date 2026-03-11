@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown, Bot as BotIcon } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
@@ -118,6 +118,16 @@ export default function AdminPoliticiansPage() {
   const [profileGradeFilter, setProfileGradeFilter] = useState("all");
   const [profileStatusFilter, setProfileStatusFilter] = useState("all");
   const [profileStateFilter, setProfileStateFilter] = useState("all");
+
+  // AI State Scan
+  const [scanState, setScanState] = useState("");
+  const [scanPreview, setScanPreview] = useState<{
+    stateName: string; profilesWithMissingData: number; positionsWithoutIncumbents: number;
+    totalItems: number; estimatedSeconds: number; sampleProfiles: string[]; samplePositions: string[];
+  } | null>(null);
+  const [scanStatus, setScanStatus] = useState<"idle"|"previewing"|"ready"|"running"|"done">("idle");
+  const [scanResult, setScanResult] = useState<{ updatedProfiles: number; createdProfiles: number; errors: string[] } | null>(null);
+  const [scanElapsed, setScanElapsed] = useState(0);
 
 
   const { data: positions = [], isLoading: positionsLoading } = useQuery<PoliticalPosition[]>({
@@ -1491,7 +1501,7 @@ export default function AdminPoliticiansPage() {
                 {/* ── External Data Tools ── */}
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">External Data Sources</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
 
                     {/* TrackAIPAC */}
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
@@ -1571,6 +1581,138 @@ export default function AdminPoliticiansPage() {
                           <Calculator className="h-3 w-3 mr-1.5" />Run Regrade
                         </Button>
                       )}
+                    </div>
+
+                    {/* AI State Scan */}
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
+                      <div className="flex items-start gap-2">
+                        <BotIcon className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">AI State Scan</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Find missing data, vacant seats & candidates by state using AI</p>
+                        </div>
+                      </div>
+
+                      {/* State selector row */}
+                      <div className="flex gap-1.5 items-center">
+                        <select
+                          value={scanState}
+                          onChange={e => { setScanState(e.target.value); setScanPreview(null); setScanStatus("idle"); setScanResult(null); }}
+                          className="flex-1 text-xs rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1.5 text-slate-700 dark:text-slate-300"
+                        >
+                          <option value="">Select state…</option>
+                          {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"].map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!scanState || scanStatus === "previewing" || scanStatus === "running"}
+                          className="text-xs px-2.5 shrink-0"
+                          onClick={async () => {
+                            setScanStatus("previewing");
+                            setScanPreview(null);
+                            setScanResult(null);
+                            try {
+                              const data = await apiRequest("/api/admin/politicians/state-scan/preview", "POST", { state: scanState }).then(r => r.json());
+                              setScanPreview(data);
+                              setScanStatus("ready");
+                            } catch (err: any) {
+                              toast({ title: "Preview failed", description: err.message, variant: "destructive" });
+                              setScanStatus("idle");
+                            }
+                          }}
+                        >
+                          {scanStatus === "previewing" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+                        </Button>
+                      </div>
+
+                      {/* Preview results */}
+                      {scanStatus === "ready" && scanPreview && (
+                        <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-2 space-y-1 text-xs">
+                          <p className="font-semibold text-emerald-700 dark:text-emerald-400">{scanPreview.stateName} scan ready</p>
+                          <p className="text-slate-600 dark:text-slate-400">
+                            <span className="font-medium text-slate-800 dark:text-slate-200">{scanPreview.profilesWithMissingData}</span> profiles with missing data
+                          </p>
+                          <p className="text-slate-600 dark:text-slate-400">
+                            <span className="font-medium text-slate-800 dark:text-slate-200">{scanPreview.positionsWithoutIncumbents}</span> seats without incumbents
+                          </p>
+                          {scanPreview.estimatedSeconds > 0 && (
+                            <p className="text-slate-500 dark:text-slate-500">
+                              Est. ~{scanPreview.estimatedSeconds < 60
+                                ? `${scanPreview.estimatedSeconds}s`
+                                : `${Math.ceil(scanPreview.estimatedSeconds / 60)}m`}
+                            </p>
+                          )}
+                          {scanPreview.totalItems === 0 && (
+                            <p className="text-emerald-600 dark:text-emerald-400 font-medium">All data looks complete!</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Running progress */}
+                      {scanStatus === "running" && (
+                        <div className="space-y-1.5">
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-emerald-500 h-1.5 rounded-full animate-pulse" style={{ width: "100%" }} />
+                          </div>
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 text-center">Scanning… {scanElapsed}s</p>
+                        </div>
+                      )}
+
+                      {/* Done result */}
+                      {scanStatus === "done" && scanResult && (
+                        <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2 space-y-0.5 text-xs">
+                          <p className="font-semibold text-blue-700 dark:text-blue-400">Scan complete</p>
+                          <p className="text-slate-600 dark:text-slate-400">{scanResult.updatedProfiles} profiles updated</p>
+                          <p className="text-slate-600 dark:text-slate-400">{scanResult.createdProfiles} profiles created</p>
+                          {scanResult.errors.length > 0 && <p className="text-orange-600 dark:text-orange-400">{scanResult.errors.length} batch error(s)</p>}
+                        </div>
+                      )}
+
+                      {/* Run / Reset button */}
+                      <div className="mt-auto">
+                        {scanStatus === "done" ? (
+                          <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => { setScanStatus("idle"); setScanPreview(null); setScanResult(null); }}>
+                            <RefreshCw className="h-3 w-3 mr-1.5" />New Scan
+                          </Button>
+                        ) : (
+                          <Button
+                            variant={scanStatus === "ready" && scanPreview && scanPreview.totalItems > 0 ? "default" : "outline"}
+                            size="sm"
+                            disabled={scanStatus !== "ready" || !scanPreview || scanPreview.totalItems === 0}
+                            className="w-full text-xs"
+                            onClick={async () => {
+                              setScanStatus("running");
+                              setScanElapsed(0);
+                              const timer = setInterval(() => setScanElapsed(s => s + 1), 1000);
+                              try {
+                                const data = await apiRequest("/api/admin/politicians/state-scan/run", "POST", { state: scanState }).then(r => r.json());
+                                clearInterval(timer);
+                                setScanResult(data);
+                                setScanStatus("done");
+                                queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+                                queryClient.invalidateQueries({ queryKey: ["/api/admin/political-positions"] });
+                              } catch (err: any) {
+                                clearInterval(timer);
+                                toast({ title: "Scan failed", description: err.message, variant: "destructive" });
+                                setScanStatus("ready");
+                              }
+                            }}
+                          >
+                            {scanStatus === "running" ? (
+                              <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Running…</>
+                            ) : (
+                              <><BotIcon className="h-3 w-3 mr-1.5" />
+                                {scanPreview && scanPreview.totalItems > 0
+                                  ? `Run Scan (${scanPreview.totalItems} items)`
+                                  : "Run Scan"}
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                   </div>

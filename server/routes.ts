@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
+import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
 import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertLiveStreamSchema, insertNotificationSchema, comments } from "@shared/schema";
 import { eq, inArray, or, sql } from "drizzle-orm";
@@ -6482,6 +6483,278 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
   
+  // ── AI State Scan ──────────────────────────────────────────────────────────
+  const US_STATES: Record<string, string> = {
+    AL:"Alabama",AK:"Alaska",AZ:"Arizona",AR:"Arkansas",CA:"California",
+    CO:"Colorado",CT:"Connecticut",DE:"Delaware",FL:"Florida",GA:"Georgia",
+    HI:"Hawaii",ID:"Idaho",IL:"Illinois",IN:"Indiana",IA:"Iowa",KS:"Kansas",
+    KY:"Kentucky",LA:"Louisiana",ME:"Maine",MD:"Maryland",MA:"Massachusetts",
+    MI:"Michigan",MN:"Minnesota",MS:"Mississippi",MO:"Missouri",MT:"Montana",
+    NE:"Nebraska",NV:"Nevada",NH:"New Hampshire",NJ:"New Jersey",NM:"New Mexico",
+    NY:"New York",NC:"North Carolina",ND:"North Dakota",OH:"Ohio",OK:"Oklahoma",
+    OR:"Oregon",PA:"Pennsylvania",RI:"Rhode Island",SC:"South Carolina",
+    SD:"South Dakota",TN:"Tennessee",TX:"Texas",UT:"Utah",VT:"Vermont",
+    VA:"Virginia",WA:"Washington",WV:"West Virginia",WI:"Wisconsin",WY:"Wyoming",
+    DC:"District of Columbia",
+  };
+
+  app.post("/api/admin/politicians/state-scan/preview", ensureAdmin, async (req, res) => {
+    try {
+      const { state } = req.body;
+      const code = String(state || "").toUpperCase().trim();
+      const stateName = US_STATES[code];
+      if (!stateName) return res.status(400).json({ message: `Unknown state code: ${code}` });
+
+      const likePattern = `%${stateName}%`;
+
+      const missingResult = await db.execute(sql`
+        SELECT pp.id, pp.full_name
+        FROM politician_profiles pp
+        LEFT JOIN political_positions pos ON pp.position_id = pos.id
+        WHERE (LOWER(pos.jurisdiction) LIKE LOWER(${likePattern}) OR UPPER(pos.jurisdiction) = ${code})
+          AND (
+            pp.biography IS NULL OR pp.biography = ''
+            OR pp.photo_url IS NULL OR pp.photo_url = ''
+            OR pp.website IS NULL OR pp.website = ''
+            OR pp.party IS NULL OR pp.party = ''
+          )
+      `);
+
+      const emptyPosResult = await db.execute(sql`
+        SELECT pos.id, pos.title, pos.level, pos.district
+        FROM political_positions pos
+        WHERE (LOWER(pos.jurisdiction) LIKE LOWER(${likePattern}) OR UPPER(pos.jurisdiction) = ${code})
+          AND pos.is_active = true
+          AND NOT EXISTS (
+            SELECT 1 FROM politician_profiles pp
+            WHERE pp.position_id = pos.id AND pp.is_current = true
+          )
+      `);
+
+      const profileCount = missingResult.rows.length;
+      const positionCount = emptyPosResult.rows.length;
+      const profileBatches = Math.ceil(profileCount / 5);
+      const positionBatches = Math.ceil(positionCount / 3);
+      const estimatedSeconds = profileBatches * 6 + positionBatches * 10;
+
+      res.json({
+        state: code,
+        stateName,
+        profilesWithMissingData: profileCount,
+        positionsWithoutIncumbents: positionCount,
+        totalItems: profileCount + positionCount,
+        estimatedSeconds,
+        sampleProfiles: missingResult.rows.slice(0, 6).map((r: any) => r.full_name),
+        samplePositions: emptyPosResult.rows.slice(0, 6).map((r: any) =>
+          r.title + (r.district ? ` — ${r.district}` : "")
+        ),
+      });
+    } catch (error: any) {
+      console.error("State scan preview error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/politicians/state-scan/run", ensureAdmin, async (req, res) => {
+    try {
+      const { state } = req.body;
+      const code = String(state || "").toUpperCase().trim();
+      const stateName = US_STATES[code];
+      if (!stateName) return res.status(400).json({ message: `Unknown state code: ${code}` });
+
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const likePattern = `%${stateName}%`;
+
+      // 1. Profiles with missing data (limit 50)
+      const missingResult = await db.execute(sql`
+        SELECT pp.id, pp.full_name, pp.party, pp.biography, pp.photo_url, pp.website,
+               pos.title AS position_title, pos.level AS position_level
+        FROM politician_profiles pp
+        LEFT JOIN political_positions pos ON pp.position_id = pos.id
+        WHERE (LOWER(pos.jurisdiction) LIKE LOWER(${likePattern}) OR UPPER(pos.jurisdiction) = ${code})
+          AND (
+            pp.biography IS NULL OR pp.biography = ''
+            OR pp.photo_url IS NULL OR pp.photo_url = ''
+            OR pp.website IS NULL OR pp.website = ''
+            OR pp.party IS NULL OR pp.party = ''
+          )
+        LIMIT 50
+      `);
+
+      // 2. Positions without incumbents (limit 20)
+      const emptyPosResult = await db.execute(sql`
+        SELECT pos.id, pos.title, pos.level, pos.district, pos.jurisdiction, pos.office_type
+        FROM political_positions pos
+        WHERE (LOWER(pos.jurisdiction) LIKE LOWER(${likePattern}) OR UPPER(pos.jurisdiction) = ${code})
+          AND pos.is_active = true
+          AND NOT EXISTS (
+            SELECT 1 FROM politician_profiles pp
+            WHERE pp.position_id = pos.id AND pp.is_current = true
+          )
+        LIMIT 20
+      `);
+
+      const profiles = missingResult.rows as any[];
+      const emptyPositions = emptyPosResult.rows as any[];
+      let updatedProfiles = 0;
+      let createdProfiles = 0;
+      const errors: string[] = [];
+
+      // Fill missing profile data in batches of 5
+      for (let i = 0; i < profiles.length; i += 5) {
+        const batch = profiles.slice(i, i + 5);
+        const needsInfo = batch.map(p => ({
+          id: p.id,
+          name: p.full_name,
+          position: p.position_title || "Unknown",
+          missing: [
+            (!p.biography || p.biography === "") && "biography",
+            (!p.photo_url || p.photo_url === "") && "photo_url",
+            (!p.website || p.website === "") && "website",
+            (!p.party || p.party === "") && "party",
+          ].filter(Boolean),
+        }));
+
+        try {
+          const resp = await anthropic.messages.create({
+            model: "claude-3-haiku-20240307",
+            max_tokens: 2000,
+            messages: [{
+              role: "user",
+              content: `You are a US political data assistant. For each politician below from ${stateName}, provide only the MISSING fields listed. Return ONLY a valid JSON array.
+
+${JSON.stringify(needsInfo, null, 2)}
+
+Rules:
+- biography: 2–3 factual sentences about their career and current role. Do not invent — if unknown, omit.
+- party: Full name e.g. "Republican", "Democrat", "Independent". If unknown, omit.
+- website: Official government or campaign URL. If unknown, use null.
+- photo_url: Reliable image URL (Wikipedia preferred). If unknown, use null.
+
+Return ONLY a JSON array. Example: [{"id":"abc","party":"Republican","biography":"...","website":null,"photo_url":null}]`
+            }],
+          });
+
+          const text = resp.content[0].type === "text" ? resp.content[0].text : "";
+          const jsonMatch = text.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const results: any[] = JSON.parse(jsonMatch[0]);
+            for (const r of results) {
+              const original = batch.find(p => p.id === r.id);
+              if (!original) continue;
+              const patch: Record<string, any> = {};
+              if (r.biography && (!original.biography || original.biography === "")) patch.biography = r.biography;
+              if (r.party && (!original.party || original.party === "")) patch.party = r.party;
+              if (r.website && (!original.website || original.website === "")) patch.website = r.website;
+              if (r.photo_url && (!original.photo_url || original.photo_url === "")) patch.photoUrl = r.photo_url;
+              if (Object.keys(patch).length > 0) {
+                await storage.updatePoliticianProfile(r.id, patch);
+                updatedProfiles++;
+              }
+            }
+          }
+        } catch (err: any) {
+          errors.push(`Profile batch ${i}–${i + 5}: ${err.message}`);
+        }
+      }
+
+      // Find incumbents for empty positions in batches of 3
+      for (let i = 0; i < emptyPositions.length; i += 3) {
+        const batch = emptyPositions.slice(i, i + 3);
+        try {
+          const resp = await anthropic.messages.create({
+            model: "claude-3-haiku-20240307",
+            max_tokens: 2000,
+            messages: [{
+              role: "user",
+              content: `You are a US political data assistant. For each political position below in ${stateName}, identify who currently holds it (incumbent) AND up to 2 candidates running for it in 2025–2026.
+
+Positions:
+${JSON.stringify(batch.map(p => ({ id: p.id, title: p.title, level: p.level, district: p.district })), null, 2)}
+
+Return ONLY a JSON array. For each position include:
+{
+  "position_id": "<id from above>",
+  "incumbent": { "full_name": "...", "party": "Republican|Democrat|Independent|...", "biography": "2-3 sentence bio", "website": "url or null" } or null,
+  "candidates": [ { "full_name": "...", "party": "...", "biography": "..." } ]
+}
+
+Only include people you are confident about. Return empty arrays/null if unknown. Return ONLY valid JSON.`
+            }],
+          });
+
+          const text = resp.content[0].type === "text" ? resp.content[0].text : "";
+          const jsonMatch = text.match(/\[[\s\S]*\]/);
+          if (!jsonMatch) continue;
+          const results: any[] = JSON.parse(jsonMatch[0]);
+
+          for (const r of results) {
+            // Create incumbent profile
+            if (r.incumbent?.full_name) {
+              const existing = await db.execute(sql`
+                SELECT id FROM politician_profiles
+                WHERE LOWER(full_name) = LOWER(${r.incumbent.full_name})
+                  AND position_id = ${r.position_id}
+                LIMIT 1
+              `);
+              if (existing.rows.length === 0) {
+                await storage.createPoliticianProfile({
+                  fullName: r.incumbent.full_name,
+                  party: r.incumbent.party || null,
+                  biography: r.incumbent.biography || null,
+                  website: r.incumbent.website || null,
+                  positionId: r.position_id,
+                  profileType: "representative",
+                  isCurrent: true,
+                });
+                createdProfiles++;
+              }
+            }
+
+            // Create candidate profiles
+            if (Array.isArray(r.candidates)) {
+              for (const cand of r.candidates) {
+                if (!cand.full_name) continue;
+                const existing = await db.execute(sql`
+                  SELECT id FROM politician_profiles
+                  WHERE LOWER(full_name) = LOWER(${cand.full_name})
+                    AND position_id = ${r.position_id}
+                  LIMIT 1
+                `);
+                if (existing.rows.length === 0) {
+                  await storage.createPoliticianProfile({
+                    fullName: cand.full_name,
+                    party: cand.party || null,
+                    biography: cand.biography || null,
+                    positionId: r.position_id,
+                    profileType: "candidate",
+                    isCurrent: false,
+                  });
+                  createdProfiles++;
+                }
+              }
+            }
+          }
+        } catch (err: any) {
+          errors.push(`Position batch ${i}–${i + 3}: ${err.message}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        state: code,
+        stateName,
+        updatedProfiles,
+        createdProfiles,
+        totalProcessed: updatedProfiles + createdProfiles,
+        errors,
+      });
+    } catch (error: any) {
+      console.error("State scan run error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   return httpServer;
 }
 
