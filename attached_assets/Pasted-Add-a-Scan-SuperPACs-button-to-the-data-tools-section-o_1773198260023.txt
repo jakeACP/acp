@@ -1,0 +1,61 @@
+Add a "Scan SuperPACs" button to the data tools section of the UI. 
+
+## What it does:
+Iterates through every candidate already in the database and queries the FEC API 
+to pull ALL SuperPAC/outside spending activity associated with them. For each 
+candidate, it fetches independent expenditures made FOR or AGAINST them, 
+identifies the spending committee, and upserts that data into the database.
+
+## API Key:
+Use the existing environment variable: FEC_API_KEY
+
+## FEC Endpoints to hit (in order):
+
+1. **Independent Expenditures per candidate:**
+   GET https://api.open.fec.gov/v1/schedules/schedule_e/
+   Params: candidate_id={fec_id}, api_key=FEC_API_KEY, per_page=100, page=1
+   → Paginate through ALL pages until no results remain
+
+2. **Committee details for each unique spender found:**
+   GET https://api.open.fec.gov/v1/committee/{committee_id}/
+   Params: api_key=FEC_API_KEY
+   → Pull name, organization_type, committee_type, description
+
+3. **Total raised/spent by that committee:**
+   GET https://api.open.fec.gov/v1/committee/{committee_id}/totals/
+   Params: api_key=FEC_API_KEY, cycle=2024
+
+## Logic:
+
+For each candidate in the database:
+  - Query schedule_e with their FEC candidate ID
+  - For each independent expenditure returned:
+      - Extract: committee_id, committee_name, support_oppose_indicator, 
+        expenditure_amount, expenditure_date, candidate_id
+      - Check if this committee already exists in the SIGs table
+      - If NOT: create a new SIG entry with the committee name, total spend, 
+        and type = "SuperPAC"
+      - If YES: update the total with any new expenditure amounts
+  - Calculate total FOR the candidate vs AGAINST the candidate from SuperPACs
+  - Store per-candidate SuperPAC support totals in the candidate record
+  - Re-run the candidate's grade/score calculation after SuperPAC data is added
+
+## UI:
+- Button label: "Scan SuperPACs 🔍"
+- Place it next to the other data tool buttons (same row/style)
+- While running: show a progress indicator with current candidate name 
+  being scanned (e.g. "Scanning: Sen. John Smith...")
+- When complete: show a summary toast/alert:
+    "✅ Scan complete: X candidates scanned, Y new SuperPACs found, 
+     Z existing SIGs updated"
+
+## Important rules:
+- Rate limit FEC API calls — add a 200ms delay between requests to avoid hitting 
+  FEC rate limits (1,000 calls/hour)
+- Deduplicate committees by committee_id (not name — names can vary)
+- Handle pagination — many candidates will have 100+ expenditure records, 
+  must page through ALL of them, not just the first page
+- If a candidate has no FEC ID stored, skip them and log a warning
+- Support_oppose_indicator will be "S" (support) or "O" (oppose) — 
+  store both and net them separately, don't combine into one number
+- Log all new SIGs found to the console for debugging

@@ -6483,6 +6483,129 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
   
+  // ── SuperPAC Scan ──────────────────────────────────────────────────────────
+  app.post("/api/admin/politicians/scan-superpacs", ensureAdmin, async (req, res) => {
+    try {
+      const fecKey = process.env.FEC_API_KEY;
+      if (!fecKey) return res.status(400).json({ message: "FEC_API_KEY not configured" });
+
+      const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+      const profilesResult = await db.execute(sql`
+        SELECT id, full_name, fec_candidate_id
+        FROM politician_profiles
+        WHERE fec_candidate_id IS NOT NULL AND fec_candidate_id != ''
+      `);
+      const profiles = profilesResult.rows as any[];
+
+      let candidatesScanned = 0;
+      let newSigs = 0;
+      let updatedSigs = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+
+      for (const profile of profiles) {
+        if (!profile.fec_candidate_id) { skipped++; continue; }
+        try {
+          // Paginate through all independent expenditures for this candidate
+          let page = 1;
+          let hasMore = true;
+          const committeeAmounts: Record<string, { forAmt: number; againstAmt: number; name: string }> = {};
+
+          while (hasMore) {
+            await delay(200);
+            const url = `https://api.open.fec.gov/v1/schedules/schedule_e/?candidate_id=${encodeURIComponent(profile.fec_candidate_id)}&api_key=${fecKey}&per_page=100&page=${page}`;
+            const fecRes = await fetch(url, { headers: { "Accept": "application/json" } });
+            if (!fecRes.ok) { hasMore = false; break; }
+            const fecData = await fecRes.json();
+            const results: any[] = fecData.results || [];
+
+            for (const exp of results) {
+              const cid = exp.committee_id;
+              if (!cid) continue;
+              if (!committeeAmounts[cid]) committeeAmounts[cid] = { forAmt: 0, againstAmt: 0, name: exp.committee_name || cid };
+              const amt = Number(exp.expenditure_amount) || 0;
+              if (exp.support_oppose_indicator === "S") committeeAmounts[cid].forAmt += amt;
+              else if (exp.support_oppose_indicator === "O") committeeAmounts[cid].againstAmt += amt;
+            }
+
+            const pagination = fecData.pagination || {};
+            hasMore = results.length > 0 && page < (pagination.pages || 1);
+            page++;
+          }
+
+          // Upsert SIG + sponsorship for each committee found
+          for (const [committeeId, amounts] of Object.entries(committeeAmounts)) {
+            // Check if SIG exists by FEC committee tag
+            const existingSig = await db.execute(sql`
+              SELECT id FROM special_interest_groups WHERE tag = ${committeeId} LIMIT 1
+            `);
+
+            let sigId: string;
+            if (existingSig.rows.length > 0) {
+              sigId = (existingSig.rows[0] as any).id;
+              updatedSigs++;
+            } else {
+              // Fetch committee details from FEC
+              await delay(200);
+              let sigDescription = `SuperPAC — FEC Committee ${committeeId}`;
+              let sigIndustry = "politics";
+              try {
+                const commRes = await fetch(`https://api.open.fec.gov/v1/committee/${committeeId}/?api_key=${fecKey}`);
+                if (commRes.ok) {
+                  const commData = await commRes.json();
+                  const comm = commData.result || {};
+                  if (comm.description) sigDescription = comm.description;
+                  if (comm.organization_type_full) sigIndustry = comm.organization_type_full.toLowerCase();
+                }
+              } catch {}
+
+              const newSig = await storage.createSpecialInterestGroup({
+                name: amounts.name || committeeId,
+                tag: committeeId,
+                category: "pac",
+                industry: sigIndustry.slice(0, 50),
+                description: sigDescription,
+                dataSourceName: "FEC",
+                dataSourceUrl: `https://www.fec.gov/data/committee/${committeeId}/`,
+                isActive: true,
+              });
+              sigId = newSig.id;
+              newSigs++;
+              console.log(`[superpac-scan] New SIG: ${amounts.name} (${committeeId})`);
+            }
+
+            // Upsert sponsorship with ON CONFLICT update
+            const totalCents = Math.round((amounts.forAmt + amounts.againstAmt) * 100);
+            const notes = `FOR: $${amounts.forAmt.toFixed(2)} | AGAINST: $${amounts.againstAmt.toFixed(2)}`;
+            await db.execute(sql`
+              INSERT INTO politician_sig_sponsorships
+                (politician_id, sig_id, relationship_type, reported_amount, notes, disclosure_source, disclosure_url, is_verified)
+              VALUES
+                (${profile.id}, ${sigId}, 'donor', ${totalCents}, ${notes}, 'FEC',
+                 ${'https://www.fec.gov/data/candidate/' + profile.fec_candidate_id + '/'}, false)
+              ON CONFLICT (politician_id, sig_id)
+              DO UPDATE SET
+                reported_amount = EXCLUDED.reported_amount,
+                notes = EXCLUDED.notes,
+                updated_at = NOW()
+            `);
+          }
+
+          candidatesScanned++;
+        } catch (err: any) {
+          console.error(`[superpac-scan] Error for ${profile.full_name}:`, err.message);
+          errors.push(`${profile.full_name}: ${err.message}`);
+        }
+      }
+
+      res.json({ success: true, candidatesScanned, newSigs, updatedSigs, skipped, errors: errors.slice(0, 10) });
+    } catch (error: any) {
+      console.error("SuperPAC scan error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // ── AI State Scan ──────────────────────────────────────────────────────────
   const US_STATES: Record<string, string> = {
     AL:"Alabama",AK:"Alaska",AZ:"Arizona",AR:"Arkansas",CA:"California",

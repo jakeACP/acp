@@ -129,6 +129,11 @@ export default function AdminPoliticiansPage() {
   const [scanResult, setScanResult] = useState<{ updatedProfiles: number; createdProfiles: number; errors: string[] } | null>(null);
   const [scanElapsed, setScanElapsed] = useState(0);
 
+  // SuperPAC Scan
+  const [superPacStatus, setSuperPacStatus] = useState<"idle"|"running"|"done">("idle");
+  const [superPacElapsed, setSuperPacElapsed] = useState(0);
+  const [superPacResult, setSuperPacResult] = useState<{ candidatesScanned: number; newSigs: number; updatedSigs: number; skipped: number; errors: string[] } | null>(null);
+
 
   const { data: positions = [], isLoading: positionsLoading } = useQuery<PoliticalPosition[]>({
     queryKey: ["/api/admin/political-positions"],
@@ -1501,7 +1506,7 @@ export default function AdminPoliticiansPage() {
                 {/* ── External Data Tools ── */}
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">External Data Sources</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
 
                     {/* TrackAIPAC */}
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
@@ -1714,6 +1719,78 @@ export default function AdminPoliticiansPage() {
                                   ? `Run Scan (${scanPreview.totalItems} items)`
                                   : "Run Scan"}
                               </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Scan SuperPACs */}
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
+                      <div className="flex items-start gap-2">
+                        <DollarSign className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Scan SuperPACs</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Pull all independent expenditures from FEC for every candidate with a FEC ID</p>
+                        </div>
+                      </div>
+
+                      {superPacStatus === "running" && (
+                        <div className="space-y-1.5">
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-orange-500 h-1.5 rounded-full animate-pulse" style={{ width: "100%" }} />
+                          </div>
+                          <p className="text-xs text-orange-600 dark:text-orange-400 text-center">Scanning FEC… {superPacElapsed}s</p>
+                        </div>
+                      )}
+
+                      {superPacStatus === "done" && superPacResult && (
+                        <div className="rounded-md bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 p-2 space-y-0.5 text-xs">
+                          <p className="font-semibold text-orange-700 dark:text-orange-400">Scan complete</p>
+                          <p className="text-slate-600 dark:text-slate-400">{superPacResult.candidatesScanned} candidates scanned</p>
+                          <p className="text-slate-600 dark:text-slate-400">{superPacResult.newSigs} new SuperPACs found</p>
+                          <p className="text-slate-600 dark:text-slate-400">{superPacResult.updatedSigs} existing SIGs updated</p>
+                          {superPacResult.errors.length > 0 && <p className="text-red-500">{superPacResult.errors.length} error(s)</p>}
+                        </div>
+                      )}
+
+                      <div className="mt-auto">
+                        {superPacStatus === "done" ? (
+                          <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => { setSuperPacStatus("idle"); setSuperPacResult(null); }}>
+                            <RefreshCw className="h-3 w-3 mr-1.5" />Scan Again
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={superPacStatus === "running"}
+                            className="w-full text-xs"
+                            onClick={async () => {
+                              setSuperPacStatus("running");
+                              setSuperPacElapsed(0);
+                              const timer = setInterval(() => setSuperPacElapsed(s => s + 1), 1000);
+                              try {
+                                const data = await apiRequest("/api/admin/politicians/scan-superpacs", "POST", {}).then(r => r.json());
+                                clearInterval(timer);
+                                setSuperPacResult(data);
+                                setSuperPacStatus("done");
+                                toast({
+                                  title: "✅ SuperPAC scan complete",
+                                  description: `${data.candidatesScanned} candidates scanned · ${data.newSigs} new SuperPACs · ${data.updatedSigs} SIGs updated`,
+                                });
+                                queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+                                queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+                              } catch (err: any) {
+                                clearInterval(timer);
+                                setSuperPacStatus("idle");
+                                toast({ title: "Scan failed", description: err.message, variant: "destructive" });
+                              }
+                            }}
+                          >
+                            {superPacStatus === "running" ? (
+                              <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Scanning…</>
+                            ) : (
+                              <><Search className="h-3 w-3 mr-1.5" />Scan SuperPACs 🔍</>
                             )}
                           </Button>
                         )}
