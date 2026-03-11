@@ -6562,7 +6562,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const stateName = US_STATES[code];
       if (!stateName) return res.status(400).json({ message: `Unknown state code: ${code}` });
 
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_PROFILES });
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const likePattern = `%${stateName}%`;
 
       // 1. Profiles with missing data (limit 50)
@@ -6616,8 +6617,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         }));
 
         try {
-          const resp = await anthropic.messages.create({
-            model: "claude-3-haiku-20240307",
+          const resp = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
             max_tokens: 2000,
             messages: [{
               role: "user",
@@ -6635,7 +6636,7 @@ Return ONLY a JSON array. Example: [{"id":"abc","party":"Republican","biography"
             }],
           });
 
-          const text = resp.content[0].type === "text" ? resp.content[0].text : "";
+          const text = resp.choices[0].message.content || "";
           const jsonMatch = text.match(/\[[\s\S]*\]/);
           if (jsonMatch) {
             const results: any[] = JSON.parse(jsonMatch[0]);
@@ -6663,8 +6664,8 @@ Return ONLY a JSON array. Example: [{"id":"abc","party":"Republican","biography"
       for (let i = 0; i < emptyPositions.length; i += 3) {
         const batch = emptyPositions.slice(i, i + 3);
         try {
-          const resp = await anthropic.messages.create({
-            model: "claude-3-haiku-20240307",
+          const resp = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
             max_tokens: 2000,
             messages: [{
               role: "user",
@@ -6684,7 +6685,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
             }],
           });
 
-          const text = resp.content[0].type === "text" ? resp.content[0].text : "";
+          const text = resp.choices[0].message.content || "";
           const jsonMatch = text.match(/\[[\s\S]*\]/);
           if (!jsonMatch) continue;
           const results: any[] = JSON.parse(jsonMatch[0]);
