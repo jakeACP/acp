@@ -6617,7 +6617,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
         try {
           const resp = await anthropic.messages.create({
-            model: "claude-3-5-haiku-20241022",
+            model: "claude-3-haiku-20240307",
             max_tokens: 2000,
             messages: [{
               role: "user",
@@ -6664,7 +6664,7 @@ Return ONLY a JSON array. Example: [{"id":"abc","party":"Republican","biography"
         const batch = emptyPositions.slice(i, i + 3);
         try {
           const resp = await anthropic.messages.create({
-            model: "claude-3-5-haiku-20241022",
+            model: "claude-3-haiku-20240307",
             max_tokens: 2000,
             messages: [{
               role: "user",
