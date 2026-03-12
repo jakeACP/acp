@@ -78,6 +78,7 @@ type PoliticianProfile = {
   corruptionGrade?: string;
   corruptionScorecard?: string;
   totalContributions?: number | null;
+  totalLobbyAmount?: number | null;
   numericScore?: number | null;
   fecCandidateId?: string | null;
   communityAdj?: number | null;
@@ -1992,9 +1993,17 @@ export default function AdminPoliticiansPage() {
                                 {position?.jurisdiction || "-"}
                               </TableCell>
                               <TableCell className="text-sm">
-                                {profile.totalContributions && Number(profile.totalContributions) > 0
-                                  ? <span className="text-red-600 dark:text-red-400 font-medium">${Number(profile.totalContributions).toLocaleString()}</span>
-                                  : <span className="text-slate-400">-</span>}
+                                {(() => {
+                                  const bp = Number(profile.totalContributions ?? 0);
+                                  const sig = Math.round(Number(profile.totalLobbyAmount ?? 0) / 100);
+                                  const total = bp + sig;
+                                  if (total === 0) return <span className="text-slate-400">-</span>;
+                                  return (
+                                    <span className="text-red-600 dark:text-red-400 font-medium" title={bp > 0 && sig > 0 ? `BallotPedia: $${bp.toLocaleString()} + SuperPACs/SIGs: $${sig.toLocaleString()}` : undefined}>
+                                      ${total.toLocaleString()}
+                                    </span>
+                                  );
+                                })()}
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1">
