@@ -796,12 +796,12 @@ export function PostCard({ post }: PostCardProps) {
         )}
 
         {post.type === "volunteer" && (
-          <div className="mb-4 border border-teal-200 dark:border-teal-800 rounded-lg overflow-hidden bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950 dark:to-emerald-950">
+          <div className="mb-4 border border-border rounded-lg overflow-hidden bg-card border-l-4 border-l-teal-500">
             <div className="p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-full bg-teal-100 dark:bg-teal-900">
-                    <HandHeart className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                  <div className="p-2 rounded-full bg-teal-500/15">
+                    <HandHeart className="h-5 w-5 text-teal-500" />
                   </div>
                   <div>
                     <h3 className="font-bold text-lg text-foreground">{(post as any).volunteerTitle || "Volunteer Opportunity"}</h3>
@@ -824,7 +824,7 @@ export function PostCard({ post }: PostCardProps) {
               <div className="space-y-2 mb-3">
                 {((post as any).volunteerLocation || (post as any).volunteerIsRemote) && (
                   <div className="flex items-center gap-2 text-sm">
-                    <MapPin className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <MapPin className="h-4 w-4 text-teal-500" />
                     <span className="text-foreground">
                       {(post as any).volunteerIsRemote ? "Remote / Virtual" : (post as any).volunteerLocation}
                     </span>
@@ -833,7 +833,7 @@ export function PostCard({ post }: PostCardProps) {
 
                 {((post as any).volunteerStartDate || (post as any).volunteerEndDate) && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <Calendar className="h-4 w-4 text-teal-500" />
                     <span className="text-foreground">
                       {(post as any).volunteerStartDate && format(new Date((post as any).volunteerStartDate), "MMM d, yyyy")}
                       {(post as any).volunteerEndDate && ` - ${format(new Date((post as any).volunteerEndDate), "MMM d, yyyy")}`}
@@ -843,14 +843,14 @@ export function PostCard({ post }: PostCardProps) {
 
                 {(post as any).volunteerCommitment && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Clock className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <Clock className="h-4 w-4 text-teal-500" />
                     <span className="text-foreground">{(post as any).volunteerCommitment}</span>
                   </div>
                 )}
 
                 {(post as any).volunteerSpotsTotal && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Users className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <Users className="h-4 w-4 text-teal-500" />
                     <span className="text-foreground">
                       {(post as any).volunteerSpotsAvailable || (post as any).volunteerSpotsTotal} spots available
                     </span>
@@ -872,7 +872,7 @@ export function PostCard({ post }: PostCardProps) {
                       return (
                         <>
                           {skillsArray.slice(0, 5).map((skill: string, index: number) => (
-                            <Badge key={index} variant="outline" className="text-xs bg-teal-50 dark:bg-teal-900/50 border-teal-200 dark:border-teal-700">
+                            <Badge key={index} variant="outline" className="text-xs bg-teal-500/10 border-teal-500/30 text-foreground">
                               {skill}
                             </Badge>
                           ))}
@@ -900,11 +900,11 @@ export function PostCard({ post }: PostCardProps) {
               )}
 
               {((post as any).volunteerContactEmail || (post as any).volunteerContactPhone) && (
-                <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-teal-200 dark:border-teal-800">
+                <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-border">
                   {(post as any).volunteerContactEmail && (
                     <a 
                       href={`mailto:${(post as any).volunteerContactEmail}`}
-                      className="flex items-center gap-1 text-sm text-teal-600 dark:text-teal-400 hover:underline"
+                      className="flex items-center gap-1 text-sm text-teal-500 hover:underline"
                       data-testid={`link-volunteer-email-${post.id}`}
                     >
                       <Mail className="h-3 w-3" />
@@ -914,7 +914,7 @@ export function PostCard({ post }: PostCardProps) {
                   {(post as any).volunteerContactPhone && (
                     <a 
                       href={`tel:${(post as any).volunteerContactPhone}`}
-                      className="flex items-center gap-1 text-sm text-teal-600 dark:text-teal-400 hover:underline"
+                      className="flex items-center gap-1 text-sm text-teal-500 hover:underline"
                       data-testid={`link-volunteer-phone-${post.id}`}
                     >
                       <Phone className="h-3 w-3" />
@@ -926,7 +926,7 @@ export function PostCard({ post }: PostCardProps) {
 
               <Button 
                 variant="default" 
-                className="w-full mt-3 bg-teal-600 hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600"
+                className="w-full mt-3 bg-teal-600 hover:bg-teal-700"
                 size="sm"
                 onClick={handleOpenVolunteerSignup}
                 data-testid={`button-volunteer-signup-${post.id}`}
