@@ -5359,10 +5359,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         }
       };
 
-      const liveData = await fetchWithTimeout(
+      let liveData = await fetchWithTimeout(
         `https://api.quiverquant.com/beta/live/congresstrading`,
         15000
       );
+      if (liveData.length === 0) {
+        console.log(`[trades] Live endpoint returned 0 trades, retrying...`);
+        liveData = await fetchWithTimeout(
+          `https://api.quiverquant.com/beta/live/congresstrading`,
+          15000
+        );
+      }
       console.log(`[trades] Live endpoint returned ${liveData.length} total trades`);
       const nameNorm = name.toLowerCase();
       const lastNameNorm = lastName.toLowerCase();
@@ -5400,8 +5407,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         }
       }
 
-      tradeCache.set(cacheKey, { data: results, ts: Date.now() });
+      if (results.length > 0) {
+        tradeCache.set(cacheKey, { data: results, ts: Date.now() });
+      }
 
+      console.log(`[trades] Final result: ${results.length} trades for "${name}"`);
       res.json(results);
     } catch (error: any) {
       console.error("Trades fetch error:", error);
