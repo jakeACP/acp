@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import * as XLSX from "xlsx";
+
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminNavigation } from "@/components/admin-navigation";
@@ -891,22 +891,82 @@ export default function AdminPoliticiansPage() {
     return tags;
   }
 
+  function parseCSVText(text: string): any[] {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length === 0) return [];
+    const parseLine = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+          else inQuotes = !inQuotes;
+        } else if (ch === ',' && !inQuotes) {
+          result.push(current); current = '';
+        } else {
+          current += ch;
+        }
+      }
+      result.push(current);
+      return result;
+    };
+    const headers = parseLine(lines[0]);
+    return lines.slice(1).map(line => {
+      const values = parseLine(line);
+      const obj: any = {};
+      headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
+      return obj;
+    });
+  }
+
   function parseFileToRows(file: File): Promise<any[]> {
+    if (file.name.toLowerCase().endsWith('.csv')) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const text = e.target?.result as string;
+            resolve(parseCSVText(text));
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    }
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
-          const data = e.target?.result;
-          const wb = XLSX.read(data, { type: "binary" });
-          const ws = wb.Sheets[wb.SheetNames[0]];
-          const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          const buffer = e.target?.result as ArrayBuffer;
+          const ExcelJS = (await import('exceljs')).default;
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(buffer);
+          const worksheet = workbook.worksheets[0];
+          const headers: string[] = [];
+          worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            headers[colNumber - 1] = String(cell.value ?? '');
+          });
+          const rows: any[] = [];
+          worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+            const obj: any = {};
+            headers.forEach((h, i) => {
+              const cell = row.getCell(i + 1);
+              let val = cell.value;
+              if (val && typeof val === 'object' && 'richText' in (val as any)) {
+                val = (val as any).richText.map((rt: any) => rt.text).join('');
+              }
+              obj[h] = val ?? '';
+            });
+            rows.push(obj);
+          });
           resolve(rows);
-        } catch (err) {
-          reject(err);
-        }
+        } catch (err) { reject(err); }
       };
       reader.onerror = reject;
-      reader.readAsBinaryString(file);
+      reader.readAsArrayBuffer(file);
     });
   }
 

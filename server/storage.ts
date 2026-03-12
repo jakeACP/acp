@@ -4733,12 +4733,32 @@ export class DatabaseStorage implements IStorage {
     sponsorships_created: number;
   }> {
     const pathMod = await import('path');
-    const XLSXMod = await import('xlsx');
+    const ExcelJS = await import('exceljs');
 
     const filePath = pathMod.default.join(process.cwd(), 'attached_assets/ALL-CONGRESS-AIPAC_1772667997732.xlsx');
-    const workbook = XLSXMod.default.readFile(filePath);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows: any[] = XLSXMod.default.utils.sheet_to_json(sheet);
+    const workbook = new ExcelJS.default.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const worksheet = workbook.worksheets[0];
+
+    const headers: string[] = [];
+    worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      headers[colNumber - 1] = String(cell.value ?? '');
+    });
+
+    const rows: any[] = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const obj: any = {};
+      headers.forEach((h, i) => {
+        const cell = row.getCell(i + 1);
+        let val = cell.value;
+        if (val && typeof val === 'object' && 'richText' in (val as any)) {
+          val = (val as any).richText.map((rt: any) => rt.text).join('');
+        }
+        obj[h] = val ?? '';
+      });
+      rows.push(obj);
+    });
 
     const STATE_NAMES: Record<string, string> = {
       AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
