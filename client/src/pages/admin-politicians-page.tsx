@@ -1563,7 +1563,7 @@ export default function AdminPoliticiansPage() {
                 {/* ── External Data Tools ── */}
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">External Data Sources</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
 
                     {/* TrackAIPAC */}
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
