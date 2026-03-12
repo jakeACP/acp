@@ -4186,6 +4186,19 @@ export class DatabaseStorage implements IStorage {
     const [sponsorship] = await db
       .insert(politicianSigSponsorships)
       .values(data)
+      .onConflictDoUpdate({
+        target: [politicianSigSponsorships.politicianId, politicianSigSponsorships.sigId],
+        set: {
+          relationshipType: data.relationshipType,
+          reportedAmount: data.reportedAmount ?? null,
+          notes: data.notes ?? null,
+          sigRank: data.sigRank ?? null,
+          disclosureSource: data.disclosureSource ?? null,
+          disclosureUrl: data.disclosureUrl ?? null,
+          contributionPeriod: data.contributionPeriod ?? null,
+          updatedAt: new Date(),
+        },
+      })
       .returning();
     return sponsorship;
   }
