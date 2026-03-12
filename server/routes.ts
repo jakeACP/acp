@@ -162,8 +162,23 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
 
     try {
+      const body = { ...req.body };
+      // Coerce volunteerSkills from comma-separated string to array
+      if (typeof body.volunteerSkills === "string") {
+        body.volunteerSkills = body.volunteerSkills
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+      }
+      // Coerce volunteer date strings to Date objects
+      if (body.volunteerStartDate && typeof body.volunteerStartDate === "string") {
+        body.volunteerStartDate = new Date(body.volunteerStartDate);
+      }
+      if (body.volunteerEndDate && typeof body.volunteerEndDate === "string") {
+        body.volunteerEndDate = new Date(body.volunteerEndDate);
+      }
       const postData = insertPostSchema.parse({
-        ...req.body,
+        ...body,
         authorId: req.user.id,
       });
       const post = await storage.createPost(postData);
