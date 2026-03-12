@@ -231,7 +231,8 @@ export interface IStorage {
   getSigCategories(): Promise<string[]>;
   getSigIndustries(): Promise<string[]>;
   getPublicSigs(filters?: { category?: string; sentiment?: string }): Promise<SpecialInterestGroup[]>;
-  getPublicSigByTag(tag: string, userId?: string): Promise<{ sig: SpecialInterestGroup; politicians: any[]; totalContributions: number; communityScore: number | null; voteCount: number; userVote: number | null; connectedLobbies: any[] } | null>;
+  getPublicSigByTag(tag: string, userId?: string): Promise<{ sig: SpecialInterestGroup; politicians: any[]; totalContributions: number; communityScore: number | null; voteCount: number; userVote: number | null; connectedLobbies: any[]; top10Recipients: any[] } | null>;
+  updateSigInfluence(sigId: string, influenceScore: number | null, letterGrade: string | null): Promise<void>;
   submitSigCommunityVote(sigId: string, userId: string, vote: number): Promise<SigCommunityVote>;
   seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number>;
   
@@ -4103,7 +4104,32 @@ export class DatabaseStorage implements IStorage {
       }));
     }
 
-    return { sig, politicians, totalContributions, communityScore, voteCount, userVote, connectedLobbies };
+    // Top 10 recipients by reported amount
+    const top10Recipients = politicians
+      .filter(p => typeof p.reportedAmount === "number" && p.reportedAmount > 0)
+      .sort((a, b) => (b.reportedAmount ?? 0) - (a.reportedAmount ?? 0))
+      .slice(0, 10)
+      .map(p => ({
+        id: p.id,
+        fullName: p.fullName,
+        party: p.party,
+        state: p.state,
+        photoUrl: p.photoUrl,
+        handle: p.handle,
+        corruptionGrade: p.corruptionGrade,
+        reportedAmount: p.reportedAmount,
+        disclosureUrl: p.disclosureUrl,
+      }));
+
+    return { sig, politicians, totalContributions, communityScore, voteCount, userVote, connectedLobbies, top10Recipients };
+  }
+
+  async updateSigInfluence(sigId: string, influenceScore: number | null, letterGrade: string | null): Promise<void> {
+    await db.execute(sql`
+      UPDATE special_interest_groups
+      SET influence_score = ${influenceScore}, letter_grade = ${letterGrade}, updated_at = NOW()
+      WHERE id = ${sigId}
+    `);
   }
 
   async submitSigCommunityVote(sigId: string, userId: string, vote: number): Promise<SigCommunityVote> {

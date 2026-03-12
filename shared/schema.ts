@@ -1403,6 +1403,8 @@ export const specialInterestGroups = pgTable("special_interest_groups", {
   dataSourceUrl: text("data_source_url"), // Link to data source
   disclosureNotes: text("disclosure_notes"), // Admin notes about the organization
   gradeWeight: real("grade_weight").default(1.0), // Multiplier for grade impact (0.5 = 50%, 2.0 = 200%)
+  influenceScore: integer("influence_score"), // Admin-set: -50 (Corruption) to +50 (Progressive), null = unrated
+  letterGrade: text("letter_grade"), // Auto-computed or admin-set: A, B, C, D, F (with +/- modifiers)
   isAce: boolean("is_ace").default(false), // Anti-Corruption Endorsement — positive pledge
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),

@@ -4947,6 +4947,19 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.patch("/api/admin/sigs/:id/influence", ensureAdmin, async (req, res) => {
+    try {
+      const { influenceScore, letterGrade } = req.body;
+      const score = influenceScore !== undefined ? Math.max(-50, Math.min(50, Math.round(Number(influenceScore)))) : null;
+      const grade = letterGrade || null;
+      await storage.updateSigInfluence(req.params.id, score, grade);
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("Update SIG influence error:", e);
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.post("/api/sigs/:tag/community-vote", async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required to vote" });
@@ -5143,6 +5156,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         industry: z.string().optional(),
         disclosureNotes: z.string().optional(),
         gradeWeight: z.number().min(0).max(10).optional(),
+        influenceScore: z.number().int().min(-50).max(50).optional().nullable(),
+        letterGrade: z.string().optional().nullable(),
         isActive: z.boolean().optional(),
       }).parse(req.body);
       const data = {

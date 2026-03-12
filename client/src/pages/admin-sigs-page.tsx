@@ -11,10 +11,33 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Users, Database, Loader2, FileDown, ShieldCheck } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, ShieldCheck, TrendingDown, TrendingUp } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
+
+function autoGrade(score: number): string {
+  if (score >= 40) return "A+";
+  if (score >= 25) return "A";
+  if (score >= 10) return "B";
+  if (score >= 1) return "B-";
+  if (score === 0) return "C";
+  if (score >= -9) return "D+";
+  if (score >= -24) return "D";
+  if (score >= -39) return "F+";
+  return "F";
+}
+
+function gradeColor(grade?: string | null) {
+  if (!grade) return "";
+  const g = grade.toUpperCase();
+  if (g.startsWith("A")) return "text-green-600 dark:text-green-400 font-black";
+  if (g.startsWith("B")) return "text-blue-600 dark:text-blue-400 font-black";
+  if (g.startsWith("C")) return "text-yellow-600 dark:text-yellow-400 font-black";
+  if (g.startsWith("D")) return "text-orange-600 dark:text-orange-400 font-black";
+  return "text-red-600 dark:text-red-400 font-black";
+}
 
 type SpecialInterestGroup = {
   id: string;
@@ -30,6 +53,8 @@ type SpecialInterestGroup = {
   industry?: string;
   disclosureNotes?: string;
   gradeWeight?: number;
+  influenceScore?: number | null;
+  letterGrade?: string | null;
   isAce?: boolean;
   isActive: boolean;
   createdAt?: string;
@@ -72,6 +97,8 @@ export default function AdminSigsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [industryFilter, setIndustryFilter] = useState<string>("all");
+  const [influenceSlider, setInfluenceSlider] = useState<number>(0);
+  const [gradeOverride, setGradeOverride] = useState<string>("");
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
@@ -147,6 +174,7 @@ export default function AdminSigsPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const gradeWeightRaw = formData.get("gradeWeight") as string;
+    const computedGrade = gradeOverride || autoGrade(influenceSlider);
     const data: Partial<SpecialInterestGroup> = {
       name: formData.get("name") as string,
       acronym: formData.get("acronym") as string || undefined,
@@ -160,6 +188,8 @@ export default function AdminSigsPage() {
       industry: formData.get("industry") as string || undefined,
       disclosureNotes: formData.get("disclosureNotes") as string || undefined,
       gradeWeight: gradeWeightRaw ? parseFloat(gradeWeightRaw) : undefined,
+      influenceScore: influenceSlider,
+      letterGrade: computedGrade,
       isActive: formData.get("isActive") === "on",
     };
 
@@ -172,11 +202,15 @@ export default function AdminSigsPage() {
 
   const openCreateDialog = () => {
     setEditingSig(null);
+    setInfluenceSlider(0);
+    setGradeOverride("");
     setDialogOpen(true);
   };
 
   const openEditDialog = (sig: SpecialInterestGroup) => {
     setEditingSig(sig);
+    setInfluenceSlider(sig.influenceScore ?? 0);
+    setGradeOverride(sig.letterGrade || "");
     setDialogOpen(true);
   };
 
@@ -293,8 +327,8 @@ export default function AdminSigsPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Category</TableHead>
+                    <TableHead>Influence / Grade</TableHead>
                     <TableHead>Industry</TableHead>
-                    <TableHead>Headquarters</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -327,12 +361,24 @@ export default function AdminSigsPage() {
                               <ShieldCheck className="h-3 w-3" />ACE
                             </Badge>
                           )}
-                          {sig.gradeWeight !== undefined && sig.gradeWeight !== 1 && (
-                            <Badge variant="secondary" className="text-xs">
-                              ×{sig.gradeWeight}
-                            </Badge>
-                          )}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {sig.influenceScore !== null && sig.influenceScore !== undefined ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-2 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500 relative">
+                              <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: "50%" }} />
+                              <div className="absolute top-0 h-full w-1 bg-white shadow-sm"
+                                style={{ left: `calc(${((sig.influenceScore + 50) / 100) * 100}% - 2px)` }} />
+                            </div>
+                            <span className="text-xs text-slate-500">{sig.influenceScore > 0 ? "+" : ""}{sig.influenceScore}</span>
+                            <span className={`text-xs ${gradeColor(sig.letterGrade || autoGrade(sig.influenceScore))}`}>
+                              {sig.letterGrade || autoGrade(sig.influenceScore)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {sig.industry ? getIndustryLabel(sig.industry) : "-"}
@@ -534,6 +580,51 @@ export default function AdminSigsPage() {
                   placeholder="Internal notes about this organization..."
                   data-testid="input-sig-notes"
                 />
+              </div>
+
+              {/* Influence Score */}
+              <div className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">ACP Influence Score</Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                      {influenceSlider > 0 ? "+" : ""}{influenceSlider}
+                    </span>
+                    <span className={`text-sm font-black ${gradeColor(gradeOverride || autoGrade(influenceSlider))}`}>
+                      {gradeOverride || autoGrade(influenceSlider)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><TrendingDown className="h-3 w-3 text-red-500" />Corruption (-50)</span>
+                  <span>Neutral (0)</span>
+                  <span className="flex items-center gap-1">Progressive (+50)<TrendingUp className="h-3 w-3 text-green-500" /></span>
+                </div>
+                <div className="relative h-2 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500 mb-2">
+                  <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: "50%" }} />
+                </div>
+                <Slider
+                  min={-50}
+                  max={50}
+                  step={1}
+                  value={[influenceSlider]}
+                  onValueChange={(v) => { setInfluenceSlider(v[0]); setGradeOverride(""); }}
+                  className="w-full"
+                />
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs whitespace-nowrap">Grade Override:</Label>
+                  <Select value={gradeOverride} onValueChange={setGradeOverride}>
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue placeholder={`Auto: ${autoGrade(influenceSlider)}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Auto (from score)</SelectItem>
+                      {["A+","A","A-","B+","B","B-","C+","C","C-","D+","D","D-","F+","F","F-"].map(g => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="space-y-2">

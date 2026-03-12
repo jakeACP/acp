@@ -21,7 +21,9 @@ import {
   Network,
   TrendingDown,
   TrendingUp,
-  Vote
+  Vote,
+  Trophy,
+  BarChart3,
 } from "lucide-react";
 
 type SIG = {
@@ -36,6 +38,8 @@ type SIG = {
   dataSourceUrl?: string;
   disclosureNotes?: string;
   website?: string;
+  influenceScore?: number | null;
+  letterGrade?: string | null;
 };
 
 type Politician = {
@@ -70,7 +74,12 @@ type SigProfileData = {
   voteCount: number;
   userVote: number | null;
   connectedLobbies: ConnectedLobby[];
+  top10Recipients: Politician[];
 };
+
+function isFecId(name: string): boolean {
+  return /^C\d{8}$/.test(name.trim());
+}
 
 function sentimentBadgeClass(s?: string) {
   if (s === "negative") return "bg-red-600 text-white";
@@ -84,20 +93,33 @@ function sentimentLabel(s?: string) {
   return "Neutral";
 }
 
-function gradeColor(grade?: string) {
+function gradeColor(grade?: string | null) {
   if (!grade) return "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300";
   const g = grade.toUpperCase();
-  if (g === "A") return "bg-green-600 text-white";
-  if (g === "B") return "bg-blue-500 text-white";
-  if (g === "C") return "bg-yellow-400 text-gray-900";
-  if (g === "D") return "bg-orange-500 text-white";
-  if (g === "F") return "bg-red-600 text-white";
+  if (g.startsWith("A")) return "bg-green-600 text-white";
+  if (g.startsWith("B")) return "bg-blue-500 text-white";
+  if (g.startsWith("C")) return "bg-yellow-400 text-gray-900";
+  if (g.startsWith("D")) return "bg-orange-500 text-white";
+  if (g.startsWith("F")) return "bg-red-600 text-white";
   return "bg-gray-200 text-gray-700";
+}
+
+function influenceGrade(score: number): string {
+  if (score >= 40) return "A+";
+  if (score >= 25) return "A";
+  if (score >= 10) return "B";
+  if (score >= 1) return "B-";
+  if (score === 0) return "C";
+  if (score >= -9) return "D+";
+  if (score >= -24) return "D";
+  if (score >= -39) return "F+";
+  return "F";
 }
 
 function categoryBadgeClass(cat: string) {
   const map: Record<string, string> = {
     "Super PAC": "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950 dark:text-orange-200",
+    "pac": "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950 dark:text-orange-200",
     "Dark Money": "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950 dark:text-purple-200",
     "Industry PAC": "bg-red-100 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-200",
     "Special Interest": "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-200",
@@ -141,6 +163,30 @@ function scoreColor(score: number): string {
   if (score === 0) return "text-muted-foreground";
   if (score < 20) return "text-blue-500 dark:text-blue-400";
   return "text-green-600 dark:text-green-400";
+}
+
+function influenceLabel(score: number): string {
+  if (score >= 35) return "Highly Progressive / Reform Aligned";
+  if (score >= 15) return "Progressive Leaning";
+  if (score >= 1) return "Slightly Progressive";
+  if (score === 0) return "Neutral";
+  if (score >= -14) return "Slight Corruption Risk";
+  if (score >= -34) return "Significant Corruption Influence";
+  return "Highly Corrupting Influence";
+}
+
+function influenceBarColor(score: number): string {
+  if (score > 0) return "bg-green-500";
+  if (score < 0) return "bg-red-500";
+  return "bg-gray-400";
+}
+
+function formatMoney(cents: number): string {
+  const dollars = cents / 100;
+  if (dollars >= 1_000_000_000) return `$${(dollars / 1_000_000_000).toFixed(2)}B`;
+  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
+  if (dollars >= 1_000) return `$${Math.round(dollars / 1_000)}K`;
+  return `$${dollars.toLocaleString()}`;
 }
 
 export default function SigProfilePage() {
@@ -203,12 +249,15 @@ export default function SigProfilePage() {
     );
   }
 
-  const { sig, politicians, totalContributions, communityScore, voteCount, userVote, connectedLobbies } = data;
+  const { sig, politicians, totalContributions, communityScore, voteCount, userVote, connectedLobbies, top10Recipients } = data;
   const pledged = politicians.filter(p => p.relationshipType === "pledged_against");
   const donors = politicians.filter(p => p.relationshipType !== "pledged_against");
 
   const displayScore = communityScore !== null ? Math.round(communityScore * 10) / 10 : null;
   const communityBarPct = displayScore !== null ? ((displayScore + 50) / 100) * 100 : 50;
+
+  const effectiveGrade = sig.letterGrade || (sig.influenceScore !== null && sig.influenceScore !== undefined ? influenceGrade(sig.influenceScore) : null);
+  const isPac = sig.category === "pac" || sig.category === "Super PAC";
 
   return (
     <div className="min-h-screen bg-background">
@@ -227,6 +276,11 @@ export default function SigProfilePage() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-start gap-3">
             <h1 className="text-3xl font-bold text-foreground">{sig.name}</h1>
+            {effectiveGrade && (
+              <span className={`text-xl font-black px-3 py-1 rounded-lg shrink-0 ${gradeColor(effectiveGrade)}`}>
+                {effectiveGrade}
+              </span>
+            )}
             {sig.sentiment && (
               <Badge className={`text-sm px-3 py-1 ${sentimentBadgeClass(sig.sentiment)}`}>
                 {sig.sentiment === "negative" ? <AlertTriangle className="h-3.5 w-3.5 mr-1.5" /> : <CheckCircle className="h-3.5 w-3.5 mr-1.5" />}
@@ -235,7 +289,7 @@ export default function SigProfilePage() {
             )}
           </div>
           <Badge variant="outline" className={`w-fit ${categoryBadgeClass(sig.category)}`}>
-            {sig.category}
+            {sig.category === "pac" ? "SuperPAC / Committee" : sig.category}
           </Badge>
           {sig.description && (
             <p className="text-base text-foreground/80 leading-relaxed max-w-3xl">
@@ -257,15 +311,9 @@ export default function SigProfilePage() {
             <CardContent className="p-4 flex flex-col items-center text-center gap-1">
               <DollarSign className="h-5 w-5 text-orange-500" />
               <span className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                {totalContributions > 0
-                  ? `$${((totalContributions / 100) >= 1_000_000
-                      ? ((totalContributions / 100) / 1_000_000).toFixed(1) + "M"
-                      : (totalContributions / 100) >= 1_000
-                      ? Math.round(totalContributions / 100 / 1_000) + "K"
-                      : (totalContributions / 100).toLocaleString())}`
-                  : "—"}
+                {totalContributions > 0 ? formatMoney(totalContributions) : "—"}
               </span>
-              <span className="text-xs text-muted-foreground">Total Reported Contributions</span>
+              <span className="text-xs text-muted-foreground">Grand Total Spent</span>
             </CardContent>
           </Card>
           <Card className="col-span-2 sm:col-span-1">
@@ -279,6 +327,101 @@ export default function SigProfilePage() {
           </Card>
         </div>
 
+        {/* Admin Influence Score */}
+        {sig.influenceScore !== null && sig.influenceScore !== undefined && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-purple-500" />
+                ACP Influence Rating
+                {effectiveGrade && (
+                  <span className={`ml-auto text-sm font-black px-2 py-0.5 rounded ${gradeColor(effectiveGrade)}`}>
+                    {effectiveGrade}
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                <span className="flex items-center gap-1"><TrendingDown className="h-3.5 w-3.5 text-red-500" />Corruption Influence (-50)</span>
+                <span>Neutral (0)</span>
+                <span className="flex items-center gap-1">Progressive Influence (+50)<TrendingUp className="h-3.5 w-3.5 text-green-500" /></span>
+              </div>
+              <div className="relative h-5 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500">
+                <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: "50%" }} />
+                <div
+                  className="absolute top-0 h-full w-1.5 bg-white border-x border-white/50 shadow-sm transition-all"
+                  style={{ left: `calc(${((sig.influenceScore + 50) / 100) * 100}% - 3px)` }}
+                />
+              </div>
+              <p className={`text-sm font-semibold text-center ${scoreColor(sig.influenceScore)}`}>
+                Score: {sig.influenceScore > 0 ? "+" : ""}{sig.influenceScore} — {influenceLabel(sig.influenceScore)}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Top 10 Recipients (for PACs/SuperPACs with data) */}
+        {isPac && top10Recipients.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-amber-500" />
+                Top Recipients of Funds
+                <Badge variant="outline" className="text-xs ml-auto">Top {top10Recipients.length}</Badge>
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Politicians who received the most spending from this committee (FEC independent expenditures).
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {top10Recipients.map((p, i) => {
+                  const maxAmt = top10Recipients[0]?.reportedAmount ?? 1;
+                  const pct = Math.round(((p.reportedAmount ?? 0) / maxAmt) * 100);
+                  return (
+                    <Link key={p.id} href={`/politicians/${p.id}`}>
+                      <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
+                        <span className="text-sm font-bold text-muted-foreground w-5 text-center shrink-0">#{i + 1}</span>
+                        <Avatar className="h-8 w-8 shrink-0">
+                          <AvatarImage src={p.photoUrl || ""} alt={p.fullName} />
+                          <AvatarFallback className="text-xs font-bold">
+                            {p.fullName.split(" ").map(w => w[0]).join("").slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{p.fullName}</span>
+                            {p.corruptionGrade && (
+                              <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${gradeColor(p.corruptionGrade)}`}>
+                                {p.corruptionGrade}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-xs font-semibold text-orange-600 dark:text-orange-400 shrink-0">
+                              {formatMoney(p.reportedAmount ?? 0)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+              {totalContributions > 0 && (
+                <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                  <span className="text-sm font-semibold text-muted-foreground">Grand Total (all recipients)</span>
+                  <span className="text-lg font-black text-orange-600 dark:text-orange-400">{formatMoney(totalContributions)}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Community Slide Scale */}
         <Card>
           <CardHeader className="pb-2">
@@ -288,7 +431,6 @@ export default function SigProfilePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            {/* Community average bar */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-muted-foreground font-medium">
                 <span className="flex items-center gap-1"><TrendingDown className="h-3.5 w-3.5 text-red-500" /> Corrupt (-50)</span>
@@ -296,14 +438,12 @@ export default function SigProfilePage() {
                 <span className="flex items-center gap-1">Clean (+50) <TrendingUp className="h-3.5 w-3.5 text-green-500" /></span>
               </div>
               <div className="relative h-4 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500">
-                {/* Community average needle */}
                 {displayScore !== null && (
                   <div
                     className="absolute top-0 h-full w-1 bg-white border-x border-white/50 shadow-sm transition-all"
                     style={{ left: `calc(${communityBarPct}% - 2px)` }}
                   />
                 )}
-                {/* Center line */}
                 <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: "50%" }} />
               </div>
               {displayScore !== null ? (
@@ -315,7 +455,6 @@ export default function SigProfilePage() {
               )}
             </div>
 
-            {/* Voting slider */}
             <div className="border rounded-lg p-4 bg-muted/30 space-y-4">
               <p className="text-sm font-medium text-center">Your Rating: <span className={`font-bold ${scoreColor(sliderValue)}`}>{sliderValue > 0 ? `+${sliderValue}` : sliderValue}</span> — {scoreLabel(sliderValue)}</p>
               <Slider
@@ -337,12 +476,10 @@ export default function SigProfilePage() {
                 className="w-full"
                 variant={hasVoted ? "outline" : "default"}
               >
-                {voteMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : null}
-                {hasVoted ? (
-                  `Update My Vote (currently ${userVote !== null ? (userVote > 0 ? `+${userVote}` : userVote) : sliderValue})`
-                ) : "Submit Community Rating"}
+                {voteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                {hasVoted
+                  ? `Update My Vote (currently ${userVote !== null ? (userVote > 0 ? `+${userVote}` : userVote) : sliderValue})`
+                  : "Submit Community Rating"}
               </Button>
             </div>
           </CardContent>
@@ -354,27 +491,17 @@ export default function SigProfilePage() {
             <div className="flex items-center gap-2">
               <Info className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-sm text-muted-foreground">Data Source:</span>
-              <a
-                href={sig.dataSourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400 font-medium"
-              >
-                {sig.dataSourceName}
-                <ExternalLink className="h-3.5 w-3.5" />
+              <a href={sig.dataSourceUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400 font-medium">
+                {sig.dataSourceName}<ExternalLink className="h-3.5 w-3.5" />
               </a>
             </div>
           )}
           {sig.website && (
             <div className="flex items-center gap-2">
-              <a
-                href={sig.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
-              >
-                Official Website
-                <ExternalLink className="h-3.5 w-3.5" />
+              <a href={sig.website} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400">
+                Official Website<ExternalLink className="h-3.5 w-3.5" />
               </a>
             </div>
           )}
@@ -402,9 +529,7 @@ export default function SigProfilePage() {
               <div className="flex flex-wrap gap-2">
                 {connectedLobbies.map(lobby => (
                   <Link key={lobby.id} href={`/sigs/${lobby.tag}`}>
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 ${lobbySentimentClass(lobby.sentiment)}`}
-                    >
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 ${lobbySentimentClass(lobby.sentiment)}`}>
                       {lobby.name}
                       <span className="text-xs opacity-60 font-normal">×{lobby.sharedCount}</span>
                     </span>
@@ -440,9 +565,7 @@ export default function SigProfilePage() {
                     Pledged Against ({pledged.length})
                   </h3>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {pledged.map(p => (
-                      <PoliticianCard key={p.id} politician={p} />
-                    ))}
+                    {pledged.map(p => <PoliticianCard key={p.id} politician={p} />)}
                   </div>
                 </div>
               )}
@@ -454,9 +577,7 @@ export default function SigProfilePage() {
                     Linked Politicians ({donors.length})
                   </h3>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {donors.map(p => (
-                      <PoliticianCard key={p.id} politician={p} />
-                    ))}
+                    {donors.map(p => <PoliticianCard key={p.id} politician={p} />)}
                   </div>
                 </div>
               )}
@@ -470,7 +591,18 @@ export default function SigProfilePage() {
 
 function PoliticianCard({ politician: p }: { politician: Politician }) {
   const initials = p.fullName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  
+
+  function gradeColor(grade?: string) {
+    if (!grade) return "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300";
+    const g = grade.toUpperCase();
+    if (g.startsWith("A")) return "bg-green-600 text-white";
+    if (g.startsWith("B")) return "bg-blue-500 text-white";
+    if (g.startsWith("C")) return "bg-yellow-400 text-gray-900";
+    if (g.startsWith("D")) return "bg-orange-500 text-white";
+    if (g.startsWith("F")) return "bg-red-600 text-white";
+    return "bg-gray-200 text-gray-700";
+  }
+
   return (
     <Link href={`/politicians/${p.id}`}>
       <Card className="hover:shadow-md transition-shadow cursor-pointer">
@@ -484,9 +616,7 @@ function PoliticianCard({ politician: p }: { politician: Politician }) {
               <div className="flex items-start justify-between gap-1">
                 <div>
                   <p className="font-semibold text-sm leading-tight truncate">{p.fullName}</p>
-                  {p.handle && (
-                    <p className="text-xs text-blue-600 dark:text-blue-400">@{p.handle}</p>
-                  )}
+                  {p.handle && <p className="text-xs text-blue-600 dark:text-blue-400">@{p.handle}</p>}
                   <p className="text-xs text-muted-foreground">
                     {[p.party, p.state].filter(Boolean).join(" · ")}
                   </p>
@@ -498,12 +628,16 @@ function PoliticianCard({ politician: p }: { politician: Politician }) {
                 )}
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
-                <Badge variant="outline" className={`text-xs ${relationshipBadge(p.relationshipType)}`}>
-                  {relationshipLabel(p.relationshipType)}
+                <Badge variant="outline" className={`text-xs ${
+                  p.relationshipType === "pledged_against" ? "bg-green-100 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-200" :
+                  p.relationshipType === "endorsed" ? "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-200" :
+                  "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950 dark:text-orange-200"
+                }`}>
+                  {p.relationshipType === "pledged_against" ? "Pledged Against" : p.relationshipType === "endorsed" ? "Endorsed By" : "Donor"}
                 </Badge>
                 {typeof p.reportedAmount === "number" && p.reportedAmount > 0 && (
                   <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
-                    ${(p.reportedAmount / 100).toLocaleString()}
+                    {formatMoney(p.reportedAmount)}
                   </span>
                 )}
               </div>
