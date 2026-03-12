@@ -64,7 +64,7 @@ export default function AdminUsersPage() {
   };
 
   const getRoleLabel = (role: string) => {
-    if (role === "state_admin") return "Delegate";
+    if (role === "state_admin") return "Database Administrator";
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
 
@@ -249,7 +249,7 @@ export default function AdminUsersPage() {
               Manage Role
             </DialogTitle>
             <DialogDescription>
-              Update the role for <strong>@{roleDialogUser?.username}</strong>. Delegates can import and manage data for their assigned state.
+              Update the role for <strong>@{roleDialogUser?.username}</strong>. Database Administrators (DBAs) can import and manage data for their assigned state.
             </DialogDescription>
           </DialogHeader>
 
@@ -264,7 +264,7 @@ export default function AdminUsersPage() {
                   <SelectItem value="citizen">Citizen — standard user</SelectItem>
                   <SelectItem value="candidate">Candidate — running for office</SelectItem>
                   <SelectItem value="moderator">Moderator — content moderation</SelectItem>
-                  <SelectItem value="state_admin">Delegate — manages data for a specific state</SelectItem>
+                  <SelectItem value="state_admin">Database Administrator (DBA) — manages data for a specific state</SelectItem>
                   <SelectItem value="admin">Admin — full access</SelectItem>
                 </SelectContent>
               </Select>
@@ -292,7 +292,7 @@ export default function AdminUsersPage() {
               <p><strong>Citizen</strong> — post, vote, follow, engage</p>
               <p><strong>Candidate</strong> — candidate profile + citizen access</p>
               <p><strong>Moderator</strong> — review flagged content</p>
-              <p><strong>Delegate</strong> — import and manage data for one state</p>
+              <p><strong>Database Administrator (DBA)</strong> — import and manage data for one state</p>
               <p><strong>Admin</strong> — full system access</p>
             </div>
           </div>
