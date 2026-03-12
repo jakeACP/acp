@@ -3426,7 +3426,7 @@ export class DatabaseStorage implements IStorage {
         sql`CASE ${politicianProfiles.corruptionGrade} WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END`,
         politicianProfiles.fullName
       )
-      .limit(500);
+      .limit(2000);
 
     const politicians = results.map(r => ({ ...r.politician, position: r.position }));
     if (politicians.length === 0) return [];
