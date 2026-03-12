@@ -625,7 +625,7 @@ export default function PoliticianProfilePage() {
         <div className="w-full lg:w-80 xl:w-96 flex-shrink-0 space-y-4">
 
           {/* Contact & Term Info */}
-          {(profile.email || profile.phone || profile.website || profile.officeAddress || profile.termStart) && (
+          {(profile.email || profile.phone || profile.website || profile.ballotpediaUrl || profile.officeAddress || profile.position?.jurisdiction || profile.termStart) && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Contact & Office</CardTitle>
@@ -655,10 +655,20 @@ export default function PoliticianProfilePage() {
                     </a>
                   </div>
                 )}
-                {profile.officeAddress && (
+                {profile.ballotpediaUrl && (
+                  <div className="flex items-center gap-2" data-testid="text-ballotpedia">
+                    <ExternalLink className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <a href={sanitizeUrl(profile.ballotpediaUrl)} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline truncate text-blue-600 dark:text-blue-400">
+                      Ballotpedia
+                    </a>
+                  </div>
+                )}
+                {(profile.officeAddress || profile.position?.jurisdiction) && (
                   <div className="flex items-center gap-2" data-testid="text-office-address">
                     <MapPin className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                    <span className="text-sm">{profile.officeAddress}</span>
+                    <span className="text-sm">
+                      {profile.officeAddress || [profile.position?.jurisdiction, profile.position?.district].filter(Boolean).join(", ")}
+                    </span>
                   </div>
                 )}
                 {profile.termStart && (
