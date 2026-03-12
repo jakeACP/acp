@@ -1320,7 +1320,8 @@ export const politicalPositions = pgTable("political_positions", {
 // Politician Profiles - Information about individual politicians
 export const politicianProfiles = pgTable("politician_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  positionId: varchar("position_id").references(() => politicalPositions.id, { onDelete: "set null" }), // current position
+  positionId: varchar("position_id").references(() => politicalPositions.id, { onDelete: "set null" }), // current/held position
+  targetPositionId: varchar("target_position_id").references(() => politicalPositions.id, { onDelete: "set null" }), // office being sought (candidates running for a different seat)
   fullName: text("full_name").notNull(),
   party: text("party"), // political party affiliation
   email: text("email"),
@@ -1358,6 +1359,7 @@ export const politicianProfiles = pgTable("politician_profiles", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   positionIndex: index("politician_profiles_position_idx").on(table.positionId),
+  targetPositionIndex: index("politician_profiles_target_position_idx").on(table.targetPositionId),
   nameIndex: index("politician_profiles_name_idx").on(table.fullName),
   currentIndex: index("politician_profiles_current_idx").on(table.isCurrent),
   featuredIndex: index("politician_profiles_featured_idx").on(table.featured),

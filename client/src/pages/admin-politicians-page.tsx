@@ -73,6 +73,7 @@ type PoliticianProfile = {
   isCurrent: boolean;
   profileType?: string;
   positionId?: string;
+  targetPositionId?: string;
   featured?: boolean;
   handle?: string;
   corruptionGrade?: string;
@@ -694,6 +695,7 @@ export default function AdminPoliticiansPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const positionIdValue = formData.get("positionId") as string;
+    const targetPositionIdValue = formData.get("targetPositionId") as string;
     const data = {
       fullName: formData.get("fullName") as string,
       party: formData.get("party") as string || undefined,
@@ -709,6 +711,7 @@ export default function AdminPoliticiansPage() {
       fecCandidateId: (formData.get("fecCandidateId") as string) || undefined,
       isCurrent: formData.get("isCurrent") === "true",
       positionId: positionIdValue === "none" ? undefined : positionIdValue || undefined,
+      targetPositionId: targetPositionIdValue === "none" ? null : targetPositionIdValue || undefined,
     };
 
     if (editingProfile) {
@@ -2082,6 +2085,7 @@ export default function AdminPoliticiansPage() {
                       <TableBody>
                         {sortedProfiles.slice(0, profileDisplayLimit).map((profile) => {
                           const position = positions.find(p => p.id === profile.positionId);
+                          const targetPosition = profile.targetPositionId ? positions.find(p => p.id === profile.targetPositionId) : undefined;
                           return (
                             <TableRow key={profile.id} data-testid={`row-profile-${profile.id}`}>
                               <TableCell>
@@ -2140,7 +2144,18 @@ export default function AdminPoliticiansPage() {
                               </TableCell>
                               <TableCell className="text-sm">{profile.party || "-"}</TableCell>
                               <TableCell className="text-sm">
-                                {position ? position.title : <span className="text-slate-400">Not assigned</span>}
+                                {position ? (
+                                  <span>
+                                    {position.title}
+                                    {targetPosition && (
+                                      <span className="block text-xs text-blue-500 dark:text-blue-400 mt-0.5">
+                                        → Running for: {targetPosition.title}
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">Not assigned</span>
+                                )}
                               </TableCell>
                               <TableCell className="text-sm text-slate-500">
                                 {position?.jurisdiction || "-"}
@@ -2653,7 +2668,7 @@ export default function AdminPoliticiansPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="positionId">Assign to Position (optional)</Label>
+                <Label htmlFor="positionId">Current Position (optional)</Label>
                 <Select name="positionId" defaultValue={editingProfile?.positionId || "none"}>
                   <SelectTrigger data-testid="select-position-id">
                     <SelectValue placeholder="Select a position" />
@@ -2667,6 +2682,25 @@ export default function AdminPoliticiansPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-slate-400">The office they currently hold.</p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="targetPositionId">Running For (optional)</Label>
+                <Select name="targetPositionId" defaultValue={editingProfile?.targetPositionId || "none"}>
+                  <SelectTrigger data-testid="select-target-position-id">
+                    <SelectValue placeholder="Select target position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not running / same seat</SelectItem>
+                    {positions.map(position => (
+                      <SelectItem key={position.id} value={position.id}>
+                        {position.title} - {position.jurisdiction}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-400">Only set if running for a different seat than their current role (e.g. a Governor running for Senate).</p>
               </div>
 
               <div className="grid gap-2">

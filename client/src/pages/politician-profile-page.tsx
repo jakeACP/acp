@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 type PoliticianProfileWithPosition = PoliticianProfile & {
   position?: PoliticalPosition | null;
+  targetPosition?: PoliticalPosition | null;
 };
 
 type SponsorWithSig = PoliticianSigSponsorship & {
@@ -255,6 +256,11 @@ export default function PoliticianProfilePage() {
                 {profile.position && (
                   <CardDescription className="text-lg" data-testid="text-politician-position">
                     {profile.position.title}
+                  </CardDescription>
+                )}
+                {profile.targetPosition && (
+                  <CardDescription className="text-sm text-blue-600 dark:text-blue-400 mt-0.5 font-medium" data-testid="text-politician-target-position">
+                    Running for: {profile.targetPosition.title}
                   </CardDescription>
                 )}
                 {profile.party && (

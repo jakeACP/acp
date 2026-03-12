@@ -5,6 +5,7 @@ import { friendships, friendGroups, friendGroupMembers, friendSuggestions, frien
 import * as cheerio from "cheerio";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray, gte, ilike } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -3389,13 +3390,16 @@ export class DatabaseStorage implements IStorage {
 
   // Politician Profiles Management
   async listPoliticianProfiles(filters?: { positionId?: string; isCurrent?: boolean }): Promise<any[]> {
+    const targetPositions = alias(politicalPositions, "target_positions");
     let query = db
       .select({
         politician: politicianProfiles,
         position: politicalPositions,
+        targetPosition: targetPositions,
       })
       .from(politicianProfiles)
-      .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id));
+      .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .leftJoin(targetPositions, eq(politicianProfiles.targetPositionId, targetPositions.id));
     
     const conditions = [];
     if (filters?.positionId) {
@@ -3410,17 +3414,20 @@ export class DatabaseStorage implements IStorage {
     }
     
     const results = await query.orderBy(politicianProfiles.fullName);
-    return results.map(r => ({ ...r.politician, position: r.position }));
+    return results.map(r => ({ ...r.politician, position: r.position, targetPosition: r.targetPosition }));
   }
 
   async listPoliticiansWithSigs(): Promise<any[]> {
+    const targetPositions = alias(politicalPositions, "target_positions");
     const results = await db
       .select({
         politician: politicianProfiles,
         position: politicalPositions,
+        targetPosition: targetPositions,
       })
       .from(politicianProfiles)
       .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .leftJoin(targetPositions, eq(politicianProfiles.targetPositionId, targetPositions.id))
       .where(eq(politicianProfiles.isCurrent, true))
       .orderBy(
         sql`CASE ${politicianProfiles.corruptionGrade} WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END`,
@@ -3428,7 +3435,7 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(2000);
 
-    const politicians = results.map(r => ({ ...r.politician, position: r.position }));
+    const politicians = results.map(r => ({ ...r.politician, position: r.position, targetPosition: r.targetPosition }));
     if (politicians.length === 0) return [];
 
     const ids = politicians.map(p => p.id);
@@ -3532,17 +3539,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPoliticianProfile(id: string): Promise<any> {
+    const targetPositions = alias(politicalPositions, "target_positions");
     const [result] = await db
       .select({
         politician: politicianProfiles,
         position: politicalPositions,
+        targetPosition: targetPositions,
       })
       .from(politicianProfiles)
       .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .leftJoin(targetPositions, eq(politicianProfiles.targetPositionId, targetPositions.id))
       .where(eq(politicianProfiles.id, id));
     
     if (!result) return undefined;
-    return { ...result.politician, position: result.position };
+    return { ...result.politician, position: result.position, targetPosition: result.targetPosition };
   }
 
   async createPoliticianProfile(data: InsertPoliticianProfile): Promise<PoliticianProfile> {
@@ -3563,13 +3573,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchPoliticians(q: string): Promise<any[]> {
+    const targetPositions = alias(politicalPositions, "target_positions");
     const results = await db
       .select({
         politician: politicianProfiles,
         position: politicalPositions,
+        targetPosition: targetPositions,
       })
       .from(politicianProfiles)
       .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .leftJoin(targetPositions, eq(politicianProfiles.targetPositionId, targetPositions.id))
       .where(
         or(
           ilike(politicianProfiles.fullName, `%${q}%`),
@@ -3578,21 +3591,24 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(politicianProfiles.fullName)
       .limit(8);
-    return results.map(r => ({ ...r.politician, position: r.position }));
+    return results.map(r => ({ ...r.politician, position: r.position, targetPosition: r.targetPosition }));
   }
 
   async getPoliticianByHandle(handle: string): Promise<any | null> {
+    const targetPositions = alias(politicalPositions, "target_positions");
     const results = await db
       .select({
         politician: politicianProfiles,
         position: politicalPositions,
+        targetPosition: targetPositions,
       })
       .from(politicianProfiles)
       .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .leftJoin(targetPositions, eq(politicianProfiles.targetPositionId, targetPositions.id))
       .where(ilike(politicianProfiles.handle, handle))
       .limit(1);
     if (!results[0]) return null;
-    return { ...results[0].politician, position: results[0].position };
+    return { ...results[0].politician, position: results[0].position, targetPosition: results[0].targetPosition };
   }
 
   async updatePoliticianPhoto(id: string, photoUrl: string): Promise<void> {
@@ -3678,8 +3694,9 @@ export class DatabaseStorage implements IStorage {
     biography?: string;
     totalContributions?: number;
     fecCandidateId?: string;
+    runningForPositionTitle?: string; // detected "running for" office from BallotPedia
   }> {
-    const result: { photoUrl?: string; website?: string; socialMedia?: Record<string, string>; biography?: string; totalContributions?: number; fecCandidateId?: string } = {};
+    const result: { photoUrl?: string; website?: string; socialMedia?: Record<string, string>; biography?: string; totalContributions?: number; fecCandidateId?: string; runningForPositionTitle?: string } = {};
 
     // Try BallotPedia first
     if (profile.ballotpediaUrl) {
@@ -3763,6 +3780,46 @@ export class DatabaseStorage implements IStorage {
         if (grandTotal > 10000) {
           result.totalContributions = grandTotal; // store in dollars
         }
+
+        // Detect "running for" office from BallotPedia page content.
+        // BallotPedia often says "[Name] is running for [Office] in [Year]" or has
+        // an elections row for the upcoming election year.
+        if (!result.runningForPositionTitle) {
+          const currentYear = new Date().getFullYear();
+          const nextYear = currentYear + 1;
+
+          // Pattern 1: prose text — "[Name] is running for X in YEAR"
+          const bodyText = $("body").text();
+          const runningForMatch = bodyText.match(
+            new RegExp(`(?:is running for|announced (?:a )?(?:bid|candidacy|campaign|run) for|filed to run for|seeks|is seeking)\\s+([A-Z][\\w .()–-]{3,60})\\s+(?:in (?:${currentYear}|${nextYear})|election)`, "i")
+          );
+          if (runningForMatch) {
+            const candidate = runningForMatch[1].trim().replace(/\s+/g, " ");
+            if (candidate.length > 3 && candidate.length < 80) {
+              result.runningForPositionTitle = candidate;
+            }
+          }
+
+          // Pattern 2: elections table — find row with upcoming year where person is a candidate
+          if (!result.runningForPositionTitle) {
+            $("table").each((_, tbl) => {
+              if (result.runningForPositionTitle) return;
+              const tblText = $(tbl).text();
+              if (!/election|race|candidacy/i.test(tblText)) return;
+              $(tbl).find("tr").each((_, row) => {
+                if (result.runningForPositionTitle) return;
+                const cells = $(row).find("td");
+                if (cells.length < 2) return;
+                const yearCell = $(cells[0]).text().trim();
+                if (!new RegExp(`${currentYear}|${nextYear}`).test(yearCell)) return;
+                const officeCell = $(cells[1]).text().trim();
+                if (officeCell.length > 3 && officeCell.length < 80) {
+                  result.runningForPositionTitle = officeCell;
+                }
+              });
+            });
+          }
+        }
       }
     } catch { /* ignore */ }
 
@@ -3814,6 +3871,29 @@ export class DatabaseStorage implements IStorage {
     if (enriched.fecCandidateId && !(profile as any).fecCandidateId) {
       (patch as any).fecCandidateId = enriched.fecCandidateId;
       fields.push("fecCandidateId");
+    }
+
+    // If BallotPedia indicated a "running for" office, try to match it to a known position
+    // and set targetPositionId when the detected office differs from the current position
+    if (enriched.runningForPositionTitle && !(profile as any).targetPositionId) {
+      try {
+        const titleLower = enriched.runningForPositionTitle.toLowerCase();
+        const matchedPos = await db
+          .select({ id: politicalPositions.id, title: politicalPositions.title })
+          .from(politicalPositions)
+          .where(ilike(politicalPositions.title, `%${enriched.runningForPositionTitle}%`))
+          .limit(5);
+
+        // Pick best match: exact or starts-with
+        const best = matchedPos.find(p => p.title.toLowerCase() === titleLower)
+          || matchedPos.find(p => p.title.toLowerCase().startsWith(titleLower.substring(0, 12)))
+          || matchedPos[0];
+
+        if (best && best.id !== (profile as any).positionId) {
+          (patch as any).targetPositionId = best.id;
+          fields.push("targetPositionId");
+        }
+      } catch { /* ignore */ }
     }
 
     if (fields.length === 0) return { updated: false, fields: [] };
@@ -4918,9 +4998,26 @@ export class DatabaseStorage implements IStorage {
         const existing = existingProfiles[0];
         profileId = existing.id;
         existingPhotoUrl = existing.photoUrl || null;
+
+        // Smart position assignment for incumbents running for a different seat:
+        // If they already hold a position and the CSV office is different, treat CSV as targetPositionId
+        const isIncumbent = row.isIncumbent === "Yes";
+        let assignedPositionId: string | undefined = positionId || undefined;
+        let assignedTargetPositionId: string | null | undefined = undefined; // undefined = don't change
+
+        if (isIncumbent && existing.positionId && positionId && existing.positionId !== positionId) {
+          // They hold a known current role; the CSV office is what they're campaigning for
+          assignedPositionId = existing.positionId; // keep their current role
+          assignedTargetPositionId = positionId;    // mark the office they're seeking
+        } else if (isIncumbent && existing.positionId && positionId && existing.positionId === positionId) {
+          // Running for re-election — same seat, no target needed
+          assignedPositionId = positionId;
+          assignedTargetPositionId = null;
+        }
+
         await db.update(politicianProfiles).set({
           party: row.party || undefined,
-          isCurrent: row.isIncumbent === "Yes",
+          isCurrent: isIncumbent,
           ballotpediaUrl: row.ballotpediaUrl || undefined,
           website: row.website || undefined,
           email: row.email || undefined,
@@ -4930,12 +5027,14 @@ export class DatabaseStorage implements IStorage {
           termStart: row.primaryDate || undefined,
           termEnd: row.generalDate || undefined,
           notes: notesText,
-          positionId: positionId || undefined,
+          positionId: assignedPositionId,
+          ...(assignedTargetPositionId !== undefined ? { targetPositionId: assignedTargetPositionId } : {}),
           profileType: normalizedProfileType,
           updatedAt: new Date(),
         } as any).where(eq(politicianProfiles.id, existing.id));
         updated++;
       } else {
+        // New profile — positionId from CSV is their primary position (current or target)
         const [inserted] = await db.insert(politicianProfiles).values({
           fullName,
           party: row.party || null,

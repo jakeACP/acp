@@ -32,6 +32,10 @@ type RepEntry = {
     district?: string;
     termLength?: number;
   };
+  targetPosition?: {
+    title: string;
+    jurisdiction: string;
+  } | null;
 };
 
 type ZipResult = {
@@ -116,6 +120,9 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{pol.fullName}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{pol.position?.title}</p>
+            {pol.targetPosition && (
+              <p className="text-[10px] text-blue-500 dark:text-blue-400">→ Running for: {pol.targetPosition.title}</p>
+            )}
             <div className="flex flex-wrap gap-1.5 mt-1.5">
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${partyBadgeClass(pol.party)}`}>{partyShort(pol.party)}</span>
               {pol.isCurrent !== false
@@ -472,6 +479,11 @@ export default function RepresentativesPage() {
                           <span className="text-xs text-slate-700 dark:text-slate-300">
                             {rep.position?.title || (rep.profileType === "candidate" ? "Candidate" : "Representative")}
                           </span>
+                          {rep.targetPosition && (
+                            <div className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5">
+                              → Running for: {rep.targetPosition.title}
+                            </div>
+                          )}
                         </td>
 
                         {/* State / Jurisdiction */}
