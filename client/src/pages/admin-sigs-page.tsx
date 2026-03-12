@@ -98,7 +98,7 @@ export default function AdminSigsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [industryFilter, setIndustryFilter] = useState<string>("all");
   const [influenceSlider, setInfluenceSlider] = useState<number>(0);
-  const [gradeOverride, setGradeOverride] = useState<string>("");
+  const [gradeOverride, setGradeOverride] = useState<string>("auto");
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
@@ -174,7 +174,7 @@ export default function AdminSigsPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const gradeWeightRaw = formData.get("gradeWeight") as string;
-    const computedGrade = gradeOverride || autoGrade(influenceSlider);
+    const computedGrade = gradeOverride !== "auto" ? gradeOverride : autoGrade(influenceSlider);
     const data: Partial<SpecialInterestGroup> = {
       name: formData.get("name") as string,
       acronym: formData.get("acronym") as string || undefined,
@@ -590,8 +590,8 @@ export default function AdminSigsPage() {
                     <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
                       {influenceSlider > 0 ? "+" : ""}{influenceSlider}
                     </span>
-                    <span className={`text-sm font-black ${gradeColor(gradeOverride || autoGrade(influenceSlider))}`}>
-                      {gradeOverride || autoGrade(influenceSlider)}
+                    <span className={`text-sm font-black ${gradeColor(gradeOverride !== "auto" ? gradeOverride : autoGrade(influenceSlider))}`}>
+                      {gradeOverride !== "auto" ? gradeOverride : autoGrade(influenceSlider)}
                     </span>
                   </div>
                 </div>
@@ -608,7 +608,7 @@ export default function AdminSigsPage() {
                   max={50}
                   step={1}
                   value={[influenceSlider]}
-                  onValueChange={(v) => { setInfluenceSlider(v[0]); setGradeOverride(""); }}
+                  onValueChange={(v) => { setInfluenceSlider(v[0]); setGradeOverride("auto"); }}
                   className="w-full"
                 />
                 <div className="flex items-center gap-2">
@@ -618,7 +618,7 @@ export default function AdminSigsPage() {
                       <SelectValue placeholder={`Auto: ${autoGrade(influenceSlider)}`} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Auto (from score)</SelectItem>
+                      <SelectItem value="auto">Auto (from score)</SelectItem>
                       {["A+","A","A-","B+","B","B-","C+","C","C-","D+","D","D-","F+","F","F-"].map(g => (
                         <SelectItem key={g} value={g}>{g}</SelectItem>
                       ))}
