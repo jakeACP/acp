@@ -1423,7 +1423,7 @@ export const politicianSigSponsorships = pgTable("politician_sig_sponsorships", 
   politicianId: varchar("politician_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
   sigId: varchar("sig_id").notNull().references(() => specialInterestGroups.id, { onDelete: "cascade" }),
   relationshipType: text("relationship_type").notNull().default("donor"), // sponsor, donor, affiliated, endorsed
-  reportedAmount: integer("reported_amount"), // Total reported contribution in cents
+  reportedAmount: bigint("reported_amount", { mode: "number" }), // Total reported contribution in cents
   amountCurrency: text("amount_currency").default("USD"),
   contributionPeriod: text("contribution_period"), // e.g., "2020-2024", "lifetime"
   firstContributionDate: timestamp("first_contribution_date"),
