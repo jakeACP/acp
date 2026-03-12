@@ -578,6 +578,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Group feed
+  app.get("/api/feeds/group/:groupId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const posts = await storage.getGroupFeed(req.params.groupId);
+      res.json(posts);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // User Following API
   app.post("/api/follow", async (req, res) => {
     if (!req.isAuthenticated()) {

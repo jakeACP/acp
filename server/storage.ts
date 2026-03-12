@@ -2274,6 +2274,86 @@ export class DatabaseStorage implements IStorage {
     return membership.length > 0;
   }
 
+  async getGroupFeed(groupId: string, limit = 50): Promise<PostWithAuthor[]> {
+    const members = await db
+      .select({ userId: groupMembers.userId })
+      .from(groupMembers)
+      .where(eq(groupMembers.groupId, groupId));
+
+    if (members.length === 0) return [];
+
+    const memberIds = members.map(m => m.userId);
+
+    return await db
+      .select({
+        id: posts.id,
+        authorId: posts.authorId,
+        content: posts.content,
+        type: posts.type,
+        tags: posts.tags,
+        image: posts.image,
+        likesCount: posts.likesCount,
+        commentsCount: posts.commentsCount,
+        url: posts.url,
+        title: posts.title,
+        newsSourceName: posts.newsSourceName,
+        linkPreview: posts.linkPreview,
+        sharesCount: posts.sharesCount,
+        sharedPostId: posts.sharedPostId,
+        eventId: posts.eventId,
+        privacy: posts.privacy,
+        emojiReactionsCount: posts.emojiReactionsCount,
+        gifReactionsCount: posts.gifReactionsCount,
+        bookmarksCount: posts.bookmarksCount,
+        flagsCount: posts.flagsCount,
+        isDeleted: posts.isDeleted,
+        createdAt: posts.createdAt,
+        // Volunteer fields
+        volunteerTitle: posts.volunteerTitle,
+        volunteerOrganization: posts.volunteerOrganization,
+        volunteerLocation: posts.volunteerLocation,
+        volunteerIsRemote: posts.volunteerIsRemote,
+        volunteerStartDate: posts.volunteerStartDate,
+        volunteerEndDate: posts.volunteerEndDate,
+        volunteerCommitment: posts.volunteerCommitment,
+        volunteerSkills: posts.volunteerSkills,
+        volunteerRequirements: posts.volunteerRequirements,
+        volunteerBenefits: posts.volunteerBenefits,
+        volunteerSpotsTotal: posts.volunteerSpotsTotal,
+        volunteerSpotsFilled: posts.volunteerSpotsFilled,
+        volunteerContactEmail: posts.volunteerContactEmail,
+        volunteerContactPhone: posts.volunteerContactPhone,
+        volunteerCategory: posts.volunteerCategory,
+        volunteerUrgency: posts.volunteerUrgency,
+        // Poll fields
+        pollId: polls.id,
+        pollTitle: polls.title,
+        pollDescription: polls.description,
+        pollOptions: polls.options,
+        pollVotingType: polls.votingType,
+        pollIsBlockchainVerified: polls.isBlockchainVerified,
+        pollTotalVotes: polls.totalVotes,
+        pollEndDate: polls.endDate,
+        pollIsActive: polls.isActive,
+        author: {
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatar: users.avatar,
+        },
+      })
+      .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(polls, eq(posts.id, polls.postId))
+      .where(and(
+        eq(posts.isDeleted, false),
+        eq(posts.privacy, 'public'),
+        inArray(posts.authorId, memberIds),
+      ))
+      .orderBy(desc(posts.createdAt))
+      .limit(limit);
+  }
+
   async getGroupMemberCount(groupId: string): Promise<number> {
     const result = await db
       .select({ count: count() })

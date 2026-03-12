@@ -36,7 +36,8 @@ import {
   GraduationCap,
   Scale,
   Landmark,
-  UserCheck
+  UserCheck,
+  HandHeart
 } from "lucide-react";
 import { format } from "date-fns";
 import { useFeedView, type FeedType } from "@/contexts/feed-view-context";
@@ -586,7 +587,7 @@ const ITEMS_PER_PAGE = 10;
 export function MainFeed() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { activeView, setActiveView, activeFeed, setActiveFeed } = useFeedView();
+  const { activeView, setActiveView, activeFeed, setActiveFeed, activeGroupId } = useFeedView();
   const [showBlockchain, setShowBlockchain] = useState(false);
   const [showMobileCreatePost, setShowMobileCreatePost] = useState(false);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
@@ -596,7 +597,13 @@ export function MainFeed() {
   // NOTE: All hooks must be called BEFORE any conditional returns to maintain React's Rules of Hooks
   const { data: allFeedPosts = [], isLoading: isLoadingAll } = useQuery<PostWithAuthor[]>({
     queryKey: ["/api/feeds/all"],
-    enabled: activeFeed === 'all',
+    enabled: activeFeed === 'all' || activeFeed === 'volunteer',
+  });
+
+  const { data: groupFeedPosts = [], isLoading: isLoadingGroup } = useQuery<PostWithAuthor[]>({
+    queryKey: ["/api/feeds/group", activeGroupId],
+    queryFn: () => fetch(`/api/feeds/group/${activeGroupId}`).then(r => r.json()),
+    enabled: activeFeed === 'group' && !!activeGroupId,
   });
 
   const { data: followingFeedPosts = [], isLoading: isLoadingFollowing } = useQuery<PostWithAuthor[]>({
@@ -660,17 +667,19 @@ export function MainFeed() {
     enabled: !!user?.id && (activeFeed === 'debates' || activeFeed === 'charities'),
   });
 
-  const isLoading = isLoadingAll || isLoadingFollowing || isLoadingNews || isLoadingMyReps || isLoadingMyCandidates;
+  const isLoading = isLoadingAll || isLoadingFollowing || isLoadingNews || isLoadingMyReps || isLoadingMyCandidates || isLoadingGroup;
 
   // Get current feed posts based on active feed
   const getCurrentFeedPosts = () => {
     switch (activeFeed) {
-      case 'all':       return allFeedPosts;
-      case 'following': return followingFeedPosts;
-      case 'news':      return newsFeedPosts;
-      case 'my-reps':   return myRepsPosts;
+      case 'all':           return allFeedPosts;
+      case 'following':     return followingFeedPosts;
+      case 'news':          return newsFeedPosts;
+      case 'my-reps':       return myRepsPosts;
       case 'my-candidates': return myCandidatesPosts;
-      default:          return [];
+      case 'volunteer':     return allFeedPosts.filter(p => p.type === 'volunteer');
+      case 'group':         return groupFeedPosts;
+      default:              return [];
     }
   };
 
@@ -708,6 +717,8 @@ export function MainFeed() {
       case 'news':
       case 'my-reps':
       case 'my-candidates':
+      case 'volunteer':
+      case 'group':
         return currentPosts.map(post => ({ type: 'post' as const, data: post, createdAt: post.createdAt }));
       case 'polls':
         return polls.map(poll => ({ type: 'poll' as const, data: poll, createdAt: poll.createdAt }));
@@ -921,10 +932,14 @@ export function MainFeed() {
                   {activeFeed === 'debates' && <MessageCircleReply className="h-12 w-12 mx-auto mb-2" />}
                   {activeFeed === 'my-reps' && <Landmark className="h-12 w-12 mx-auto mb-2" />}
                   {activeFeed === 'my-candidates' && <UserCheck className="h-12 w-12 mx-auto mb-2" />}
+                  {activeFeed === 'volunteer' && <HandHeart className="h-12 w-12 mx-auto mb-2" />}
+                  {activeFeed === 'group' && <Users className="h-12 w-12 mx-auto mb-2" />}
                   <h3 className="text-lg font-semibold text-foreground">
                     {activeFeed === 'my-reps' && 'No posts from your representatives yet'}
                     {activeFeed === 'my-candidates' && 'No posts from your candidates yet'}
-                    {activeFeed !== 'my-reps' && activeFeed !== 'my-candidates' && `No ${activeFeed} content yet`}
+                    {activeFeed === 'volunteer' && 'No volunteer opportunities yet'}
+                    {activeFeed === 'group' && 'No posts from this group yet'}
+                    {activeFeed !== 'my-reps' && activeFeed !== 'my-candidates' && activeFeed !== 'volunteer' && activeFeed !== 'group' && `No ${activeFeed} content yet`}
                   </h3>
                   <p className="text-muted-foreground mt-2">
                     {activeFeed === 'news' && 'No news or announcements to display'}
@@ -935,6 +950,8 @@ export function MainFeed() {
                     {activeFeed === 'debates' && 'No debate discussions yet. Start one!'}
                     {activeFeed === 'my-reps' && 'Follow your representatives on the Current Reps page, then posts tagged @TheirHandle will appear here.'}
                     {activeFeed === 'my-candidates' && 'Support candidates to see their posts here. Posts they are tagged in will also appear.'}
+                    {activeFeed === 'volunteer' && 'No volunteer posts yet. Create the first opportunity!'}
+                    {activeFeed === 'group' && 'Group members have not posted yet. Be the first!'}
                   </p>
                 </>
               )}

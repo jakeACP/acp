@@ -7,7 +7,7 @@ import { Group } from "@shared/schema";
 import {
   Globe, Newspaper, Users, BarChart3, Calendar, Heart,
   Ban, FileText, ScrollText, Building2, MessageCircleReply,
-  Landmark, UserCheck, Circle, ChevronDown, ChevronUp
+  Landmark, UserCheck, Circle, ChevronDown, ChevronUp, HandHeart
 } from "lucide-react";
 import { Link } from "wouter";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
@@ -28,14 +28,15 @@ const PRIMARY_FILTERS: FilterItem[] = [
 ];
 
 const CONTENT_FILTERS: FilterItem[] = [
-  { key: 'polls',       label: 'Polls',       icon: BarChart3,        color: 'text-violet-600' },
-  { key: 'events',      label: 'Events',      icon: Calendar,         color: 'text-emerald-600' },
-  { key: 'charities',   label: 'Charities',   icon: Heart,            color: 'text-pink-600' },
-  { key: 'boycotts',    label: 'Boycotts',    icon: Ban,              color: 'text-red-600' },
-  { key: 'initiatives', label: 'Initiatives', icon: FileText,         color: 'text-orange-600' },
-  { key: 'petitions',   label: 'Petitions',   icon: ScrollText,       color: 'text-amber-600' },
-  { key: 'unions',      label: 'Unions',      icon: Building2,        color: 'text-purple-600' },
+  { key: 'polls',       label: 'Polls',       icon: BarChart3,          color: 'text-violet-600' },
+  { key: 'events',      label: 'Events',      icon: Calendar,           color: 'text-emerald-600' },
+  { key: 'charities',   label: 'Charities',   icon: Heart,              color: 'text-pink-600' },
+  { key: 'boycotts',    label: 'Boycotts',    icon: Ban,                color: 'text-red-600' },
+  { key: 'initiatives', label: 'Initiatives', icon: FileText,           color: 'text-orange-600' },
+  { key: 'petitions',   label: 'Petitions',   icon: ScrollText,         color: 'text-amber-600' },
+  { key: 'unions',      label: 'Unions',      icon: Building2,          color: 'text-purple-600' },
   { key: 'debates',     label: 'Debates',     icon: MessageCircleReply, color: 'text-teal-600' },
+  { key: 'volunteer',   label: 'Volunteer',   icon: HandHeart,          color: 'text-teal-600' },
 ];
 
 const MY_PEOPLE_FILTERS: FilterItem[] = [
@@ -45,8 +46,8 @@ const MY_PEOPLE_FILTERS: FilterItem[] = [
 
 export function UserSidebar() {
   const { user } = useAuth();
-  const { activeFeed, setActiveFeed, activeView, setActiveView } = useFeedView();
-  const [showGroups, setShowGroups] = useState(false);
+  const { activeFeed, setActiveFeed, activeView, setActiveView, activeGroupId, setActiveGroupId } = useFeedView();
+  const [showGroups, setShowGroups] = useState(true);
 
   const { data: userGroups = [] } = useQuery<Group[]>({
     queryKey: ["/api/groups/user", user?.id],
@@ -72,10 +73,17 @@ export function UserSidebar() {
   const handleFeedSelect = (key: FeedType) => {
     setActiveFeed(key);
     setActiveView("all");
+    setActiveGroupId(null);
+  };
+
+  const handleGroupSelect = (groupId: string) => {
+    setActiveGroupId(groupId);
+    setActiveFeed('group');
+    setActiveView("all");
   };
 
   const isActiveFeed = (key: FeedType) =>
-    activeView === "all" && activeFeed === key;
+    activeView === "all" && activeFeed === key && activeFeed !== 'group';
 
   const FilterButton = ({ item }: { item: FilterItem }) => {
     const Icon = item.icon;
@@ -175,37 +183,45 @@ export function UserSidebar() {
           {MY_PEOPLE_FILTERS.map(item => (
             <FilterButton key={item.key} item={item} />
           ))}
+
+          {/* Groups under My People */}
+          {user && (
+            <>
+              <button
+                onClick={() => setShowGroups(v => !v)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-all duration-150 text-left"
+              >
+                <Users className="h-4 w-4 shrink-0 text-cyan-600" />
+                <span className="flex-1 truncate">Groups</span>
+                {showGroups ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+              </button>
+              {showGroups && userGroups.length > 0 && (
+                <div className="pl-3 space-y-0.5">
+                  {userGroups.map((group) => (
+                    <button
+                      key={group.id}
+                      onClick={() => handleGroupSelect(group.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-150 text-left ${
+                        activeFeed === 'group' && activeGroupId === group.id
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      <div className="w-5 h-5 rounded-full bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center shrink-0">
+                        <Users className="h-3 w-3 text-cyan-600 dark:text-cyan-400" />
+                      </div>
+                      <span className="truncate">{group.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showGroups && userGroups.length === 0 && (
+                <p className="text-xs text-muted-foreground px-6 py-1">No groups yet</p>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
-
-      {/* My Groups (collapsible) */}
-      {userGroups.length > 0 && (
-        <Card className="floating-card bg-card border border-border">
-          <CardContent className="p-3">
-            <button
-              onClick={() => setShowGroups(v => !v)}
-              className="w-full flex items-center justify-between text-sm font-semibold text-foreground hover:text-primary transition-colors"
-            >
-              <span>My Groups</span>
-              {showGroups ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-            {showGroups && (
-              <div className="mt-2 space-y-2">
-                {userGroups.slice(0, 5).map((group) => (
-                  <Link key={group.id} href={`/groups`}>
-                    <div className="flex items-center gap-2 py-1 hover:text-primary transition-colors cursor-pointer">
-                      <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                        <Users className="h-3 w-3 text-slate-500" />
-                      </div>
-                      <p className="text-sm text-foreground truncate">{group.name}</p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Friends Online (compact) */}
       {onlineFriends.length > 0 && (
@@ -229,14 +245,11 @@ export function UserSidebar() {
                       <div className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-green-500 border border-card" />
                     </div>
                     <span className="text-xs text-foreground truncate">
-                      {friend.firstName ? `${friend.firstName} ${friend.lastName}` : friend.username}
+                      {friend.firstName} {friend.lastName}
                     </span>
                   </div>
                 </Link>
               ))}
-              {onlineFriends.length > 4 && (
-                <p className="text-xs text-muted-foreground pt-1">+{onlineFriends.length - 4} more</p>
-              )}
             </div>
           </CardContent>
         </Card>
