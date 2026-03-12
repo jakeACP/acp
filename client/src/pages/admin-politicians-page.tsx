@@ -1380,6 +1380,7 @@ export default function AdminPoliticiansPage() {
             { label: "Active Positions", value: activePositions.length, icon: MapPin, color: "text-green-600 dark:text-green-400" },
             { label: "Total Profiles", value: profiles.length, icon: Users, color: "text-purple-600 dark:text-purple-400" },
             { label: "Current Reps", value: currentProfiles.length, icon: UserPlus, color: "text-amber-600 dark:text-amber-400" },
+            { label: "Candidates", value: profiles.filter(p => p.profileType === "candidate").length, icon: Star, color: "text-rose-600 dark:text-rose-400" },
           ].map(({ label, value, icon: Icon, color }, i, arr) => (
             <div key={label} className={`flex items-center gap-2 px-4 py-1.5 ${i < arr.length - 1 ? "border-r border-slate-200 dark:border-slate-700" : ""}`}>
               <Icon className={`h-4 w-4 ${color}`} />
