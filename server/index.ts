@@ -8,8 +8,8 @@ function log(msg: string) {
 }
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: false, limit: "5mb" }));
 
 // Health check — first thing registered, responds immediately regardless of
 // whether routes have finished loading.
