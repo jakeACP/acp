@@ -4044,7 +4044,21 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       };
 
       const profiles = await storage.listPoliticianProfiles(filters);
-      res.json(profiles);
+
+      // Aggregate total lobby amounts in one query and merge into profiles
+      const totalsResult = await db.execute(
+        sql`SELECT politician_id, SUM(reported_amount) AS total FROM politician_sig_sponsorships GROUP BY politician_id`
+      );
+      const totalsMap: Record<string, number> = {};
+      for (const row of totalsResult.rows as any[]) {
+        totalsMap[row.politician_id] = Number(row.total ?? 0);
+      }
+      const profilesWithTotals = profiles.map(p => ({
+        ...p,
+        totalLobbyAmount: totalsMap[p.id] ?? 0,
+      }));
+
+      res.json(profilesWithTotals);
     } catch (error: any) {
       console.error("Admin list politician profiles error:", error);
       res.status(500).json({ message: error.message });
