@@ -1,7 +1,7 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
 import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote } from "@shared/schema";
-import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters } from "@shared/schema";
+import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray, gte, ilike } from "drizzle-orm";
@@ -256,6 +256,17 @@ export interface IStorage {
   regradeAllProfiles(): Promise<{ scanned: number; regraded: number; errors: string[] }>;
   setCommunityAdj(politicianId: string, adj: number): Promise<void>;
   getPoliticiansBySig(sigId: string): Promise<any[]>;
+
+  // Trading Flags
+  createTradingFlag(flag: InsertTradingFlag): Promise<TradingFlag>;
+  getTradingFlagsByPolitician(politicianId: string): Promise<TradingFlag[]>;
+  getAllTradingFlags(status?: string): Promise<TradingFlag[]>;
+  reviewTradingFlag(flagId: string, status: string, reviewedBy: string, reviewNote?: string): Promise<TradingFlag>;
+
+  // Politician Demerits
+  createDemerit(demerit: InsertPoliticianDemerit): Promise<PoliticianDemerit>;
+  getDemeritsByPolitician(politicianId: string): Promise<PoliticianDemerit[]>;
+  deleteDemerit(demeritId: string): Promise<void>;
 
   // Boycotts
   getBoycotts(limit?: number, offset?: number): Promise<Boycott[]>;
@@ -3456,6 +3467,17 @@ export class DatabaseStorage implements IStorage {
       sigMap.get(s.politicianId)!.push(s);
     }
 
+    const allDemerits = await db
+      .select({ politicianId: politicianDemerits.politicianId, label: politicianDemerits.label, type: politicianDemerits.type })
+      .from(politicianDemerits)
+      .where(inArray(politicianDemerits.politicianId, ids));
+
+    const demeritMap = new Map<string, Array<{ label: string; type: string }>>();
+    for (const d of allDemerits) {
+      if (!demeritMap.has(d.politicianId)) demeritMap.set(d.politicianId, []);
+      demeritMap.get(d.politicianId)!.push({ label: d.label, type: d.type });
+    }
+
     return politicians.map(p => {
       const sigs = sigMap.get(p.id) || [];
       const totalLobbyAmount = sigs.reduce((sum, s) => sum + (s.reportedAmount ?? 0), 0);
@@ -3463,7 +3485,8 @@ export class DatabaseStorage implements IStorage {
         .filter(s => s.acronym && s.relationshipType !== 'pledged_against')
         .map(s => s.acronym as string);
       const rejectsAIPAC = sigs.some(s => s.relationshipType === 'pledged_against');
-      return { ...p, totalLobbyAmount, sigAcronyms, rejectsAIPAC };
+      const demerits = demeritMap.get(p.id) || [];
+      return { ...p, totalLobbyAmount, sigAcronyms, rejectsAIPAC, demerits };
     });
   }
 
@@ -8435,6 +8458,43 @@ export class DatabaseStorage implements IStorage {
       SET view_count = view_count + 1 
       WHERE id = ${signalId}
     `);
+  }
+
+  async createTradingFlag(flag: InsertTradingFlag): Promise<TradingFlag> {
+    const [result] = await db.insert(tradingFlags).values(flag).returning();
+    return result;
+  }
+
+  async getTradingFlagsByPolitician(politicianId: string): Promise<TradingFlag[]> {
+    return await db.select().from(tradingFlags).where(eq(tradingFlags.politicianId, politicianId)).orderBy(desc(tradingFlags.createdAt));
+  }
+
+  async getAllTradingFlags(status?: string): Promise<TradingFlag[]> {
+    if (status) {
+      return await db.select().from(tradingFlags).where(eq(tradingFlags.status, status)).orderBy(desc(tradingFlags.createdAt));
+    }
+    return await db.select().from(tradingFlags).orderBy(desc(tradingFlags.createdAt));
+  }
+
+  async reviewTradingFlag(flagId: string, status: string, reviewedBy: string, reviewNote?: string): Promise<TradingFlag> {
+    const [result] = await db.update(tradingFlags)
+      .set({ status, reviewedBy, reviewNote: reviewNote ?? null, reviewedAt: new Date() })
+      .where(eq(tradingFlags.id, flagId))
+      .returning();
+    return result;
+  }
+
+  async createDemerit(demerit: InsertPoliticianDemerit): Promise<PoliticianDemerit> {
+    const [result] = await db.insert(politicianDemerits).values(demerit).returning();
+    return result;
+  }
+
+  async getDemeritsByPolitician(politicianId: string): Promise<PoliticianDemerit[]> {
+    return await db.select().from(politicianDemerits).where(eq(politicianDemerits.politicianId, politicianId)).orderBy(desc(politicianDemerits.createdAt));
+  }
+
+  async deleteDemerit(demeritId: string): Promise<void> {
+    await db.delete(politicianDemerits).where(eq(politicianDemerits.id, demeritId));
   }
 }
 

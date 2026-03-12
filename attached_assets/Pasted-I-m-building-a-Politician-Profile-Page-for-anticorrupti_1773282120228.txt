@@ -1,0 +1,55 @@
+I'm building a Politician Profile Page for anticorruptionparty.us. 
+I need to add a "Stock Trades & Financial Activity" section to the 
+existing politician profile page.
+
+DATA SOURCE:
+Use the Quiver Quantitative API with Bearer token authentication.
+Store the token in .env as QUIVER_API_TOKEN.
+Base URL: https://api.quiverquant.com/beta
+
+Key endpoints:
+- House trades by politician: GET /historical/congresstrading/{politician_name}
+- Senate trades by politician: GET /historical/senatetrading/{politician_name}
+
+SECTION FEATURES:
+
+1. STOCK TRADES DISPLAY
+- Fetch all trades for the politician on page load
+- Group trades by industry/sector (use ticker to determine sector)
+- Show collapsed industry cards with total estimated value range
+- Expand each card to show individual trades with: ticker, 
+  company name, buy/sell, amount range, transaction date, 
+  disclosure date, and days to disclose
+- Show a "Late Disclosure" badge if disclosure took more than 45 days
+
+2. FLAG FOR INSIDER TRADING
+- Each trade row has a "🚩 Flag Trade" button
+- Clicking opens a modal with:
+  - The trade details at the top (read only)
+  - A required text area: "Why do you think this trade is suspicious?"
+  - An optional URL field: "Link to supporting evidence"
+  - Submit and Cancel buttons
+- On submit, POST the flag to our backend at /api/flags with:
+  - politician_id
+  - trade_id (use ticker + transaction_date as unique ID)
+  - reason (user's text)
+  - evidence_url (optional)
+  - timestamp
+- Show a success message: "Thank you — this trade has been flagged 
+  for review by our team."
+
+3. STYLING
+- Match the existing ACP site design system
+- Industry cards should use subtle color coding by sector
+- Red badge for late disclosures
+- Flag button should be subtle (not alarming) until hovered
+- Mobile responsive
+
+4. LOADING & ERROR STATES
+- Show a skeleton loader while fetching
+- If no trades found, show: "No stock trades on record for this politician"
+- If API fails, show: "Trade data temporarily unavailable" with a 
+  link to the official disclosure source
+
+TECH STACK: Use whatever stack the existing ACP Replit project uses.
+Do not hardcode the API token — read from environment variables only.

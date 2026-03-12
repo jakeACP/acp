@@ -2266,7 +2266,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         locations.map(l => l.districtNum)
       );
 
-      // Attach SIG sponsor summary to each politician
       const politiciansWithSponsors = await Promise.all(politicians.map(async (p) => {
         const sponsors = await storage.listPoliticianSponsors(p.id);
         const totalAmount = sponsors.reduce((sum: number, s: any) => sum + (s.reportedAmount ?? 0), 0);
@@ -2274,7 +2273,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           .filter((s: any) => s.sig?.acronym && s.relationshipType !== 'pledged_against')
           .map((s: any) => s.sig.acronym as string);
         const rejectsAIPAC = sponsors.some((s: any) => s.relationshipType === 'pledged_against');
-        return { ...p, totalLobbyAmount: totalAmount, sigAcronyms, rejectsAIPAC };
+        const demeritsRaw = await storage.getDemeritsByPolitician(p.id);
+        const demerits = demeritsRaw.map(d => ({ label: d.label, type: d.type }));
+        return { ...p, totalLobbyAmount: totalAmount, sigAcronyms, rejectsAIPAC, demerits };
       }));
 
       const primaryDistrict = locations[0];
@@ -5310,6 +5311,176 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       res.sendStatus(204);
     } catch (error: any) {
       console.error("Unlink sponsor error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ── Trading (Quiver API proxy) ──────────────────────────────
+  app.get("/api/politician-profiles/:id/trades", async (req, res) => {
+    try {
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) return res.status(404).json({ message: "Politician not found" });
+
+      const apiToken = process.env.QUIVER_INSIDER_TRADING;
+      if (!apiToken) return res.status(503).json({ message: "Trade data temporarily unavailable" });
+
+      const name = profile.fullName?.trim();
+      if (!name) return res.json([]);
+
+      const nameForApi = name.replace(/\s+/g, " ");
+      const encodedName = encodeURIComponent(nameForApi);
+
+      const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
+      const results: any[] = [];
+
+      const endpoints = [
+        `https://api.quiverquant.com/beta/historical/congresstrading/${encodedName}`,
+        `https://api.quiverquant.com/beta/historical/senatetrading/${encodedName}`,
+      ];
+
+      for (const url of endpoints) {
+        try {
+          const resp = await fetch(url, { headers });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (Array.isArray(data)) results.push(...data);
+          }
+        } catch (e) {
+          console.error(`Quiver fetch error for ${url}:`, e);
+        }
+      }
+
+      res.json(results);
+    } catch (error: any) {
+      console.error("Trades fetch error:", error);
+      res.status(500).json({ message: "Trade data temporarily unavailable" });
+    }
+  });
+
+  // ── Trading Flags ──────────────────────────────────────────
+  app.post("/api/politician-profiles/:id/trades/flag", async (req, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ message: "Login required" });
+
+      const { tradeId, ticker, transactionDate, tradeType, amount, reason, evidenceUrl } = req.body;
+      if (!tradeId || !ticker || !transactionDate || !reason) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      if (typeof reason !== 'string' || reason.length < 10) {
+        return res.status(400).json({ message: "Reason must be at least 10 characters" });
+      }
+
+      let sanitizedUrl: string | null = null;
+      if (evidenceUrl && typeof evidenceUrl === 'string' && evidenceUrl.trim()) {
+        try {
+          const parsed = new URL(evidenceUrl.trim());
+          if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+            sanitizedUrl = parsed.href;
+          }
+        } catch { }
+      }
+
+      const flag = await storage.createTradingFlag({
+        politicianId: req.params.id,
+        tradeId,
+        ticker,
+        transactionDate,
+        tradeType: tradeType ?? null,
+        amount: amount ?? null,
+        reason,
+        evidenceUrl: sanitizedUrl,
+        flaggedBy: (req.user as any).id,
+      });
+      res.json(flag);
+    } catch (error: any) {
+      console.error("Flag trade error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/politician-profiles/:id/trades/flags", async (req, res) => {
+    try {
+      const flags = await storage.getTradingFlagsByPolitician(req.params.id);
+      const sanitized = flags.map(f => ({
+        id: f.id,
+        ticker: f.ticker,
+        transactionDate: f.transactionDate,
+        tradeType: f.tradeType,
+        status: f.status,
+        createdAt: f.createdAt,
+      }));
+      res.json(sanitized);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ── Politician Demerits (public) ──────────────────────────
+  app.get("/api/politician-profiles/:id/demerits", async (req, res) => {
+    try {
+      const demerits = await storage.getDemeritsByPolitician(req.params.id);
+      res.json(demerits);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ── Admin Trading Flags Review ────────────────────────────
+  app.get("/api/admin/trading-flags", ensureAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const flags = await storage.getAllTradingFlags(status);
+      const enriched = await Promise.all(flags.map(async (f) => {
+        const profile = await storage.getPoliticianProfile(f.politicianId);
+        return { ...f, politicianName: profile?.fullName ?? "Unknown" };
+      }));
+      res.json(enriched);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/trading-flags/:flagId/review", ensureAdmin, async (req, res) => {
+    try {
+      const { status, reviewNote } = req.body;
+      if (!status || !["approved", "rejected"].includes(status)) {
+        return res.status(400).json({ message: "Status must be 'approved' or 'rejected'" });
+      }
+      const flag = await storage.reviewTradingFlag(
+        req.params.flagId, status, (req.user as any).id, reviewNote
+      );
+      res.json(flag);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ── Admin Demerits ─────────────────────────────────────────
+  app.post("/api/admin/politician-profiles/:politicianId/demerits", ensureAdmin, async (req, res) => {
+    try {
+      const { type, label, description, flagId } = req.body;
+      if (!type || !label || !description) {
+        return res.status(400).json({ message: "type, label, and description are required" });
+      }
+      const demerit = await storage.createDemerit({
+        politicianId: req.params.politicianId,
+        type,
+        label,
+        description,
+        flagId: flagId ?? null,
+        assignedBy: (req.user as any).id,
+      });
+      res.json(demerit);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/demerits/:demeritId", ensureAdmin, async (req, res) => {
+    try {
+      await storage.deleteDemerit(req.params.demeritId);
+      res.sendStatus(204);
+    } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });

@@ -74,3 +74,11 @@ Preferred communication style: Simple, everyday language.
 ### APIs
 - **Google Divisions API**: For fetching representative data.
 - **ip-api.com**: For IP geolocation.
+- **Quiver Quantitative API**: Congressional stock trading data. Bearer token auth via `QUIVER_INSIDER_TRADING` env var. Endpoints: `GET /beta/historical/congresstrading/{name}`, `GET /beta/historical/senatetrading/{name}`. Proxied through backend at `GET /api/politician-profiles/:id/trades`.
+
+### Trading & Demerit System
+- **DB Tables**: `trading_flags` (user-submitted insider trading flags with pending/approved/rejected status), `politician_demerits` (admin-assigned negative marks with type/label/description).
+- **Profile Page Tabs**: Politician profile now has 4 tabs — Donors (default), Trading, Endorsements, Campaign Promises (Coming Soon). Donors tab contains all existing SuperPAC/FEC contribution data. Trading tab shows Quiver API stock trades grouped by sector with late-disclosure badges and flag-for-insider-trading modal. Endorsements tab shows ACE badges and pledges.
+- **Demerit System**: Admin-approved demerits appear as red `ShieldAlert` badges next to SIGs/ACEs on the Representatives page (both table and zip card view) and on the Trading tab of politician profiles.
+- **Admin Trading Flags Page**: `/admin/trading-flags` — review pending flags, approve with demerit assignment, or reject. Admin nav includes "Trading Flags" link.
+- **API Routes**: `GET /api/politician-profiles/:id/trades` (Quiver proxy), `POST /api/politician-profiles/:id/trades/flag` (submit flag, auth required), `GET /api/politician-profiles/:id/demerits` (public), `GET /api/admin/trading-flags` (admin), `POST /api/admin/trading-flags/:flagId/review` (admin), `POST /api/admin/politician-profiles/:politicianId/demerits` (admin), `DELETE /api/admin/demerits/:demeritId` (admin).

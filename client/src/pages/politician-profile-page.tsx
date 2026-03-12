@@ -8,16 +8,18 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { sanitizeUrl } from "@/lib/utils";
-import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink } from "lucide-react";
+import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink, Flag, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronRight, ShieldAlert, Lock } from "lucide-react";
 import { format } from "date-fns";
-import { useState } from "react";
-import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating, SpecialInterestGroup, PoliticianSigSponsorship } from "@shared/schema";
+import { useState, useMemo } from "react";
+import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating, SpecialInterestGroup, PoliticianSigSponsorship, PoliticianDemerit } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 
 type PoliticianProfileWithPosition = PoliticianProfile & {
@@ -631,192 +633,43 @@ export default function PoliticianProfilePage() {
         </Card>
       )}
 
-      {/* Campaign Sponsors & Israel Lobby Section */}
-      {sponsors.length > 0 && (() => {
-        const validSponsors = sponsors.filter(s => s.sig);
-        const pledgedAgainst = validSponsors.filter(s => s.relationshipType === 'pledged_against');
-        const donorSponsors = validSponsors.filter(s => s.relationshipType !== 'pledged_against');
-        const totalLobbyAmount = validSponsors.reduce((sum, s) => sum + (s.reportedAmount ?? 0), 0);
-        const hasIsraelLobby = validSponsors.some(s => s.sig?.industry === 'foreign policy');
+      {/* ── Tabbed Content ──────────────────────────────────── */}
+      <Tabs defaultValue="donors" className="mb-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="donors">Donors</TabsTrigger>
+          <TabsTrigger value="trading">Trading</TabsTrigger>
+          <TabsTrigger value="endorsements">Endorsements</TabsTrigger>
+          <TabsTrigger value="promises" disabled>Campaign Promises</TabsTrigger>
+        </TabsList>
 
-        return (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5" />
-                Campaign Sponsors & Special Interests
-              </CardTitle>
-              <CardDescription>
-                Organizations and groups linked to {profile.fullName}'s campaigns
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
+        {/* ── DONORS TAB ──────────────────────────────────── */}
+        <TabsContent value="donors">
+          <DonorsTab profile={profile} sponsors={sponsors} />
+        </TabsContent>
 
-              {/* Grand Total Contributions */}
-              {(() => {
-                const bpTotal = profile.totalContributions != null && Number(profile.totalContributions) > 0
-                  ? Number(profile.totalContributions) : 0;
-                const sigTotal = totalLobbyAmount > 0 ? Math.round(totalLobbyAmount / 100) : 0;
-                const grandTotal = bpTotal + sigTotal;
-                if (grandTotal === 0) return null;
-                const hasBoth = bpTotal > 0 && sigTotal > 0;
-                const hasBpOnly = bpTotal > 0 && sigTotal === 0;
-                return (
-                  <div className="rounded-lg border-2 border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-4 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-1">
-                      Grand Total Contributions
-                    </p>
-                    <p className="text-3xl font-bold text-red-700 dark:text-red-300">
-                      ${grandTotal.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-red-500 dark:text-red-400 mt-1">
-                      {hasBoth
-                        ? `BallotPedia career total ($${bpTotal.toLocaleString()}) + linked SuperPACs / SIGs ($${sigTotal.toLocaleString()})`
-                        : hasBpOnly
-                          ? "Career total raised, sourced from BallotPedia / FEC data"
-                          : "Sum of linked SuperPACs and special interest groups (BallotPedia data not yet available)"}
-                    </p>
-                  </div>
-                );
-              })()}
+        {/* ── TRADING TAB ─────────────────────────────────── */}
+        <TabsContent value="trading">
+          <TradingTab politicianId={id!} politicianName={profile.fullName} />
+        </TabsContent>
 
-              {/* Pledged Against banners */}
-              {pledgedAgainst.map(sponsor => (
-                <div
-                  key={sponsor.id}
-                  className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40 px-4 py-3"
-                >
-                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-semibold text-green-800 dark:text-green-200">
-                      Pledged Against {sponsor.sig?.acronym ?? sponsor.sig?.name}
-                    </p>
-                    <p className="text-sm text-green-700 dark:text-green-300">
-                      {profile.fullName} has publicly rejected funding from {sponsor.sig?.name ?? sponsor.sig?.acronym}.
-                    </p>
-                    {sponsor.disclosureUrl && (
-                      <a
-                        href={sanitizeUrl(sponsor.disclosureUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-green-600 hover:underline mt-1"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        Source: {sponsor.disclosureSource ?? 'Disclosure'}
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
+        {/* ── ENDORSEMENTS TAB ────────────────────────────── */}
+        <TabsContent value="endorsements">
+          <EndorsementsTab profile={profile} sponsors={sponsors} />
+        </TabsContent>
 
-
-              {/* Donor SIG badges grid */}
-              {donorSponsors.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-                    Linked Special Interest Groups
-                  </p>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {donorSponsors.map(sponsor => {
-                      const sigTag = (sponsor.sig as any)?.tag || sponsor.sig?.acronym || encodeURIComponent(sponsor.sig?.name || "");
-                      return (
-                        <Link key={sponsor.id} href={`/sigs/${sigTag}`}>
-                          <Badge
-                            className={
-                              sponsor.sig?.industry === 'foreign policy'
-                                ? 'bg-orange-500 text-white border-orange-600 font-semibold hover:bg-orange-600 cursor-pointer'
-                                : 'bg-slate-500 text-white border-slate-600 hover:bg-slate-600 cursor-pointer'
-                            }
-                          >
-                            {sponsor.sig?.acronym ?? sponsor.sig?.name}
-                          </Badge>
-                        </Link>
-                      );
-                    })}
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {donorSponsors.map((sponsor) => (
-                      <div
-                        key={sponsor.id}
-                        className="border rounded-lg p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                        data-testid={`sponsor-${sponsor.id}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          {sponsor.sig?.logoUrl ? (
-                            <img
-                              src={sponsor.sig.logoUrl}
-                              alt={sponsor.sig?.name ?? "Organization"}
-                              className="w-10 h-10 rounded object-cover"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                              <Building2 className="w-5 h-5 text-slate-400" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-medium truncate">
-                                {sponsor.sig?.name ?? "Unknown Organization"}
-                              </h4>
-                              {sponsor.sig?.acronym && sponsor.sig.acronym !== sponsor.sig.name && (
-                                <span className="text-sm text-slate-500">({sponsor.sig.acronym})</span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {sponsor.sig?.industry && (
-                                <Badge variant="outline" className="text-xs capitalize">
-                                  {sponsor.sig.industry.replace(/_/g, " ")}
-                                </Badge>
-                              )}
-                              {sponsor.isVerified && (
-                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
-                                  Verified
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 mt-2 text-sm text-slate-600 dark:text-slate-400">
-                              {typeof sponsor.reportedAmount === 'number' && sponsor.reportedAmount > 0 && (
-                                <span className="font-medium text-orange-600 dark:text-orange-400">
-                                  ${(sponsor.reportedAmount / 100).toLocaleString()}
-                                </span>
-                              )}
-                              {sponsor.contributionPeriod && (
-                                <span>{sponsor.contributionPeriod}</span>
-                              )}
-                            </div>
-                            {sponsor.disclosureUrl ? (
-                              <a
-                                href={sanitizeUrl(sponsor.disclosureUrl)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                {sponsor.disclosureSource ?? 'Source'}
-                              </a>
-                            ) : sponsor.sig?.website ? (
-                              <a
-                                href={sanitizeUrl(sponsor.sig.website)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                Website
-                              </a>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+        {/* ── CAMPAIGN PROMISES TAB ───────────────────────── */}
+        <TabsContent value="promises">
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Lock className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+              <p className="text-lg font-medium text-slate-500 dark:text-slate-400">Coming Soon</p>
+              <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+                Track campaign promises and accountability — launching soon.
+              </p>
             </CardContent>
           </Card>
-        );
-      })()}
+        </TabsContent>
+      </Tabs>
 
       {/* News Feed Section */}
       <Card>
@@ -855,5 +708,499 @@ export default function PoliticianProfilePage() {
       </Card>
       </div>
     </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   DONORS TAB
+   ════════════════════════════════════════════════════════════ */
+function DonorsTab({ profile, sponsors }: { profile: PoliticianProfileWithPosition; sponsors: SponsorWithSig[] }) {
+  const validSponsors = sponsors.filter(s => s.sig);
+  const pledgedAgainst = validSponsors.filter(s => s.relationshipType === 'pledged_against');
+  const donorSponsors = validSponsors.filter(s => s.relationshipType !== 'pledged_against');
+  const totalLobbyAmount = validSponsors.reduce((sum, s) => sum + (s.reportedAmount ?? 0), 0);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <DollarSign className="w-5 h-5" />
+          Campaign Sponsors & Special Interests
+        </CardTitle>
+        <CardDescription>
+          Organizations and groups linked to {profile.fullName}'s campaigns
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {(() => {
+          const bpTotal = profile.totalContributions != null && Number(profile.totalContributions) > 0
+            ? Number(profile.totalContributions) : 0;
+          const sigTotal = totalLobbyAmount > 0 ? Math.round(totalLobbyAmount / 100) : 0;
+          const grandTotal = bpTotal + sigTotal;
+          if (grandTotal === 0) return null;
+          const hasBoth = bpTotal > 0 && sigTotal > 0;
+          const hasBpOnly = bpTotal > 0 && sigTotal === 0;
+          return (
+            <div className="rounded-lg border-2 border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-1">
+                Grand Total Contributions
+              </p>
+              <p className="text-3xl font-bold text-red-700 dark:text-red-300">
+                ${grandTotal.toLocaleString()}
+              </p>
+              <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                {hasBoth
+                  ? `BallotPedia career total ($${bpTotal.toLocaleString()}) + linked SuperPACs / SIGs ($${sigTotal.toLocaleString()})`
+                  : hasBpOnly
+                    ? "Career total raised, sourced from BallotPedia / FEC data"
+                    : "Sum of linked SuperPACs and special interest groups (BallotPedia data not yet available)"}
+              </p>
+            </div>
+          );
+        })()}
+
+        {pledgedAgainst.map(sponsor => (
+          <div key={sponsor.id} className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40 px-4 py-3">
+            <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-green-800 dark:text-green-200">
+                Pledged Against {sponsor.sig?.acronym ?? sponsor.sig?.name}
+              </p>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                {profile.fullName} has publicly rejected funding from {sponsor.sig?.name ?? sponsor.sig?.acronym}.
+              </p>
+              {sponsor.disclosureUrl && (
+                <a href={sanitizeUrl(sponsor.disclosureUrl)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-green-600 hover:underline mt-1">
+                  <ExternalLink className="w-3 h-3" />
+                  Source: {sponsor.disclosureSource ?? 'Disclosure'}
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {donorSponsors.length > 0 && (
+          <div>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Linked Special Interest Groups</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {donorSponsors.map(sponsor => {
+                const sigTag = (sponsor.sig as any)?.tag || sponsor.sig?.acronym || encodeURIComponent(sponsor.sig?.name || "");
+                return (
+                  <Link key={sponsor.id} href={`/sigs/${sigTag}`}>
+                    <Badge className={sponsor.sig?.industry === 'foreign policy' ? 'bg-orange-500 text-white border-orange-600 font-semibold hover:bg-orange-600 cursor-pointer' : 'bg-slate-500 text-white border-slate-600 hover:bg-slate-600 cursor-pointer'}>
+                      {sponsor.sig?.acronym ?? sponsor.sig?.name}
+                    </Badge>
+                  </Link>
+                );
+              })}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {donorSponsors.map((sponsor) => (
+                <div key={sponsor.id} className="border rounded-lg p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors" data-testid={`sponsor-${sponsor.id}`}>
+                  <div className="flex items-start gap-3">
+                    {sponsor.sig?.logoUrl ? (
+                      <img src={sponsor.sig.logoUrl} alt={sponsor.sig?.name ?? "Organization"} className="w-10 h-10 rounded object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-slate-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-medium truncate">{sponsor.sig?.name ?? "Unknown Organization"}</h4>
+                        {sponsor.sig?.acronym && sponsor.sig.acronym !== sponsor.sig.name && (
+                          <span className="text-sm text-slate-500">({sponsor.sig.acronym})</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {sponsor.sig?.industry && <Badge variant="outline" className="text-xs capitalize">{sponsor.sig.industry.replace(/_/g, " ")}</Badge>}
+                        {sponsor.isVerified && <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">Verified</Badge>}
+                      </div>
+                      <div className="flex items-center gap-3 mt-2 text-sm text-slate-600 dark:text-slate-400">
+                        {typeof sponsor.reportedAmount === 'number' && sponsor.reportedAmount > 0 && (
+                          <span className="font-medium text-orange-600 dark:text-orange-400">${(sponsor.reportedAmount / 100).toLocaleString()}</span>
+                        )}
+                        {sponsor.contributionPeriod && <span>{sponsor.contributionPeriod}</span>}
+                      </div>
+                      {sponsor.disclosureUrl ? (
+                        <a href={sanitizeUrl(sponsor.disclosureUrl)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1">
+                          <ExternalLink className="w-3 h-3" />
+                          {sponsor.disclosureSource ?? 'Source'}
+                        </a>
+                      ) : sponsor.sig?.website ? (
+                        <a href={sanitizeUrl(sponsor.sig.website)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1">
+                          <ExternalLink className="w-3 h-3" />
+                          Website
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {validSponsors.length === 0 && (
+          <p className="text-sm text-slate-500 py-4 text-center">No donor or SuperPAC data on record for {profile.fullName}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   ENDORSEMENTS TAB
+   ════════════════════════════════════════════════════════════ */
+function EndorsementsTab({ profile, sponsors }: { profile: PoliticianProfileWithPosition; sponsors: SponsorWithSig[] }) {
+  const endorsements = sponsors.filter(s => s.sig && (s.sig as any).isAce);
+  const pledges = sponsors.filter(s => s.relationshipType === 'pledged_against');
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Award className="w-5 h-5" />
+          Endorsements & Pledges
+        </CardTitle>
+        <CardDescription>
+          Anti-corruption endorsements and pledges associated with {profile.fullName}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {pledges.map(sponsor => (
+          <div key={sponsor.id} className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40 px-4 py-3">
+            <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-green-800 dark:text-green-200">Pledged Against {sponsor.sig?.acronym ?? sponsor.sig?.name}</p>
+              <p className="text-sm text-green-700 dark:text-green-300">{profile.fullName} has publicly rejected funding from {sponsor.sig?.name ?? sponsor.sig?.acronym}.</p>
+            </div>
+          </div>
+        ))}
+        {endorsements.map(sponsor => (
+          <div key={sponsor.id} className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40 px-4 py-3">
+            <Award className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-blue-800 dark:text-blue-200">{sponsor.sig?.name ?? sponsor.sig?.acronym}</p>
+              <p className="text-sm text-blue-700 dark:text-blue-300">Anti-Corruption Endorsement (ACE)</p>
+            </div>
+          </div>
+        ))}
+        {pledges.length === 0 && endorsements.length === 0 && (
+          <p className="text-sm text-slate-500 py-4 text-center">No endorsements or pledges on record for {profile.fullName}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   TRADING TAB
+   ════════════════════════════════════════════════════════════ */
+type QuiverTrade = {
+  Ticker?: string;
+  ticker?: string;
+  Transaction?: string;
+  transaction?: string;
+  Amount?: string;
+  amount?: string;
+  TransactionDate?: string;
+  transaction_date?: string;
+  ReportDate?: string;
+  report_date?: string;
+  District?: string;
+  Senator?: string;
+  Representative?: string;
+};
+
+const SECTOR_MAP: Record<string, string> = {
+  AAPL: "Technology", MSFT: "Technology", GOOGL: "Technology", GOOG: "Technology", META: "Technology",
+  AMZN: "Consumer", TSLA: "Automotive", NVDA: "Technology", AMD: "Technology", INTC: "Technology",
+  JPM: "Finance", BAC: "Finance", GS: "Finance", MS: "Finance", C: "Finance", WFC: "Finance",
+  JNJ: "Healthcare", PFE: "Healthcare", UNH: "Healthcare", ABBV: "Healthcare", MRK: "Healthcare",
+  XOM: "Energy", CVX: "Energy", COP: "Energy", SLB: "Energy", OXY: "Energy",
+  LMT: "Defense", RTX: "Defense", NOC: "Defense", BA: "Defense", GD: "Defense",
+  DIS: "Media", NFLX: "Media", CMCSA: "Media",
+};
+
+const SECTOR_COLORS: Record<string, string> = {
+  Technology: "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40",
+  Finance: "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40",
+  Healthcare: "border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950/40",
+  Energy: "border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/40",
+  Defense: "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40",
+  Media: "border-pink-200 bg-pink-50 dark:border-pink-800 dark:bg-pink-950/40",
+  Automotive: "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40",
+  Consumer: "border-teal-200 bg-teal-50 dark:border-teal-800 dark:bg-teal-950/40",
+  Other: "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50",
+};
+
+function getSector(ticker: string): string {
+  return SECTOR_MAP[ticker.toUpperCase()] || "Other";
+}
+
+function getDaysToDisclose(txDate: string, reportDate: string): number | null {
+  try {
+    const tx = new Date(txDate);
+    const rp = new Date(reportDate);
+    if (isNaN(tx.getTime()) || isNaN(rp.getTime())) return null;
+    return Math.round((rp.getTime() - tx.getTime()) / (1000 * 60 * 60 * 24));
+  } catch { return null; }
+}
+
+const flagFormSchema = z.object({
+  reason: z.string().min(10, "Please provide at least 10 characters explaining why this trade is suspicious"),
+  evidenceUrl: z.string().url("Must be a valid URL").or(z.literal("")),
+});
+type FlagFormData = z.infer<typeof flagFormSchema>;
+
+function TradingTab({ politicianId, politicianName }: { politicianId: string; politicianName: string }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set());
+  const [flagTrade, setFlagTrade] = useState<QuiverTrade | null>(null);
+
+  const { data: trades = [], isLoading, isError } = useQuery<QuiverTrade[]>({
+    queryKey: ['/api/politician-profiles', politicianId, 'trades'],
+    queryFn: async () => {
+      const res = await fetch(`/api/politician-profiles/${politicianId}/trades`);
+      if (!res.ok) throw new Error("Failed to fetch trades");
+      return res.json();
+    },
+  });
+
+  const { data: demerits = [] } = useQuery<PoliticianDemerit[]>({
+    queryKey: ['/api/politician-profiles', politicianId, 'demerits'],
+    queryFn: async () => {
+      const res = await fetch(`/api/politician-profiles/${politicianId}/demerits`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const flagForm = useForm<FlagFormData>({
+    resolver: zodResolver(flagFormSchema),
+    defaultValues: { reason: "", evidenceUrl: "" },
+  });
+
+  const flagMutation = useMutation({
+    mutationFn: async (data: FlagFormData) => {
+      const t = flagTrade!;
+      const ticker = t.Ticker || t.ticker || "";
+      const txDate = t.TransactionDate || t.transaction_date || "";
+      const tradeId = `${ticker}_${txDate}`;
+      return apiRequest(`/api/politician-profiles/${politicianId}/trades/flag`, "POST", {
+        tradeId,
+        ticker,
+        transactionDate: txDate,
+        tradeType: t.Transaction || t.transaction || null,
+        amount: t.Amount || t.amount || null,
+        reason: data.reason,
+        evidenceUrl: data.evidenceUrl || null,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Trade Flagged", description: "Thank you — this trade has been flagged for review by our team." });
+      setFlagTrade(null);
+      flagForm.reset();
+    },
+    onError: (err: any) => {
+      toast({ title: "Flag Failed", description: err.message || "Could not submit flag", variant: "destructive" });
+    },
+  });
+
+  const grouped = useMemo(() => {
+    const map: Record<string, QuiverTrade[]> = {};
+    trades.forEach(t => {
+      const ticker = t.Ticker || t.ticker || "UNKNOWN";
+      const sector = getSector(ticker);
+      if (!map[sector]) map[sector] = [];
+      map[sector].push(t);
+    });
+    return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
+  }, [trades]);
+
+  const toggleSector = (sector: string) => {
+    setExpandedSectors(prev => {
+      const next = new Set(prev);
+      next.has(sector) ? next.delete(sector) : next.add(sector);
+      return next;
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-16 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <AlertTriangle className="w-10 h-10 mx-auto text-yellow-500 mb-3" />
+          <p className="text-lg font-medium">Trade data temporarily unavailable</p>
+          <a href="https://efts.sec.gov/LATEST/search-index?q=%22congressional%20trading%22" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline mt-2 inline-flex items-center gap-1">
+            <ExternalLink className="w-3 h-3" /> View official disclosure source
+          </a>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Stock Trades & Financial Activity
+          </CardTitle>
+          <CardDescription>
+            Congressional trading disclosures for {politicianName}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {demerits.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {demerits.map(d => (
+                <Badge key={d.id} className="bg-red-600 text-white border-red-700">
+                  <ShieldAlert className="w-3 h-3 mr-1" />
+                  {d.label}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {trades.length === 0 ? (
+            <p className="text-sm text-slate-500 py-4 text-center">No stock trades on record for this politician</p>
+          ) : (
+            <>
+              <p className="text-xs text-slate-500">{trades.length} trade{trades.length !== 1 ? "s" : ""} found across {grouped.length} sector{grouped.length !== 1 ? "s" : ""}</p>
+              {grouped.map(([sector, sectorTrades]) => {
+                const isOpen = expandedSectors.has(sector);
+                const colorClass = SECTOR_COLORS[sector] || SECTOR_COLORS.Other;
+                return (
+                  <div key={sector} className={`rounded-lg border ${colorClass} overflow-hidden`}>
+                    <button onClick={() => toggleSector(sector)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:opacity-80 transition-opacity">
+                      <div className="flex items-center gap-2">
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        <span className="font-semibold text-sm">{sector}</span>
+                        <Badge variant="outline" className="text-xs">{sectorTrades.length} trade{sectorTrades.length !== 1 ? "s" : ""}</Badge>
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="border-t px-4 py-2 space-y-2">
+                        {sectorTrades.map((trade, idx) => {
+                          const ticker = trade.Ticker || trade.ticker || "—";
+                          const txType = trade.Transaction || trade.transaction || "—";
+                          const amount = trade.Amount || trade.amount || "—";
+                          const txDate = trade.TransactionDate || trade.transaction_date || "";
+                          const reportDate = trade.ReportDate || trade.report_date || "";
+                          const daysToDisclose = txDate && reportDate ? getDaysToDisclose(txDate, reportDate) : null;
+                          const isLate = daysToDisclose != null && daysToDisclose > 45;
+                          const isBuy = txType.toLowerCase().includes("purchase");
+
+                          return (
+                            <div key={idx} className="flex items-center justify-between gap-3 py-2 border-b last:border-0 border-slate-200 dark:border-slate-700">
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className={`w-8 h-8 rounded flex items-center justify-center text-white text-xs font-bold shrink-0 ${isBuy ? "bg-green-500" : "bg-red-500"}`}>
+                                  {isBuy ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-mono font-bold text-sm">{ticker}</span>
+                                    <span className="text-xs text-slate-500 capitalize">{txType}</span>
+                                    {isLate && <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 text-[10px]">Late Disclosure</Badge>}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                    <span>{amount}</span>
+                                    {txDate && <span>· {txDate}</span>}
+                                    {daysToDisclose != null && (
+                                      <span className="flex items-center gap-0.5">
+                                        <Clock className="w-3 h-3" />{daysToDisclose}d to disclose
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 shrink-0"
+                                onClick={() => {
+                                  if (!user) {
+                                    toast({ title: "Login Required", description: "Please log in to flag trades", variant: "destructive" });
+                                    return;
+                                  }
+                                  setFlagTrade(trade);
+                                }}
+                              >
+                                <Flag className="w-3.5 h-3.5 mr-1" />
+                                <span className="text-xs">Flag</span>
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Flag Modal */}
+      <Dialog open={!!flagTrade} onOpenChange={(open) => { if (!open) { setFlagTrade(null); flagForm.reset(); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Flag className="w-5 h-5 text-red-500" /> Flag Trade for Insider Trading</DialogTitle>
+            <DialogDescription>Report a suspicious trade for review by our team.</DialogDescription>
+          </DialogHeader>
+          {flagTrade && (
+            <div className="rounded-md border bg-slate-50 dark:bg-slate-800 p-3 text-sm space-y-1">
+              <p><span className="font-medium">Ticker:</span> {flagTrade.Ticker || flagTrade.ticker}</p>
+              <p><span className="font-medium">Type:</span> {flagTrade.Transaction || flagTrade.transaction}</p>
+              <p><span className="font-medium">Amount:</span> {flagTrade.Amount || flagTrade.amount}</p>
+              <p><span className="font-medium">Date:</span> {flagTrade.TransactionDate || flagTrade.transaction_date}</p>
+            </div>
+          )}
+          <Form {...flagForm}>
+            <form onSubmit={flagForm.handleSubmit((data) => flagMutation.mutate(data))} className="space-y-4">
+              <FormField control={flagForm.control} name="reason" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Why do you think this trade is suspicious? *</FormLabel>
+                  <FormControl><Textarea placeholder="Describe what makes this trade suspicious..." rows={3} {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={flagForm.control} name="evidenceUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Link to supporting evidence (optional)</FormLabel>
+                  <FormControl><Input placeholder="https://..." {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => { setFlagTrade(null); flagForm.reset(); }}>Cancel</Button>
+                <Button type="submit" disabled={flagMutation.isPending} className="bg-red-600 hover:bg-red-700 text-white">
+                  {flagMutation.isPending ? "Submitting..." : "Submit Flag"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

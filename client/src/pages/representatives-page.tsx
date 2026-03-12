@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
-  MapPin, Search, ExternalLink, DollarSign, ShieldCheck,
+  MapPin, Search, ExternalLink, DollarSign, ShieldCheck, ShieldAlert,
   AlertTriangle, Loader2, Users, X, ChevronUp, ChevronDown,
 } from "lucide-react";
 
@@ -36,6 +36,7 @@ type RepEntry = {
     title: string;
     jurisdiction: string;
   } | null;
+  demerits?: Array<{ label: string; type: string }>;
 };
 
 type ZipResult = {
@@ -136,8 +137,13 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
                 <span className="text-slate-400">grand total</span>
               </div>
             )}
-            {(pol.rejectsAIPAC || pol.sigAcronyms.length > 0) && (
+            {(pol.rejectsAIPAC || pol.sigAcronyms.length > 0 || (pol.demerits && pol.demerits.length > 0)) && (
               <div className="flex flex-wrap gap-1 mt-1">
+                {pol.demerits?.map((d, i) => (
+                  <span key={`dem-${i}`} className="text-[10px] px-1 py-0.5 rounded bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 flex items-center gap-0.5">
+                    <ShieldAlert className="w-2.5 h-2.5" />{d.label}
+                  </span>
+                ))}
                 {pol.rejectsAIPAC && (
                   <span className="text-[10px] px-1 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 flex items-center gap-0.5">
                     <ShieldCheck className="w-2.5 h-2.5" />No AIPAC
@@ -493,10 +499,15 @@ export default function RepresentativesPage() {
 
                         {/* SIGs / PACs / ACEs */}
                         <td className="px-3 py-2">
-                          {rep.sigAcronyms.length === 0 && !rep.rejectsAIPAC ? (
+                          {rep.sigAcronyms.length === 0 && !rep.rejectsAIPAC && (!rep.demerits || rep.demerits.length === 0) ? (
                             <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
                           ) : (
-                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            <div className="flex flex-wrap gap-1 max-w-[240px]">
+                              {rep.demerits?.map((d, i) => (
+                                <span key={`dem-${i}`} className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 font-medium flex items-center gap-0.5">
+                                  <ShieldAlert className="w-2.5 h-2.5" />{d.label}
+                                </span>
+                              ))}
                               {rep.rejectsAIPAC && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 font-medium flex items-center gap-0.5">
                                   <ShieldCheck className="w-2.5 h-2.5" />No AIPAC

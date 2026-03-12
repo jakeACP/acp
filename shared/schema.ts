@@ -1370,6 +1370,44 @@ export const politicianProfiles = pgTable("politician_profiles", {
   profileTypeCheck: sql`CHECK (${table.profileType} IN ('representative', 'candidate', 'delegate') OR ${table.profileType} IS NULL)`,
 }));
 
+// Trading Flags - User-submitted insider trading flags for politician stock trades
+export const tradingFlags = pgTable("trading_flags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  politicianId: varchar("politician_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  tradeId: text("trade_id").notNull(),
+  ticker: text("ticker").notNull(),
+  transactionDate: text("transaction_date").notNull(),
+  tradeType: text("trade_type"),
+  amount: text("amount"),
+  reason: text("reason").notNull(),
+  evidenceUrl: text("evidence_url"),
+  status: text("status").notNull().default("pending"),
+  flaggedBy: varchar("flagged_by").references(() => users.id),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewNote: text("review_note"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  politicianIndex: index("trading_flags_politician_idx").on(table.politicianId),
+  statusIndex: index("trading_flags_status_idx").on(table.status),
+  statusCheck: sql`CHECK (${table.status} IN ('pending', 'approved', 'rejected'))`,
+}));
+
+// Politician Demerits - Admin-assigned negative marks for confirmed violations
+export const politicianDemerits = pgTable("politician_demerits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  politicianId: varchar("politician_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  label: text("label").notNull(),
+  description: text("description").notNull(),
+  flagId: varchar("flag_id").references(() => tradingFlags.id, { onDelete: "set null" }),
+  assignedBy: varchar("assigned_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  politicianIndex: index("politician_demerits_politician_idx").on(table.politicianId),
+  typeIndex: index("politician_demerits_type_idx").on(table.type),
+}));
+
 // User Corruption Ratings - Community ratings for politician corruption
 export const politicianCorruptionRatings = pgTable("politician_corruption_ratings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1976,6 +2014,20 @@ export const insertPoliticianSigSponsorshipSchema = createInsertSchema(politicia
   updatedAt: true,
 });
 
+export const insertTradingFlagSchema = createInsertSchema(tradingFlags).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+  reviewedBy: true,
+  reviewNote: true,
+  reviewedAt: true,
+});
+
+export const insertPoliticianDemeritSchema = createInsertSchema(politicianDemerits).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertVoterVerificationRequestSchema = createInsertSchema(voterVerificationRequests).omit({
   id: true,
   submittedAt: true,
@@ -2309,6 +2361,12 @@ export type SignalLike = typeof signalLikes.$inferSelect;
 export type InsertSignalLike = z.infer<typeof insertSignalLikeSchema>;
 export type SignalComment = typeof signalComments.$inferSelect;
 export type InsertSignalComment = z.infer<typeof insertSignalCommentSchema>;
+
+// Trading & Demerit types
+export type TradingFlag = typeof tradingFlags.$inferSelect;
+export type InsertTradingFlag = z.infer<typeof insertTradingFlagSchema>;
+export type PoliticianDemerit = typeof politicianDemerits.$inferSelect;
+export type InsertPoliticianDemerit = z.infer<typeof insertPoliticianDemeritSchema>;
 
 // Signal with author info for feed display
 export type GradingAlgorithmSettings = typeof gradingAlgorithmSettings.$inferSelect;

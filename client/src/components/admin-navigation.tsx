@@ -13,7 +13,8 @@ import {
   BarChart3,
   Sliders,
   Building2,
-  MapPin
+  MapPin,
+  Flag
 } from "lucide-react";
 
 const adminMenuItems = [
@@ -25,6 +26,7 @@ const adminMenuItems = [
   { name: "Politicians", href: "/admin/politicians", icon: Users, category: "people" },
   { name: "SIGs", href: "/admin/sigs", icon: Building2, category: "people" },
   { name: "State Data", href: "/admin/state-data", icon: MapPin, category: "people" },
+  { name: "Trading Flags", href: "/admin/trading-flags", icon: Flag, category: "people" },
   { name: "Security", href: "/admin/security", icon: Lock, category: "system" },
   { name: "Database", href: "/admin/database", icon: Database, category: "system" },
   { name: "Algorithm", href: "/admin/algorithm", icon: Cpu, category: "system" },
