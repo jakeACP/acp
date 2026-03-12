@@ -756,7 +756,7 @@ export function PostCard({ post }: PostCardProps) {
               </div>
 
               <div className="space-y-2 mb-3">
-                {(post as any).volunteerLocation && (
+                {((post as any).volunteerLocation || (post as any).volunteerIsRemote) && (
                   <div className="flex items-center gap-2 text-sm">
                     <MapPin className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                     <span className="text-foreground">
@@ -797,8 +797,12 @@ export function PostCard({ post }: PostCardProps) {
                   <p className="text-xs text-muted-foreground mb-1">Skills Needed:</p>
                   <div className="flex flex-wrap gap-1">
                     {(() => {
-                      const skillsStr = (post as any).volunteerSkills as string;
-                      const skillsArray = skillsStr.split(',').map(s => s.trim()).filter(s => s);
+                      const raw = (post as any).volunteerSkills;
+                      const skillsArray: string[] = Array.isArray(raw)
+                        ? raw
+                        : typeof raw === "string"
+                        ? raw.split(",").map((s: string) => s.trim()).filter((s: string) => s)
+                        : [];
                       return (
                         <>
                           {skillsArray.slice(0, 5).map((skill: string, index: number) => (
@@ -813,6 +817,13 @@ export function PostCard({ post }: PostCardProps) {
                       );
                     })()}
                   </div>
+                </div>
+              )}
+
+              {(post as any).volunteerRequirements && (
+                <div className="mb-3">
+                  <p className="text-xs text-muted-foreground mb-1">Requirements:</p>
+                  <p className="text-sm text-foreground">{(post as any).volunteerRequirements}</p>
                 </div>
               )}
 
