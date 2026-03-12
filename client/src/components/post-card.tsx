@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ShareToMessagesModal } from "@/components/share-to-messages-modal";
@@ -38,6 +39,10 @@ export function PostCard({ post }: PostCardProps) {
   const [newComment, setNewComment] = useState("");
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [showShareToMessages, setShowShareToMessages] = useState(false);
+  const [showVolunteerSignup, setShowVolunteerSignup] = useState(false);
+  const [signupName, setSignupName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPhone, setSignupPhone] = useState("");
 
   const { data: likeStatus } = useQuery<{ liked: boolean }>({
     queryKey: ["/api/likes", post.id, "post"],
@@ -283,6 +288,67 @@ export function PostCard({ post }: PostCardProps) {
       });
     },
   });
+
+  const volunteerSignupMutation = useMutation({
+    mutationFn: async () => {
+      const creatorName = post.author?.firstName && post.author?.lastName
+        ? `${post.author.firstName} ${post.author.lastName}`
+        : post.author?.username || "the organizer";
+      const opportunityTitle = (post as any).volunteerTitle || "Volunteer Opportunity";
+
+      // Record the signup
+      await apiRequest(`/api/volunteer/${post.id}/signup`, "POST", {
+        email: signupEmail.trim(),
+        phone: signupPhone.trim(),
+        message: `Name: ${signupName.trim()}\nEmail: ${signupEmail.trim()}\nPhone: ${signupPhone.trim()}`,
+      });
+
+      // Send a direct message to the creator
+      const messageContent =
+        `📋 Volunteer Sign-Up: ${opportunityTitle}\n\n` +
+        `${signupName.trim()} would like to volunteer.\n\n` +
+        `Name: ${signupName.trim()}\n` +
+        `Email: ${signupEmail.trim()}\n` +
+        `Phone: ${signupPhone.trim()}`;
+
+      await apiRequest("/api/messages", "POST", {
+        recipientId: post.authorId,
+        content: messageContent,
+      });
+    },
+    onSuccess: () => {
+      setShowVolunteerSignup(false);
+      toast({
+        title: "Signed Up!",
+        description: "Your info has been sent to the organizer.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to sign up. You may have already signed up.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleOpenVolunteerSignup = () => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to sign up for volunteer opportunities",
+        variant: "destructive",
+      });
+      return;
+    }
+    const fullName = user.firstName && user.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : user.username || "";
+    setSignupName(fullName);
+    setSignupEmail((user as any).email || "");
+    setSignupPhone((user as any).phoneNumber || "");
+    setShowVolunteerSignup(true);
+  };
 
   const handleLike = () => {
     if (user) {
@@ -862,11 +928,77 @@ export function PostCard({ post }: PostCardProps) {
                 variant="default" 
                 className="w-full mt-3 bg-teal-600 hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600"
                 size="sm"
+                onClick={handleOpenVolunteerSignup}
                 data-testid={`button-volunteer-signup-${post.id}`}
               >
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Sign Up to Volunteer
               </Button>
+
+              <Dialog open={showVolunteerSignup} onOpenChange={setShowVolunteerSignup}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <HandHeart className="h-5 w-5 text-teal-600" />
+                      Sign Up to Volunteer
+                    </DialogTitle>
+                    <DialogDescription>
+                      Can we share this info with{" "}
+                      <span className="font-semibold text-foreground">
+                        {post.author?.firstName && post.author?.lastName
+                          ? `${post.author.firstName} ${post.author.lastName}`
+                          : post.author?.username || "the organizer"}
+                      </span>
+                      ?
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-2">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Name</label>
+                      <Input
+                        placeholder="Your full name"
+                        value={signupName}
+                        onChange={(e) => setSignupName(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Phone</label>
+                      <Input
+                        type="tel"
+                        placeholder="Your phone number"
+                        value={signupPhone}
+                        onChange={(e) => setSignupPhone(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+                      <Input
+                        type="email"
+                        placeholder="Your email address"
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setShowVolunteerSignup(false)}
+                        disabled={volunteerSignupMutation.isPending}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className="flex-1 bg-teal-600 hover:bg-teal-700"
+                        onClick={() => volunteerSignupMutation.mutate()}
+                        disabled={volunteerSignupMutation.isPending || !signupName.trim() || !signupEmail.trim()}
+                      >
+                        {volunteerSignupMutation.isPending ? "Submitting..." : "Submit"}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         )}
