@@ -1081,7 +1081,11 @@ function TradingTab({ politicianId, politicianName }: { politicianId: string; po
           )}
 
           {trades.length === 0 ? (
-            <p className="text-sm text-slate-500 py-4 text-center">No stock trades on record for this politician</p>
+            <div className="py-8 text-center space-y-2">
+              <TrendingUp className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
+              <p className="text-sm font-medium text-slate-500">No stock trades found</p>
+              <p className="text-xs text-slate-400">Trade data is sourced from congressional disclosure reports. This politician may not have any reported trades, or historical data may be temporarily unavailable.</p>
+            </div>
           ) : (
             <>
               <p className="text-xs text-slate-500">{trades.length} trade{trades.length !== 1 ? "s" : ""} found across {grouped.length} sector{grouped.length !== 1 ? "s" : ""}</p>

@@ -5316,6 +5316,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // ── Trading (Quiver API proxy) ──────────────────────────────
+  const tradeCache = new Map<string, { data: any[]; ts: number }>();
+  const TRADE_CACHE_TTL = 30 * 60 * 1000;
+
   app.get("/api/politician-profiles/:id/trades", async (req, res) => {
     try {
       const profile = await storage.getPoliticianProfile(req.params.id);
@@ -5327,28 +5330,77 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const name = profile.fullName?.trim();
       if (!name) return res.json([]);
 
-      const nameForApi = name.replace(/\s+/g, " ");
-      const encodedName = encodeURIComponent(nameForApi);
+      const cacheKey = name.toLowerCase();
+      const cached = tradeCache.get(cacheKey);
+      if (cached && Date.now() - cached.ts < TRADE_CACHE_TTL) {
+        return res.json(cached.data);
+      }
 
       const headers = { Authorization: `Bearer ${apiToken}`, Accept: "application/json" };
       const results: any[] = [];
 
-      const endpoints = [
+      const nameParts = name.split(/\s+/);
+      const lastName = nameParts[nameParts.length - 1];
+
+      const fetchWithTimeout = async (url: string, timeoutMs: number): Promise<any[]> => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const resp = await fetch(url, { headers, signal: controller.signal });
+          clearTimeout(timer);
+          if (resp.ok) {
+            const data = await resp.json();
+            return Array.isArray(data) ? data : [];
+          }
+          return [];
+        } catch {
+          clearTimeout(timer);
+          return [];
+        }
+      };
+
+      const liveData = await fetchWithTimeout(
+        `https://api.quiverquant.com/beta/live/congresstrading`,
+        15000
+      );
+      console.log(`[trades] Live endpoint returned ${liveData.length} total trades`);
+      const nameNorm = name.toLowerCase();
+      const lastNameNorm = lastName.toLowerCase();
+      const matchingLive = liveData.filter((t: any) => {
+        const rep = (t.Representative || "").toLowerCase();
+        return rep === nameNorm || rep.includes(lastNameNorm);
+      });
+      console.log(`[trades] ${matchingLive.length} matching live trades for "${name}"`);
+      results.push(...matchingLive);
+
+      const nameForApi = name.replace(/\s+/g, " ");
+      const encodedName = encodeURIComponent(nameForApi);
+      const historicalEndpoints = [
         `https://api.quiverquant.com/beta/historical/congresstrading/${encodedName}`,
         `https://api.quiverquant.com/beta/historical/senatetrading/${encodedName}`,
       ];
 
-      for (const url of endpoints) {
-        try {
-          const resp = await fetch(url, { headers });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (Array.isArray(data)) results.push(...data);
+      const historicalResults = await Promise.allSettled(
+        historicalEndpoints.map(url => fetchWithTimeout(url, 12000))
+      );
+      for (let i = 0; i < historicalResults.length; i++) {
+        const result = historicalResults[i];
+        console.log(`[trades] Historical endpoint ${i} status: ${result.status}${result.status === 'fulfilled' ? ` (${result.value.length} trades)` : ''}`);
+        if (result.status === "fulfilled" && result.value.length > 0) {
+          const existingKeys = new Set(results.map((t: any) =>
+            `${t.Ticker}-${t.TransactionDate}-${t.Transaction}-${t.Range}`
+          ));
+          for (const trade of result.value) {
+            const key = `${trade.Ticker}-${trade.TransactionDate}-${trade.Transaction}-${trade.Range}`;
+            if (!existingKeys.has(key)) {
+              results.push(trade);
+              existingKeys.add(key);
+            }
           }
-        } catch (e) {
-          console.error(`Quiver fetch error for ${url}:`, e);
         }
       }
+
+      tradeCache.set(cacheKey, { data: results, ts: Date.now() });
 
       res.json(results);
     } catch (error: any) {
