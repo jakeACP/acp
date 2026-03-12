@@ -129,7 +129,7 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
   return (
     <div
       ref={containerRef}
-      className="relative w-full mb-4"
+      className="relative w-full"
       style={{ paddingBottom: '56.25%' }}
       data-video-id={videoId}
       data-post-id={postId}

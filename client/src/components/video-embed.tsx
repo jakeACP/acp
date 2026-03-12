@@ -15,13 +15,15 @@ export function VideoEmbedDisplay({ content, postId }: VideoEmbedDisplayProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 mb-4">
       {embeds.map((embed, index) => (
-        <div key={`${embed.type}-${embed.id}-${index}`} className="w-full">
+        <div
+          key={`${embed.type}-${embed.id}-${index}`}
+          className="border border-border rounded-xl overflow-hidden bg-card"
+        >
           {embed.type === 'youtube' && (
             <YouTubeEmbed videoId={embed.id} postId={postId} />
           )}
-          
           {embed.type === 'tiktok' && (
             <TikTokEmbed videoId={embed.id} tiktokUrl={embed.url} />
           )}

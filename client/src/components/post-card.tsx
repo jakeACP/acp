@@ -610,13 +610,17 @@ export function PostCard({ post }: PostCardProps) {
         )}
         
         {post.image && (
-          <img
-            src={post.image}
-            alt="Post content"
+          <div
+            className="mb-4 border border-border rounded-xl overflow-hidden bg-card cursor-pointer group"
             onClick={() => setExpandedImage(post.image)}
-            className="w-full h-auto max-h-96 object-contain rounded-lg mb-4 cursor-pointer hover:opacity-90 transition-opacity"
             data-testid={`image-post-${post.id}`}
-          />
+          >
+            <img
+              src={post.image}
+              alt="Post content"
+              className="w-full h-auto max-h-96 object-contain group-hover:opacity-90 transition-opacity"
+            />
+          </div>
         )}
         
         {/* Image Expand Modal */}
