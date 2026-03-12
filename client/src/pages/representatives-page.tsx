@@ -128,11 +128,6 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
               {pol.isCurrent !== false
                 ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">Incumbent</span>
                 : <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Candidate</span>}
-              {pol.rejectsAIPAC && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 flex items-center gap-0.5">
-                  <ShieldCheck className="w-2.5 h-2.5" />No AIPAC
-                </span>
-              )}
             </div>
             {total != null && (
               <div className="flex items-center gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
@@ -141,8 +136,13 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
                 <span className="text-slate-400">grand total</span>
               </div>
             )}
-            {pol.sigAcronyms.length > 0 && (
+            {(pol.rejectsAIPAC || pol.sigAcronyms.length > 0) && (
               <div className="flex flex-wrap gap-1 mt-1">
+                {pol.rejectsAIPAC && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 flex items-center gap-0.5">
+                    <ShieldCheck className="w-2.5 h-2.5" />No AIPAC
+                  </span>
+                )}
                 {pol.sigAcronyms.slice(0, 4).map(a => (
                   <span key={a} className="text-[10px] px-1 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">{a}</span>
                 ))}
@@ -414,7 +414,7 @@ export default function RepresentativesPage() {
                     <SortableHeader col="party" label="Party" />
                     <SortableHeader col="position" label="Position" />
                     <SortableHeader col="state" label="State / Jurisdiction" />
-                    <SortableHeader col="sigs" label="SIGs / PACs" />
+                    <SortableHeader col="sigs" label="SIGs/PACs/ACEs" />
                     <SortableHeader col="total" label="Grand Total" />
                     <SortableHeader col="grade" label="Grade" />
                     <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Profile</th>
@@ -455,16 +455,11 @@ export default function RepresentativesPage() {
                               {rep.fullName}
                             </span>
                           </Link>
-                          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                            {rep.isVerified && (
+                          {rep.isVerified && (
+                            <div className="flex items-center gap-1 mt-0.5">
                               <span className="text-[10px] px-1 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">Verified</span>
-                            )}
-                            {rep.rejectsAIPAC && (
-                              <span className="text-[10px] px-1 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 flex items-center gap-0.5">
-                                <ShieldCheck className="w-2.5 h-2.5" />No AIPAC
-                              </span>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </td>
 
                         {/* Party */}
@@ -496,12 +491,17 @@ export default function RepresentativesPage() {
                           )}
                         </td>
 
-                        {/* SIGs / PACs */}
+                        {/* SIGs / PACs / ACEs */}
                         <td className="px-3 py-2">
-                          {rep.sigAcronyms.length === 0 ? (
+                          {rep.sigAcronyms.length === 0 && !rep.rejectsAIPAC ? (
                             <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
                           ) : (
                             <div className="flex flex-wrap gap-1 max-w-[200px]">
+                              {rep.rejectsAIPAC && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 font-medium flex items-center gap-0.5">
+                                  <ShieldCheck className="w-2.5 h-2.5" />No AIPAC
+                                </span>
+                              )}
                               {rep.sigAcronyms.slice(0, 5).map(a => (
                                 <span key={a} className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 font-medium">
                                   {a}
