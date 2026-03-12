@@ -125,7 +125,7 @@ export default function PollDetailPage() {
     return (
       <div className="min-h-screen bg-slate-50">
         <Navigation />
-        <div className="max-w-4xl mx-auto p-4">
+        <div className="max-w-6xl mx-auto p-4">
           <div className="animate-pulse">
             <div className="h-8 bg-slate-300 rounded mb-4"></div>
             <div className="h-64 bg-slate-300 rounded mb-4"></div>
@@ -140,7 +140,7 @@ export default function PollDetailPage() {
     return (
       <div className="min-h-screen bg-slate-50">
         <Navigation />
-        <div className="max-w-4xl mx-auto p-4 text-center">
+        <div className="max-w-6xl mx-auto p-4 text-center">
           <h1 className="text-2xl font-bold text-slate-900 mb-4">Poll not found</h1>
           <Button onClick={() => navigate("/")}>Back to Home</Button>
         </div>
@@ -178,7 +178,7 @@ export default function PollDetailPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
-      <div className="max-w-4xl mx-auto p-4">
+      <div className="max-w-6xl mx-auto p-4">
         {/* Back Button */}
         <Button 
           variant="ghost" 

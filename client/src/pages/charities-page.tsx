@@ -54,7 +54,7 @@ export default function CharitiesPage() {
     return (
       <div className="bg-slate-50 min-h-screen">
         <Navigation />
-        <div className="container max-w-4xl mx-auto py-6">
+        <div className="max-w-6xl mx-auto py-6">
           <CharityCreationForm
             onSuccess={handleCreateSuccess}
             onCancel={() => setShowCreateForm(false)}

@@ -118,7 +118,7 @@ export default function CandidateProfilePage() {
     return (
       <div className="bg-slate-50 dark:bg-slate-900 min-h-screen">
         <Navigation />
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-6">
             <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
             <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
@@ -133,7 +133,7 @@ export default function CandidateProfilePage() {
     return (
       <div className="bg-slate-50 dark:bg-slate-900 min-h-screen">
         <Navigation />
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Candidate Not Found</h1>
             <p className="text-gray-600 dark:text-gray-300 mt-2">The candidate you're looking for doesn't exist.</p>
@@ -155,7 +155,7 @@ export default function CandidateProfilePage() {
     <div className="bg-slate-50 dark:bg-slate-900 min-h-screen">
       <Navigation />
       
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Button 

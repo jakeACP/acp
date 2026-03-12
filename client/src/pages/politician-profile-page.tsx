@@ -211,7 +211,7 @@ export default function PoliticianProfilePage() {
   return (
     <div className="min-h-screen bg-background" data-testid="politician-profile-page">
       <Navigation />
-      <div className="container mx-auto p-6 max-w-5xl">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Header Section */}
       <Card className="mb-6">
         <CardHeader>
@@ -526,79 +526,182 @@ export default function PoliticianProfilePage() {
             </div>
           </div>
         </CardHeader>
+      </Card>
 
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            {profile.email && (
-              <div className="flex items-center gap-2" data-testid="text-email">
-                <Mail className="w-4 h-4 text-gray-500" />
-                <a href={`mailto:${profile.email}`} className="text-sm hover:underline">
-                  {profile.email}
-                </a>
-              </div>
-            )}
-            {profile.phone && (
-              <div className="flex items-center gap-2" data-testid="text-phone">
-                <Phone className="w-4 h-4 text-gray-500" />
-                <a href={`tel:${profile.phone}`} className="text-sm hover:underline">
-                  {profile.phone}
-                </a>
-              </div>
-            )}
-            {profile.website && (
-              <div className="flex items-center gap-2" data-testid="text-website">
-                <Globe className="w-4 h-4 text-gray-500" />
-                <a href={sanitizeUrl(profile.website)} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline">
-                  {profile.website}
-                </a>
-              </div>
-            )}
-            {profile.officeAddress && (
-              <div className="flex items-center gap-2" data-testid="text-office-address">
-                <MapPin className="w-4 h-4 text-gray-500" />
-                <span className="text-sm">{profile.officeAddress}</span>
-              </div>
-            )}
-            {profile.termStart && (
-              <div className="flex items-center gap-2" data-testid="text-term">
-                <Calendar className="w-4 h-4 text-gray-500" />
-                <span className="text-sm">
-                  Term: {profile.termStart} - {profile.termEnd || "Present"}
-                </span>
-              </div>
-            )}
-          </div>
+      {/* ── Two-column desktop layout ───────────────────────── */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-          {profile.biography && (
-            <div className="mt-6">
-              <h3 className="font-semibold text-lg mb-2">Biography</h3>
-              <p className="text-sm text-gray-700 dark:text-gray-300" data-testid="text-biography">
-                {profile.biography}
-              </p>
-            </div>
+        {/* ── LEFT: Main tabbed content + news feed ─────────── */}
+        <div className="flex-1 min-w-0 space-y-6">
+
+          {/* ── Tabbed Content ──────────────────────────────── */}
+          <Tabs defaultValue="donors">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="donors">Donors</TabsTrigger>
+              <TabsTrigger value="trading">Trading</TabsTrigger>
+              <TabsTrigger value="endorsements">Endorsements</TabsTrigger>
+              <TabsTrigger value="promises" disabled>Campaign Promises</TabsTrigger>
+            </TabsList>
+
+            {/* ── DONORS TAB ────────────────────────────────── */}
+            <TabsContent value="donors">
+              <DonorsTab profile={profile} sponsors={sponsors} />
+            </TabsContent>
+
+            {/* ── TRADING TAB ───────────────────────────────── */}
+            <TabsContent value="trading">
+              <TradingTab politicianId={id!} politicianName={profile.fullName} />
+            </TabsContent>
+
+            {/* ── ENDORSEMENTS TAB ──────────────────────────── */}
+            <TabsContent value="endorsements">
+              <EndorsementsTab profile={profile} sponsors={sponsors} />
+            </TabsContent>
+
+            {/* ── CAMPAIGN PROMISES TAB ─────────────────────── */}
+            <TabsContent value="promises">
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Lock className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                  <p className="text-lg font-medium text-slate-500 dark:text-slate-400">Coming Soon</p>
+                  <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+                    Track campaign promises and accountability — launching soon.
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          {/* ── News Feed ─────────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <CardTitle>News Feed</CardTitle>
+              <CardDescription>
+                Posts and discussions mentioning {profile.fullName}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {postsLoading ? (
+                <p>Loading posts...</p>
+              ) : taggedPosts.length > 0 ? (
+                <div className="space-y-4">
+                  {taggedPosts.map((post: Post) => (
+                    <div
+                      key={post.id}
+                      className="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      data-testid={`post-${post.id}`}
+                    >
+                      <p className="text-sm mb-2">{post.content}</p>
+                      {post.createdAt && (
+                        <span className="text-xs text-gray-500">
+                          {format(new Date(post.createdAt), "PPP")}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500" data-testid="text-no-posts">
+                  No posts found mentioning {profile.fullName}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ── RIGHT: Sidebar — contact, bio, grades, scorecard ── */}
+        <div className="w-full lg:w-80 xl:w-96 flex-shrink-0 space-y-4">
+
+          {/* Contact & Term Info */}
+          {(profile.email || profile.phone || profile.website || profile.officeAddress || profile.termStart) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Contact & Office</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2.5">
+                {profile.email && (
+                  <div className="flex items-center gap-2" data-testid="text-email">
+                    <Mail className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <a href={`mailto:${profile.email}`} className="text-sm hover:underline truncate">
+                      {profile.email}
+                    </a>
+                  </div>
+                )}
+                {profile.phone && (
+                  <div className="flex items-center gap-2" data-testid="text-phone">
+                    <Phone className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <a href={`tel:${profile.phone}`} className="text-sm hover:underline">
+                      {profile.phone}
+                    </a>
+                  </div>
+                )}
+                {profile.website && (
+                  <div className="flex items-center gap-2" data-testid="text-website">
+                    <Globe className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <a href={sanitizeUrl(profile.website)} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline truncate">
+                      {profile.website}
+                    </a>
+                  </div>
+                )}
+                {profile.officeAddress && (
+                  <div className="flex items-center gap-2" data-testid="text-office-address">
+                    <MapPin className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <span className="text-sm">{profile.officeAddress}</span>
+                  </div>
+                )}
+                {profile.termStart && (
+                  <div className="flex items-center gap-2" data-testid="text-term">
+                    <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <span className="text-sm">
+                      Term: {profile.termStart} – {profile.termEnd || "Present"}
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
+          {/* Biography */}
+          {profile.biography && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Biography</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed" data-testid="text-biography">
+                  {profile.biography}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Grade Explanation */}
           {(profile as any).gradeExplanation && (profile as any).numericScore != null && (
-            <details className="mt-6 border rounded-lg p-3 bg-gray-50 dark:bg-gray-800">
-              <summary className="text-sm font-medium cursor-pointer text-gray-700 dark:text-gray-300 select-none">
-                How was this grade calculated? ({Math.round((profile as any).numericScore)}/100)
-              </summary>
-              <div className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-400">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Grade Breakdown
+                </CardTitle>
+                <CardDescription className="text-xs">Score: {Math.round((profile as any).numericScore)}/100</CardDescription>
+              </CardHeader>
+              <CardContent className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
                 {(() => {
                   const expl = (profile as any).gradeExplanation as any;
                   const m = expl?.metrics ?? {};
                   const w = expl?.weights ?? {};
                   return (
                     <div className="space-y-1">
-                      <p className="font-medium text-gray-700 dark:text-gray-300">Sources: {(expl?.sources ?? []).join(', ') || 'SIG data'}</p>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                        {m.dataScore != null && <><span>Data Score:</span><span className="font-mono">{m.dataScore.toFixed(1)}/100</span></>}
-                        {m.pledgeScore != null && <><span>Pledge Score:</span><span className="font-mono">{m.pledgeScore.toFixed(1)}/100</span></>}
-                        {m.aceCount != null && <><span>ACE sponsors:</span><span className="font-mono">{m.aceCount}</span></>}
-                        {m.fec?.receipts != null && <><span>FEC receipts:</span><span className="font-mono">${Math.round(m.fec.receipts).toLocaleString()}</span></>}
-                        {m.fec?.committeeShare != null && <><span>PAC/committee share:</span><span className="font-mono">{(m.fec.committeeShare * 100).toFixed(1)}%</span></>}
-                        {m.fec?.smallDollarShare != null && <><span>Small-dollar share:</span><span className="font-mono">{(m.fec.smallDollarShare * 100).toFixed(1)}%</span></>}
-                        {m.fec?.individualShare != null && <><span>Individual share:</span><span className="font-mono">{(m.fec.individualShare * 100).toFixed(1)}%</span></>}
+                      <p className="font-medium text-gray-700 dark:text-gray-300 text-xs">
+                        Sources: {(expl?.sources ?? []).join(', ') || 'SIG data'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1">
+                        {m.dataScore != null && <><span>Data Score:</span><span className="font-mono text-right">{m.dataScore.toFixed(1)}/100</span></>}
+                        {m.pledgeScore != null && <><span>Pledge Score:</span><span className="font-mono text-right">{m.pledgeScore.toFixed(1)}/100</span></>}
+                        {m.aceCount != null && <><span>ACE sponsors:</span><span className="font-mono text-right">{m.aceCount}</span></>}
+                        {m.fec?.receipts != null && <><span>FEC receipts:</span><span className="font-mono text-right">${Math.round(m.fec.receipts).toLocaleString()}</span></>}
+                        {m.fec?.committeeShare != null && <><span>PAC share:</span><span className="font-mono text-right">{(m.fec.committeeShare * 100).toFixed(1)}%</span></>}
+                        {m.fec?.smallDollarShare != null && <><span>Small-dollar:</span><span className="font-mono text-right">{(m.fec.smallDollarShare * 100).toFixed(1)}%</span></>}
+                        {m.fec?.individualShare != null && <><span>Individual:</span><span className="font-mono text-right">{(m.fec.individualShare * 100).toFixed(1)}%</span></>}
                       </div>
                       {w.dataScoreWeight != null && (
                         <p className="text-gray-500 pt-1">
@@ -608,105 +711,28 @@ export default function PoliticianProfilePage() {
                     </div>
                   );
                 })()}
-              </div>
-            </details>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Corruption Scorecard Section */}
-      {profile.corruptionScorecard && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="w-5 h-5" />
-              Corruption Scorecard
-            </CardTitle>
-            <CardDescription>
-              Detailed information about corruption history and transparency
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="prose dark:prose-invert max-w-none" data-testid="text-corruption-scorecard">
-              {profile.corruptionScorecard}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Tabbed Content ──────────────────────────────────── */}
-      <Tabs defaultValue="donors" className="mb-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="donors">Donors</TabsTrigger>
-          <TabsTrigger value="trading">Trading</TabsTrigger>
-          <TabsTrigger value="endorsements">Endorsements</TabsTrigger>
-          <TabsTrigger value="promises" disabled>Campaign Promises</TabsTrigger>
-        </TabsList>
-
-        {/* ── DONORS TAB ──────────────────────────────────── */}
-        <TabsContent value="donors">
-          <DonorsTab profile={profile} sponsors={sponsors} />
-        </TabsContent>
-
-        {/* ── TRADING TAB ─────────────────────────────────── */}
-        <TabsContent value="trading">
-          <TradingTab politicianId={id!} politicianName={profile.fullName} />
-        </TabsContent>
-
-        {/* ── ENDORSEMENTS TAB ────────────────────────────── */}
-        <TabsContent value="endorsements">
-          <EndorsementsTab profile={profile} sponsors={sponsors} />
-        </TabsContent>
-
-        {/* ── CAMPAIGN PROMISES TAB ───────────────────────── */}
-        <TabsContent value="promises">
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Lock className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-              <p className="text-lg font-medium text-slate-500 dark:text-slate-400">Coming Soon</p>
-              <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-                Track campaign promises and accountability — launching soon.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* News Feed Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>News Feed</CardTitle>
-          <CardDescription>
-            Posts and discussions mentioning {profile.fullName}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {postsLoading ? (
-            <p>Loading posts...</p>
-          ) : taggedPosts.length > 0 ? (
-            <div className="space-y-4">
-              {taggedPosts.map((post: Post) => (
-                <div 
-                  key={post.id} 
-                  className="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  data-testid={`post-${post.id}`}
-                >
-                  <p className="text-sm mb-2">{post.content}</p>
-                  {post.createdAt && (
-                    <span className="text-xs text-gray-500">
-                      {format(new Date(post.createdAt), "PPP")}
-                    </span>
-                  )}
+          {/* Corruption Scorecard */}
+          {profile.corruptionScorecard && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  <Award className="w-4 h-4" />
+                  Corruption Scorecard
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="prose dark:prose-invert max-w-none text-sm" data-testid="text-corruption-scorecard">
+                  {profile.corruptionScorecard}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500" data-testid="text-no-posts">
-              No posts found mentioning {profile.fullName}
-            </p>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
       </div>
     </div>
   );

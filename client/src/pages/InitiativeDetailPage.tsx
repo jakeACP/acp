@@ -50,7 +50,7 @@ export default function InitiativeDetailPage() {
 
   if (!initiativeId) {
     return (
-      <div className="container max-w-4xl mx-auto py-6">
+      <div className="max-w-6xl mx-auto py-6">
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-muted-foreground">Initiative not found</p>
@@ -69,7 +69,7 @@ export default function InitiativeDetailPage() {
     return (
       <div className="bg-slate-50 min-h-screen">
         <Navigation />
-        <div className="container max-w-4xl mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="space-y-6">
           <div className="flex items-center gap-4">
             <Skeleton className="h-10 w-32" />
@@ -87,7 +87,7 @@ export default function InitiativeDetailPage() {
     return (
       <div className="bg-slate-50 min-h-screen">
         <Navigation />
-        <div className="container max-w-4xl mx-auto py-6">
+        <div className="max-w-6xl mx-auto py-6">
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-muted-foreground">Initiative not found</p>
@@ -125,7 +125,7 @@ export default function InitiativeDetailPage() {
   return (
     <div className="bg-slate-50 min-h-screen">
       <Navigation />
-      <div className="container max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

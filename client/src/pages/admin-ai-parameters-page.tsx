@@ -94,7 +94,7 @@ export default function AdminAiParametersPage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <AdminNavigation />
-      <div className="container mx-auto py-8 max-w-4xl px-4">
+      <div className="max-w-7xl mx-auto py-8 px-4">
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-blue-500">

@@ -64,7 +64,7 @@ export default function PollsPage() {
     return (
       <div className="bg-slate-50 min-h-screen">
         <Navigation />
-        <div className="max-w-4xl mx-auto p-6">
+        <div className="max-w-6xl mx-auto p-6">
           <CreatePollForm onCancel={() => setShowCreatePoll(false)} />
         </div>
       </div>
