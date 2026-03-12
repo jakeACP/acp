@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown, Bot as BotIcon } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown, Bot as BotIcon, ChevronDown, ChevronRight } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
@@ -120,6 +120,13 @@ export default function AdminPoliticiansPage() {
   const [profileGradeFilter, setProfileGradeFilter] = useState("all");
   const [profileStatusFilter, setProfileStatusFilter] = useState("all");
   const [profileStateFilter, setProfileStateFilter] = useState("all");
+
+  // Data Scan Tool collapse states (all collapsed by default)
+  const [trackAipacOpen, setTrackAipacOpen] = useState(false);
+  const [refreshWebOpen, setRefreshWebOpen] = useState(false);
+  const [regradeOpen, setRegradeOpen] = useState(false);
+  const [aiScanOpen, setAiScanOpen] = useState(false);
+  const [superPacOpen, setSuperPacOpen] = useState(false);
 
   // AI State Scan
   const [scanState, setScanState] = useState("");
@@ -1568,65 +1575,79 @@ export default function AdminPoliticiansPage() {
 
                     {/* TrackAIPAC */}
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
-                      <div className="flex items-start gap-2">
-                        <Shield className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Scan TrackAIPAC</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Sync AIPAC donation data for all 535 Congress members</p>
+                      <button className="flex items-start justify-between w-full gap-2 text-left" onClick={() => setTrackAipacOpen(o => !o)}>
+                        <div className="flex items-start gap-2">
+                          <Shield className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Scan TrackAIPAC</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Sync AIPAC donation data for all 535 Congress members</p>
+                          </div>
                         </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setImportDialogOpen(true)}
-                        disabled={importCongressMutation.isPending}
-                        className="mt-auto w-full text-xs"
-                      >
-                        {importCongressMutation.isPending ? (
-                          <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Syncing…</>
-                        ) : (
-                          <><Download className="h-3 w-3 mr-1.5" />Run Scan</>
-                        )}
-                      </Button>
+                        {trackAipacOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />}
+                      </button>
+                      {trackAipacOpen && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setImportDialogOpen(true)}
+                          disabled={importCongressMutation.isPending}
+                          className="w-full text-xs"
+                        >
+                          {importCongressMutation.isPending ? (
+                            <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Syncing…</>
+                          ) : (
+                            <><Download className="h-3 w-3 mr-1.5" />Run Scan</>
+                          )}
+                        </Button>
+                      )}
                     </div>
 
                     {/* Refresh from Web */}
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
-                      <div className="flex items-start gap-2">
-                        <RefreshCw className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Refresh from Web</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Fill missing photos, bios, and websites from Ballotpedia & Wikipedia</p>
-                        </div>
-                      </div>
-                      {refreshDataMutation.isPending ? (
-                        <div className="space-y-1.5 mt-auto">
-                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                            <div className="bg-blue-500 h-1.5 rounded-full animate-pulse" style={{ width: "100%" }} />
+                      <button className="flex items-start justify-between w-full gap-2 text-left" onClick={() => setRefreshWebOpen(o => !o)}>
+                        <div className="flex items-start gap-2">
+                          <RefreshCw className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Refresh from Web</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Fill missing photos, bios, and websites from Ballotpedia & Wikipedia</p>
                           </div>
-                          <p className="text-xs text-blue-600 dark:text-blue-400 text-center">Running… {refreshElapsed}s</p>
                         </div>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => refreshDataMutation.mutate()}
-                          className="mt-auto w-full text-xs"
-                        >
-                          <RefreshCw className="h-3 w-3 mr-1.5" />Run Refresh
-                        </Button>
+                        {refreshWebOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />}
+                      </button>
+                      {refreshWebOpen && (
+                        refreshDataMutation.isPending ? (
+                          <div className="space-y-1.5">
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                              <div className="bg-blue-500 h-1.5 rounded-full animate-pulse" style={{ width: "100%" }} />
+                            </div>
+                            <p className="text-xs text-blue-600 dark:text-blue-400 text-center">Running… {refreshElapsed}s</p>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => refreshDataMutation.mutate()}
+                            className="w-full text-xs"
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1.5" />Run Refresh
+                          </Button>
+                        )
                       )}
                     </div>
 
                     {/* Regrade Profiles */}
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
-                      <div className="flex items-start gap-2">
-                        <Calculator className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Regrade All Profiles</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Recalculate corruption grades using current weighting formula</p>
+                      <button className="flex items-start justify-between w-full gap-2 text-left" onClick={() => setRegradeOpen(o => !o)}>
+                        <div className="flex items-start gap-2">
+                          <Calculator className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Regrade All Profiles</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Recalculate corruption grades using current weighting formula</p>
+                          </div>
                         </div>
-                      </div>
+                        {regradeOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />}
+                      </button>
+                      {regradeOpen && (<>
                       {/* PAC Grade Ceiling — nested inside Regrade card */}
                       <div className="rounded-md border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-2.5 flex flex-col gap-1.5">
                         <div className="flex items-start justify-between gap-2">
@@ -1726,18 +1747,22 @@ export default function AdminPoliticiansPage() {
                           <Calculator className="h-3 w-3 mr-1.5" />Run Regrade
                         </Button>
                       )}
+                      </>)}
                     </div>
 
                     {/* AI State Scan */}
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
-                      <div className="flex items-start gap-2">
-                        <BotIcon className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">AI State Scan</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Find missing data, vacant seats & candidates by state using AI</p>
+                      <button className="flex items-start justify-between w-full gap-2 text-left" onClick={() => setAiScanOpen(o => !o)}>
+                        <div className="flex items-start gap-2">
+                          <BotIcon className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">AI State Scan</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Find missing data, vacant seats & candidates by state using AI</p>
+                          </div>
                         </div>
-                      </div>
-
+                        {aiScanOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />}
+                      </button>
+                      {aiScanOpen && (<>
                       {/* State selector row */}
                       <div className="flex gap-1.5 items-center">
                         <select
@@ -1863,18 +1888,22 @@ export default function AdminPoliticiansPage() {
                           </Button>
                         )}
                       </div>
+                      </>)}
                     </div>
 
                     {/* Scan SuperPACs */}
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
-                      <div className="flex items-start gap-2">
-                        <DollarSign className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Scan SuperPACs</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Pull all independent expenditures from FEC for every candidate with a FEC ID</p>
+                      <button className="flex items-start justify-between w-full gap-2 text-left" onClick={() => setSuperPacOpen(o => !o)}>
+                        <div className="flex items-start gap-2">
+                          <DollarSign className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Scan SuperPACs</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Pull all independent expenditures from FEC for every candidate with a FEC ID</p>
+                          </div>
                         </div>
-                      </div>
-
+                        {superPacOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />}
+                      </button>
+                      {superPacOpen && (<>
                       {superPacStatus === "running" && (
                         <div className="space-y-1.5">
                           <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
@@ -1935,6 +1964,7 @@ export default function AdminPoliticiansPage() {
                           </Button>
                         )}
                       </div>
+                      </>)}
                     </div>
 
                   </div>
