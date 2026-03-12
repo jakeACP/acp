@@ -52,6 +52,18 @@ type RatingStats = {
   totalRatings: number;
 };
 
+function formatTermDate(value: string | null | undefined): string {
+  if (!value) return "";
+  const num = Number(value);
+  if (!isNaN(num) && num > 40000 && num < 80000) {
+    const date = new Date((num - 25569) * 86400 * 1000);
+    return format(date, "MMM d, yyyy");
+  }
+  const parsed = new Date(value);
+  if (!isNaN(parsed.getTime())) return format(parsed, "MMM d, yyyy");
+  return value;
+}
+
 export default function PoliticianProfilePage() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -653,7 +665,7 @@ export default function PoliticianProfilePage() {
                   <div className="flex items-center gap-2" data-testid="text-term">
                     <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
                     <span className="text-sm">
-                      Term: {profile.termStart} – {profile.termEnd || "Present"}
+                      Term: {formatTermDate(profile.termStart)} – {profile.termEnd ? formatTermDate(profile.termEnd) : "Present"}
                     </span>
                   </div>
                 )}
