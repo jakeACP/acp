@@ -4310,6 +4310,13 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     dc: 'District of Columbia',
   };
 
+  // Public: return Google Maps API key for frontend Places Autocomplete
+  app.get("/api/config/google-maps-key", (req, res) => {
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    if (!key) return res.status(503).json({ message: "Google Maps not configured" });
+    res.json({ key });
+  });
+
   // Elections — Address lookup: queries politician_profiles DB grouped by position
   app.get("/api/elections/lookup", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

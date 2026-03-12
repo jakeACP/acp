@@ -1,24 +1,98 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Vote, MapPin, Search, Loader2 } from "lucide-react";
+import { Vote, MapPin, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
+function loadGoogleMapsScript(apiKey: string): Promise<void> {
+  if (window.google?.maps?.places) return Promise.resolve();
+  const existing = document.getElementById("google-maps-script");
+  if (existing) {
+    return new Promise((resolve) => {
+      existing.addEventListener("load", () => resolve());
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.id = "google-maps-script";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Google Maps"));
+    document.head.appendChild(script);
+  });
+}
+
 export default function ElectionsPage() {
-  const [address, setAddress] = useState("");
-  const [isGeolocating, setIsGeolocating] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
+  const [mapsKey, setMapsKey] = useState<string | null>(null);
+  const [mapsError, setMapsError] = useState(false);
+  const [isGeolocating, setIsGeolocating] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [verifiedAddress, setVerifiedAddress] = useState<string | null>(null);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<any>(null);
+
+  useEffect(() => {
+    fetch("/api/config/google-maps-key")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.key) setMapsKey(data.key);
+        else setMapsError(true);
+      })
+      .catch(() => setMapsError(true));
+  }, []);
+
+  const initAutocomplete = useCallback(() => {
+    if (!inputRef.current || !window.google?.maps?.places) return;
+    if (autocompleteRef.current) return;
+    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+      componentRestrictions: { country: "us" },
+      types: ["address"],
+      fields: ["formatted_address", "geometry", "address_components"],
+    });
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (place?.formatted_address) {
+        setVerifiedAddress(place.formatted_address);
+        setInputValue(place.formatted_address);
+      }
+    });
+    autocompleteRef.current = autocomplete;
+  }, []);
+
+  useEffect(() => {
+    if (!mapsKey) return;
+    loadGoogleMapsScript(mapsKey)
+      .then(() => initAutocomplete())
+      .catch(() => setMapsError(true));
+  }, [mapsKey, initAutocomplete]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!address.trim()) {
+    if (!inputValue.trim()) {
       toast({ title: "Please enter an address", variant: "destructive" });
       return;
     }
-    navigate(`/elections/positions?address=${encodeURIComponent(address.trim())}`);
+    if (!verifiedAddress) {
+      toast({
+        title: "Please select a verified address from the dropdown to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+    navigate(`/elections/positions?address=${encodeURIComponent(verifiedAddress)}`);
   };
 
   const handleUseMyLocation = () => {
@@ -31,17 +105,37 @@ export default function ElectionsPage() {
       async (position) => {
         try {
           const { latitude, longitude } = position.coords;
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-          );
-          const data = await res.json();
-          const addr = data.display_name || `${latitude},${longitude}`;
-          setAddress(addr);
-          navigate(`/elections/positions?address=${encodeURIComponent(addr)}`);
+
+          if (window.google?.maps?.Geocoder) {
+            const geocoder = new window.google.maps.Geocoder();
+            geocoder.geocode(
+              { location: { lat: latitude, lng: longitude } },
+              (results: any[], status: string) => {
+                setIsGeolocating(false);
+                if (status === "OK" && results[0]) {
+                  const addr = results[0].formatted_address;
+                  setVerifiedAddress(addr);
+                  setInputValue(addr);
+                  navigate(`/elections/positions?address=${encodeURIComponent(addr)}`);
+                } else {
+                  toast({ title: "Could not determine your address", variant: "destructive" });
+                }
+              }
+            );
+          } else {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+            );
+            const data = await res.json();
+            const addr = data.display_name || `${latitude},${longitude}`;
+            setIsGeolocating(false);
+            setVerifiedAddress(addr);
+            setInputValue(addr);
+            navigate(`/elections/positions?address=${encodeURIComponent(addr)}`);
+          }
         } catch {
-          toast({ title: "Could not determine your address", variant: "destructive" });
-        } finally {
           setIsGeolocating(false);
+          toast({ title: "Could not determine your address", variant: "destructive" });
         }
       },
       () => {
@@ -67,25 +161,37 @@ export default function ElectionsPage() {
             Enter your address to see the elected offices representing you and the candidates running for each seat.
           </p>
           <p className="text-sm text-muted-foreground mb-8">
-            For the most accurate results — including your specific congressional district — enter a full street address.
-            A ZIP code alone will show all seats for your state.
+            We use your address to find your exact congressional district, state legislature district, and local offices.
+            Your address is never stored.
           </p>
 
-          <form onSubmit={handleSearch} className="space-y-3">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g. 123 Main St, Minneapolis, MN 55401"
-                  className="pl-9 h-12 text-base"
-                />
-              </div>
-              <Button type="submit" size="lg" className="h-12 px-6">
-                Find My Elections
-              </Button>
+          {mapsError && (
+            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              Address lookup is temporarily unavailable. You can still type an address manually.
             </div>
+          )}
+
+          <form onSubmit={handleSearch} className="space-y-3">
+            <div className="relative w-full">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputValue}
+                onChange={(e) => {
+                  setInputValue(e.target.value);
+                  setVerifiedAddress(null);
+                }}
+                placeholder="Enter your address to find your representatives..."
+                autoComplete="off"
+                className="w-full pl-9 pr-4 h-12 text-base rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0 transition-colors"
+              />
+            </div>
+
+            <Button type="submit" size="lg" className="w-full h-12">
+              Find My Elections
+            </Button>
 
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <div className="flex-1 h-px bg-border" />

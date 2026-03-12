@@ -1,0 +1,95 @@
+PROBLEM TO FIX:
+The current ACP site (anticorruptionparty.us) uses a ZIP code input 
+to identify a user's location, but this only returns the state and 
+shows ALL state elections rather than the specific districts and 
+politicians that represent that exact address. ZIP codes are imprecise 
+— they are mail delivery routes, not geographic boundaries, and nearly 
+15% of ZIP codes cross congressional district lines. We need to replace 
+the ZIP code search with a verified address lookup that returns only 
+the exact federal, state, and local districts for that specific address.
+
+WHAT TO CHANGE:
+Replace the existing ZIP code search input and search button on the 
+homepage/landing page with a Google Maps address autocomplete field 
+that verifies the address in real time as the user types.
+
+STEP 1 — ADDRESS INPUT WITH GOOGLE PLACES AUTOCOMPLETE:
+- Remove the existing ZIP code input field and search button
+- Replace with a Google Maps Places Autocomplete input field
+- As the user types their address, show real-time verified address 
+  suggestions from Google
+- When the user selects a suggested address, capture:
+  - The full standardized address string
+  - The latitude and longitude coordinates
+  - The ZIP code (extracted from the place result)
+- The input placeholder text should read: 
+  "Enter your address to find your representatives..."
+- Style the autocomplete input to match the existing ACP design system
+- On mobile, the input should be full width
+- Restrict autocomplete results to US addresses only 
+  (use componentRestrictions: { country: 'us' })
+
+STEP 2 — CIVIC API DISTRICT LOOKUP:
+- Once a verified address is selected from the autocomplete,
+  automatically trigger a call to the Google Civic Information API:
+  GET https://www.googleapis.com/civicinfo/v2/representatives
+    ?address={full_verified_address}
+    &key={GOOGLE_CIVIC_API_KEY}
+- Parse the response to extract all divisions and offices including:
+  - U.S. House Representative (specific district only, not all state)
+  - U.S. Senators (2)
+  - State House Representative (their specific district)
+  - State Senate Representative (their specific district)
+  - Any local/county officials returned
+- Use the division ocdId to determine the specific congressional 
+  district number (e.g. "ocd-division/country:us/state:mn/cd:3")
+- Filter the results to show ONLY officials who represent that 
+  specific address — not all officials in the state
+
+STEP 3 — DISPLAY RESULTS:
+- After the Civic API returns results, display only the politicians 
+  who represent that exact address, grouped by level:
+  - Federal (U.S. House + Senate)
+  - State (State House + State Senate)
+  - Local (County, City, etc. if returned)
+- Each politician card should link to their ACP profile page
+- Replace any existing logic that was querying by state and returning 
+  all state elections — that behavior should be completely removed
+
+ENVIRONMENT VARIABLES:
+Store all API keys in Replit Secrets, never hardcode them:
+- GOOGLE_MAPS_API_KEY — used for Places Autocomplete on the frontend
+- GOOGLE_CIVIC_API_KEY — used for Civic Information API on the backend
+Note: These can be the same Google Cloud API key if both APIs are 
+enabled on the same GCP project, which is recommended.
+
+DATA STORAGE:
+- Do NOT store the user's full street address in the database
+- After the lookup, store only the following in the user's profile:
+  - The district codes / ocdIds returned by the Civic API
+  - The state abbreviation
+  - The ZIP code
+- This minimizes sensitive data storage while retaining everything 
+  needed to show the right politicians on return visits
+
+ERROR HANDLING:
+- If the user types a partial address and tries to submit before 
+  selecting a verified suggestion, show: 
+  "Please select a verified address from the dropdown to continue."
+- If the Civic API returns no results, show:
+  "We couldn't find representatives for this address. Please try 
+  entering your full street address including city and state."
+- If either API call fails, show:
+  "Address lookup is temporarily unavailable. Please try again."
+- Never show a blank or broken state
+
+IMPORTANT:
+- The Google Maps Places Autocomplete script must be loaded 
+  asynchronously in the HTML head with the correct API key
+- Restrict the Civic API call to the backend to protect the API key
+- The frontend should call an internal ACP endpoint which then 
+  calls the Civic API server-side
+- Make sure the new address input works correctly on both desktop 
+  and mobile
+- Do not break any existing functionality on the page — only replace 
+  the ZIP code input and its downstream district/politician query logic
