@@ -648,23 +648,27 @@ export default function PoliticianProfilePage() {
 
               {/* Grand Total Contributions */}
               {(() => {
-                const hasBp = profile.totalContributions != null && Number(profile.totalContributions) > 0;
-                const grandTotal = hasBp
-                  ? Number(profile.totalContributions)
-                  : totalLobbyAmount > 0 ? Math.round(totalLobbyAmount / 100) : null;
-                if (grandTotal == null) return null;
+                const bpTotal = profile.totalContributions != null && Number(profile.totalContributions) > 0
+                  ? Number(profile.totalContributions) : 0;
+                const sigTotal = totalLobbyAmount > 0 ? Math.round(totalLobbyAmount / 100) : 0;
+                const grandTotal = bpTotal + sigTotal;
+                if (grandTotal === 0) return null;
+                const hasBoth = bpTotal > 0 && sigTotal > 0;
+                const hasBpOnly = bpTotal > 0 && sigTotal === 0;
                 return (
                   <div className="rounded-lg border-2 border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-4 py-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-1">
-                      Grand Total Contributions {hasBp ? "(BallotPedia)" : "(SIG Data)"}
+                      Grand Total Contributions
                     </p>
                     <p className="text-3xl font-bold text-red-700 dark:text-red-300">
                       ${grandTotal.toLocaleString()}
                     </p>
                     <p className="text-xs text-red-500 dark:text-red-400 mt-1">
-                      {hasBp
-                        ? "Career total raised, sourced from BallotPedia / FEC data"
-                        : "Sum of linked SuperPACs and special interest groups (BallotPedia data not yet available)"}
+                      {hasBoth
+                        ? `BallotPedia career total ($${bpTotal.toLocaleString()}) + linked SuperPACs / SIGs ($${sigTotal.toLocaleString()})`
+                        : hasBpOnly
+                          ? "Career total raised, sourced from BallotPedia / FEC data"
+                          : "Sum of linked SuperPACs and special interest groups (BallotPedia data not yet available)"}
                     </p>
                   </div>
                 );
@@ -699,20 +703,6 @@ export default function PoliticianProfilePage() {
                 </div>
               ))}
 
-              {/* Individual SIG/SuperPAC total — only shown when BallotPedia grand total is also present */}
-              {totalLobbyAmount > 0 && profile.totalContributions != null && Number(profile.totalContributions) > 0 && (
-                <div className="rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 dark:text-orange-400 mb-1">
-                    Individual SuperPAC / SIG Total
-                  </p>
-                  <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">
-                    ${(totalLobbyAmount / 100).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                    Sum of individually linked SuperPACs and special interest groups
-                  </p>
-                </div>
-              )}
 
               {/* Donor SIG badges grid */}
               {donorSponsors.length > 0 && (
