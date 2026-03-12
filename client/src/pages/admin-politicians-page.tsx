@@ -383,6 +383,7 @@ export default function AdminPoliticiansPage() {
   // Elapsed time counters for long-running data tools
   const [refreshElapsed, setRefreshElapsed] = useState(0);
   const [regradeElapsed, setRegradeElapsed] = useState(0);
+  const [regradeResult, setRegradeResult] = useState<{ regraded: number; errors: number } | null>(null);
   const candidateFileRef = useRef<HTMLInputElement>(null);
 
   // Profiles CSV import
@@ -509,14 +510,14 @@ export default function AdminPoliticiansPage() {
   });
 
   const regradeAllMutation = useMutation({
-    mutationFn: async () => apiRequest("/api/admin/politician-profiles/regrade", "POST"),
+    mutationFn: async () => {
+      const r = await apiRequest("/api/admin/politician-profiles/regrade", "POST");
+      return r.json();
+    },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
       setRegradeElapsed(0);
-      toast({
-        title: "Regrade complete",
-        description: `${data.regraded ?? 0} profiles regraded${data.errors?.length ? `, ${data.errors.length} errors` : ""}.`,
-      });
+      setRegradeResult({ regraded: data.regraded ?? 0, errors: data.errors?.length ?? 0 });
     },
     onError: (err: any) => {
       setRegradeElapsed(0);
@@ -1572,16 +1573,49 @@ export default function AdminPoliticiansPage() {
                       </div>
                       {regradeAllMutation.isPending ? (
                         <div className="space-y-1.5 mt-auto">
-                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                            <div className="bg-purple-500 h-1.5 rounded-full animate-pulse" style={{ width: "100%" }} />
+                          {(() => {
+                            const ESTIMATED_SECONDS = 65;
+                            const pct = Math.min(Math.round((regradeElapsed / ESTIMATED_SECONDS) * 100), 95);
+                            return (
+                              <>
+                                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                                  <span>Regrading…</span>
+                                  <span>{pct}%</span>
+                                </div>
+                                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                                  <div
+                                    className="bg-purple-500 h-2 rounded-full transition-all duration-1000"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <p className="text-xs text-purple-600 dark:text-purple-400 text-center">{regradeElapsed}s elapsed</p>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      ) : regradeResult ? (
+                        <div className="space-y-1.5 mt-auto">
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                            <div className="bg-green-500 h-2 rounded-full w-full" />
                           </div>
-                          <p className="text-xs text-purple-600 dark:text-purple-400 text-center">Running… {regradeElapsed}s</p>
+                          <p className="text-xs text-green-600 dark:text-green-400 text-center font-medium">
+                            ✓ {regradeResult.regraded.toLocaleString()} profiles regraded
+                            {regradeResult.errors > 0 ? ` · ${regradeResult.errors} errors` : ""}
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setRegradeResult(null); regradeAllMutation.mutate(); }}
+                            className="w-full text-xs"
+                          >
+                            <Calculator className="h-3 w-3 mr-1.5" />Run Again
+                          </Button>
                         </div>
                       ) : (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => regradeAllMutation.mutate()}
+                          onClick={() => { setRegradeResult(null); regradeAllMutation.mutate(); }}
                           className="mt-auto w-full text-xs"
                         >
                           <Calculator className="h-3 w-3 mr-1.5" />Run Regrade
