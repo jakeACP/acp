@@ -16,9 +16,10 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { sanitizeUrl } from "@/lib/utils";
-import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink, Flag, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronRight, ShieldAlert, Lock } from "lucide-react";
+import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink, Flag, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronRight, ShieldAlert, Lock, PieChart as PieChartIcon, BarChart3, Wallet } from "lucide-react";
 import { format } from "date-fns";
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating, SpecialInterestGroup, PoliticianSigSponsorship, PoliticianDemerit } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -904,6 +905,7 @@ type QuiverTrade = {
   transaction?: string;
   Amount?: string;
   amount?: string;
+  Range?: string;
   TransactionDate?: string;
   transaction_date?: string;
   ReportDate?: string;
@@ -954,11 +956,47 @@ const flagFormSchema = z.object({
 });
 type FlagFormData = z.infer<typeof flagFormSchema>;
 
+const SECTOR_CHART_COLORS: Record<string, string> = {
+  Technology: "#3b82f6",
+  Finance: "#10b981",
+  Healthcare: "#8b5cf6",
+  Energy: "#eab308",
+  Defense: "#ef4444",
+  Media: "#ec4899",
+  Automotive: "#f97316",
+  Consumer: "#14b8a6",
+  Other: "#94a3b8",
+};
+
+function parseAmount(trade: QuiverTrade): number {
+  const raw = trade.Amount || trade.amount;
+  if (!raw) return 0;
+  const n = parseFloat(String(raw).replace(/[,$]/g, ""));
+  return isNaN(n) ? 0 : n;
+}
+
+function parseRange(range: string): { low: number; high: number } {
+  if (!range) return { low: 0, high: 0 };
+  const cleaned = range.replace(/\$/g, "").replace(/,/g, "");
+  const parts = cleaned.split("-").map(s => parseFloat(s.trim()));
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return { low: parts[0], high: parts[1] };
+  }
+  const single = parseFloat(cleaned);
+  return { low: isNaN(single) ? 0 : single, high: isNaN(single) ? 0 : single };
+}
+
+function formatDollar(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n.toFixed(0)}`;
+}
+
 function TradingTab({ politicianId, politicianName }: { politicianId: string; politicianName: string }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set());
-  const [flagTrade, setFlagTrade] = useState<QuiverTrade | null>(null);
+  const [showFlagDialog, setShowFlagDialog] = useState(false);
 
   const { data: trades = [], isLoading, isError } = useQuery<QuiverTrade[]>({
     queryKey: ['/api/politician-profiles', politicianId, 'trades'],
@@ -985,23 +1023,19 @@ function TradingTab({ politicianId, politicianName }: { politicianId: string; po
 
   const flagMutation = useMutation({
     mutationFn: async (data: FlagFormData) => {
-      const t = flagTrade!;
-      const ticker = t.Ticker || t.ticker || "";
-      const txDate = t.TransactionDate || t.transaction_date || "";
-      const tradeId = `${ticker}_${txDate}`;
       return apiRequest(`/api/politician-profiles/${politicianId}/trades/flag`, "POST", {
-        tradeId,
-        ticker,
-        transactionDate: txDate,
-        tradeType: t.Transaction || t.transaction || null,
-        amount: t.Amount || t.amount || null,
+        tradeId: `profile_flag_${Date.now()}`,
+        ticker: "PROFILE",
+        transactionDate: new Date().toISOString().split("T")[0],
+        tradeType: "Profile Flag",
+        amount: null,
         reason: data.reason,
         evidenceUrl: data.evidenceUrl || null,
       });
     },
     onSuccess: () => {
-      toast({ title: "Trade Flagged", description: "Thank you — this trade has been flagged for review by our team." });
-      setFlagTrade(null);
+      toast({ title: "Profile Flagged", description: "Thank you — this politician's trading activity has been flagged for review." });
+      setShowFlagDialog(false);
       flagForm.reset();
     },
     onError: (err: any) => {
@@ -1018,6 +1052,91 @@ function TradingTab({ politicianId, politicianName }: { politicianId: string; po
       map[sector].push(t);
     });
     return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
+  }, [trades]);
+
+  const analytics = useMemo(() => {
+    if (trades.length === 0) return null;
+
+    let totalBuyLow = 0, totalBuyHigh = 0, totalSellLow = 0, totalSellHigh = 0;
+    const sectorAmounts: Record<string, { low: number; high: number }> = {};
+    const timelineMap: Record<string, { buys: number; sells: number; net: number }> = {};
+    let lateTrades = 0;
+
+    const sortedTrades = [...trades].sort((a, b) => {
+      const dA = a.TransactionDate || a.transaction_date || "";
+      const dB = b.TransactionDate || b.transaction_date || "";
+      return dA.localeCompare(dB);
+    });
+
+    sortedTrades.forEach(t => {
+      const txType = (t.Transaction || t.transaction || "").toLowerCase();
+      const range = t.Range || "";
+      const { low, high } = parseRange(range);
+      const midpoint = (low + high) / 2;
+      const isBuy = txType.includes("purchase") || txType.includes("exchange");
+      const sector = getSector(t.Ticker || t.ticker || "");
+      const txDate = t.TransactionDate || t.transaction_date || "";
+      const reportDate = t.ReportDate || t.report_date || "";
+      const days = txDate && reportDate ? getDaysToDisclose(txDate, reportDate) : null;
+      if (days != null && days > 45) lateTrades++;
+
+      if (isBuy) {
+        totalBuyLow += low;
+        totalBuyHigh += high;
+      } else {
+        totalSellLow += low;
+        totalSellHigh += high;
+      }
+
+      if (!sectorAmounts[sector]) sectorAmounts[sector] = { low: 0, high: 0 };
+      sectorAmounts[sector].low += low;
+      sectorAmounts[sector].high += high;
+
+      const month = txDate.slice(0, 7);
+      if (month) {
+        if (!timelineMap[month]) timelineMap[month] = { buys: 0, sells: 0, net: 0 };
+        if (isBuy) {
+          timelineMap[month].buys += midpoint;
+        } else {
+          timelineMap[month].sells += midpoint;
+        }
+        timelineMap[month].net = timelineMap[month].buys - timelineMap[month].sells;
+      }
+    });
+
+    const sectorData = Object.entries(sectorAmounts)
+      .map(([name, { low, high }]) => ({
+        name,
+        value: Math.round((low + high) / 2),
+        low,
+        high,
+        color: SECTOR_CHART_COLORS[name] || SECTOR_CHART_COLORS.Other,
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    const timelineData = Object.entries(timelineMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .reduce((acc, [month, data]) => {
+        const prev = acc.length > 0 ? acc[acc.length - 1].cumulative : 0;
+        acc.push({
+          month,
+          label: month,
+          buys: Math.round(data.buys),
+          sells: Math.round(data.sells),
+          net: Math.round(data.net),
+          cumulative: Math.round(prev + data.net),
+        });
+        return acc;
+      }, [] as { month: string; label: string; buys: number; sells: number; net: number; cumulative: number }[]);
+
+    const netLow = totalBuyLow - totalSellLow;
+    const netHigh = totalBuyHigh - totalSellHigh;
+
+    return {
+      totalBuyLow, totalBuyHigh, totalSellLow, totalSellHigh,
+      netLow, netHigh,
+      sectorData, timelineData, lateTrades,
+    };
   }, [trades]);
 
   const toggleSector = (sector: string) => {
@@ -1060,17 +1179,38 @@ function TradingTab({ politicianId, politicianName }: { politicianId: string; po
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Stock Trades & Financial Activity
-          </CardTitle>
-          <CardDescription>
-            Congressional trading disclosures for {politicianName}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Stock Trades & Financial Activity
+              </CardTitle>
+              <CardDescription>
+                Congressional trading disclosures for {politicianName}
+              </CardDescription>
+            </div>
+            {trades.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:hover:bg-red-950/40"
+                onClick={() => {
+                  if (!user) {
+                    toast({ title: "Login Required", description: "Please log in to flag trading activity", variant: "destructive" });
+                    return;
+                  }
+                  setShowFlagDialog(true);
+                }}
+              >
+                <Flag className="w-4 h-4 mr-1.5" />
+                Flag Insider Trading
+              </Button>
+            )}
+          </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           {demerits.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="flex flex-wrap gap-2">
               {demerits.map(d => (
                 <Badge key={d.id} className="bg-red-600 text-white border-red-700">
                   <ShieldAlert className="w-3 h-3 mr-1" />
@@ -1086,105 +1226,162 @@ function TradingTab({ politicianId, politicianName }: { politicianId: string; po
               <p className="text-sm font-medium text-slate-500">No stock trades found</p>
               <p className="text-xs text-slate-400">Trade data is sourced from congressional disclosure reports. This politician may not have any reported trades, or historical data may be temporarily unavailable.</p>
             </div>
-          ) : (
+          ) : analytics && (
             <>
-              <p className="text-xs text-slate-500">{trades.length} trade{trades.length !== 1 ? "s" : ""} found across {grouped.length} sector{grouped.length !== 1 ? "s" : ""}</p>
-              {grouped.map(([sector, sectorTrades]) => {
-                const isOpen = expandedSectors.has(sector);
-                const colorClass = SECTOR_COLORS[sector] || SECTOR_COLORS.Other;
-                return (
-                  <div key={sector} className={`rounded-lg border ${colorClass} overflow-hidden`}>
-                    <button onClick={() => toggleSector(sector)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:opacity-80 transition-opacity">
-                      <div className="flex items-center gap-2">
-                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                        <span className="font-semibold text-sm">{sector}</span>
-                        <Badge variant="outline" className="text-xs">{sectorTrades.length} trade{sectorTrades.length !== 1 ? "s" : ""}</Badge>
-                      </div>
-                    </button>
-                    {isOpen && (
-                      <div className="border-t px-4 py-2 space-y-2">
-                        {sectorTrades.map((trade, idx) => {
-                          const ticker = trade.Ticker || trade.ticker || "—";
-                          const txType = trade.Transaction || trade.transaction || "—";
-                          const amount = trade.Amount || trade.amount || "—";
-                          const txDate = trade.TransactionDate || trade.transaction_date || "";
-                          const reportDate = trade.ReportDate || trade.report_date || "";
-                          const daysToDisclose = txDate && reportDate ? getDaysToDisclose(txDate, reportDate) : null;
-                          const isLate = daysToDisclose != null && daysToDisclose > 45;
-                          const isBuy = txType.toLowerCase().includes("purchase");
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-lg border bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 p-3 text-center">
+                  <TrendingUp className="w-5 h-5 mx-auto text-green-600 mb-1" />
+                  <p className="text-xs text-green-700 dark:text-green-400 font-medium">Total Buys</p>
+                  <p className="text-lg font-bold text-green-700 dark:text-green-300">{formatDollar((analytics.totalBuyLow + analytics.totalBuyHigh) / 2)}</p>
+                  <p className="text-[10px] text-green-600/70 dark:text-green-400/60">{formatDollar(analytics.totalBuyLow)} – {formatDollar(analytics.totalBuyHigh)}</p>
+                </div>
+                <div className="rounded-lg border bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 p-3 text-center">
+                  <TrendingDown className="w-5 h-5 mx-auto text-red-600 mb-1" />
+                  <p className="text-xs text-red-700 dark:text-red-400 font-medium">Total Sales</p>
+                  <p className="text-lg font-bold text-red-700 dark:text-red-300">{formatDollar((analytics.totalSellLow + analytics.totalSellHigh) / 2)}</p>
+                  <p className="text-[10px] text-red-600/70 dark:text-red-400/60">{formatDollar(analytics.totalSellLow)} – {formatDollar(analytics.totalSellHigh)}</p>
+                </div>
+                <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 p-3 text-center">
+                  <Wallet className="w-5 h-5 mx-auto text-blue-600 mb-1" />
+                  <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">Est. Net Position</p>
+                  <p className={`text-lg font-bold ${(analytics.netLow + analytics.netHigh) / 2 >= 0 ? "text-blue-700 dark:text-blue-300" : "text-orange-700 dark:text-orange-300"}`}>{formatDollar(Math.abs((analytics.netLow + analytics.netHigh) / 2))}</p>
+                  <p className="text-[10px] text-blue-600/70 dark:text-blue-400/60">{formatDollar(Math.abs(analytics.netLow))} – {formatDollar(Math.abs(analytics.netHigh))}</p>
+                </div>
+                <div className="rounded-lg border bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 p-3 text-center">
+                  <BarChart3 className="w-5 h-5 mx-auto text-slate-600 dark:text-slate-400 mb-1" />
+                  <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total Trades</p>
+                  <p className="text-lg font-bold text-slate-700 dark:text-slate-300">{trades.length}</p>
+                  {analytics.lateTrades > 0 && (
+                    <p className="text-[10px] text-red-500">{analytics.lateTrades} late disclosure{analytics.lateTrades !== 1 ? "s" : ""}</p>
+                  )}
+                </div>
+              </div>
 
-                          return (
-                            <div key={idx} className="flex items-center justify-between gap-3 py-2 border-b last:border-0 border-slate-200 dark:border-slate-700">
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <div className={`w-8 h-8 rounded flex items-center justify-center text-white text-xs font-bold shrink-0 ${isBuy ? "bg-green-500" : "bg-red-500"}`}>
-                                  {isBuy ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-mono font-bold text-sm">{ticker}</span>
-                                    <span className="text-xs text-slate-500 capitalize">{txType}</span>
-                                    {isLate && <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 text-[10px]">Late Disclosure</Badge>}
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                                    <span>{amount}</span>
-                                    {txDate && <span>· {txDate}</span>}
-                                    {daysToDisclose != null && (
-                                      <span className="flex items-center gap-0.5">
-                                        <Clock className="w-3 h-3" />{daysToDisclose}d to disclose
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 shrink-0"
-                                onClick={() => {
-                                  if (!user) {
-                                    toast({ title: "Login Required", description: "Please log in to flag trades", variant: "destructive" });
-                                    return;
-                                  }
-                                  setFlagTrade(trade);
-                                }}
-                              >
-                                <Flag className="w-3.5 h-3.5 mr-1" />
-                                <span className="text-xs">Flag</span>
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+              {analytics.timelineData.length > 1 && (
+                <div className="rounded-lg border p-4">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4" />
+                    Trading Activity Over Time
+                  </h4>
+                  <div className="h-48">
+                    <TradingTimelineChart data={analytics.timelineData} />
                   </div>
-                );
-              })}
+                </div>
+              )}
+
+              {analytics.sectorData.length > 1 && (
+                <div className="rounded-lg border p-4">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <PieChartIcon className="w-4 h-4" />
+                    Portfolio Allocation by Sector
+                  </h4>
+                  <div className="flex flex-col md:flex-row items-center gap-4">
+                    <div className="w-48 h-48">
+                      <SectorPieChart data={analytics.sectorData} />
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      {analytics.sectorData.map(s => {
+                        const total = analytics.sectorData.reduce((sum, d) => sum + d.value, 0);
+                        const pct = total > 0 ? ((s.value / total) * 100).toFixed(1) : "0";
+                        return (
+                          <div key={s.name} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: s.color }} />
+                              <span className="text-slate-700 dark:text-slate-300">{s.name}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-slate-500 text-xs">{pct}%</span>
+                              <span className="font-medium text-slate-700 dark:text-slate-300">{formatDollar(s.value)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <h4 className="text-sm font-semibold mb-2">
+                  {trades.length} trade{trades.length !== 1 ? "s" : ""} across {grouped.length} sector{grouped.length !== 1 ? "s" : ""}
+                </h4>
+                <div className="space-y-2">
+                  {grouped.map(([sector, sectorTrades]) => {
+                    const isOpen = expandedSectors.has(sector);
+                    const colorClass = SECTOR_COLORS[sector] || SECTOR_COLORS.Other;
+                    const sectorTotal = sectorTrades.reduce((sum, t) => sum + parseAmount(t), 0);
+                    return (
+                      <div key={sector} className={`rounded-lg border ${colorClass} overflow-hidden`}>
+                        <button onClick={() => toggleSector(sector)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:opacity-80 transition-opacity">
+                          <div className="flex items-center gap-2">
+                            {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            <span className="font-semibold text-sm">{sector}</span>
+                            <Badge variant="outline" className="text-xs">{sectorTrades.length} trade{sectorTrades.length !== 1 ? "s" : ""}</Badge>
+                          </div>
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">{formatDollar(sectorTotal)}</span>
+                        </button>
+                        {isOpen && (
+                          <div className="border-t px-4 py-2 space-y-2">
+                            {sectorTrades.map((trade, idx) => {
+                              const ticker = trade.Ticker || trade.ticker || "—";
+                              const txType = trade.Transaction || trade.transaction || "—";
+                              const range = trade.Range || "";
+                              const txDate = trade.TransactionDate || trade.transaction_date || "";
+                              const reportDate = trade.ReportDate || trade.report_date || "";
+                              const daysToDisclose = txDate && reportDate ? getDaysToDisclose(txDate, reportDate) : null;
+                              const isLate = daysToDisclose != null && daysToDisclose > 45;
+                              const isBuy = txType.toLowerCase().includes("purchase");
+
+                              return (
+                                <div key={idx} className="flex items-center justify-between gap-3 py-2 border-b last:border-0 border-slate-200 dark:border-slate-700">
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <div className={`w-8 h-8 rounded flex items-center justify-center text-white text-xs font-bold shrink-0 ${isBuy ? "bg-green-500" : "bg-red-500"}`}>
+                                      {isBuy ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-mono font-bold text-sm">{ticker}</span>
+                                        <span className="text-xs text-slate-500 capitalize">{txType}</span>
+                                        {isLate && <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 text-[10px]">Late Disclosure</Badge>}
+                                      </div>
+                                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                        <span className="font-medium">{range || "—"}</span>
+                                        {txDate && <span>· {txDate}</span>}
+                                        {daysToDisclose != null && (
+                                          <span className="flex items-center gap-0.5">
+                                            <Clock className="w-3 h-3" />{daysToDisclose}d to disclose
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </>
           )}
         </CardContent>
       </Card>
 
-      {/* Flag Modal */}
-      <Dialog open={!!flagTrade} onOpenChange={(open) => { if (!open) { setFlagTrade(null); flagForm.reset(); } }}>
+      <Dialog open={showFlagDialog} onOpenChange={(open) => { if (!open) { setShowFlagDialog(false); flagForm.reset(); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Flag className="w-5 h-5 text-red-500" /> Flag Trade for Insider Trading</DialogTitle>
-            <DialogDescription>Report a suspicious trade for review by our team.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><Flag className="w-5 h-5 text-red-500" /> Flag Insider Trading</DialogTitle>
+            <DialogDescription>Report suspicious trading activity by {politicianName} for review by our team.</DialogDescription>
           </DialogHeader>
-          {flagTrade && (
-            <div className="rounded-md border bg-slate-50 dark:bg-slate-800 p-3 text-sm space-y-1">
-              <p><span className="font-medium">Ticker:</span> {flagTrade.Ticker || flagTrade.ticker}</p>
-              <p><span className="font-medium">Type:</span> {flagTrade.Transaction || flagTrade.transaction}</p>
-              <p><span className="font-medium">Amount:</span> {flagTrade.Amount || flagTrade.amount}</p>
-              <p><span className="font-medium">Date:</span> {flagTrade.TransactionDate || flagTrade.transaction_date}</p>
-            </div>
-          )}
           <Form {...flagForm}>
             <form onSubmit={flagForm.handleSubmit((data) => flagMutation.mutate(data))} className="space-y-4">
               <FormField control={flagForm.control} name="reason" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Why do you think this trade is suspicious? *</FormLabel>
-                  <FormControl><Textarea placeholder="Describe what makes this trade suspicious..." rows={3} {...field} /></FormControl>
+                  <FormLabel>Why do you think this trading activity is suspicious? *</FormLabel>
+                  <FormControl><Textarea placeholder="Describe what makes this politician's trading activity suspicious..." rows={3} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -1196,7 +1393,7 @@ function TradingTab({ politicianId, politicianName }: { politicianId: string; po
                 </FormItem>
               )} />
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => { setFlagTrade(null); flagForm.reset(); }}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => { setShowFlagDialog(false); flagForm.reset(); }}>Cancel</Button>
                 <Button type="submit" disabled={flagMutation.isPending} className="bg-red-600 hover:bg-red-700 text-white">
                   {flagMutation.isPending ? "Submitting..." : "Submit Flag"}
                 </Button>
@@ -1206,5 +1403,35 @@ function TradingTab({ politicianId, politicianName }: { politicianId: string; po
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function SectorPieChart({ data }: { data: { name: string; value: number; color: string }[] }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie data={data} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2} dataKey="value">
+          {data.map((entry, idx) => (
+            <Cell key={idx} fill={entry.color} />
+          ))}
+        </Pie>
+        <RechartsTooltip formatter={(value: number) => formatDollar(value)} />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+function TradingTimelineChart({ data }: { data: { month: string; label: string; buys: number; sells: number; cumulative: number }[] }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+        <XAxis dataKey="label" tick={{ fontSize: 10 }} tickFormatter={(v: string) => { const parts = v.split("-"); return parts.length === 2 ? `${parts[1]}/${parts[0].slice(2)}` : v; }} />
+        <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => formatDollar(v)} width={55} />
+        <RechartsTooltip formatter={(value: number, name: string) => [formatDollar(value), name === "buys" ? "Purchases" : "Sales"]} labelFormatter={(l: string) => `Month: ${l}`} />
+        <Bar dataKey="buys" fill="#22c55e" name="Purchases" radius={[2, 2, 0, 0]} />
+        <Bar dataKey="sells" fill="#ef4444" name="Sales" radius={[2, 2, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
