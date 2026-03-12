@@ -383,7 +383,7 @@ export default function AdminPoliticiansPage() {
   // Elapsed time counters for long-running data tools
   const [refreshElapsed, setRefreshElapsed] = useState(0);
   const [regradeElapsed, setRegradeElapsed] = useState(0);
-  const [regradeResult, setRegradeResult] = useState<{ regraded: number; errors: number } | null>(null);
+  const [regradeResult, setRegradeResult] = useState<{ scanned: number; regraded: number; errors: number } | null>(null);
   const candidateFileRef = useRef<HTMLInputElement>(null);
 
   // Profiles CSV import
@@ -517,7 +517,7 @@ export default function AdminPoliticiansPage() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
       setRegradeElapsed(0);
-      setRegradeResult({ regraded: data.regraded ?? 0, errors: data.errors?.length ?? 0 });
+      setRegradeResult({ scanned: data.scanned ?? 0, regraded: data.regraded ?? 0, errors: data.errors?.length ?? 0 });
     },
     onError: (err: any) => {
       setRegradeElapsed(0);
@@ -539,6 +539,20 @@ export default function AdminPoliticiansPage() {
     const id = setInterval(() => setRegradeElapsed(s => s + 1), 1000);
     return () => clearInterval(id);
   }, [regradeAllMutation.isPending]);
+
+  // Grading settings (PAC ceiling)
+  const { data: gradingSettings, refetch: refetchGradingSettings } = useQuery<any>({
+    queryKey: ["/api/admin/grading-settings"],
+    queryFn: () => fetch("/api/admin/grading-settings", { credentials: "include" }).then(r => r.json()),
+  });
+  const updateGradingSettingsMutation = useMutation({
+    mutationFn: async (patch: Record<string, any>) => {
+      const r = await apiRequest("/api/admin/grading-settings", "POST", patch);
+      return r.json();
+    },
+    onSuccess: () => refetchGradingSettings(),
+    onError: (err: any) => toast({ title: "Settings update failed", description: err.message, variant: "destructive" }),
+  });
 
   // Import progress simulation
   useEffect(() => {
@@ -1598,10 +1612,15 @@ export default function AdminPoliticiansPage() {
                           <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                             <div className="bg-green-500 h-2 rounded-full w-full" />
                           </div>
-                          <p className="text-xs text-green-600 dark:text-green-400 text-center font-medium">
-                            ✓ {regradeResult.regraded.toLocaleString()} profiles regraded
-                            {regradeResult.errors > 0 ? ` · ${regradeResult.errors} errors` : ""}
-                          </p>
+                          <div className="text-center space-y-0.5">
+                            <p className="text-xs text-green-600 dark:text-green-400 font-medium">
+                              ✓ {regradeResult.regraded.toLocaleString()} profiles regraded
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {regradeResult.scanned.toLocaleString()} scanned
+                              {regradeResult.errors > 0 ? ` · ${regradeResult.errors} errors` : " · 0 errors"}
+                            </p>
+                          </div>
                           <Button
                             variant="outline"
                             size="sm"
@@ -1620,6 +1639,50 @@ export default function AdminPoliticiansPage() {
                         >
                           <Calculator className="h-3 w-3 mr-1.5" />Run Regrade
                         </Button>
+                      )}
+                    </div>
+
+                    {/* PAC Grade Ceiling Settings */}
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2">
+                          <Shield className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">PAC Grade Ceiling</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Cap grades based on total SIG/PAC dollars received</p>
+                          </div>
+                        </div>
+                        <button
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${gradingSettings?.enablePacCeiling ? 'bg-orange-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                          onClick={() => updateGradingSettingsMutation.mutate({ enablePacCeiling: !gradingSettings?.enablePacCeiling })}
+                          title={gradingSettings?.enablePacCeiling ? "Ceiling enabled — click to disable" : "Ceiling disabled — click to enable"}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${gradingSettings?.enablePacCeiling ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
+                      </div>
+                      {gradingSettings?.enablePacCeiling && (
+                        <div className="space-y-1.5 mt-1">
+                          {[
+                            { label: "Any $ → cap B", field: "pacCeilingBThreshold", value: gradingSettings?.pacCeilingBThreshold ?? 0 },
+                            { label: "Cap C above ($)", field: "pacCeilingCThreshold", value: gradingSettings?.pacCeilingCThreshold ?? 100000 },
+                            { label: "Cap D above ($)", field: "pacCeilingDThreshold", value: gradingSettings?.pacCeilingDThreshold ?? 1000000 },
+                            { label: "Force F above ($)", field: "pacCeilingFThreshold", value: gradingSettings?.pacCeilingFThreshold ?? 10000000 },
+                          ].map(({ label, field, value }) => (
+                            <div key={field} className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0">{label}</span>
+                              <input
+                                type="number"
+                                defaultValue={value}
+                                className="flex-1 text-xs rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1 text-slate-700 dark:text-slate-300 min-w-0"
+                                onBlur={e => {
+                                  const v = parseFloat(e.target.value);
+                                  if (!isNaN(v)) updateGradingSettingsMutation.mutate({ [field]: v });
+                                }}
+                              />
+                            </div>
+                          ))}
+                          <p className="text-xs text-orange-500 dark:text-orange-400 mt-1">Run Regrade to apply changes.</p>
+                        </div>
                       )}
                     </div>
 

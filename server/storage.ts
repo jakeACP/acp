@@ -252,7 +252,7 @@ export interface IStorage {
   fetchFecCandidateTotals(fecCandidateId: string): Promise<{ individualShare: number; smallDollarShare: number; committeeShare: number; selfFundingShare: number; receipts: number } | null>;
   lookupFecCandidateId(name: string, state?: string, office?: string): Promise<string | null>;
   computePoliticianGrade(politicianId: string): Promise<{ grade: string; numericScore: number; explanation: any }>;
-  regradeAllProfiles(): Promise<{ regraded: number; errors: string[] }>;
+  regradeAllProfiles(): Promise<{ scanned: number; regraded: number; errors: string[] }>;
   setCommunityAdj(politicianId: string, adj: number): Promise<void>;
   getPoliticiansBySig(sigId: string): Promise<any[]>;
 
@@ -4422,6 +4422,29 @@ export class DatabaseStorage implements IStorage {
     else if (finalScore >= config.gradeDCutoff) grade = 'D';
     else grade = 'F';
 
+    // ── SuperPAC / SIG Grade Ceiling ──────────────────────────────────────
+    // Caps the letter grade based on raw dollar intake from non-ACE SIGs.
+    // Amounts are stored in cents; thresholds in the config are in dollars.
+    if (config.enablePacCeiling) {
+      const rawSigDollars = sponsorships
+        .filter(s => s.sig && !s.sig.isAce)
+        .reduce((sum, s) => sum + (s.reportedAmount ?? 0), 0) / 100;
+
+      const GRADE_ORDER = ['A', 'B', 'C', 'D', 'F'];
+      let ceiling: string | null = null;
+
+      if (rawSigDollars >= config.pacCeilingFThreshold) ceiling = 'F';
+      else if (rawSigDollars >= config.pacCeilingDThreshold) ceiling = 'D';
+      else if (rawSigDollars >= config.pacCeilingCThreshold) ceiling = 'C';
+      else if (rawSigDollars > config.pacCeilingBThreshold) ceiling = 'B';
+
+      if (ceiling && GRADE_ORDER.indexOf(grade) < GRADE_ORDER.indexOf(ceiling)) {
+        explanation.metrics.pacCeilingApplied = ceiling;
+        explanation.metrics.pacCeilingRawDollars = rawSigDollars;
+        grade = ceiling;
+      }
+    }
+
     // Persist
     await db.update(politicianProfiles).set({
       corruptionGrade: grade,
@@ -4432,8 +4455,9 @@ export class DatabaseStorage implements IStorage {
     return { grade, numericScore: finalScore, explanation };
   }
 
-  async regradeAllProfiles(): Promise<{ regraded: number; errors: string[] }> {
+  async regradeAllProfiles(): Promise<{ scanned: number; regraded: number; errors: string[] }> {
     const all = await db.select({ id: politicianProfiles.id }).from(politicianProfiles);
+    const scanned = all.length;
     let regraded = 0;
     const errors: string[] = [];
     for (const p of all) {
@@ -4445,7 +4469,7 @@ export class DatabaseStorage implements IStorage {
       }
       await new Promise(r => setTimeout(r, 50)); // avoid hammering FEC/DB
     }
-    return { regraded, errors };
+    return { scanned, regraded, errors };
   }
 
   async setCommunityAdj(politicianId: string, adj: number): Promise<void> {

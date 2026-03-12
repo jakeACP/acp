@@ -1475,6 +1475,12 @@ export const gradingAlgorithmSettings = pgTable("grading_algorithm_settings", {
   gradeBCutoff: real("grade_b_cutoff").default(60).notNull(),
   gradeCCutoff: real("grade_c_cutoff").default(40).notNull(),
   gradeDCutoff: real("grade_d_cutoff").default(20).notNull(),
+  // SuperPAC / SIG grade ceiling — caps grade based on raw dollar intake (in dollars)
+  enablePacCeiling: boolean("enable_pac_ceiling").default(true).notNull(),
+  pacCeilingBThreshold: real("pac_ceiling_b_threshold").default(0).notNull(),         // any $>0 → cap B
+  pacCeilingCThreshold: real("pac_ceiling_c_threshold").default(100000).notNull(),    // $100K+ → cap C
+  pacCeilingDThreshold: real("pac_ceiling_d_threshold").default(1000000).notNull(),   // $1M+ → cap D
+  pacCeilingFThreshold: real("pac_ceiling_f_threshold").default(10000000).notNull(),  // $10M+ → F
   updatedAt: timestamp("updated_at").defaultNow(),
   updatedBy: varchar("updated_by").references(() => users.id),
 });
