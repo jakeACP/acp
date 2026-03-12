@@ -371,6 +371,8 @@ export default function AdminPoliticiansPage() {
   // Profile sub-filter (all, representatives, candidates, delegates)
   const [profileSubFilter, setProfileSubFilter] = useState("all");
   const [profileDisplayLimit, setProfileDisplayLimit] = useState(100);
+  const [profileSortCol, setProfileSortCol] = useState<string | null>(null);
+  const [profileSortDir, setProfileSortDir] = useState<"asc" | "desc">("asc");
 
   // Candidate XLSX import
   const [candidateImportOpen, setCandidateImportOpen] = useState(false);
@@ -813,6 +815,42 @@ export default function AdminPoliticiansPage() {
     return matchSearch && matchParty && matchGrade && matchStatus && matchState && matchSubFilter;
   });
 
+  const GRADE_ORDER: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, F: 5 };
+  const sortedProfiles = profileSortCol
+    ? [...filteredProfiles].sort((a, b) => {
+        const dir = profileSortDir === "asc" ? 1 : -1;
+        const pos_a = positions.find(p => p.id === a.positionId);
+        const pos_b = positions.find(p => p.id === b.positionId);
+        switch (profileSortCol) {
+          case "name":     return dir * a.fullName.localeCompare(b.fullName);
+          case "type":     return dir * ((a.profileType ?? "").localeCompare(b.profileType ?? ""));
+          case "party":    return dir * ((a.party ?? "").localeCompare(b.party ?? ""));
+          case "position": return dir * ((pos_a?.title ?? "").localeCompare(pos_b?.title ?? ""));
+          case "state":    return dir * ((pos_a?.jurisdiction ?? "").localeCompare(pos_b?.jurisdiction ?? ""));
+          case "total": {
+            const ta = Number(a.totalContributions ?? 0) + Math.round(Number(a.totalLobbyAmount ?? 0) / 100);
+            const tb = Number(b.totalContributions ?? 0) + Math.round(Number(b.totalLobbyAmount ?? 0) / 100);
+            return dir * (ta - tb);
+          }
+          case "grade": {
+            const ga = GRADE_ORDER[a.corruptionGrade ?? ""] ?? 99;
+            const gb = GRADE_ORDER[b.corruptionGrade ?? ""] ?? 99;
+            return dir * (ga - gb);
+          }
+          default: return 0;
+        }
+      })
+    : filteredProfiles;
+
+  function toggleSort(col: string) {
+    if (profileSortCol === col) {
+      setProfileSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setProfileSortCol(col);
+      setProfileSortDir("asc");
+    }
+    setProfileDisplayLimit(100);
+  }
 
   const ROLE_COLORS: Record<string, string> = {
     admin: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
@@ -2001,7 +2039,7 @@ export default function AdminPoliticiansPage() {
 
                 {profilesLoading ? (
                   <div className="text-center py-8">Loading profiles...</div>
-                ) : filteredProfiles.length === 0 ? (
+                ) : sortedProfiles.length === 0 ? (
                   <div className="text-center py-12 text-slate-500 dark:text-slate-400">
                     <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>{profiles.length === 0 ? "No politician profiles created yet" : "No profiles match your search"}</p>
@@ -2013,18 +2051,36 @@ export default function AdminPoliticiansPage() {
                         <TableRow>
                           <TableHead className="w-[50px]">Featured</TableHead>
                           <TableHead className="w-[60px]">Photo</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Party</TableHead>
-                          <TableHead>Position</TableHead>
-                          <TableHead>State</TableHead>
-                          <TableHead>Grand Total</TableHead>
-                          <TableHead>Grade</TableHead>
+                          {([
+                            { col: "name",     label: "Name" },
+                            { col: "type",     label: "Type" },
+                            { col: "party",    label: "Party" },
+                            { col: "position", label: "Position" },
+                            { col: "state",    label: "State" },
+                            { col: "total",    label: "Grand Total" },
+                            { col: "grade",    label: "Grade" },
+                          ] as { col: string; label: string }[]).map(({ col, label }) => (
+                            <TableHead
+                              key={col}
+                              className="cursor-pointer select-none hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              onClick={() => toggleSort(col)}
+                            >
+                              <span className="flex items-center gap-1">
+                                {label}
+                                {profileSortCol === col
+                                  ? (profileSortDir === "asc"
+                                    ? <span className="text-xs text-blue-500">↑</span>
+                                    : <span className="text-xs text-blue-500">↓</span>)
+                                  : <span className="text-xs text-slate-300 dark:text-slate-600">↕</span>
+                                }
+                              </span>
+                            </TableHead>
+                          ))}
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredProfiles.slice(0, profileDisplayLimit).map((profile) => {
+                        {sortedProfiles.slice(0, profileDisplayLimit).map((profile) => {
                           const position = positions.find(p => p.id === profile.positionId);
                           return (
                             <TableRow key={profile.id} data-testid={`row-profile-${profile.id}`}>
@@ -2189,7 +2245,7 @@ export default function AdminPoliticiansPage() {
                     </Table>
                   </div>
                 )}
-                {filteredProfiles.length > profileDisplayLimit && (
+                {sortedProfiles.length > profileDisplayLimit && (
                   <div className="flex flex-col items-center gap-1 pt-2 pb-1">
                     <Button
                       variant="outline"
@@ -2197,9 +2253,9 @@ export default function AdminPoliticiansPage() {
                       onClick={() => setProfileDisplayLimit(l => l + 100)}
                       className="flex items-center gap-2"
                     >
-                      Load More ({filteredProfiles.length - profileDisplayLimit} remaining)
+                      Load More ({sortedProfiles.length - profileDisplayLimit} remaining)
                     </Button>
-                    <span className="text-xs text-slate-400">Showing {Math.min(profileDisplayLimit, filteredProfiles.length)} of {filteredProfiles.length}</span>
+                    <span className="text-xs text-slate-400">Showing {Math.min(profileDisplayLimit, sortedProfiles.length)} of {sortedProfiles.length}</span>
                   </div>
                 )}
               </TabsContent>
