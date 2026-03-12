@@ -33,7 +33,7 @@ export function generateDeviceToken(): string {
 function encryptTotpSecret(secret: string): string {
   const keyBuffer = Buffer.from(ENCRYPTION_KEY.slice(0, 64), 'hex');
   const iv = randomBytes(IV_LENGTH);
-  const cipher = createCipheriv(ALGORITHM, keyBuffer, iv);
+  const cipher = createCipheriv(ALGORITHM, keyBuffer, iv, { authTagLength: AUTH_TAG_LENGTH });
   
   let encrypted = cipher.update(secret, 'utf8', 'hex');
   encrypted += cipher.final('hex');
@@ -49,7 +49,7 @@ function decryptTotpSecret(encryptedSecret: string): string {
   const iv = Buffer.from(ivHex, 'hex');
   const authTag = Buffer.from(authTagHex, 'hex');
   
-  const decipher = createDecipheriv(ALGORITHM, keyBuffer, iv);
+  const decipher = createDecipheriv(ALGORITHM, keyBuffer, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
   
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
