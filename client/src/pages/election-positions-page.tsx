@@ -44,6 +44,39 @@ interface LookupResponse {
   seats: Seat[];
 }
 
+type SectionKey = "presidential" | "usCongress" | "governor" | "stateCongress" | "local";
+
+function getSectionKey(seat: Seat): SectionKey {
+  const title = seat.title?.toLowerCase() ?? '';
+  const level = seat.level?.toLowerCase() ?? '';
+  const officeType = seat.officeType?.toLowerCase() ?? '';
+
+  if (title.includes('president') || title.includes('vice president')) return "presidential";
+  if (title.includes('governor') || officeType.includes('governor') || officeType.includes('executive')) return "governor";
+  if (
+    title.includes('u.s. senator') || title.includes('us senator') ||
+    title.includes('u.s. representative') || title.includes('us representative') ||
+    title.includes('congress') ||
+    officeType.includes('us_senate') || officeType.includes('us_house') ||
+    (level === 'federal' && !title.includes('president'))
+  ) return "usCongress";
+  if (
+    title.includes('state senator') || title.includes('state representative') ||
+    title.includes('state assembly') || title.includes('state delegate') ||
+    officeType.includes('state_senate') || officeType.includes('state_house') ||
+    level === 'state'
+  ) return "stateCongress";
+  return "local";
+}
+
+const SECTIONS: { key: SectionKey; label: string; description: string }[] = [
+  { key: "presidential", label: "Presidential", description: "President & Vice President of the United States" },
+  { key: "usCongress", label: "US Congress", description: "U.S. Senate and House of Representatives" },
+  { key: "governor", label: "Governor", description: "State executive offices" },
+  { key: "stateCongress", label: "State Congress", description: "State legislative chambers" },
+  { key: "local", label: "Local Offices", description: "County, city, and other local offices" },
+];
+
 function getLevelLabel(level: string, officeType?: string): string {
   const l = level?.toLowerCase();
   const o = officeType?.toLowerCase() ?? '';
@@ -287,20 +320,45 @@ export default function ElectionPositionsPage() {
 
         {lookupData && !isLoading && (
           <>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-sm text-muted-foreground mb-6">
               Found {lookupData.seats.length} position{lookupData.seats.length !== 1 ? "s" : ""} in the ACP database for your area.
               Click <strong>View Race</strong> to see candidates and ACP grades.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {lookupData.seats.map(seat => (
-                <SeatCard
-                  key={seat.positionId}
-                  seat={seat}
-                  stateName={lookupData.stateName}
-                  onViewRace={() => handleViewRace(seat, lookupData.stateName)}
-                />
-              ))}
-            </div>
+            {(() => {
+              const grouped: Record<SectionKey, Seat[]> = {
+                presidential: [],
+                usCongress: [],
+                governor: [],
+                stateCongress: [],
+                local: [],
+              };
+              for (const seat of lookupData.seats) {
+                grouped[getSectionKey(seat)].push(seat);
+              }
+              return SECTIONS.map(section => {
+                const seats = grouped[section.key];
+                if (seats.length === 0) return null;
+                return (
+                  <div key={section.key} className="mb-10">
+                    <div className="flex items-baseline gap-3 mb-1">
+                      <h2 className="text-xl font-semibold">{section.label}</h2>
+                      <span className="text-sm text-muted-foreground">{section.description}</span>
+                    </div>
+                    <div className="border-b mb-4" />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                      {seats.map(seat => (
+                        <SeatCard
+                          key={seat.positionId}
+                          seat={seat}
+                          stateName={lookupData.stateName}
+                          onViewRace={() => handleViewRace(seat, lookupData.stateName)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </>
         )}
 
