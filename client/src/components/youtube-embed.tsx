@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useFloatingVideo } from '@/contexts/floating-video-context';
-import { X, Maximize } from 'lucide-react';
+import { X, Maximize, ArrowUp } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -92,6 +92,22 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
     }
   }, [postId, videoId]);
 
+  // Return to feed: scroll the player back into view and deactivate floating
+  const handleReturn = useCallback(() => {
+    deactivate();
+    // Small delay so the element is back in normal flow before we scroll to it
+    setTimeout(() => {
+      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  }, [deactivate]);
+
+  // Close: pause the video first so the IntersectionObserver can't immediately
+  // re-activate floating (it only fires when isPlaying === true)
+  const handleClose = useCallback(() => {
+    playerRef.current?.pauseVideo?.();
+    deactivate();
+  }, [deactivate]);
+
   // IntersectionObserver: activate floating when video is playing and scrolled out of view
   useEffect(() => {
     if (!containerRef.current || isFloating) return;
@@ -138,23 +154,34 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
       >
         {/* Control bar — rendered ABOVE the iframe, never overlapping it */}
         {isFloating && (
-          <div className="flex items-center justify-end gap-1 px-2 bg-black/90 shrink-0 h-9">
-            <button
-              onClick={handleFullscreen}
-              title="Fullscreen"
-              data-testid="button-fullscreen-video"
-              className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              <Maximize className="h-4 w-4" />
-            </button>
-            <button
-              onClick={deactivate}
-              title="Close"
-              data-testid="button-close-floating-video"
-              className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
+          <div className="flex items-center justify-between px-2 bg-black/90 shrink-0 h-9">
+            <span className="text-white/50 text-xs select-none">Playing</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleReturn}
+                title="Return to feed"
+                data-testid="button-return-to-post"
+                className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleFullscreen}
+                title="Fullscreen"
+                data-testid="button-fullscreen-video"
+                className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <Maximize className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleClose}
+                title="Close"
+                data-testid="button-close-floating-video"
+                className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
 
