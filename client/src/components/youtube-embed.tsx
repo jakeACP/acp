@@ -45,9 +45,21 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const { floatingPostId, activate, deactivate } = useFloatingVideo();
-  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const isFloating = floatingPostId === postId;
+
+  // Refs that the IntersectionObserver reads — avoids stale closures and
+  // removes isPlaying / isFloating from the observer effect's dependency array,
+  // which was causing a recreate-then-immediately-fire race condition.
+  const isPlayingRef = useRef(false);
+  const isFloatingRef = useRef(false);
+  // Set by user-initiated dismiss; cleared when the video becomes visible again.
+  // Prevents the observer from re-activating float right after the user closes it.
+  const suppressRef = useRef(false);
+
+  // Keep refs in sync
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { isFloatingRef.current = isFloating; }, [isFloating]);
 
   useEffect(() => {
     let mounted = true;
@@ -65,6 +77,7 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
           onStateChange: (event: any) => {
             const playing = event.data === (window as any).YT.PlayerState.PLAYING;
             setIsPlaying(playing);
+            isPlayingRef.current = playing;
           },
         },
       });
@@ -77,6 +90,40 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
   }, [videoId, postId]);
+
+  // IntersectionObserver created ONCE — reads live refs, never recreated.
+  // This eliminates the "recreate → immediate fire → re-activate" race.
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const ratio = entry.intersectionRatio;
+
+          // Clear suppress when the video scrolls back into view
+          if (ratio >= 0.5) {
+            suppressRef.current = false;
+          }
+
+          // Pop to corner only when: playing + not suppressed + not already floating + mostly off-screen
+          if (
+            isPlayingRef.current &&
+            !suppressRef.current &&
+            !isFloatingRef.current &&
+            ratio < 0.2
+          ) {
+            activate(postId);
+          }
+        });
+      },
+      { threshold: [0, 0.2, 0.5, 1.0] }
+    );
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId]); // intentionally stable — reads refs, not state
 
   // Fullscreen: ask the browser to fullscreen the YouTube iframe
   const handleFullscreen = useCallback(() => {
@@ -92,41 +139,21 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
     }
   }, [postId, videoId]);
 
-  // Return to feed: scroll the player back into view and deactivate floating
+  // Return to feed: suppress re-float, deactivate, then scroll back
   const handleReturn = useCallback(() => {
+    suppressRef.current = true;
     deactivate();
-    // Small delay so the element is back in normal flow before we scroll to it
     setTimeout(() => {
       containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
   }, [deactivate]);
 
-  // Close: pause the video first so the IntersectionObserver can't immediately
-  // re-activate floating (it only fires when isPlaying === true)
+  // Close: suppress re-float immediately, then deactivate
   const handleClose = useCallback(() => {
+    suppressRef.current = true;
     playerRef.current?.pauseVideo?.();
     deactivate();
   }, [deactivate]);
-
-  // IntersectionObserver: activate floating when video is playing and scrolled out of view
-  useEffect(() => {
-    if (!containerRef.current || isFloating) return;
-
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          // Activate floating once video is playing and scrolled mostly out of view
-          if (isPlaying && entry.intersectionRatio < 0.2) {
-            activate(postId);
-          }
-        });
-      },
-      { threshold: [0, 0.2, 0.5, 1.0] }
-    );
-
-    observerRef.current.observe(containerRef.current);
-    return () => observerRef.current?.disconnect();
-  }, [isPlaying, postId, isFloating, activate]);
 
   const playerId = `youtube-player-${postId}-${videoId}`;
 
@@ -138,10 +165,10 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
       data-video-id={videoId}
       data-post-id={postId}
     >
-      {/* ── Floating shell ─────────────────────────────────────────────────
-          When floating, the outer div is fixed to the viewport corner.
+      {/* ── Floating shell ──────────────────────────────────────────────────
           Controls live in a header bar ABOVE the iframe so they are never
-          covered by it (iframes eat all pointer-events inside their bounds).
+          covered by it — iframes consume all pointer-events inside their
+          bounds regardless of z-index.
           ─────────────────────────────────────────────────────────────────── */}
       <div
         className={
@@ -152,7 +179,7 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
         style={isFloating ? { width: 'min(90vw, 400px)' } : undefined}
         data-testid={isFloating ? 'floating-video-player' : undefined}
       >
-        {/* Control bar — rendered ABOVE the iframe, never overlapping it */}
+        {/* Control bar — sits above the iframe, never inside it */}
         {isFloating && (
           <div className="flex items-center justify-between px-2 bg-black/90 shrink-0 h-9">
             <span className="text-white/50 text-xs select-none">Playing</span>
@@ -185,7 +212,7 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
           </div>
         )}
 
-        {/* YouTube player — fills remaining space */}
+        {/* YouTube player */}
         <div
           className={isFloating ? 'w-full' : 'w-full h-full'}
           style={isFloating ? { aspectRatio: '16/9' } : undefined}
