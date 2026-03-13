@@ -46,8 +46,6 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const { floatingPostId, activate, deactivate } = useFloatingVideo();
   const observerRef = useRef<IntersectionObserver | null>(null);
-  // Only allow floating after the video has been fully visible at least once
-  const hasBeenVisibleRef = useRef(false);
 
   const isFloating = floatingPostId === postId;
 
@@ -94,31 +92,20 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
     }
   }, [postId, videoId]);
 
-  // IntersectionObserver: activate floating only when:
-  //   - video is playing
-  //   - it WAS fully visible before (hasBeenVisible)
-  //   - now scrolled mostly out of view (< 15% visible)
+  // IntersectionObserver: activate floating when video is playing and scrolled out of view
   useEffect(() => {
     if (!containerRef.current || isFloating) return;
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          // Track that the video has been in full view
-          if (entry.intersectionRatio >= 0.8) {
-            hasBeenVisibleRef.current = true;
-          }
-          // Only pop out once it has been visible and then scrolled away while playing
-          if (
-            isPlaying &&
-            hasBeenVisibleRef.current &&
-            entry.intersectionRatio < 0.15
-          ) {
+          // Activate floating once video is playing and scrolled mostly out of view
+          if (isPlaying && entry.intersectionRatio < 0.2) {
             activate(postId);
           }
         });
       },
-      { threshold: [0, 0.15, 0.5, 0.8, 1.0] }
+      { threshold: [0, 0.2, 0.5, 1.0] }
     );
 
     observerRef.current.observe(containerRef.current);
