@@ -43,9 +43,6 @@ function loadYouTubeAPI(): Promise<void> {
 
 export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const playerWrapperRef = useRef<HTMLDivElement>(null);
-  const originalSlotRef = useRef<HTMLDivElement>(null);
-  const portalContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const { floatingPostId, activate, deactivate, returnToPost } = useFloatingVideo();
@@ -58,7 +55,7 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
 
     async function initPlayer() {
       await loadYouTubeAPI();
-      if (!mounted || !playerWrapperRef.current) return;
+      if (!mounted || !containerRef.current) return;
 
       const playerId = `youtube-player-${postId}-${videoId}`;
 
@@ -101,68 +98,6 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
     return () => observerRef.current?.disconnect();
   }, [isPlaying, postId, isFloating, activate]);
 
-  // Move player DOM node to/from document.body to escape ancestor transforms/backdrop-filters
-  useEffect(() => {
-    const playerWrapper = playerWrapperRef.current;
-    if (!playerWrapper) return;
-
-    if (isFloating) {
-      // Build a portal container appended to document.body
-      const portal = document.createElement('div');
-      portal.style.cssText = [
-        'position: fixed',
-        'bottom: 16px',
-        'right: 16px',
-        'z-index: 9999',
-        'width: min(90vw, 400px)',
-        'aspect-ratio: 16 / 9',
-        'border-radius: 12px',
-        'overflow: hidden',
-        'background: #000',
-        'box-shadow: 0 8px 32px rgba(0,0,0,0.5)',
-      ].join(';');
-      portal.setAttribute('data-testid', 'floating-video-player');
-
-      // Controls overlay
-      const controls = document.createElement('div');
-      controls.style.cssText = 'position:absolute;top:8px;right:8px;display:flex;gap:8px;z-index:10;';
-
-      const makeBtn = (label: string, testId: string, onClick: () => void) => {
-        const btn = document.createElement('button');
-        btn.title = label;
-        btn.setAttribute('data-testid', testId);
-        btn.style.cssText = [
-          'width:32px', 'height:32px', 'border-radius:6px',
-          'background:rgba(0,0,0,0.7)', 'border:none', 'cursor:pointer',
-          'color:#fff', 'display:flex', 'align-items:center', 'justify-content:center',
-          'font-size:14px',
-        ].join(';');
-        btn.innerHTML = label === 'Return to post'
-          ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
-          : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        btn.addEventListener('click', onClick);
-        return btn;
-      };
-
-      controls.appendChild(makeBtn('Return to post', 'button-return-to-post', returnToPost));
-      controls.appendChild(makeBtn('Close', 'button-close-floating-video', deactivate));
-
-      portal.appendChild(playerWrapper);
-      portal.appendChild(controls);
-      document.body.appendChild(portal);
-      portalContainerRef.current = portal;
-    } else {
-      // Move player back to the original slot
-      if (portalContainerRef.current) {
-        portalContainerRef.current.remove();
-        portalContainerRef.current = null;
-      }
-      if (originalSlotRef.current && !originalSlotRef.current.contains(playerWrapper)) {
-        originalSlotRef.current.appendChild(playerWrapper);
-      }
-    }
-  }, [isFloating, activate, deactivate, returnToPost]);
-
   const playerId = `youtube-player-${postId}-${videoId}`;
 
   return (
@@ -173,21 +108,46 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
       data-video-id={videoId}
       data-post-id={postId}
     >
-      {/* Slot that holds the player when not floating */}
+      {/* Player stays in original DOM location — CSS fixed positioning moves it visually */}
       <div
-        ref={originalSlotRef}
-        className="absolute top-0 left-0 w-full h-full rounded-lg overflow-hidden"
+        className={
+          isFloating
+            ? 'fixed bottom-4 right-4 z-[9999] shadow-2xl rounded-xl overflow-hidden bg-black transition-all duration-300'
+            : 'absolute top-0 left-0 w-full h-full rounded-lg overflow-hidden'
+        }
+        style={isFloating ? { width: 'min(90vw, 400px)', aspectRatio: '16/9' } : undefined}
+        data-testid={isFloating ? 'floating-video-player' : undefined}
       >
-        {/* Player wrapper — moved to body portal when floating */}
-        <div
-          ref={playerWrapperRef}
-          className="w-full h-full"
-        >
-          <div id={playerId} className="w-full h-full" />
-        </div>
+        <div id={playerId} className="w-full h-full" />
+
+        {/* Controls shown when floating */}
+        {isFloating && (
+          <div className="absolute top-2 right-2 flex gap-1.5 z-10">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0"
+              onClick={returnToPost}
+              title="Return to post"
+              data-testid="button-return-to-post"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0"
+              onClick={deactivate}
+              title="Close"
+              data-testid="button-close-floating-video"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Placeholder shown in the feed while video is floating */}
+      {/* Placeholder in the feed while video is floating */}
       {isFloating && (
         <div className="absolute top-0 left-0 w-full h-full bg-black/10 rounded-lg flex items-center justify-center">
           <p className="text-sm text-muted-foreground">Video playing in corner →</p>

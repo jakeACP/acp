@@ -682,3 +682,19 @@
 .pac-logo::after {
   display: none;
 }
+
+/* ─── Floating video: neutralise ancestor transform/backdrop-filter ────────
+   CSS position:fixed is clipped to the nearest ancestor that has a transform,
+   backdrop-filter, filter, or will-change:transform applied.
+   When a video is playing in the corner we add .has-floating-video to <body>
+   so these properties are cleared on every card wrapper in the tree, letting
+   the player sit at the true viewport corner regardless of theme.
+   ─────────────────────────────────────────────────────────────────────────── */
+body.has-floating-video .floating-card,
+body.has-floating-video .floating-card:hover,
+body.has-floating-video .floating-card-lg,
+body.has-floating-video .floating-card-lg:hover {
+  transform: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

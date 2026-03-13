@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 
 interface FloatingVideoContext {
   floatingPostId: string | null;
@@ -11,6 +11,19 @@ const FloatingVideoContext = createContext<FloatingVideoContext | undefined>(und
 
 export function FloatingVideoProvider({ children }: { children: ReactNode }) {
   const [floatingPostId, setFloatingPostId] = useState<string | null>(null);
+
+  // Add/remove body class so CSS can disable ancestor transforms and backdrop-filters
+  // that would break position:fixed inside them
+  useEffect(() => {
+    if (floatingPostId) {
+      document.body.classList.add('has-floating-video');
+    } else {
+      document.body.classList.remove('has-floating-video');
+    }
+    return () => {
+      document.body.classList.remove('has-floating-video');
+    };
+  }, [floatingPostId]);
 
   const activate = useCallback((postId: string) => {
     setFloatingPostId(postId);
@@ -25,7 +38,6 @@ export function FloatingVideoProvider({ children }: { children: ReactNode }) {
       const postElement = document.querySelector(`[data-post-id="${floatingPostId}"]`);
       if (postElement) {
         postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Deactivate after scrolling
         setTimeout(() => {
           deactivate();
         }, 500);
