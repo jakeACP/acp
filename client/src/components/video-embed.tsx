@@ -19,7 +19,7 @@ export function VideoEmbedDisplay({ content, postId }: VideoEmbedDisplayProps) {
       {embeds.map((embed, index) => (
         <div
           key={`${embed.type}-${embed.id}-${index}`}
-          className="border border-border rounded-xl overflow-hidden bg-card"
+          className="rounded-xl overflow-hidden"
         >
           {embed.type === 'youtube' && (
             <YouTubeEmbed videoId={embed.id} postId={postId} />

@@ -18,6 +18,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { useState } from "react";
 import { Link as WouterLink } from "wouter";
 import { VideoEmbedDisplay } from "@/components/video-embed";
+import { extractVideoEmbeds } from "@/lib/video-embed";
 
 interface PostCardProps {
   post: PostWithAuthor;
@@ -581,7 +582,7 @@ export function PostCard({ post }: PostCardProps) {
               {post.content}
             </p>
         
-        {post.linkPreview && (
+        {post.linkPreview && extractVideoEmbeds(post.linkPreview.url).length === 0 && (
           <div className="mb-4 border border-border rounded-lg overflow-hidden bg-card hover:bg-accent/10 transition-colors">
             <a href={sanitizeUrl(post.linkPreview.url)} target="_blank" rel="noopener noreferrer" className="block">
               {post.linkPreview.image && (
