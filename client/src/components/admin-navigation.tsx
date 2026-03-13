@@ -11,7 +11,6 @@ import {
   Coins, 
   Settings,
   BarChart3,
-  Sliders,
   Building2,
   MapPin,
   Flag
@@ -30,7 +29,6 @@ const adminMenuItems = [
   { name: "Security", href: "/admin/security", icon: Lock, category: "system" },
   { name: "Database", href: "/admin/database", icon: Database, category: "system" },
   { name: "Algorithm", href: "/admin/algorithm", icon: Cpu, category: "system" },
-  { name: "Config", href: "/admin/algorithm-settings", icon: Sliders, category: "system" },
   { name: "ACP+", href: "/admin/acp-plus", icon: Coins, category: "business" },
   { name: "Settings", href: "/admin/settings", icon: Settings, category: "config" },
 ];
