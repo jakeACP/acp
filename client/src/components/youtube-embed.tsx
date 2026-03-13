@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useFloatingVideo } from '@/contexts/floating-video-context';
-import { Button } from './ui/button';
-import { X, Maximize2 } from 'lucide-react';
+import { X, Maximize } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -45,8 +44,10 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const { floatingPostId, activate, deactivate, returnToPost } = useFloatingVideo();
+  const { floatingPostId, activate, deactivate } = useFloatingVideo();
   const observerRef = useRef<IntersectionObserver | null>(null);
+  // Only allow floating after the video has been fully visible at least once
+  const hasBeenVisibleRef = useRef(false);
 
   const isFloating = floatingPostId === postId;
 
@@ -79,19 +80,45 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
     };
   }, [videoId, postId]);
 
-  // IntersectionObserver: activate floating when playing video scrolls out of view
+  // Fullscreen: ask the browser to fullscreen the YouTube iframe
+  const handleFullscreen = useCallback(() => {
+    const iframe: HTMLIFrameElement | null =
+      playerRef.current?.getIframe?.() ??
+      document.getElementById(`youtube-player-${postId}-${videoId}`)?.querySelector('iframe') ??
+      null;
+
+    if (iframe?.requestFullscreen) {
+      iframe.requestFullscreen().catch(() => {});
+    } else if ((iframe as any)?.webkitRequestFullscreen) {
+      (iframe as any).webkitRequestFullscreen();
+    }
+  }, [postId, videoId]);
+
+  // IntersectionObserver: activate floating only when:
+  //   - video is playing
+  //   - it WAS fully visible before (hasBeenVisible)
+  //   - now scrolled mostly out of view (< 15% visible)
   useEffect(() => {
     if (!containerRef.current || isFloating) return;
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (isPlaying && entry.intersectionRatio < 0.2 && entry.intersectionRatio >= 0) {
+          // Track that the video has been in full view
+          if (entry.intersectionRatio >= 0.8) {
+            hasBeenVisibleRef.current = true;
+          }
+          // Only pop out once it has been visible and then scrolled away while playing
+          if (
+            isPlaying &&
+            hasBeenVisibleRef.current &&
+            entry.intersectionRatio < 0.15
+          ) {
             activate(postId);
           }
         });
       },
-      { threshold: [0, 0.2, 0.5, 1.0] }
+      { threshold: [0, 0.15, 0.5, 0.8, 1.0] }
     );
 
     observerRef.current.observe(containerRef.current);
@@ -108,46 +135,52 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
       data-video-id={videoId}
       data-post-id={postId}
     >
-      {/* Player stays in original DOM location — CSS fixed positioning moves it visually */}
+      {/* ── Floating shell ─────────────────────────────────────────────────
+          When floating, the outer div is fixed to the viewport corner.
+          Controls live in a header bar ABOVE the iframe so they are never
+          covered by it (iframes eat all pointer-events inside their bounds).
+          ─────────────────────────────────────────────────────────────────── */}
       <div
         className={
           isFloating
-            ? 'fixed bottom-4 right-4 z-[9999] shadow-2xl rounded-xl overflow-hidden bg-black transition-all duration-300'
+            ? 'fixed bottom-4 right-4 z-[9999] rounded-xl overflow-hidden bg-black shadow-2xl transition-all duration-300 flex flex-col'
             : 'absolute top-0 left-0 w-full h-full rounded-lg overflow-hidden'
         }
-        style={isFloating ? { width: 'min(90vw, 400px)', aspectRatio: '16/9' } : undefined}
+        style={isFloating ? { width: 'min(90vw, 400px)' } : undefined}
         data-testid={isFloating ? 'floating-video-player' : undefined}
       >
-        <div id={playerId} className="w-full h-full" />
-
-        {/* Controls shown when floating */}
+        {/* Control bar — rendered ABOVE the iframe, never overlapping it */}
         {isFloating && (
-          <div className="absolute top-2 right-2 flex gap-1.5 z-10">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0"
-              onClick={returnToPost}
-              title="Return to post"
-              data-testid="button-return-to-post"
+          <div className="flex items-center justify-end gap-1 px-2 bg-black/90 shrink-0 h-9">
+            <button
+              onClick={handleFullscreen}
+              title="Fullscreen"
+              data-testid="button-fullscreen-video"
+              className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
             >
-              <Maximize2 className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0"
+              <Maximize className="h-4 w-4" />
+            </button>
+            <button
               onClick={deactivate}
               title="Close"
               data-testid="button-close-floating-video"
+              className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
             >
               <X className="h-4 w-4" />
-            </Button>
+            </button>
           </div>
         )}
+
+        {/* YouTube player — fills remaining space */}
+        <div
+          className={isFloating ? 'w-full' : 'w-full h-full'}
+          style={isFloating ? { aspectRatio: '16/9' } : undefined}
+        >
+          <div id={playerId} className="w-full h-full" />
+        </div>
       </div>
 
-      {/* Placeholder in the feed while video is floating */}
+      {/* Placeholder shown in the feed while video is floating */}
       {isFloating && (
         <div className="absolute top-0 left-0 w-full h-full bg-black/10 rounded-lg flex items-center justify-center">
           <p className="text-sm text-muted-foreground">Video playing in corner →</p>
