@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useFloatingVideo } from '@/contexts/floating-video-context';
-import { X, Maximize, ArrowUp } from 'lucide-react';
+import { X, Maximize, PictureInPicture2, ArrowUpFromLine } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -48,114 +48,60 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
 
   const isFloating = floatingPostId === postId;
 
-  // Refs that the IntersectionObserver reads — avoids stale closures and
-  // removes isPlaying / isFloating from the observer effect's dependency array,
-  // which was causing a recreate-then-immediately-fire race condition.
-  const isPlayingRef = useRef(false);
-  const isFloatingRef = useRef(false);
-  // Set by user-initiated dismiss; cleared when the video becomes visible again.
-  // Prevents the observer from re-activating float right after the user closes it.
-  const suppressRef = useRef(false);
-
-  // Keep refs in sync
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-  useEffect(() => { isFloatingRef.current = isFloating; }, [isFloating]);
-
+  // ── YouTube player init ──────────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
 
     async function initPlayer() {
       await loadYouTubeAPI();
-      if (!mounted || !containerRef.current) return;
+      if (!mounted) return;
 
-      const playerId = `youtube-player-${postId}-${videoId}`;
+      const id = `yt-player-${postId}-${videoId}`;
 
-      playerRef.current = new (window as any).YT.Player(playerId, {
+      playerRef.current = new window.YT.Player(id, {
         videoId,
         playerVars: { enablejsapi: 1, origin: window.location.origin },
         events: {
-          onStateChange: (event: any) => {
-            const playing = event.data === (window as any).YT.PlayerState.PLAYING;
-            setIsPlaying(playing);
-            isPlayingRef.current = playing;
+          onStateChange: (e: any) => {
+            setIsPlaying(e.data === window.YT.PlayerState.PLAYING);
           },
         },
       });
     }
 
     initPlayer();
-
     return () => {
       mounted = false;
-      if (playerRef.current?.destroy) playerRef.current.destroy();
+      playerRef.current?.destroy?.();
     };
   }, [videoId, postId]);
 
-  // IntersectionObserver created ONCE — reads live refs, never recreated.
-  // This eliminates the "recreate → immediate fire → re-activate" race.
-  useEffect(() => {
-    if (!containerRef.current) return;
+  // ── Actions ──────────────────────────────────────────────────────────
+  const handlePopOut = useCallback(() => activate(postId), [activate, postId]);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const ratio = entry.intersectionRatio;
-
-          // Clear suppress when the video scrolls back into view
-          if (ratio >= 0.5) {
-            suppressRef.current = false;
-          }
-
-          // Pop to corner only when: playing + not suppressed + not already floating + mostly off-screen
-          if (
-            isPlayingRef.current &&
-            !suppressRef.current &&
-            !isFloatingRef.current &&
-            ratio < 0.2
-          ) {
-            activate(postId);
-          }
-        });
-      },
-      { threshold: [0, 0.2, 0.5, 1.0] }
-    );
-
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [postId]); // intentionally stable — reads refs, not state
-
-  // Fullscreen: ask the browser to fullscreen the YouTube iframe
-  const handleFullscreen = useCallback(() => {
-    const iframe: HTMLIFrameElement | null =
-      playerRef.current?.getIframe?.() ??
-      document.getElementById(`youtube-player-${postId}-${videoId}`)?.querySelector('iframe') ??
-      null;
-
-    if (iframe?.requestFullscreen) {
-      iframe.requestFullscreen().catch(() => {});
-    } else if ((iframe as any)?.webkitRequestFullscreen) {
-      (iframe as any).webkitRequestFullscreen();
-    }
-  }, [postId, videoId]);
-
-  // Return to feed: suppress re-float, deactivate, then scroll back
   const handleReturn = useCallback(() => {
-    suppressRef.current = true;
     deactivate();
     setTimeout(() => {
       containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
   }, [deactivate]);
 
-  // Close: suppress re-float immediately, then deactivate
   const handleClose = useCallback(() => {
-    suppressRef.current = true;
     playerRef.current?.pauseVideo?.();
     deactivate();
   }, [deactivate]);
 
-  const playerId = `youtube-player-${postId}-${videoId}`;
+  const handleFullscreen = useCallback(() => {
+    const iframe: HTMLIFrameElement | null =
+      playerRef.current?.getIframe?.() ??
+      document.getElementById(`yt-player-${postId}-${videoId}`)?.querySelector('iframe') ??
+      null;
+    if (iframe?.requestFullscreen) iframe.requestFullscreen().catch(() => {});
+    else if ((iframe as any)?.webkitRequestFullscreen) (iframe as any).webkitRequestFullscreen();
+  }, [postId, videoId]);
+
+  // ── Render ───────────────────────────────────────────────────────────
+  const playerId = `yt-player-${postId}-${videoId}`;
 
   return (
     <div
@@ -165,54 +111,34 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
       data-video-id={videoId}
       data-post-id={postId}
     >
-      {/* ── Floating shell ──────────────────────────────────────────────────
-          Controls live in a header bar ABOVE the iframe so they are never
-          covered by it — iframes consume all pointer-events inside their
-          bounds regardless of z-index.
-          ─────────────────────────────────────────────────────────────────── */}
       <div
         className={
           isFloating
-            ? 'fixed bottom-4 right-4 z-[9999] rounded-xl overflow-hidden bg-black shadow-2xl transition-all duration-300 flex flex-col'
+            ? 'fixed bottom-4 right-4 z-[9999] rounded-xl overflow-hidden bg-black shadow-2xl flex flex-col'
             : 'absolute top-0 left-0 w-full h-full rounded-lg overflow-hidden'
         }
         style={isFloating ? { width: 'min(90vw, 400px)' } : undefined}
         data-testid={isFloating ? 'floating-video-player' : undefined}
       >
-        {/* Control bar — sits above the iframe, never inside it */}
+        {/* ── Floating control bar (above iframe — always clickable) ──── */}
         {isFloating && (
-          <div className="flex items-center justify-between px-2 bg-black/90 shrink-0 h-9">
-            <span className="text-white/50 text-xs select-none">Playing</span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handleReturn}
-                title="Return to feed"
-                data-testid="button-return-to-post"
-                className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <ArrowUp className="h-4 w-4" />
-              </button>
-              <button
-                onClick={handleFullscreen}
-                title="Fullscreen"
-                data-testid="button-fullscreen-video"
-                className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <Maximize className="h-4 w-4" />
-              </button>
-              <button
-                onClick={handleClose}
-                title="Close"
-                data-testid="button-close-floating-video"
-                className="h-7 w-7 rounded flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
+          <div className="flex items-center justify-between px-2 bg-gradient-to-r from-black/95 to-black/85 shrink-0 h-9">
+            <span className="text-white/50 text-xs select-none truncate">Now playing</span>
+            <div className="flex items-center gap-0.5">
+              <ControlButton onClick={handleReturn} title="Return to feed">
+                <ArrowUpFromLine className="h-3.5 w-3.5" />
+              </ControlButton>
+              <ControlButton onClick={handleFullscreen} title="Fullscreen">
+                <Maximize className="h-3.5 w-3.5" />
+              </ControlButton>
+              <ControlButton onClick={handleClose} title="Close">
+                <X className="h-3.5 w-3.5" />
+              </ControlButton>
             </div>
           </div>
         )}
 
-        {/* YouTube player */}
+        {/* ── YouTube iframe ──────────────────────────────────────────── */}
         <div
           className={isFloating ? 'w-full' : 'w-full h-full'}
           style={isFloating ? { aspectRatio: '16/9' } : undefined}
@@ -221,12 +147,35 @@ export function YouTubeEmbed({ videoId, postId }: YouTubeEmbedProps) {
         </div>
       </div>
 
-      {/* Placeholder shown in the feed while video is floating */}
+      {/* ── Inline "pop out" button (shown when playing & not floating) ─ */}
+      {isPlaying && !isFloating && (
+        <button
+          onClick={handlePopOut}
+          title="Pop out to corner"
+          className="absolute top-2 right-2 z-10 h-8 w-8 rounded-md flex items-center justify-center bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors"
+        >
+          <PictureInPicture2 className="h-4 w-4" />
+        </button>
+      )}
+
+      {/* ── Placeholder while floating ─────────────────────────────────── */}
       {isFloating && (
-        <div className="absolute top-0 left-0 w-full h-full bg-black/10 rounded-lg flex items-center justify-center">
-          <p className="text-sm text-muted-foreground">Video playing in corner →</p>
+        <div className="absolute top-0 left-0 w-full h-full bg-black/10 rounded-lg flex items-center justify-center cursor-pointer" onClick={handleReturn}>
+          <p className="text-sm text-muted-foreground">Video playing in corner — click to return</p>
         </div>
       )}
     </div>
+  );
+}
+
+function ControlButton({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="h-7 w-7 rounded flex items-center justify-center text-white/70 hover:text-white hover:bg-white/15 transition-colors"
+    >
+      {children}
+    </button>
   );
 }
