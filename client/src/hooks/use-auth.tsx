@@ -4,7 +4,7 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
+import { insertUserSchema, User as SelectUser, UserWithClaim, InsertUser } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient, fetchCsrfToken } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,7 +18,7 @@ export type TwoFactorRequirement = {
 export type LoginResponse = SelectUser | TwoFactorRequirement;
 
 type AuthContextType = {
-  user: SelectUser | null;
+  user: UserWithClaim | null;
   isLoading: boolean;
   error: Error | null;
   loginMutation: UseMutationResult<LoginResponse, Error, LoginData>;
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: user,
     error,
     isLoading,
-  } = useQuery<SelectUser | undefined, Error>({
+  } = useQuery<UserWithClaim | undefined, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });

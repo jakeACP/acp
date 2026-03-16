@@ -76,7 +76,7 @@ export default function CandidateEditProfilePage() {
   const [correctionSuggested, setCorrectionSuggested] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
 
-  const politicianId = (user as any)?.claimedPoliticianId;
+  const politicianId = user?.claimedPoliticianId;
 
   const { data: politician, isLoading: politicianLoading } = useQuery<any>({
     queryKey: ["/api/politician-profiles", politicianId],

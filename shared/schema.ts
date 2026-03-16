@@ -2052,6 +2052,7 @@ export const insertBoycottSubscriptionSchema = createInsertSchema(boycottSubscri
 
 // Types
 export type User = typeof users.$inferSelect;
+export type UserWithClaim = User & { claimedPoliticianId?: string | null };
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Post = typeof posts.$inferSelect;
 export type InsertPost = z.infer<typeof insertPostSchema>;

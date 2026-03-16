@@ -547,11 +547,12 @@ export default function PoliticianProfilePage() {
         <div className="flex-1 min-w-0 space-y-6">
 
           {/* ── Tabbed Content ──────────────────────────────── */}
-          <Tabs defaultValue={(profile as any)?.claimedByUserId ? "candidate-profile" : "donors"}>
-            <TabsList className={`grid w-full ${(profile as any)?.claimedByUserId ? 'grid-cols-5' : 'grid-cols-4'}`}>
-              {(profile as any)?.claimedByUserId && (
+          <Tabs defaultValue={profile.claimedByUserId ? "candidate-profile" : "news-feed"}>
+            <TabsList className={`grid w-full ${profile.claimedByUserId ? 'grid-cols-6' : 'grid-cols-5'}`}>
+              {profile.claimedByUserId && (
                 <TabsTrigger value="candidate-profile">Candidate Profile</TabsTrigger>
               )}
+              <TabsTrigger value="news-feed">News Feed</TabsTrigger>
               <TabsTrigger value="donors">Donors</TabsTrigger>
               <TabsTrigger value="trading">Trading</TabsTrigger>
               <TabsTrigger value="endorsements">Endorsements</TabsTrigger>
@@ -559,11 +560,49 @@ export default function PoliticianProfilePage() {
             </TabsList>
 
             {/* ── CANDIDATE PROFILE TAB ─────────────────────── */}
-            {(profile as any)?.claimedByUserId && (
+            {profile.claimedByUserId && (
               <TabsContent value="candidate-profile">
                 <CandidateProfileTab politicianId={id!} />
               </TabsContent>
             )}
+
+            {/* ── NEWS FEED TAB ──────────────────────────────── */}
+            <TabsContent value="news-feed">
+              <Card>
+                <CardHeader>
+                  <CardTitle>News Feed</CardTitle>
+                  <CardDescription>
+                    Posts and discussions mentioning {profile.fullName}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {postsLoading ? (
+                    <p>Loading posts...</p>
+                  ) : taggedPosts.length > 0 ? (
+                    <div className="space-y-4">
+                      {taggedPosts.map((post: Post) => (
+                        <div
+                          key={post.id}
+                          className="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          data-testid={`post-${post.id}`}
+                        >
+                          <p className="text-sm mb-2">{post.content}</p>
+                          {post.createdAt && (
+                            <span className="text-xs text-gray-500">
+                              {format(new Date(post.createdAt), "PPP")}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500" data-testid="text-no-posts">
+                      No posts found mentioning {profile.fullName}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             {/* ── DONORS TAB ────────────────────────────────── */}
             <TabsContent value="donors">
@@ -593,42 +632,6 @@ export default function PoliticianProfilePage() {
               </Card>
             </TabsContent>
           </Tabs>
-
-          {/* ── News Feed ─────────────────────────────────────── */}
-          <Card>
-            <CardHeader>
-              <CardTitle>News Feed</CardTitle>
-              <CardDescription>
-                Posts and discussions mentioning {profile.fullName}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {postsLoading ? (
-                <p>Loading posts...</p>
-              ) : taggedPosts.length > 0 ? (
-                <div className="space-y-4">
-                  {taggedPosts.map((post: Post) => (
-                    <div
-                      key={post.id}
-                      className="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                      data-testid={`post-${post.id}`}
-                    >
-                      <p className="text-sm mb-2">{post.content}</p>
-                      {post.createdAt && (
-                        <span className="text-xs text-gray-500">
-                          {format(new Date(post.createdAt), "PPP")}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500" data-testid="text-no-posts">
-                  No posts found mentioning {profile.fullName}
-                </p>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
         {/* ── RIGHT: Sidebar — contact, bio, grades, scorecard ── */}
