@@ -16,7 +16,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { sanitizeUrl } from "@/lib/utils";
-import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink, Flag, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronRight, ShieldAlert, Lock, PieChart as PieChartIcon, BarChart3, Wallet } from "lucide-react";
+import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink, Flag, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronRight, ShieldAlert, Lock, PieChart as PieChartIcon, BarChart3, Wallet, User } from "lucide-react";
 import { format } from "date-fns";
 import { useState, useMemo, lazy, Suspense } from "react";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -547,13 +547,23 @@ export default function PoliticianProfilePage() {
         <div className="flex-1 min-w-0 space-y-6">
 
           {/* ── Tabbed Content ──────────────────────────────── */}
-          <Tabs defaultValue="donors">
-            <TabsList className="grid w-full grid-cols-4">
+          <Tabs defaultValue={(profile as any)?.claimedByUserId ? "candidate-profile" : "donors"}>
+            <TabsList className={`grid w-full ${(profile as any)?.claimedByUserId ? 'grid-cols-5' : 'grid-cols-4'}`}>
+              {(profile as any)?.claimedByUserId && (
+                <TabsTrigger value="candidate-profile">Candidate Profile</TabsTrigger>
+              )}
               <TabsTrigger value="donors">Donors</TabsTrigger>
               <TabsTrigger value="trading">Trading</TabsTrigger>
               <TabsTrigger value="endorsements">Endorsements</TabsTrigger>
               <TabsTrigger value="promises" disabled>Campaign Promises</TabsTrigger>
             </TabsList>
+
+            {/* ── CANDIDATE PROFILE TAB ─────────────────────── */}
+            {(profile as any)?.claimedByUserId && (
+              <TabsContent value="candidate-profile">
+                <CandidateProfileTab politicianId={id!} />
+              </TabsContent>
+            )}
 
             {/* ── DONORS TAB ────────────────────────────────── */}
             <TabsContent value="donors">
@@ -1466,6 +1476,54 @@ function SectorPieChart({ data }: { data: { name: string; value: number; color: 
         <RechartsTooltip formatter={(value: number) => formatDollar(value)} />
       </PieChart>
     </ResponsiveContainer>
+  );
+}
+
+function CandidateProfileTab({ politicianId }: { politicianId: string }) {
+  const { data: modules = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/candidate-profile", politicianId, "modules"],
+    queryFn: async () => {
+      const res = await fetch(`/api/candidate-profile/${politicianId}/modules`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  if (isLoading) return <div className="py-8 text-center text-muted-foreground">Loading candidate profile...</div>;
+
+  if (modules.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          <User className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+          <p>This candidate hasn't set up their profile modules yet.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {modules.map((mod: any) => {
+        const type = mod.module_type || mod.moduleType;
+        const content = typeof mod.content === "string" ? JSON.parse(mod.content) : mod.content || {};
+        return (
+          <Card key={mod.id}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm capitalize">{type?.replace(/-/g, " ") || "Module"}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {type === "bio" && <p className="text-sm text-muted-foreground">{content.text || "No bio provided"}</p>}
+              {type === "youtube" && content.videoUrl && (() => {
+                const videoId = content.videoUrl.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?#]+)/)?.[1];
+                return videoId ? <div className="aspect-video"><iframe src={`https://www.youtube.com/embed/${videoId}`} className="w-full h-full rounded" allowFullScreen /></div> : <p className="text-sm text-muted-foreground">Invalid video URL</p>;
+              })()}
+              {type !== "bio" && type !== "youtube" && <p className="text-sm text-muted-foreground">{type?.replace(/-/g, " ")} content</p>}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
   );
 }
 

@@ -7,6 +7,8 @@ import { doubleCsrf } from "csrf-csrf";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import { User as SelectUser } from "@shared/schema";
 import { getClientIp, getCountryFromIp } from "./ip-utils";
 import { sendPasswordResetEmail } from "./email";
@@ -346,9 +348,17 @@ export function setupAuth(app: Express) {
     });
   });
 
-  app.get("/api/user", (req, res) => {
+  app.get("/api/user", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json(req.user);
+    try {
+      const claimed = await db.execute(
+        sql`SELECT id FROM politician_profiles WHERE claimed_by_user_id = ${req.user.id} LIMIT 1`
+      );
+      const claimedPoliticianId = (claimed.rows as any[])[0]?.id || null;
+      res.json({ ...req.user, claimedPoliticianId });
+    } catch {
+      res.json(req.user);
+    }
   });
 
   app.post("/api/change-password", async (req, res) => {

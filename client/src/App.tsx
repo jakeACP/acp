@@ -29,6 +29,7 @@ import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
 import CryptoDashboardPage from "@/pages/crypto-dashboard-page";
 import ProfilePage from "@/pages/profile-page";
+import CandidateEditProfilePage from "@/pages/candidate-edit-profile-page";
 import CharitiesPage from "@/pages/charities-page";
 import CharityDetailPage from "@/pages/charity-detail-page";
 import BoycottsPage from "@/pages/boycotts-page";
@@ -159,6 +160,7 @@ function Router() {
       <ProtectedRoute path="/initiatives/new" component={InitiativeFormPage} />
       <ProtectedRoute path="/initiatives/edit/:id" component={InitiativeFormPage} />
       <ProtectedRoute path="/initiatives/:id" component={InitiativeDetailPage} />
+      <ProtectedRoute path="/political-profile" component={CandidateEditProfilePage} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
       <ProtectedRoute path="/subscription" component={SubscriptionPage} />

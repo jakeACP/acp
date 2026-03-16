@@ -4556,6 +4556,53 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.get("/api/candidate-profile/:politicianId/modules", async (req, res) => {
+    try {
+      const rows = await db.execute(sql`
+        SELECT * FROM candidate_profile_modules
+        WHERE politician_id = ${req.params.politicianId}
+        ORDER BY position ASC
+      `);
+      res.json(rows.rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/candidate-profile/:politicianId/modules", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const profile = await db.execute(sql`SELECT claimed_by_user_id FROM politician_profiles WHERE id = ${req.params.politicianId}`);
+      const owner = (profile.rows as any[])[0]?.claimed_by_user_id;
+      if (owner !== (req.user as any).id && (req.user as any).role !== 'admin') {
+        return res.status(403).json({ message: "Not authorized to edit this profile" });
+      }
+      const { modules } = req.body;
+      if (!Array.isArray(modules)) {
+        return res.status(400).json({ message: "modules must be an array" });
+      }
+      const validTypes = ["bio","photos","feed","friends","following","music","background","youtube","badges","issues","civic-tracker","pinned-post","debate-history","events","political-compass","analytics","campaign-hub","verified-badge","civic-scorecard","media-hub","widgets","supporter-wall","democracy-wrapped","legacy-timeline","custom"];
+      await db.execute(sql`DELETE FROM candidate_profile_modules WHERE politician_id = ${req.params.politicianId}`);
+      for (let i = 0; i < modules.length; i++) {
+        const m = modules[i];
+        const modType = m.moduleType || m.module_type;
+        if (!modType || !validTypes.includes(modType)) continue;
+        const contentStr = JSON.stringify(m.content && typeof m.content === "object" ? m.content : {});
+        await db.execute(sql`
+          INSERT INTO candidate_profile_modules (politician_id, module_type, content, position)
+          VALUES (${req.params.politicianId}, ${modType}, ${contentStr}, ${i})
+        `);
+      }
+      const updated = await db.execute(sql`
+        SELECT * FROM candidate_profile_modules WHERE politician_id = ${req.params.politicianId} ORDER BY position ASC
+      `);
+      res.json(updated.rows);
+    } catch (error: any) {
+      console.error("Save candidate profile modules error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // STATE CODE → NAME mapping used by elections lookup
   const STATE_CODE_TO_NAME: Record<string, string> = {
     al: 'Alabama', ak: 'Alaska', az: 'Arizona', ar: 'Arkansas', ca: 'California',

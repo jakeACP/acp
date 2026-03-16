@@ -134,6 +134,16 @@ export function Navigation() {
                   <Link href="/profile">
                     <DropdownMenuItem className="cursor-pointer">Profile</DropdownMenuItem>
                   </Link>
+                  {(user as any)?.claimedPoliticianId && (
+                    <>
+                      <Link href="/political-profile">
+                        <DropdownMenuItem className="cursor-pointer">Edit Candidate Profile</DropdownMenuItem>
+                      </Link>
+                      <Link href={`/politicians/${(user as any).claimedPoliticianId}`}>
+                        <DropdownMenuItem className="cursor-pointer">View Candidate Profile</DropdownMenuItem>
+                      </Link>
+                    </>
+                  )}
                   <Link href="/my-streams">
                     <DropdownMenuItem className="cursor-pointer">My Streams</DropdownMenuItem>
                   </Link>
@@ -260,6 +270,20 @@ export function Navigation() {
                   Profile
                 </Button>
               </Link>
+              {(user as any)?.claimedPoliticianId && (
+                <>
+                  <Link href="/political-profile">
+                    <Button variant="ghost" className="w-full justify-start" onClick={() => setIsMobileMenuOpen(false)}>
+                      Edit Candidate Profile
+                    </Button>
+                  </Link>
+                  <Link href={`/politicians/${(user as any).claimedPoliticianId}`}>
+                    <Button variant="ghost" className="w-full justify-start" onClick={() => setIsMobileMenuOpen(false)}>
+                      View Candidate Profile
+                    </Button>
+                  </Link>
+                </>
+              )}
               <Link href="/my-streams">
                 <Button 
                   variant="ghost" 
