@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown, Bot as BotIcon, ChevronDown, ChevronRight } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown, Bot as BotIcon, ChevronDown, ChevronRight, AtSign } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
@@ -133,6 +133,7 @@ export default function AdminPoliticiansPage() {
   const [trackAipacOpen, setTrackAipacOpen] = useState(false);
   const [refreshWebOpen, setRefreshWebOpen] = useState(false);
   const [regradeOpen, setRegradeOpen] = useState(false);
+  const [generateHandlesOpen, setGenerateHandlesOpen] = useState(false);
   const [aiScanOpen, setAiScanOpen] = useState(false);
   const [superPacOpen, setSuperPacOpen] = useState(false);
 
@@ -2116,6 +2117,35 @@ export default function AdminPoliticiansPage() {
                       </>)}
                     </div>
 
+                    {/* Generate Handles */}
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
+                      <button className="flex items-start justify-between w-full gap-2 text-left" onClick={() => setGenerateHandlesOpen(o => !o)}>
+                        <div className="flex items-start gap-2">
+                          <AtSign className="h-4 w-4 text-cyan-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Generate Handles</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Create @handles for any candidate currently missing one</p>
+                          </div>
+                        </div>
+                        {generateHandlesOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />}
+                      </button>
+                      {generateHandlesOpen && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => backfillHandlesMutation.mutate()}
+                          disabled={backfillHandlesMutation.isPending}
+                          className="w-full text-xs"
+                        >
+                          {backfillHandlesMutation.isPending ? (
+                            <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Generating…</>
+                          ) : (
+                            <><AtSign className="h-3 w-3 mr-1.5" />Run</>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+
                   </div>
                 </div>
 
@@ -2482,18 +2512,6 @@ export default function AdminPoliticiansPage() {
                     <h3 className="text-lg font-semibold">Missing Information</h3>
                     <p className="text-sm text-muted-foreground">Politicians missing state or grade data</p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => backfillHandlesMutation.mutate()}
-                    disabled={backfillHandlesMutation.isPending}
-                  >
-                    {backfillHandlesMutation.isPending ? (
-                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Backfilling…</>
-                    ) : (
-                      <><RefreshCw className="h-4 w-4 mr-2" />Backfill Missing Handles</>
-                    )}
-                  </Button>
                 </div>
 
                 {missingInfoData.length === 0 ? (
