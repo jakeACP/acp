@@ -23,6 +23,20 @@ import {
   Send, AlertTriangle
 } from "lucide-react";
 import { LoadingSpinner } from "@/components/loading-spinner";
+import type { PoliticianProfile, PoliticianSigSponsorship, SpecialInterestGroup, CandidateProfileModule } from "@shared/schema";
+
+type PoliticianWithPosition = PoliticianProfile & {
+  position?: { title: string; jurisdiction?: string | null } | null;
+};
+
+type SponsorWithSig = PoliticianSigSponsorship & {
+  sig?: SpecialInterestGroup | null;
+};
+
+type RatingStats = {
+  averageGrade: string;
+  totalRatings: number;
+};
 
 interface ProfileModule {
   id: string;
@@ -32,7 +46,7 @@ interface ProfileModule {
   isEnabled: boolean;
   position: number;
   itemCount: number;
-  customData?: any;
+  customData?: Record<string, unknown>;
 }
 
 const availableModules = [
@@ -78,7 +92,7 @@ export default function CandidateEditProfilePage() {
 
   const politicianId = user?.claimedPoliticianId;
 
-  const { data: politician, isLoading: politicianLoading } = useQuery<any>({
+  const { data: politician, isLoading: politicianLoading } = useQuery<PoliticianWithPosition>({
     queryKey: ["/api/politician-profiles", politicianId],
     queryFn: async () => {
       const res = await fetch(`/api/politician-profiles/${politicianId}`, { credentials: "include" });
@@ -88,7 +102,7 @@ export default function CandidateEditProfilePage() {
     enabled: !!politicianId,
   });
 
-  const { data: sponsors = [] } = useQuery<any[]>({
+  const { data: sponsors = [] } = useQuery<SponsorWithSig[]>({
     queryKey: ["/api/politician-profiles", politicianId, "sponsors"],
     queryFn: async () => {
       const res = await fetch(`/api/politician-profiles/${politicianId}/sponsors`, { credentials: "include" });
@@ -98,7 +112,7 @@ export default function CandidateEditProfilePage() {
     enabled: !!politicianId,
   });
 
-  const { data: ratingStats } = useQuery<any>({
+  const { data: ratingStats } = useQuery<RatingStats>({
     queryKey: ["/api/politician-profiles", politicianId, "rating", "stats"],
     queryFn: async () => {
       const res = await fetch(`/api/politician-profiles/${politicianId}/rating/stats`, { credentials: "include" });
@@ -108,7 +122,7 @@ export default function CandidateEditProfilePage() {
     enabled: !!politicianId,
   });
 
-  const { data: savedModules = [], isLoading: modulesLoading } = useQuery<any[]>({
+  const { data: savedModules = [], isLoading: modulesLoading } = useQuery<CandidateProfileModule[]>({
     queryKey: ["/api/candidate-profile", politicianId, "modules"],
     queryFn: async () => {
       const res = await fetch(`/api/candidate-profile/${politicianId}/modules`, { credentials: "include" });
@@ -120,9 +134,12 @@ export default function CandidateEditProfilePage() {
 
   useEffect(() => {
     if (savedModules.length > 0) {
-      setProfileModules(savedModules.map((m: any, i: number) => {
-        const modType = m.module_type || m.moduleType;
-        const content = typeof m.content === "string" ? (() => { try { return JSON.parse(m.content); } catch { return {}; } })() : (m.content || {});
+      setProfileModules(savedModules.map((m, i) => {
+        const modType = m.moduleType;
+        const rawContent = m.content;
+        const content: Record<string, unknown> = typeof rawContent === "string"
+          ? (() => { try { return JSON.parse(rawContent); } catch { return {}; } })()
+          : (rawContent && typeof rawContent === "object" ? rawContent as Record<string, unknown> : {});
         return {
           id: m.id || `mod-${i}`,
           name: availableModules.find(am => am.type === modType)?.name || modType,
@@ -130,7 +147,7 @@ export default function CandidateEditProfilePage() {
           isPremium: false,
           isEnabled: true,
           position: m.position ?? i,
-          itemCount: content?.itemCount ?? 6,
+          itemCount: (content?.itemCount as number) ?? 6,
           customData: content,
         };
       }));
@@ -158,13 +175,13 @@ export default function CandidateEditProfilePage() {
       toast({ title: "Profile saved" });
       setEditMode(false);
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({ title: "Error saving profile", description: err.message, variant: "destructive" });
     },
   });
 
   const correctionMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: { fieldName: string; currentValue: string; suggestedValue: string; reason: string }) => {
       const res = await apiRequest(`/api/politicians/${politicianId}/correction`, "POST", data);
       return res.json();
     },
@@ -176,7 +193,7 @@ export default function CandidateEditProfilePage() {
       setCorrectionSuggested("");
       setCorrectionReason("");
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
@@ -214,7 +231,7 @@ export default function CandidateEditProfilePage() {
     return "bg-red-600";
   };
 
-  const aceSponsors = sponsors.filter((s: any) => s.sig?.isAce);
+  const aceSponsors = sponsors.filter((s) => s.sig?.isAce);
 
   const openCorrectionFor = (field: string, current: string) => {
     setCorrectionField(field);
@@ -324,7 +341,7 @@ export default function CandidateEditProfilePage() {
                 <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1"><Award className="w-3 h-3" /> Endorsements</h3>
                 {aceSponsors.length > 0 ? (
                   <div className="flex gap-1 flex-wrap">
-                    {aceSponsors.map((s: any) => (
+                    {aceSponsors.map((s) => (
                       <Badge key={s.id} variant="secondary" className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
                         <Shield className="w-3 h-3 mr-1" />{s.sig?.name}
                       </Badge>
@@ -544,7 +561,7 @@ export default function CandidateEditProfilePage() {
   );
 }
 
-function ModuleContent({ module, politician, politicianId }: { module: ProfileModule; politician: any; politicianId: string }) {
+function ModuleContent({ module, politician, politicianId }: { module: ProfileModule; politician: PoliticianWithPosition | undefined; politicianId: string }) {
   if (module.type === "bio") {
     const text = module.customData?.text || politician?.biography;
     return <p className="text-sm text-muted-foreground">{text || "No bio added yet. Click customize to add one."}</p>;
@@ -565,12 +582,19 @@ function ModuleContent({ module, politician, politicianId }: { module: ProfileMo
   return <p className="text-sm text-muted-foreground">{module.name} content will appear here</p>;
 }
 
+interface FeedPost {
+  id: number;
+  content: string;
+  createdAt: string;
+  author?: { username: string };
+}
+
 function NewsFeedSection({ politicianId, politicianName }: { politicianId: string; politicianName?: string }) {
-  const { data: posts = [], isLoading } = useQuery<any[]>({
+  const { data: posts = [], isLoading } = useQuery<FeedPost[]>({
     queryKey: ["/api/feeds/all"],
   });
 
-  const relevantPosts = posts.filter((p: any) => {
+  const relevantPosts = posts.filter((p) => {
     const content = (p.content || "").toLowerCase();
     const name = (politicianName || "").toLowerCase();
     return name && content.includes(name);
@@ -591,7 +615,7 @@ function NewsFeedSection({ politicianId, politicianName }: { politicianId: strin
 
   return (
     <div className="space-y-4">
-      {relevantPosts.slice(0, 20).map((post: any) => (
+      {relevantPosts.slice(0, 20).map((post) => (
         <Card key={post.id}>
           <CardContent className="py-4">
             <p className="text-sm font-medium mb-1">{post.author?.username || "Unknown"}</p>

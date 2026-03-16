@@ -20,7 +20,7 @@ import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangl
 import { format } from "date-fns";
 import { useState, useMemo, lazy, Suspense } from "react";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating, SpecialInterestGroup, PoliticianSigSponsorship, PoliticianDemerit } from "@shared/schema";
+import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating, SpecialInterestGroup, PoliticianSigSponsorship, PoliticianDemerit, CandidateProfileModule } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 
 type PoliticianProfileWithPosition = PoliticianProfile & {
@@ -1483,7 +1483,7 @@ function SectorPieChart({ data }: { data: { name: string; value: number; color: 
 }
 
 function CandidateProfileTab({ politicianId }: { politicianId: string }) {
-  const { data: modules = [], isLoading } = useQuery<any[]>({
+  const { data: modules = [], isLoading } = useQuery<CandidateProfileModule[]>({
     queryKey: ["/api/candidate-profile", politicianId, "modules"],
     queryFn: async () => {
       const res = await fetch(`/api/candidate-profile/${politicianId}/modules`, { credentials: "include" });
@@ -1507,9 +1507,12 @@ function CandidateProfileTab({ politicianId }: { politicianId: string }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {modules.map((mod: any) => {
-        const type = mod.module_type || mod.moduleType;
-        const content = typeof mod.content === "string" ? JSON.parse(mod.content) : mod.content || {};
+      {modules.map((mod) => {
+        const type = mod.moduleType;
+        const rawContent = mod.content;
+        const content: Record<string, string> = typeof rawContent === "string"
+          ? (() => { try { return JSON.parse(rawContent); } catch { return {}; } })()
+          : (rawContent && typeof rawContent === "object" ? rawContent as Record<string, string> : {});
         return (
           <Card key={mod.id}>
             <CardHeader className="pb-2">
