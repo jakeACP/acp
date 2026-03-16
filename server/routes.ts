@@ -4092,6 +4092,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.get("/api/admin/politician-profiles/claim-requests", ensureAdmin, async (req, res) => {
+    try {
+      const requests = await storage.getPendingClaimRequests();
+      res.json(requests);
+    } catch (error: any) {
+      console.error("Get pending claim requests error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/admin/politician-profiles/:id", ensureAdmin, async (req, res) => {
     try {
       const profile = await storage.getPoliticianProfile(req.params.id);
@@ -5119,17 +5129,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: "Validation error: Email and phone are required" });
       }
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Admin: Get pending claim requests
-  app.get("/api/admin/politician-profiles/claim-requests", ensureAdmin, async (req, res) => {
-    try {
-      const requests = await storage.getPendingClaimRequests();
-      res.json(requests);
-    } catch (error: any) {
-      console.error("Get pending claim requests error:", error);
       res.status(500).json({ message: error.message });
     }
   });
