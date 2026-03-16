@@ -1,0 +1,456 @@
+# ACP Platform — Replit Agent Prompt
+## Multi-Feature Update: Handles, Presidential Race Fix, Missing Info, Profile Merging, Claim Requests, Candidate Profiles
+
+---
+
+## OVERVIEW
+
+This prompt covers 7 interconnected feature areas. Implement them in the order listed, as later features depend on earlier ones. Do not skip any section.
+
+---
+
+## 1. PRESIDENTIAL RACE — FIX OFFICE LEVEL FILTER
+
+**Bug:** Candidates are appearing on the Presidential Race page who are not running for president (e.g., Zack Filipovich, Mike Lindell).
+
+**Fix:** In the query/filter that populates the Presidential Race view, add a strict filter:
+
+```ts
+WHERE office = 'President' AND office_level = 'Federal'
+```
+
+- Do NOT use a loose `LIKE '%president%'` match — use exact equality on the `office` column.
+- If `office_level` is not set on some rows, add a migration: for any record where `office = 'President'`, set `office_level = 'Federal'` if it is currently null.
+- On the frontend Presidential Race component, add a visible label showing the count of candidates displayed and a note: "Showing federal presidential candidates only."
+
+---
+
+## 2. AUTO-GENERATE @ HANDLES ON IMPORT
+
+### Schema Change
+
+Add a `handle` column to the politicians/candidates table if it does not already exist:
+
+```sql
+ALTER TABLE politicians ADD COLUMN IF NOT EXISTS handle VARCHAR(100) UNIQUE;
+```
+
+### Handle Generation Logic
+
+Create a shared utility function `generateHandle(politician)` used both at import time and on-demand for existing records without handles.
+
+**Algorithm:**
+
+```ts
+function generateHandle(fullName: string, state: string | null): string {
+  // 1. Normalize full name: lowercase, remove punctuation, split to words
+  const nameParts = fullName.toLowerCase()
+    .replace(/[^a-z\s]/g, '')
+    .trim()
+    .split(/\s+/);
+
+  // 2. Build base: first initial + last name (e.g., jsmith)
+  //    If only one word, use it as-is
+  const base = nameParts.length > 1
+    ? nameParts[0][0] + nameParts[nameParts.length - 1]
+    : nameParts[0];
+
+  // 3. Append state abbreviation if state is present (lowercase)
+  const stateSuffix = state ? '_' + state.toLowerCase() : '';
+
+  return '@' + base + stateSuffix;
+}
+```
+
+**Collision handling:**
+- After generating the base handle, check if it already exists in the DB.
+- If collision: append `_2`, `_3`, etc. until unique.
+- Store the handle WITHOUT the `@` prefix in the database; the `@` is display-only.
+
+### Apply on Import
+
+In the bulk import route (XLSX/CSV upload handler):
+- After parsing each row, call `generateHandle(row.FULL_NAME, row.STATE)` and assign to `handle`.
+- If a row already has a handle (re-import scenario), do NOT overwrite it — preserve existing handles.
+
+### Backfill Existing Records
+
+Create an admin-triggered endpoint `POST /api/admin/politicians/backfill-handles`:
+- Finds all politicians where `handle IS NULL`.
+- Generates and saves handles using the same function.
+- Returns a count of records updated.
+- Add a button "Backfill Missing Handles" to the Politicians Management admin page that calls this endpoint.
+
+### Handle as URL Slug
+
+Update politician profile URLs to use handle:
+- Route: `/politician/@:handle` (or `/p/:handle`)
+- Existing ID-based routes should redirect to the handle-based URL.
+- If a politician has no handle yet, fall back to `/politician/:id` temporarily.
+
+---
+
+## 3. @ MENTION AUTOCOMPLETE IN ALL USER INPUT FIELDS
+
+Anywhere users can type posts, comments, article bodies, or captions — add @ mention autocomplete for politician/candidate handles.
+
+### Backend
+
+Create endpoint `GET /api/politicians/search-handle?q=:query`:
+- Accepts a partial string (e.g., `jsmith`).
+- Returns up to 10 matches: `{ id, handle, full_name, photo_url, office, state }`.
+- Search against the `handle` column (without `@`) using `ILIKE '%query%'`.
+- Also search `full_name` as a fallback.
+
+### Frontend — Mention Hook
+
+Create a reusable React hook `useMentionAutocomplete(inputRef)`:
+
+- Watches the textarea/input for the `@` character.
+- After `@`, captures subsequent keystrokes as the search query.
+- Debounces 200ms then calls the search endpoint.
+- Returns `{ suggestions, isOpen, selectSuggestion }`.
+
+### Dropdown Component
+
+`MentionDropdown` component:
+- Appears below the cursor position (use `getBoundingClientRect` on the text caret).
+- Shows politician photo (small avatar), `@handle`, full name, office + state.
+- Keyboard navigable (↑↓ arrows, Enter to select, Escape to dismiss).
+- On select: replaces the `@query` in the input with `@handle` — rendered as a styled mention chip/badge in the final post.
+
+### Apply to:
+- Social feed post composer
+- Comment fields
+- Article body editor
+- Poll description fields
+- Any other user-facing text input where posts are created
+
+### Stored Mentions
+
+When a post/comment is saved, parse the text for `@handle` patterns and store them as structured mention references (array of politician IDs) alongside the post, so profile pages can later display "mentions" of a politician.
+
+---
+
+## 4. MISSING INFO TAB — ADMIN POLITICIANS MANAGEMENT
+
+### Location
+
+Add a new tab **"Missing Info"** to the Admin → Politicians Management page, alongside the existing tabs: Positions, Profiles, Claim Requests.
+
+### Query
+
+Initial scope — a politician appears in Missing Info if ANY of the following are true:
+- `state IS NULL OR state = ''`
+- `grade IS NULL OR grade = ''`
+
+(This scope is intentionally narrow for launch; we will expand the criteria later.)
+
+### Missing Info Tab UI
+
+Display a table with columns:
+| Full Name | Handle | Office | State | Grade | Missing Fields | Actions |
+
+- **Missing Fields** column: shows badge chips for each missing field (e.g., `State`, `Grade`).
+- **Actions** column: inline edit button that opens a slide-out panel (not a modal) for that record.
+
+### Inline Edit Panel
+
+The slide-out panel for a Missing Info record shows:
+- All editable fields (State, Grade, Office, Party, District, etc.)
+- A "Save Changes" button
+- A "Run External Data Tools" section — this applies the existing External Data Tools (Scan TrackAIPAC, Refresh from Web, AI State Scan) **only to this single politician record**, not the full database. These are the same tools already in the Politicians Management page but scoped to one record.
+
+### Missing Info Count Badge
+
+Show a red badge count on the "Missing Info" tab label (e.g., `Missing Info (47)`) that updates in real time after saves.
+
+---
+
+## 5. DUPLICATE PROFILE DETECTION & MERGE TOOL
+
+### Duplicate Detection on Import
+
+During bulk import (XLSX/CSV), before inserting each row, run a duplicate check:
+
+```ts
+// Check for likely duplicates by normalized full name + state
+const normalized = row.FULL_NAME.trim().toLowerCase();
+const existing = await db.query(
+  `SELECT id, full_name, handle, state FROM politicians
+   WHERE LOWER(TRIM(full_name)) = $1 AND (state = $2 OR state IS NULL)
+   LIMIT 3`,
+  [normalized, row.STATE]
+);
+```
+
+If a match is found:
+- Do NOT create a duplicate record.
+- Instead, flag it in the import results summary: `"Skipped: [Name] — possible duplicate of existing record ID [X]. Review in Missing Info > Merge Tool."`
+- Add the flagged pair to a `merge_candidates` table for admin review.
+
+```sql
+CREATE TABLE IF NOT EXISTS merge_candidates (
+  id SERIAL PRIMARY KEY,
+  politician_a_id INTEGER REFERENCES politicians(id),
+  politician_b_id INTEGER REFERENCES politicians(id),
+  reason TEXT,
+  status VARCHAR(20) DEFAULT 'pending', -- pending | merged | dismissed
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Merge Tool — Location
+
+Add a **"Merge Tool"** section inside the Missing Info tab (or as a sub-tab within it).
+
+### Merge Tool UI
+
+Display pending merge candidates as a side-by-side comparison card:
+
+```
+┌─────────────────────────┬─────────────────────────┐
+│  Record A               │  Record B               │
+│  Tom Emmer              │  Tom Emmer              │
+│  @temmermn              │  @temmer                │
+│  MN-06, Republican      │  MN, Republican         │
+│  Grade: C               │  Grade: —               │
+│  Candidate              │  Current Rep            │
+├─────────────────────────┴─────────────────────────┤
+│  [Keep A] [Keep B] [Merge → A] [Merge → B] [Dismiss] │
+└────────────────────────────────────────────────────┘
+```
+
+**Merge behavior:**
+- "Merge → A": Keep Record A as the canonical record. Copy any non-null fields from B that are null in A. Delete Record B. Update all foreign key references (posts, mentions, SIG links, claim requests) to point to A.
+- "Merge → B": Same but keep B.
+- "Keep A / Keep B": Mark as dismissed — they are intentionally separate records.
+- After merge, regenerate the handle for the surviving record if needed.
+- Log the merge action in an `admin_audit_log` table.
+
+### Manual Merge Trigger
+
+In the Profiles tab (existing), add a "Flag for Merge" button on each politician card. This creates a `merge_candidates` entry with `reason = 'manual'` and surfaces it in the Merge Tool.
+
+---
+
+## 6. CLAIM REQUESTS — FIX & ENHANCE
+
+### Bug Fix
+
+Claim requests submitted by users are not appearing in Admin → Claim Requests. Debug the full flow:
+
+1. Check the `POST /api/politicians/:id/claim` route — confirm it is writing to the correct table (`claim_requests` or equivalent).
+2. Check the Admin Claim Requests query — confirm it reads from the same table with no erroneous status filter (e.g., not accidentally filtering for `status = 'approved'` only).
+3. Add server-side logging: when a claim is submitted, log `[CLAIM] Submitted for politician_id={X} by user_id={Y}`.
+4. Return a proper success response to the frontend so the user sees confirmation.
+5. Add a visible "Pending" badge to the Claim Requests tab when there are unreviewed requests.
+
+### Handle Requirement
+
+Before a claim can be submitted, verify the politician record has a generated handle. If not, auto-generate it at claim-submission time using the `generateHandle()` function from Section 2. A politician with no handle should never reach the claim flow.
+
+### Claim Approval Flow
+
+When an admin **approves** a claim request:
+
+1. Update `claim_requests` record: `status = 'approved'`.
+2. Link the user to the politician record: set `politicians.claimed_by_user_id = user.id`.
+3. **Automatically elevate the user's role to `verified_candidate`** in the users table.
+4. Send the user a notification (in-app notification, or console log if notifications are not yet built): `"Your claim for [Politician Name] has been approved. You now have Candidate Profile access."`
+5. The approval action should be a single button click in the admin UI with a confirmation dialog: `"Approve claim and grant Verified Candidate status to [Username]?"`
+
+When an admin **rejects** a claim:
+- Update status to `rejected`.
+- Optionally add a rejection reason (text field in the admin UI).
+
+---
+
+## 7. VERIFIED CANDIDATE — SETTINGS MENU & CANDIDATE PROFILE SYSTEM
+
+### Settings Menu (Top Left)
+
+For users with role `verified_candidate`, add two new items to the top-left settings/profile menu:
+- **Edit Candidate Profile** → navigates to `/candidate/edit`
+- **View Candidate Profile** → navigates to `/candidate/view` (or `/@:handle`)
+
+These menu items are ONLY visible to `verified_candidate` role. All other roles do not see them.
+
+### Candidate Profile Page Structure
+
+The politician profile page (`/politician/@:handle`) has two distinct states: **Claimed** and **Unclaimed**.
+
+#### Fixed Top Section (Always Visible, ACP-Controlled)
+
+This section is read-only for the politician. It is set and maintained by ACP admins and the grading algorithm. It includes:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  [PHOTO]  Full Name                          Grade: [C]          │
+│           Office · Party · State · District                      │
+│           @handle                                                │
+│  ─────────────────────────────────────────────────────────────  │
+│  Links: [Website] [FEC] [Ballotpedia]                           │
+│  Contact: email · phone                                          │
+│  ─────────────────────────────────────────────────────────────  │
+│  Scores: DataScore · PledgeScore · CommunityAdj                 │
+│  Endorsements: [ACE badges] [SIG badges]                        │
+│  Career Funding Total: $X,XXX,XXX                               │
+│                                                                  │
+│  [Request a correction →]  (opens a form to submit change req)  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+The "Request a correction" link opens a lightweight form where the politician (or any user) can flag incorrect data. These go to a correction request queue in the admin panel (not auto-applied).
+
+#### Tab Bar (Below Fixed Section)
+
+Two tabs:
+- **Candidate Profile** (tab 1)
+- **News Feed** (tab 2)
+
+**Claimed profile:** Both tabs visible. Default active tab = **Candidate Profile**.
+**Unclaimed profile:** Only **News Feed** tab is visible (Candidate Profile tab is hidden). Default = News Feed.
+
+#### Tab 1: Candidate Profile (Claimed only — editable by the politician)
+
+This is where the verified candidate customizes their public-facing profile using the same modular system as personal user profiles. Use identical module types for now:
+
+- Bio / About Me module
+- Photo Gallery module
+- Video module
+- Links / Social Media module
+- Upcoming Events module
+- Platform / Issues module (politician-specific label for what is currently "posts" or "about")
+- Custom HTML module (if supported in personal profiles)
+
+The candidate accesses this via **Edit Candidate Profile** in their settings menu. The edit view shows a module editor (drag-and-drop or add/remove blocks). The **View Candidate Profile** option shows the public-facing rendered result.
+
+Changes made by the candidate in this tab update in real time on their public profile page.
+
+#### Tab 2: News Feed
+
+- Shows all posts, articles, and mentions related to this politician (tagged via `@handle` or linked by politician ID).
+- Visible on both claimed and unclaimed profiles.
+- Unclaimed profiles: show a "Claim this profile" CTA banner above the feed.
+- Claimed profiles: show a "✓ Verified Candidate" badge and optionally a pinned statement from the candidate.
+
+---
+
+## DATABASE MIGRATIONS SUMMARY
+
+Run these in order:
+
+```sql
+-- 1. Handle column
+ALTER TABLE politicians ADD COLUMN IF NOT EXISTS handle VARCHAR(100) UNIQUE;
+
+-- 2. Claimed by user
+ALTER TABLE politicians ADD COLUMN IF NOT EXISTS claimed_by_user_id INTEGER REFERENCES users(id);
+
+-- 3. Merge candidates queue
+CREATE TABLE IF NOT EXISTS merge_candidates (
+  id SERIAL PRIMARY KEY,
+  politician_a_id INTEGER REFERENCES politicians(id) ON DELETE CASCADE,
+  politician_b_id INTEGER REFERENCES politicians(id) ON DELETE CASCADE,
+  reason TEXT,
+  status VARCHAR(20) DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Verified candidate role (if not already in your role enum/table)
+-- If roles are stored as a VARCHAR/enum, ensure 'verified_candidate' is a valid value.
+
+-- 5. Candidate profile modules table (if personal profile modules are stored separately)
+CREATE TABLE IF NOT EXISTS candidate_profile_modules (
+  id SERIAL PRIMARY KEY,
+  politician_id INTEGER REFERENCES politicians(id) ON DELETE CASCADE,
+  module_type VARCHAR(50) NOT NULL,
+  content JSONB,
+  position INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. Claim requests table (verify this exists; create if not)
+CREATE TABLE IF NOT EXISTS claim_requests (
+  id SERIAL PRIMARY KEY,
+  politician_id INTEGER REFERENCES politicians(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  status VARCHAR(20) DEFAULT 'pending', -- pending | approved | rejected
+  rejection_reason TEXT,
+  submitted_at TIMESTAMPTZ DEFAULT NOW(),
+  reviewed_at TIMESTAMPTZ,
+  reviewed_by_user_id INTEGER REFERENCES users(id)
+);
+
+-- 7. Correction requests
+CREATE TABLE IF NOT EXISTS correction_requests (
+  id SERIAL PRIMARY KEY,
+  politician_id INTEGER REFERENCES politicians(id) ON DELETE CASCADE,
+  submitted_by_user_id INTEGER REFERENCES users(id),
+  field_name VARCHAR(100),
+  current_value TEXT,
+  suggested_value TEXT,
+  reason TEXT,
+  status VARCHAR(20) DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+---
+
+## API ROUTES SUMMARY
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/politicians/search-handle?q=` | @ mention autocomplete |
+| POST | `/api/admin/politicians/backfill-handles` | Generate missing handles |
+| GET | `/api/admin/missing-info` | Missing State or Grade records |
+| PUT | `/api/admin/politicians/:id` | Inline edit from Missing Info panel |
+| GET | `/api/admin/merge-candidates` | List pending merge candidates |
+| POST | `/api/admin/merge-candidates/:id/merge` | Execute merge (body: `{ keepId }`) |
+| POST | `/api/admin/merge-candidates/:id/dismiss` | Dismiss merge candidate |
+| POST | `/api/politicians/:id/flag-merge` | Flag two profiles for merge |
+| GET | `/api/admin/claim-requests` | List all claim requests |
+| POST | `/api/admin/claim-requests/:id/approve` | Approve + elevate user role |
+| POST | `/api/admin/claim-requests/:id/reject` | Reject with optional reason |
+| GET | `/api/candidate/profile/:politician_id` | Get candidate profile modules |
+| PUT | `/api/candidate/profile/:politician_id` | Update candidate profile modules |
+| POST | `/api/politicians/:id/correction` | Submit a correction request |
+| GET | `/api/admin/correction-requests` | List pending corrections |
+
+---
+
+## FRONTEND COMPONENT SUMMARY
+
+| Component | Location | Notes |
+|-----------|----------|-------|
+| `MentionDropdown` | `components/mentions/` | Reusable @ autocomplete |
+| `useMentionAutocomplete` | `hooks/` | Hook for all text inputs |
+| `MissingInfoTab` | `pages/admin/politicians/` | New tab in Politicians Mgmt |
+| `MissingInfoPanel` | `components/admin/` | Slide-out edit panel |
+| `MergeToolSection` | `pages/admin/politicians/` | Inside Missing Info tab |
+| `MergeCandidateCard` | `components/admin/` | Side-by-side comparison UI |
+| `ClaimRequestsTab` | `pages/admin/politicians/` | Existing — fix + enhance |
+| `PoliticianProfilePage` | `pages/politician/` | Add fixed top section + tabs |
+| `CandidateProfileEditor` | `pages/candidate/` | Module editor for verified candidates |
+| `CandidateProfileView` | `pages/candidate/` | Public view of candidate modules |
+| `FixedPoliticianHeader` | `components/politician/` | ACP-controlled top section |
+| `CorrectionRequestForm` | `components/politician/` | "Request a correction" form |
+
+---
+
+## IMPLEMENTATION NOTES
+
+1. **Handle uniqueness is critical** — the handle becomes the URL slug and @ mention key. Treat it as immutable once set. If a name change is needed, it requires admin action and should create a redirect from the old handle.
+
+2. **Role elevation is one-way** — approving a claim sets `verified_candidate`. Revoking should be a separate admin action (do not auto-revert if a claim is later disputed).
+
+3. **The Fixed Top Section must be clearly visually distinct** from the editable candidate modules below it. Use a different background color or a subtle "ACP Verified Data" watermark to communicate that it is authoritative and not user-edited.
+
+4. **Merge is destructive** — log every merge to `admin_audit_log` with both politician IDs, the surviving ID, the admin who performed it, and a timestamp. This cannot be undone automatically.
+
+5. **@ mentions in stored posts** — store both the raw text (with `@handle`) and a parsed array of referenced politician IDs. This enables future "mentioned in" feeds on politician profile pages.
+
+6. **Backfill handles migration** — run `POST /api/admin/politicians/backfill-handles` immediately after deployment to ensure all existing records get handles before the claim flow goes live.

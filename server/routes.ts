@@ -4239,60 +4239,63 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // Bulk import all Congress members from the XLSX file
+  const STATE_NAME_TO_ABBR: Record<string, string> = {
+    "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
+    "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Washington D.C.": "DC", "Florida": "FL",
+    "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL", "Indiana": "IN",
+    "Iowa": "IA", "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME",
+    "Maryland": "MD", "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN",
+    "Mississippi": "MS", "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
+    "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
+    "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK", "Oregon": "OR",
+    "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC", "South Dakota": "SD",
+    "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT", "Virginia": "VA",
+    "Washington": "WA", "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY", "Puerto Rico": "PR",
+    "United States": "US",
+  };
+
+  function generateHandle(fullName: string, state: string | null): string {
+    const nameParts = fullName.toLowerCase()
+      .replace(/[^a-z\s]/g, '')
+      .trim()
+      .split(/\s+/);
+    const base = nameParts.length > 1
+      ? nameParts[0][0] + nameParts[nameParts.length - 1]
+      : nameParts[0];
+    const stateSuffix = state ? '_' + state.toLowerCase() : '';
+    return base + stateSuffix;
+  }
+
+  function getStateAbbrFromJurisdiction(jurisdiction: string | null | undefined): string | null {
+    if (!jurisdiction) return null;
+    const trimmed = jurisdiction.trim();
+    if (STATE_NAME_TO_ABBR[trimmed]) return STATE_NAME_TO_ABBR[trimmed];
+    for (const [name, abbr] of Object.entries(STATE_NAME_TO_ABBR)) {
+      if (trimmed.toLowerCase().includes(name.toLowerCase())) return abbr;
+    }
+    const twoLetter = trimmed.match(/\b([A-Z]{2})\b/);
+    if (twoLetter && Object.values(STATE_NAME_TO_ABBR).includes(twoLetter[1])) return twoLetter[1];
+    return null;
+  }
+
   app.post("/api/admin/politicians/generate-handles", ensureAdmin, async (req, res) => {
-    const STATE_NAME_TO_ABBR: Record<string, string> = {
-      "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
-      "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Washington D.C.": "DC", "Florida": "FL",
-      "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL", "Indiana": "IN",
-      "Iowa": "IA", "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME",
-      "Maryland": "MD", "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN",
-      "Mississippi": "MS", "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
-      "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
-      "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK", "Oregon": "OR",
-      "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC", "South Dakota": "SD",
-      "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT", "Virginia": "VA",
-      "Washington": "WA", "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY", "Puerto Rico": "PR",
-    };
-
-    function buildHandle(fullName: string, stateAbbr: string): string {
-      let name = fullName
-        .replace(/\s+(?:Jr\.?|Sr\.?|II|III|IV|V|Esq\.?)$/i, "")
-        .replace(/\s+[A-Z]\.\s+/, " ")
-        .trim();
-      const parts = name.split(/\s+/);
-      const first = parts[0] ?? "";
-      const last = parts[parts.length - 1] ?? "";
-      return (first + last + stateAbbr).replace(/[^a-zA-Z0-9]/g, "");
-    }
-
-    function getStateFromTitle(title: string): string | null {
-      const senatorMatch = title.match(/^U\.S\. Senator from (.+)$/);
-      if (senatorMatch) return senatorMatch[1];
-      const repMatch = title.match(/^U\.S\. Representative,? (.+?)'s /);
-      if (repMatch) return repMatch[1];
-      const atLargeMatch = title.match(/^U\.S\. Representative from (.+?) \(At-Large\)$/);
-      if (atLargeMatch) return atLargeMatch[1];
-      return null;
-    }
-
     try {
       const allProfiles = await storage.listPoliticianProfiles();
       let updated = 0;
       let skipped = 0;
-      const usedHandles = new Set<string>();
+      const existingHandles = await db.select({ handle: politicianProfiles.handle }).from(politicianProfiles);
+      const usedHandles = new Set<string>(existingHandles.map(h => (h.handle ?? '').toLowerCase()).filter(Boolean));
 
       for (const profile of allProfiles) {
-        const stateFromPosition = profile.position ? getStateFromTitle(profile.position.title) : null;
-        const stateAbbr = stateFromPosition ? STATE_NAME_TO_ABBR[stateFromPosition] : null;
-        if (!stateAbbr) { skipped++; continue; }
-
-        let handle = buildHandle(profile.fullName, stateAbbr);
+        const jurisdiction = profile.position?.jurisdiction ?? null;
+        const stateAbbr = getStateAbbrFromJurisdiction(jurisdiction);
+        let handle = generateHandle(profile.fullName, stateAbbr);
         if (!handle) { skipped++; continue; }
 
         let finalHandle = handle;
         let suffix = 2;
         while (usedHandles.has(finalHandle.toLowerCase())) {
-          finalHandle = handle + suffix;
+          finalHandle = handle + '_' + suffix;
           suffix++;
         }
         usedHandles.add(finalHandle.toLowerCase());
@@ -4308,6 +4311,41 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.post("/api/admin/politicians/backfill-handles", ensureAdmin, async (req, res) => {
+    try {
+      const rows = await db.execute(sql`
+        SELECT pol.id, pol.full_name, pol.handle, pos.jurisdiction
+        FROM politician_profiles pol
+        LEFT JOIN political_positions pos ON pol.position_id = pos.id
+        WHERE pol.handle IS NULL OR pol.handle = ''
+      `);
+      const profiles = rows.rows as any[];
+      const existingHandles = await db.select({ handle: politicianProfiles.handle }).from(politicianProfiles);
+      const usedHandles = new Set<string>(existingHandles.map(h => (h.handle ?? '').toLowerCase()).filter(Boolean));
+      let updated = 0;
+
+      for (const profile of profiles) {
+        const stateAbbr = getStateAbbrFromJurisdiction(profile.jurisdiction);
+        let handle = generateHandle(profile.full_name, stateAbbr);
+        if (!handle) continue;
+
+        let finalHandle = handle;
+        let suffix = 2;
+        while (usedHandles.has(finalHandle.toLowerCase())) {
+          finalHandle = handle + '_' + suffix;
+          suffix++;
+        }
+        usedHandles.add(finalHandle.toLowerCase());
+        await db.update(politicianProfiles).set({ handle: finalHandle } as any).where(eq(politicianProfiles.id, profile.id));
+        updated++;
+      }
+      res.json({ success: true, updated, total: profiles.length });
+    } catch (error: any) {
+      console.error("Backfill handles error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Politician search by name/handle (authenticated)
   app.get("/api/politicians/search", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -4316,6 +4354,193 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     try {
       const results = await storage.searchPoliticians(q);
       res.json(results);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/politicians/search-handle", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const q = (req.query.q as string || "").trim();
+    if (!q || q.length < 1) return res.json([]);
+    try {
+      const rows = await db.execute(sql`
+        SELECT pol.id, pol.handle, pol.full_name, pol.photo_url, pol.party,
+               pos.title as office, pos.jurisdiction as state
+        FROM politician_profiles pol
+        LEFT JOIN political_positions pos ON pol.position_id = pos.id
+        WHERE pol.handle ILIKE ${'%' + q + '%'}
+           OR pol.full_name ILIKE ${'%' + q + '%'}
+        ORDER BY
+          CASE WHEN pol.handle ILIKE ${q + '%'} THEN 0 ELSE 1 END,
+          pol.full_name
+        LIMIT 10
+      `);
+      res.json((rows.rows as any[]).map(r => ({
+        id: r.id,
+        handle: r.handle,
+        fullName: r.full_name,
+        photoUrl: r.photo_url,
+        party: r.party,
+        office: r.office,
+        state: r.state,
+      })));
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/missing-info", ensureAdmin, async (req, res) => {
+    try {
+      const rows = await db.execute(sql`
+        SELECT pol.id, pol.full_name, pol.handle, pol.party, pol.corruption_grade,
+               pol.profile_type, pol.photo_url, pol.email, pol.phone, pol.biography,
+               pos.title as office, pos.jurisdiction as state, pos.level, pos.district
+        FROM politician_profiles pol
+        LEFT JOIN political_positions pos ON pol.position_id = pos.id
+        WHERE pos.jurisdiction IS NULL OR pos.jurisdiction = ''
+           OR pol.corruption_grade IS NULL OR pol.corruption_grade = ''
+        ORDER BY pol.full_name
+      `);
+      res.json((rows.rows as any[]).map(r => ({
+        id: r.id,
+        fullName: r.full_name,
+        handle: r.handle,
+        party: r.party,
+        corruptionGrade: r.corruption_grade,
+        profileType: r.profile_type,
+        photoUrl: r.photo_url,
+        email: r.email,
+        phone: r.phone,
+        biography: r.biography,
+        office: r.office,
+        state: r.state,
+        level: r.level,
+        district: r.district,
+        missingFields: [
+          ...((!r.state || r.state === '') ? ['State'] : []),
+          ...((!r.corruption_grade || r.corruption_grade === '') ? ['Grade'] : []),
+        ],
+      })));
+    } catch (error: any) {
+      console.error("Missing info error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/merge-candidates", ensureAdmin, async (req, res) => {
+    try {
+      const rows = await db.execute(sql`
+        SELECT mc.id, mc.reason, mc.status, mc.created_at,
+               a.id as a_id, a.full_name as a_name, a.handle as a_handle, a.party as a_party,
+               a.corruption_grade as a_grade, a.profile_type as a_type, a.photo_url as a_photo,
+               pa.jurisdiction as a_state, pa.district as a_district,
+               b.id as b_id, b.full_name as b_name, b.handle as b_handle, b.party as b_party,
+               b.corruption_grade as b_grade, b.profile_type as b_type, b.photo_url as b_photo,
+               pb.jurisdiction as b_state, pb.district as b_district
+        FROM merge_candidates mc
+        JOIN politician_profiles a ON mc.politician_a_id = a.id
+        JOIN politician_profiles b ON mc.politician_b_id = b.id
+        LEFT JOIN political_positions pa ON a.position_id = pa.id
+        LEFT JOIN political_positions pb ON b.position_id = pb.id
+        WHERE mc.status = 'pending'
+        ORDER BY mc.created_at DESC
+      `);
+      res.json(rows.rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/merge-candidates/:id/dismiss", ensureAdmin, async (req, res) => {
+    try {
+      await db.execute(sql`UPDATE merge_candidates SET status = 'dismissed' WHERE id = ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/merge-candidates/:id/merge", ensureAdmin, async (req, res) => {
+    const { keepId } = req.body;
+    try {
+      const mcRows = await db.execute(sql`SELECT * FROM merge_candidates WHERE id = ${req.params.id}`);
+      const mc = (mcRows.rows as any[])[0];
+      if (!mc) return res.status(404).json({ message: "Merge candidate not found" });
+
+      const removeId = mc.politician_a_id === keepId ? mc.politician_b_id : mc.politician_a_id;
+
+      const keepRows = await db.execute(sql`SELECT * FROM politician_profiles WHERE id = ${keepId}`);
+      const removeRows = await db.execute(sql`SELECT * FROM politician_profiles WHERE id = ${removeId}`);
+      const keep = (keepRows.rows as any[])[0];
+      const remove = (removeRows.rows as any[])[0];
+      if (!keep || !remove) return res.status(404).json({ message: "Profile not found" });
+
+      const fieldsToMerge = ['party', 'email', 'phone', 'website', 'photo_url', 'biography',
+        'corruption_grade', 'fec_candidate_id', 'ballotpedia_url'];
+      const updates: Record<string, any> = {};
+      for (const f of fieldsToMerge) {
+        if (!keep[f] && remove[f]) updates[f] = remove[f];
+      }
+      if (Object.keys(updates).length > 0) {
+        const setClauses = Object.entries(updates).map(([k, v]) => sql`${sql.raw(k)} = ${v}`);
+        for (const clause of setClauses) {
+          await db.execute(sql`UPDATE politician_profiles SET ${clause} WHERE id = ${keepId}`);
+        }
+      }
+
+      await db.execute(sql`UPDATE posts SET politician_id = ${keepId} WHERE politician_id = ${removeId}`);
+      await db.execute(sql`UPDATE politician_sig_sponsorships SET politician_id = ${keepId} WHERE politician_id = ${removeId}`);
+      await db.execute(sql`DELETE FROM politician_profiles WHERE id = ${removeId}`);
+      await db.execute(sql`UPDATE merge_candidates SET status = 'merged' WHERE id = ${req.params.id}`);
+
+      res.json({ success: true, keptId: keepId, removedId: removeId });
+    } catch (error: any) {
+      console.error("Merge error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/politicians/:id/flag-merge", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const { otherPoliticianId } = req.body;
+    if (!otherPoliticianId) return res.status(400).json({ message: "otherPoliticianId required" });
+    try {
+      await db.execute(sql`
+        INSERT INTO merge_candidates (politician_a_id, politician_b_id, reason, status)
+        VALUES (${req.params.id}, ${otherPoliticianId}, 'manual', 'pending')
+      `);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/politicians/:id/correction", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const { fieldName, currentValue, suggestedValue, reason } = req.body;
+    try {
+      await db.execute(sql`
+        INSERT INTO correction_requests (politician_id, submitted_by_user_id, field_name, current_value, suggested_value, reason)
+        VALUES (${req.params.id}, ${(req.user as any).id}, ${fieldName}, ${currentValue}, ${suggestedValue}, ${reason})
+      `);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/correction-requests", ensureAdmin, async (req, res) => {
+    try {
+      const rows = await db.execute(sql`
+        SELECT cr.*, pol.full_name, u.username as submitted_by
+        FROM correction_requests cr
+        JOIN politician_profiles pol ON cr.politician_id = pol.id
+        LEFT JOIN users u ON cr.submitted_by_user_id = u.id
+        WHERE cr.status = 'pending'
+        ORDER BY cr.created_at DESC
+      `);
+      res.json(rows.rows);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -4866,14 +5091,29 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // Submit page claim request
   app.post("/api/politician-profiles/:id/claim", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const { email, phone } = z.object({ 
         email: z.string().email(), 
         phone: z.string().min(10) 
       }).parse(req.body);
-      
+
+      const existing = await storage.getPoliticianProfile(req.params.id);
+      if (existing && (!existing.handle || existing.handle === '')) {
+        const jurisdiction = (existing as any).position?.jurisdiction ?? null;
+        const stateAbbr = getStateAbbrFromJurisdiction(jurisdiction);
+        let handle = generateHandle(existing.fullName, stateAbbr);
+        const allHandles = await db.select({ handle: politicianProfiles.handle }).from(politicianProfiles);
+        const used = new Set(allHandles.map(h => (h.handle ?? '').toLowerCase()).filter(Boolean));
+        let final = handle;
+        let s = 2;
+        while (used.has(final.toLowerCase())) { final = handle + '_' + s; s++; }
+        await db.update(politicianProfiles).set({ handle: final } as any).where(eq(politicianProfiles.id, req.params.id));
+      }
+
+      console.log(`[CLAIM] Submitted for politician_id=${req.params.id} by user_id=${(req.user as any).id}`);
       const profile = await storage.submitPageClaimRequest(req.params.id, email, phone);
-      res.json(profile);
+      res.json({ success: true, message: "Claim request submitted successfully", profile });
     } catch (error: any) {
       console.error("Submit claim request error:", error);
       if (error.name === 'ZodError') {
@@ -4898,6 +5138,15 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.patch("/api/admin/politician-profiles/:id/claim-approve", ensureAdmin, async (req, res) => {
     try {
       const profile = await storage.approveClaimRequest(req.params.id);
+      if (profile.claimRequestEmail) {
+        const claimingUser = await db.execute(sql`SELECT id FROM users WHERE email = ${profile.claimRequestEmail} LIMIT 1`);
+        const userId = (claimingUser.rows as any[])[0]?.id;
+        if (userId) {
+          await db.execute(sql`UPDATE users SET role = 'candidate' WHERE id = ${userId}`);
+          await db.execute(sql`UPDATE politician_profiles SET claimed_by_user_id = ${userId} WHERE id = ${req.params.id}`);
+          console.log(`[CLAIM] Approved: politician_id=${req.params.id}, user_id=${userId} elevated to candidate role`);
+        }
+      }
       res.json(profile);
     } catch (error: any) {
       console.error("Approve claim request error:", error);
@@ -4905,10 +5154,13 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Admin: Reject claim request
   app.patch("/api/admin/politician-profiles/:id/claim-reject", ensureAdmin, async (req, res) => {
     try {
+      const { reason } = req.body || {};
       const profile = await storage.rejectClaimRequest(req.params.id);
+      if (reason) {
+        await db.execute(sql`UPDATE politician_profiles SET notes = COALESCE(notes, '') || ${'\nRejection reason: ' + reason} WHERE id = ${req.params.id}`);
+      }
       res.json(profile);
     } catch (error: any) {
       console.error("Reject claim request error:", error);

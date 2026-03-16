@@ -732,7 +732,7 @@ export function CreatePostForm({ onSuccess }: { onSuccess?: () => void } = {}) {
                       mentionDebounce.current = setTimeout(async () => {
                         setMentionLoading(true);
                         try {
-                          const res = await fetch(`/api/politicians/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+                          const res = await fetch(`/api/politicians/search-handle?q=${encodeURIComponent(q)}`, { credentials: "include" });
                           if (res.ok) setMentionResults(await res.json());
                         } finally {
                           setMentionLoading(false);

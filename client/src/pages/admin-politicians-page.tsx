@@ -188,6 +188,54 @@ export default function AdminPoliticiansPage() {
     enabled: !!managingSigsPolitician,
   });
 
+  const { data: missingInfoData = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/missing-info"],
+  });
+
+  const { data: mergeCandidatesData = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/merge-candidates"],
+  });
+
+  const backfillHandlesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/politicians/backfill-handles", "POST");
+      return await res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/missing-info"] });
+      toast({ title: "Handles backfilled", description: `${data.updated || 0} handles generated out of ${data.total || 0} missing.` });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error backfilling handles", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const mergeMutation = useMutation({
+    mutationFn: async ({ mcId, keepId }: { mcId: string; keepId: string }) => {
+      const res = await apiRequest(`/api/admin/merge-candidates/${mcId}/merge`, "POST", { keepId });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/merge-candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "Profiles merged successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Merge failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const dismissMergeMutation = useMutation({
+    mutationFn: async (mcId: string) => {
+      const res = await apiRequest(`/api/admin/merge-candidates/${mcId}/dismiss`, "POST");
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/merge-candidates"] });
+      toast({ title: "Merge candidate dismissed" });
+    },
+  });
 
   const createPositionMutation = useMutation({
     mutationFn: async (data: Partial<PoliticalPosition>) => {
@@ -1471,13 +1519,21 @@ export default function AdminPoliticiansPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="positions" data-testid="tab-positions">Positions</TabsTrigger>
                 <TabsTrigger value="profiles" data-testid="tab-profiles">Profiles</TabsTrigger>
+                <TabsTrigger value="missing-info" data-testid="tab-missing-info" className="relative">
+                  Missing Info
+                  {missingInfoData.length > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 text-xs font-bold rounded-full bg-red-500 text-white px-1">
+                      {missingInfoData.length}
+                    </span>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="claim-requests" data-testid="tab-claim-requests" className="relative">
-                  Claim Requests
+                  Claims
                   {pendingClaims.length > 0 && (
-                    <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-red-500 text-white">
+                    <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 text-xs font-bold rounded-full bg-red-500 text-white px-1">
                       {pendingClaims.length}
                     </span>
                   )}
@@ -2369,6 +2425,122 @@ export default function AdminPoliticiansPage() {
                       Load More ({sortedProfiles.length - profileDisplayLimit} remaining)
                     </Button>
                     <span className="text-xs text-slate-400">Showing {Math.min(profileDisplayLimit, sortedProfiles.length)} of {sortedProfiles.length}</span>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ── MISSING INFO TAB ── */}
+              <TabsContent value="missing-info" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-semibold">Missing Information</h3>
+                    <p className="text-sm text-muted-foreground">Politicians missing state or grade data</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => backfillHandlesMutation.mutate()}
+                    disabled={backfillHandlesMutation.isPending}
+                  >
+                    {backfillHandlesMutation.isPending ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Backfilling…</>
+                    ) : (
+                      <><RefreshCw className="h-4 w-4 mr-2" />Backfill Missing Handles</>
+                    )}
+                  </Button>
+                </div>
+
+                {missingInfoData.length === 0 ? (
+                  <Card><CardContent className="py-8 text-center text-muted-foreground">
+                    <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                    No politicians with missing information
+                  </CardContent></Card>
+                ) : (
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Full Name</TableHead>
+                          <TableHead>Handle</TableHead>
+                          <TableHead>Office</TableHead>
+                          <TableHead>State</TableHead>
+                          <TableHead>Grade</TableHead>
+                          <TableHead>Missing Fields</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {missingInfoData.map((record: any) => (
+                          <TableRow key={record.id}>
+                            <TableCell className="font-medium">{record.fullName}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {record.handle ? `@${record.handle}` : <span className="text-slate-400 italic">none</span>}
+                            </TableCell>
+                            <TableCell className="text-sm">{record.office || '-'}</TableCell>
+                            <TableCell className="text-sm">{record.state || '-'}</TableCell>
+                            <TableCell className="text-sm">{record.corruptionGrade || '-'}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-1 flex-wrap">
+                                {record.missingFields.map((f: string) => (
+                                  <Badge key={f} variant="destructive" className="text-xs">{f}</Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const profile = profiles.find(p => p.id === record.id);
+                                  if (profile) {
+                                    setEditingProfile(profile);
+                                    setProfileDialogOpen(true);
+                                  }
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {mergeCandidatesData.length > 0 && (
+                  <div className="mt-6 space-y-4">
+                    <h3 className="text-lg font-semibold">Merge Tool ({mergeCandidatesData.length} pending)</h3>
+                    {mergeCandidatesData.map((mc: any) => (
+                      <Card key={mc.id} className="overflow-hidden">
+                        <div className="grid grid-cols-2 divide-x">
+                          <div className="p-4 space-y-1">
+                            <p className="font-semibold">{mc.a_name}</p>
+                            <p className="text-sm text-muted-foreground">{mc.a_handle ? `@${mc.a_handle}` : 'no handle'}</p>
+                            <p className="text-sm">{mc.a_state}{mc.a_district ? ` - ${mc.a_district}` : ''}, {mc.a_party}</p>
+                            <p className="text-sm">Grade: {mc.a_grade || '—'} · {mc.a_type || 'unknown'}</p>
+                          </div>
+                          <div className="p-4 space-y-1">
+                            <p className="font-semibold">{mc.b_name}</p>
+                            <p className="text-sm text-muted-foreground">{mc.b_handle ? `@${mc.b_handle}` : 'no handle'}</p>
+                            <p className="text-sm">{mc.b_state}{mc.b_district ? ` - ${mc.b_district}` : ''}, {mc.b_party}</p>
+                            <p className="text-sm">Grade: {mc.b_grade || '—'} · {mc.b_type || 'unknown'}</p>
+                          </div>
+                        </div>
+                        <div className="border-t p-3 flex gap-2 flex-wrap bg-muted/30">
+                          <Button size="sm" variant="default" onClick={() => mergeMutation.mutate({ mcId: mc.id, keepId: mc.a_id })}>
+                            Merge → Keep A
+                          </Button>
+                          <Button size="sm" variant="default" onClick={() => mergeMutation.mutate({ mcId: mc.id, keepId: mc.b_id })}>
+                            Merge → Keep B
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => dismissMergeMutation.mutate(mc.id)}>
+                            Dismiss
+                          </Button>
+                          <span className="text-xs text-muted-foreground self-center ml-auto">Reason: {mc.reason || 'import duplicate'}</span>
+                        </div>
+                      </Card>
+                    ))}
                   </div>
                 )}
               </TabsContent>

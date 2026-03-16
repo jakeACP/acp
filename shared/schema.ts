@@ -1349,6 +1349,7 @@ export const politicianProfiles = pgTable("politician_profiles", {
   verifiedDate: timestamp("verified_date"), // When admin approved the claim
   claimToken: text("claim_token"), // Email-based claim verification token
   claimTokenExpiry: timestamp("claim_token_expiry"), // Token expiry (72h)
+  claimedByUserId: varchar("claimed_by_user_id").references(() => users.id, { onDelete: "set null" }),
   totalContributions: bigint("total_contributions", { mode: "number" }), // Grand total contributions in dollars, sourced from BallotPedia
   fecCandidateId: text("fec_candidate_id"), // FEC candidate ID, e.g. H8MN06059
   ballotpediaUrl: text("ballotpedia_url"), // Direct Ballotpedia profile URL for scraping
@@ -2384,3 +2385,53 @@ export type SignalWithAuthor = Signal & {
     subscriptionStatus: string | null;
   } | null;
 };
+
+export const mergeCandidates = pgTable("merge_candidates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  politicianAId: varchar("politician_a_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  politicianBId: varchar("politician_b_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  reason: text("reason"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  statusIndex: index("merge_candidates_status_idx").on(table.status),
+}));
+
+export const insertMergeCandidateSchema = createInsertSchema(mergeCandidates).omit({ id: true, createdAt: true });
+export type MergeCandidate = typeof mergeCandidates.$inferSelect;
+export type InsertMergeCandidate = z.infer<typeof insertMergeCandidateSchema>;
+
+export const correctionRequests = pgTable("correction_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  politicianId: varchar("politician_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  submittedByUserId: varchar("submitted_by_user_id").references(() => users.id),
+  fieldName: text("field_name"),
+  currentValue: text("current_value"),
+  suggestedValue: text("suggested_value"),
+  reason: text("reason"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  statusIndex: index("correction_requests_status_idx").on(table.status),
+  politicianIndex: index("correction_requests_politician_idx").on(table.politicianId),
+}));
+
+export const insertCorrectionRequestSchema = createInsertSchema(correctionRequests).omit({ id: true, createdAt: true });
+export type CorrectionRequest = typeof correctionRequests.$inferSelect;
+export type InsertCorrectionRequest = z.infer<typeof insertCorrectionRequestSchema>;
+
+export const candidateProfileModules = pgTable("candidate_profile_modules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  politicianId: varchar("politician_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  moduleType: text("module_type").notNull(),
+  content: json("content"),
+  position: integer("position").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  politicianIndex: index("candidate_modules_politician_idx").on(table.politicianId),
+}));
+
+export const insertCandidateProfileModuleSchema = createInsertSchema(candidateProfileModules).omit({ id: true, createdAt: true, updatedAt: true });
+export type CandidateProfileModule = typeof candidateProfileModules.$inferSelect;
+export type InsertCandidateProfileModule = z.infer<typeof insertCandidateProfileModuleSchema>;
