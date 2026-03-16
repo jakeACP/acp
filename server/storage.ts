@@ -3479,25 +3479,41 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Political Positions Management
-  async listPoliticalPositions(filters?: { level?: string; jurisdiction?: string; isActive?: boolean }): Promise<PoliticalPosition[]> {
-    let query = db.select().from(politicalPositions);
-    
-    const conditions = [];
-    if (filters?.level) {
-      conditions.push(eq(politicalPositions.level, filters.level));
-    }
-    if (filters?.jurisdiction) {
-      conditions.push(eq(politicalPositions.jurisdiction, filters.jurisdiction));
-    }
-    if (filters?.isActive !== undefined) {
-      conditions.push(eq(politicalPositions.isActive, filters.isActive));
-    }
-    
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-    
-    return await query.orderBy(politicalPositions.displayOrder, politicalPositions.title);
+  async listPoliticalPositions(filters?: { level?: string; jurisdiction?: string; isActive?: boolean }): Promise<(PoliticalPosition & { currentHolderId?: string; currentHolderName?: string })[]> {
+    const conditions: any[] = [];
+    if (filters?.level) conditions.push(eq(politicalPositions.level, filters.level));
+    if (filters?.jurisdiction) conditions.push(eq(politicalPositions.jurisdiction, filters.jurisdiction));
+    if (filters?.isActive !== undefined) conditions.push(eq(politicalPositions.isActive, filters.isActive));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db.execute(sql`
+      SELECT pos.*,
+             holder.id   AS current_holder_id,
+             holder.full_name AS current_holder_name
+      FROM political_positions pos
+      LEFT JOIN politician_profiles holder
+        ON holder.position_id = pos.id
+        AND holder.is_current = true
+      ${whereClause ? sql`WHERE ${whereClause}` : sql``}
+      ORDER BY pos.display_order NULLS LAST, pos.title
+    `);
+
+    return (rows.rows as any[]).map(r => ({
+      id: r.id,
+      title: r.title,
+      officeType: r.office_type,
+      level: r.level,
+      jurisdiction: r.jurisdiction,
+      district: r.district,
+      termLength: r.term_length,
+      isElected: r.is_elected,
+      isActive: r.is_active,
+      description: r.description,
+      displayOrder: r.display_order,
+      currentHolderId: r.current_holder_id ?? undefined,
+      currentHolderName: r.current_holder_name ?? undefined,
+    }));
   }
 
   async getPoliticalPosition(id: string): Promise<PoliticalPosition | undefined> {

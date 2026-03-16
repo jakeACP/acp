@@ -56,6 +56,7 @@ type PoliticalPosition = {
   displayOrder?: number;
   isActive: boolean;
   currentHolderId?: string;
+  currentHolderName?: string;
 };
 
 type PoliticianProfile = {
@@ -113,6 +114,10 @@ export default function AdminPoliticiansPage() {
   const [positionSearch, setPositionSearch] = useState("");
   const [positionLevelFilter, setPositionLevelFilter] = useState("all");
   const [positionTypeFilter, setPositionTypeFilter] = useState("all");
+
+  // Holder search inside Edit Position dialog
+  const [holderSearch, setHolderSearch] = useState("");
+  const [holderSearchOpen, setHolderSearchOpen] = useState(false);
 
   // Profiles search/filter
   const [profileSearch, setProfileSearch] = useState("");
@@ -1588,7 +1593,9 @@ export default function AdminPoliticiansPage() {
                                 </Badge>
                               </TableCell>
                               <TableCell>
-                                {currentHolder ? currentHolder.fullName : <span className="text-slate-400">Vacant</span>}
+                                {position.currentHolderName
+                                  ? <span className="font-medium">{position.currentHolderName}</span>
+                                  : <span className="text-slate-400">Vacant</span>}
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
@@ -2429,7 +2436,7 @@ export default function AdminPoliticiansPage() {
         </Card>
       </div>
 
-      <Dialog open={positionDialogOpen} onOpenChange={setPositionDialogOpen}>
+      <Dialog open={positionDialogOpen} onOpenChange={v => { setPositionDialogOpen(v); if (!v) { setHolderSearch(""); setHolderSearchOpen(false); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingPosition ? "Edit Position" : "Create Position"}</DialogTitle>
@@ -2559,6 +2566,79 @@ export default function AdminPoliticiansPage() {
                   data-testid="textarea-description"
                 />
               </div>
+
+              {editingPosition && (
+                <div className="grid gap-2 border-t pt-4 mt-2">
+                  <Label className="text-sm font-semibold">Assign Current Holder</Label>
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    Current:{" "}
+                    <span className="font-medium">
+                      {editingPosition.currentHolderName ?? "Vacant"}
+                    </span>
+                  </p>
+                  <div className="relative">
+                    <Input
+                      placeholder="Search politician by name…"
+                      value={holderSearch}
+                      onChange={e => {
+                        setHolderSearch(e.target.value);
+                        setHolderSearchOpen(e.target.value.length > 0);
+                      }}
+                      onFocus={() => holderSearch.length > 0 && setHolderSearchOpen(true)}
+                      autoComplete="off"
+                    />
+                    {holderSearchOpen && (() => {
+                      const term = holderSearch.toLowerCase();
+                      const matches = profiles
+                        .filter(p => p.fullName.toLowerCase().includes(term))
+                        .slice(0, 8);
+                      return matches.length > 0 ? (
+                        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg overflow-hidden">
+                          {matches.map(p => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                              onClick={() => {
+                                assignMutation.mutate({ profileId: p.id, positionId: editingPosition.id });
+                                setHolderSearch("");
+                                setHolderSearchOpen(false);
+                                setEditingPosition({ ...editingPosition, currentHolderName: p.fullName, currentHolderId: p.id });
+                              }}
+                            >
+                              {p.photoUrl && (
+                                <img src={p.photoUrl} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                              )}
+                              <span className="flex-1 truncate">{p.fullName}</span>
+                              {p.party && <span className="text-xs text-muted-foreground shrink-0">{p.party}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg px-3 py-2 text-sm text-muted-foreground">
+                          No politicians found
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  {editingPosition.currentHolderName && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-fit text-xs text-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (editingPosition.currentHolderId) {
+                          assignMutation.mutate({ profileId: editingPosition.currentHolderId, positionId: "" });
+                          setEditingPosition({ ...editingPosition, currentHolderName: undefined, currentHolderId: undefined });
+                        }
+                      }}
+                    >
+                      Remove current holder
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
 
             <DialogFooter>
