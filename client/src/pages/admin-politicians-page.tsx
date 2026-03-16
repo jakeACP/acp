@@ -2606,6 +2606,7 @@ export default function AdminPoliticiansPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Politician</TableHead>
+                        <TableHead>User Account</TableHead>
                         <TableHead>Submitted Email</TableHead>
                         <TableHead>Phone</TableHead>
                         <TableHead>Date</TableHead>
@@ -2616,6 +2617,13 @@ export default function AdminPoliticiansPage() {
                       {pendingClaims.map((claim: any) => (
                         <TableRow key={claim.id}>
                           <TableCell className="font-medium">{claim.fullName}</TableCell>
+                          <TableCell>
+                            {claim.claimantUsername ? (
+                              <Badge variant="secondary" className="text-xs">@{claim.claimantUsername}</Badge>
+                            ) : (
+                              <span className="text-slate-400 text-xs">Unknown</span>
+                            )}
+                          </TableCell>
                           <TableCell>{claim.claimRequestEmail || "—"}</TableCell>
                           <TableCell>{claim.claimRequestPhone || "—"}</TableCell>
                           <TableCell>{claim.claimRequestDate ? new Date(claim.claimRequestDate).toLocaleDateString() : "—"}</TableCell>

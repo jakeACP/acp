@@ -208,7 +208,7 @@ export interface IStorage {
   updatePoliticianProfile(id: string, patch: Partial<PoliticianProfile>): Promise<PoliticianProfile>;
   deletePoliticianProfile(id: string): Promise<void>;
   assignPoliticianToPosition(politicianId: string, positionId: string): Promise<void>;
-  submitPageClaimRequest(profileId: string, email: string, phone: string): Promise<PoliticianProfile>;
+  submitPageClaimRequest(profileId: string, email: string, phone: string, userId?: string): Promise<PoliticianProfile>;
   getPendingClaimRequests(): Promise<any[]>;
   approveClaimRequest(profileId: string): Promise<PoliticianProfile>;
   rejectClaimRequest(profileId: string): Promise<PoliticianProfile>;
@@ -3802,16 +3802,20 @@ export class DatabaseStorage implements IStorage {
       .where(eq(politicianProfiles.id, politicianId));
   }
 
-  async submitPageClaimRequest(profileId: string, email: string, phone: string): Promise<PoliticianProfile> {
+  async submitPageClaimRequest(profileId: string, email: string, phone: string, userId?: string): Promise<PoliticianProfile> {
+    const setData: Record<string, unknown> = {
+      claimRequestEmail: email,
+      claimRequestPhone: phone,
+      claimRequestStatus: 'pending',
+      claimRequestDate: new Date(),
+      updatedAt: new Date(),
+    };
+    if (userId) {
+      setData.claimRequestUserId = userId;
+    }
     const [updated] = await db
       .update(politicianProfiles)
-      .set({ 
-        claimRequestEmail: email,
-        claimRequestPhone: phone,
-        claimRequestStatus: 'pending',
-        claimRequestDate: new Date(),
-        updatedAt: new Date()
-      })
+      .set(setData)
       .where(eq(politicianProfiles.id, profileId))
       .returning();
     return updated;
@@ -3822,12 +3826,14 @@ export class DatabaseStorage implements IStorage {
       .select({
         politician: politicianProfiles,
         position: politicalPositions,
+        claimantUsername: users.username,
       })
       .from(politicianProfiles)
       .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
+      .leftJoin(users, eq(politicianProfiles.claimRequestUserId, users.id))
       .where(eq(politicianProfiles.claimRequestStatus, 'pending'))
       .orderBy(politicianProfiles.claimRequestDate);
-    return results.map(r => ({ ...r.politician, position: r.position }));
+    return results.map(r => ({ ...r.politician, position: r.position, claimantUsername: r.claimantUsername }));
   }
 
   async approveClaimRequest(profileId: string): Promise<PoliticianProfile> {

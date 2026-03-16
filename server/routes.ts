@@ -5168,8 +5168,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         await db.update(politicianProfiles).set({ handle: final } as any).where(eq(politicianProfiles.id, req.params.id));
       }
 
-      console.log(`[CLAIM] Submitted for politician_id=${req.params.id} by user_id=${(req.user as any).id}`);
-      const profile = await storage.submitPageClaimRequest(req.params.id, email, phone);
+      const claimUserId = (req.user as any).id;
+      console.log(`[CLAIM] Submitted for politician_id=${req.params.id} by user_id=${claimUserId}`);
+      const profile = await storage.submitPageClaimRequest(req.params.id, email, phone, claimUserId);
       res.json({ success: true, message: "Claim request submitted successfully", profile });
     } catch (error: any) {
       console.error("Submit claim request error:", error);
@@ -5184,14 +5185,18 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.patch("/api/admin/politician-profiles/:id/claim-approve", ensureAdmin, async (req, res) => {
     try {
       const profile = await storage.approveClaimRequest(req.params.id);
-      if (profile.claimRequestEmail) {
+      // Use stored claimRequestUserId first, fall back to email lookup for older claims
+      let userId = profile.claimRequestUserId;
+      if (!userId && profile.claimRequestEmail) {
         const claimingUser = await db.execute(sql`SELECT id FROM users WHERE email = ${profile.claimRequestEmail} LIMIT 1`);
-        const userId = (claimingUser.rows as any[])[0]?.id;
-        if (userId) {
-          await db.execute(sql`UPDATE users SET role = 'candidate' WHERE id = ${userId}`);
-          await db.execute(sql`UPDATE politician_profiles SET claimed_by_user_id = ${userId} WHERE id = ${req.params.id}`);
-          console.log(`[CLAIM] Approved: politician_id=${req.params.id}, user_id=${userId} elevated to candidate role`);
-        }
+        userId = (claimingUser.rows as { id: number }[])[0]?.id ?? null;
+      }
+      if (userId) {
+        await db.execute(sql`UPDATE users SET role = 'candidate' WHERE id = ${userId}`);
+        await db.execute(sql`UPDATE politician_profiles SET claimed_by_user_id = ${userId} WHERE id = ${req.params.id}`);
+        console.log(`[CLAIM] Approved: politician_id=${req.params.id}, user_id=${userId} elevated to candidate role`);
+      } else {
+        console.warn(`[CLAIM] Approved politician_id=${req.params.id} but no user could be linked (no userId or matching email)`);
       }
       res.json(profile);
     } catch (error: any) {

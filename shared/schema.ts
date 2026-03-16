@@ -1346,6 +1346,7 @@ export const politicianProfiles = pgTable("politician_profiles", {
   claimRequestPhone: text("claim_request_phone"), // Phone for verification
   claimRequestStatus: text("claim_request_status"), // pending, approved, rejected
   claimRequestDate: timestamp("claim_request_date"), // When claim was requested
+  claimRequestUserId: varchar("claim_request_user_id").references(() => users.id, { onDelete: "set null" }), // User who submitted the claim
   verifiedDate: timestamp("verified_date"), // When admin approved the claim
   claimToken: text("claim_token"), // Email-based claim verification token
   claimTokenExpiry: timestamp("claim_token_expiry"), // Token expiry (72h)
