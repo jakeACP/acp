@@ -109,6 +109,9 @@ export default function AdminPoliticiansPage() {
   const [sponsorshipFilter, setSponsorshipFilter] = useState<string>("");
   const [manageSigsOpen, setManageSigsOpen] = useState(false);
   const [managingSigsPolitician, setManagingSigsPolitician] = useState<PoliticianProfile | null>(null);
+  const [linkUserDialogOpen, setLinkUserDialogOpen] = useState(false);
+  const [linkingProfile, setLinkingProfile] = useState<PoliticianProfile | null>(null);
+  const [linkUserSearch, setLinkUserSearch] = useState("");
 
   // Positions search/filter
   const [positionSearch, setPositionSearch] = useState("");
@@ -554,6 +557,29 @@ export default function AdminPoliticiansPage() {
       toast({ title: "Claim rejected" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const linkUserMutation = useMutation({
+    mutationFn: async ({ politicianId, usernameOrEmail }: { politicianId: string; usernameOrEmail: string }) =>
+      apiRequest(`/api/admin/politician-profiles/${politicianId}/link-user`, "POST", { usernameOrEmail }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "User linked", description: "Account linked to politician profile." });
+      setLinkUserDialogOpen(false);
+      setLinkUserSearch("");
+      setLinkingProfile(null);
+    },
+    onError: (err: Error) => toast({ title: "Error linking user", description: err.message, variant: "destructive" }),
+  });
+
+  const unlinkUserMutation = useMutation({
+    mutationFn: async (politicianId: string) =>
+      apiRequest(`/api/admin/politician-profiles/${politicianId}/link-user`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "User unlinked" });
+    },
+    onError: (err: Error) => toast({ title: "Error unlinking user", description: err.message, variant: "destructive" }),
   });
 
   const refreshDataMutation = useMutation({
@@ -2396,6 +2422,26 @@ export default function AdminPoliticiansPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    title={(profile as any).claimedByUserId ? "Unlink user account" : "Link user account"}
+                                    onClick={() => {
+                                      if ((profile as any).claimedByUserId) {
+                                        if (confirm("Remove user account link from this profile?")) {
+                                          unlinkUserMutation.mutate(profile.id);
+                                        }
+                                      } else {
+                                        setLinkingProfile(profile);
+                                        setLinkUserDialogOpen(true);
+                                      }
+                                    }}
+                                    data-testid={`button-link-user-${profile.id}`}
+                                  >
+                                    {(profile as any).claimedByUserId
+                                      ? <Unlink className="h-4 w-4 text-green-500" />
+                                      : <LinkIcon className="h-4 w-4 text-slate-400" />}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => {
                                       if (confirm("Are you sure you want to delete this profile?")) {
                                         deleteProfileMutation.mutate(profile.id);
@@ -3362,6 +3408,48 @@ export default function AdminPoliticiansPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link User Account Dialog */}
+      <Dialog open={linkUserDialogOpen} onOpenChange={setLinkUserDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link User Account</DialogTitle>
+            <DialogDescription>
+              Enter the username or email of the user to link as the verified candidate for <strong>{linkingProfile?.fullName}</strong>.
+              This grants them access to the Candidate Profile editor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="link-user-search">Username or Email</Label>
+              <Input
+                id="link-user-search"
+                placeholder="e.g. johndoe or john@example.com"
+                value={linkUserSearch}
+                onChange={(e) => setLinkUserSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && linkingProfile && linkUserSearch.trim()) {
+                    linkUserMutation.mutate({ politicianId: linkingProfile.id, usernameOrEmail: linkUserSearch.trim() });
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setLinkUserDialogOpen(false); setLinkUserSearch(""); }}>Cancel</Button>
+            <Button
+              disabled={!linkUserSearch.trim() || linkUserMutation.isPending}
+              onClick={() => {
+                if (linkingProfile && linkUserSearch.trim()) {
+                  linkUserMutation.mutate({ politicianId: linkingProfile.id, usernameOrEmail: linkUserSearch.trim() });
+                }
+              }}
+            >
+              {linkUserMutation.isPending ? "Linking..." : "Link Account"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

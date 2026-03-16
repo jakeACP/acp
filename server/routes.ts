@@ -5214,6 +5214,37 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Admin: directly link a user account to a politician profile by username or email
+  app.post("/api/admin/politician-profiles/:id/link-user", ensureAdmin, async (req, res) => {
+    try {
+      const { usernameOrEmail } = req.body;
+      if (!usernameOrEmail) return res.status(400).json({ message: "usernameOrEmail is required" });
+      const result = await db.execute(
+        sql`SELECT id, username, email FROM users WHERE username = ${usernameOrEmail} OR email = ${usernameOrEmail} LIMIT 1`
+      );
+      const user = (result.rows as { id: number; username: string; email: string }[])[0];
+      if (!user) return res.status(404).json({ message: "No user found with that username or email" });
+      await db.execute(sql`UPDATE politician_profiles SET claimed_by_user_id = ${user.id}, is_verified = true WHERE id = ${req.params.id}`);
+      await db.execute(sql`UPDATE users SET role = 'candidate' WHERE id = ${user.id}`);
+      console.log(`[LINK] Admin linked user_id=${user.id} (${user.username}) to politician_id=${req.params.id}`);
+      res.json({ message: "User linked successfully", userId: user.id, username: user.username });
+    } catch (error: any) {
+      console.error("Link user error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: remove user account link from a politician profile
+  app.delete("/api/admin/politician-profiles/:id/link-user", ensureAdmin, async (req, res) => {
+    try {
+      await db.execute(sql`UPDATE politician_profiles SET claimed_by_user_id = NULL WHERE id = ${req.params.id}`);
+      res.json({ message: "User unlinked successfully" });
+    } catch (error: any) {
+      console.error("Unlink user error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Politician Corruption Rating APIs
   // Submit or update a corruption rating for a politician
   app.post("/api/politician-profiles/:id/rate", async (req, res) => {
