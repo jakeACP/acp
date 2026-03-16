@@ -5168,9 +5168,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         await db.update(politicianProfiles).set({ handle: final } as any).where(eq(politicianProfiles.id, req.params.id));
       }
 
-      const claimUserId = (req.user as any).id;
+      const claimUserId = req.user!.id;
       console.log(`[CLAIM] Submitted for politician_id=${req.params.id} by user_id=${claimUserId}`);
-      const profile = await storage.submitPageClaimRequest(req.params.id, email, phone, claimUserId);
+      const profile = await storage.submitPageClaimRequest(req.params.id, email, phone, String(claimUserId));
       res.json({ success: true, message: "Claim request submitted successfully", profile });
     } catch (error: any) {
       console.error("Submit claim request error:", error);
@@ -5189,7 +5189,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       let userId = profile.claimRequestUserId;
       if (!userId && profile.claimRequestEmail) {
         const claimingUser = await db.execute(sql`SELECT id FROM users WHERE email = ${profile.claimRequestEmail} LIMIT 1`);
-        userId = (claimingUser.rows as { id: number }[])[0]?.id ?? null;
+        userId = (claimingUser.rows as { id: string }[])[0]?.id ?? null;
       }
       if (userId) {
         await db.execute(sql`UPDATE users SET role = 'candidate' WHERE id = ${userId}`);
