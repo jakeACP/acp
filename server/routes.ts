@@ -6,8 +6,8 @@ import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertLiveStreamSchema, insertNotificationSchema, comments } from "@shared/schema";
-import { eq, inArray, or, sql } from "drizzle-orm";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules } from "@shared/schema";
+import { eq, inArray, or, sql, asc } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
 import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle } from "./openai";
@@ -4558,12 +4558,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.get("/api/candidate-profile/:politicianId/modules", async (req, res) => {
     try {
-      const rows = await db.execute(sql`
-        SELECT * FROM candidate_profile_modules
-        WHERE politician_id = ${req.params.politicianId}
-        ORDER BY position ASC
-      `);
-      res.json(rows.rows);
+      const rows = await db.select().from(candidateProfileModules)
+        .where(eq(candidateProfileModules.politicianId, req.params.politicianId))
+        .orderBy(asc(candidateProfileModules.position));
+      res.json(rows);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
