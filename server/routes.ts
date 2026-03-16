@@ -6,7 +6,7 @@ import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules } from "@shared/schema";
 import { eq, inArray, or, sql, asc } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
