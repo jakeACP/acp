@@ -4454,7 +4454,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
                  WHERE ss.politician_id = pol.id
                ), 0) as superpac_total
         FROM politician_profiles pol
-        JOIN political_positions pos ON pol.position_id = pos.id
+        JOIN political_positions pos ON (
+          pol.position_id = pos.id 
+          OR pol.target_position_id = pos.id
+        )
         WHERE (
           -- National/country-wide races (President, VP): jurisdiction = 'United States'
           pos.jurisdiction ILIKE 'United States'
