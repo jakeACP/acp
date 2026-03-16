@@ -4591,10 +4591,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           VALUES (${req.params.politicianId}, ${modType}, ${contentStr}, ${i})
         `);
       }
-      const updated = await db.execute(sql`
-        SELECT * FROM candidate_profile_modules WHERE politician_id = ${req.params.politicianId} ORDER BY position ASC
-      `);
-      res.json(updated.rows);
+      const updated = await db.select().from(candidateProfileModules)
+        .where(eq(candidateProfileModules.politicianId, req.params.politicianId))
+        .orderBy(asc(candidateProfileModules.position));
+      res.json(updated);
     } catch (error: any) {
       console.error("Save candidate profile modules error:", error);
       res.status(500).json({ message: error.message });
