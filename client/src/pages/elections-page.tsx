@@ -81,18 +81,12 @@ export default function ElectionsPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim()) {
+    const addressToUse = verifiedAddress || inputValue.trim();
+    if (!addressToUse) {
       toast({ title: "Please enter an address", variant: "destructive" });
       return;
     }
-    if (!verifiedAddress) {
-      toast({
-        title: "Please select a verified address from the dropdown to continue.",
-        variant: "destructive",
-      });
-      return;
-    }
-    navigate(`/elections/positions?address=${encodeURIComponent(verifiedAddress)}`);
+    navigate(`/elections/positions?address=${encodeURIComponent(addressToUse)}`);
   };
 
   const handleUseMyLocation = () => {
