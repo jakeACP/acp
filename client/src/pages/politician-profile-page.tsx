@@ -1522,7 +1522,12 @@ function CandidateProfileTab({ politicianId }: { politicianId: string }) {
               {type === "bio" && <p className="text-sm text-muted-foreground">{content.text || "No bio provided"}</p>}
               {type === "youtube" && content.videoUrl && (() => {
                 const videoId = content.videoUrl.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?#]+)/)?.[1];
-                return videoId ? <div className="aspect-video"><iframe src={`https://www.youtube.com/embed/${videoId}`} className="w-full h-full rounded" allowFullScreen /></div> : <p className="text-sm text-muted-foreground">Invalid video URL</p>;
+                return videoId ? (
+                  <div>
+                    <div className="aspect-video"><iframe src={`https://www.youtube-nocookie.com/embed/${videoId}`} className="w-full h-full rounded" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>
+                    <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline mt-1 inline-block">Watch on YouTube</a>
+                  </div>
+                ) : <p className="text-sm text-muted-foreground">Invalid video URL</p>;
               })()}
               {type !== "bio" && type !== "youtube" && <p className="text-sm text-muted-foreground">{type?.replace(/-/g, " ")} content</p>}
             </CardContent>

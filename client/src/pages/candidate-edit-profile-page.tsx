@@ -571,7 +571,12 @@ function ModuleContent({ module, politician, politicianId }: { module: ProfileMo
     if (!url) return <p className="text-sm text-muted-foreground">No video added. Click customize to add a YouTube video.</p>;
     const videoId = url.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?#]+)/)?.[1];
     if (!videoId) return <p className="text-sm text-muted-foreground">Invalid YouTube URL</p>;
-    return <div className="aspect-video"><iframe src={`https://www.youtube.com/embed/${videoId}`} className="w-full h-full rounded" allowFullScreen /></div>;
+    return (
+      <div>
+        <div className="aspect-video"><iframe src={`https://www.youtube-nocookie.com/embed/${videoId}`} className="w-full h-full rounded" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>
+        <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline mt-1 inline-block">Watch on YouTube</a>
+      </div>
+    );
   }
   if (module.type === "photos") {
     return <p className="text-sm text-muted-foreground">Photo gallery coming soon</p>;

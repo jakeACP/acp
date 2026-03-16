@@ -669,29 +669,33 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
               )}
             </div>
           );
-        case "youtube":
+        case "youtube": {
+          const ytVideoId = module.customData?.videoUrl?.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?#]+)/)?.[1];
           return (
             <div className="text-center">
-              {module.customData?.videoUrl ? (
+              {module.customData?.videoUrl && ytVideoId ? (
                 <div className="relative">
                   <iframe
                     width="100%"
                     height={module.customData?.height || "200"}
-                    src={`https://www.youtube.com/embed/${module.customData.videoUrl.split('v=')[1]?.split('&')[0] || module.customData.videoUrl.split('/').pop()}`}
+                    src={`https://www.youtube-nocookie.com/embed/${ytVideoId}`}
                     title="YouTube video"
                     frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
                     className="rounded-lg"
                   />
+                  <a href={`https://www.youtube.com/watch?v=${ytVideoId}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline mt-1 inline-block">Watch on YouTube</a>
                 </div>
               ) : (
                 <div className="p-4 border-dashed border-2 border-gray-300 rounded-lg">
                   <Youtube className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm text-gray-500">No YouTube video set</p>
+                  <p className="text-sm text-gray-500">{module.customData?.videoUrl ? "Invalid YouTube URL" : "No YouTube video set"}</p>
                 </div>
               )}
             </div>
           );
+        }
         case "badges":
           return (
             <div className="grid grid-cols-3 gap-2">
