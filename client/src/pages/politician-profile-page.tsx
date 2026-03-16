@@ -18,7 +18,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { sanitizeUrl } from "@/lib/utils";
 import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink, Flag, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronRight, ShieldAlert, Lock, PieChart as PieChartIcon, BarChart3, Wallet, User } from "lucide-react";
 import { format } from "date-fns";
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, useRef, lazy, Suspense } from "react";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating, SpecialInterestGroup, PoliticianSigSponsorship, PoliticianDemerit, CandidateProfileModule } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
@@ -1482,6 +1482,93 @@ function SectorPieChart({ data }: { data: { name: string; value: number; color: 
   );
 }
 
+function YouTubeEmbedFallback({ videoId }: { videoId: string }) {
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+  return (
+    <div>
+      <a href={youtubeUrl} target="_blank" rel="noopener noreferrer" className="block">
+        <div className="aspect-video relative rounded overflow-hidden bg-muted">
+          <img src={thumbnailUrl} alt="Video thumbnail" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+            <div className="bg-red-600 rounded-full p-3">
+              <ExternalLink className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </div>
+      </a>
+      <a href={youtubeUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline mt-1 inline-block">Watch on YouTube</a>
+    </div>
+  );
+}
+
+function loadYouTubeIFrameAPI(): Promise<void> {
+  return new Promise((resolve) => {
+    if ((window as any).YT?.Player) {
+      resolve();
+      return;
+    }
+    const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    if (!existing) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(tag);
+    }
+    const prev = (window as any).onYouTubeIframeAPIReady;
+    (window as any).onYouTubeIframeAPIReady = () => {
+      if (prev) prev();
+      resolve();
+    };
+  });
+}
+
+function YouTubeEmbed({ videoId }: { videoId: string }) {
+  const [embedFailed, setEmbedFailed] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<any>(null);
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  useEffect(() => {
+    let destroyed = false;
+
+    loadYouTubeIFrameAPI().then(() => {
+      if (destroyed || !containerRef.current) return;
+      const el = document.createElement("div");
+      containerRef.current.appendChild(el);
+
+      playerRef.current = new (window as any).YT.Player(el, {
+        videoId,
+        host: "https://www.youtube-nocookie.com",
+        playerVars: { modestbranding: 1 },
+        events: {
+          onError: () => {
+            if (!destroyed) setEmbedFailed(true);
+          },
+        },
+      });
+    });
+
+    return () => {
+      destroyed = true;
+      if (playerRef.current?.destroy) {
+        try { playerRef.current.destroy(); } catch {}
+      }
+      playerRef.current = null;
+    };
+  }, [videoId]);
+
+  if (embedFailed) {
+    return <YouTubeEmbedFallback videoId={videoId} />;
+  }
+
+  return (
+    <div>
+      <div ref={containerRef} className="aspect-video rounded overflow-hidden [&>div]:w-full [&>div]:h-full [&_iframe]:w-full [&_iframe]:h-full" />
+      <a href={youtubeUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline mt-1 inline-block">Watch on YouTube</a>
+    </div>
+  );
+}
+
 function CandidateProfileTab({ politicianId }: { politicianId: string }) {
   const { data: modules = [], isLoading } = useQuery<CandidateProfileModule[]>({
     queryKey: ["/api/candidate-profile", politicianId, "modules"],
@@ -1521,12 +1608,9 @@ function CandidateProfileTab({ politicianId }: { politicianId: string }) {
             <CardContent>
               {type === "bio" && <p className="text-sm text-muted-foreground">{content.text || "No bio provided"}</p>}
               {type === "youtube" && content.videoUrl && (() => {
-                const videoId = content.videoUrl.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?#]+)/)?.[1];
+                const videoId = content.videoUrl.match(/(?:youtube\.com\/watch\?.*v=|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/)?.[1];
                 return videoId ? (
-                  <div>
-                    <div className="aspect-video"><iframe src={`https://www.youtube-nocookie.com/embed/${videoId}`} className="w-full h-full rounded" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>
-                    <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline mt-1 inline-block">Watch on YouTube</a>
-                  </div>
+                  <YouTubeEmbed videoId={videoId} />
                 ) : <p className="text-sm text-muted-foreground">Invalid video URL</p>;
               })()}
               {type !== "bio" && type !== "youtube" && <p className="text-sm text-muted-foreground">{type?.replace(/-/g, " ")} content</p>}

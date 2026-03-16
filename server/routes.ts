@@ -17,6 +17,17 @@ import multer from "multer";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
 import { randomUUID } from "crypto";
 
+function extractYouTubeVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?.*v=|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
 // Configure multer for file uploads (memory storage for streaming to object storage)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -41,6 +52,28 @@ const objectStorageService = new ObjectStorageService();
 
 export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   setupAuth(app);
+
+  (async () => {
+    try {
+      const rows = await db.select().from(candidateProfileModules)
+        .where(eq(candidateProfileModules.moduleType, "youtube"));
+      for (const row of rows) {
+        const c = typeof row.content === "string" ? JSON.parse(row.content as string) : row.content;
+        if (c?.videoUrl) {
+          const vid = extractYouTubeVideoId(c.videoUrl);
+          if (vid) {
+            const cleanUrl = `https://www.youtube.com/watch?v=${vid}`;
+            if (c.videoUrl !== cleanUrl) {
+              c.videoUrl = cleanUrl;
+              await db.execute(sql`UPDATE candidate_profile_modules SET content = ${JSON.stringify(c)} WHERE id = ${row.id}`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("YouTube URL normalization error:", err);
+    }
+  })();
 
   // Public Articles API (no auth required)
   app.get("/api/public/articles", async (req, res) => {
@@ -4561,7 +4594,22 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const rows = await db.select().from(candidateProfileModules)
         .where(eq(candidateProfileModules.politicianId, req.params.politicianId))
         .orderBy(asc(candidateProfileModules.position));
-      res.json(rows);
+      const normalized = rows.map((row) => {
+        if (row.moduleType === "youtube" && row.content) {
+          try {
+            const c = typeof row.content === "string" ? JSON.parse(row.content) : row.content;
+            if (c.videoUrl) {
+              const vid = extractYouTubeVideoId(c.videoUrl);
+              if (vid) {
+                c.videoUrl = `https://www.youtube.com/watch?v=${vid}`;
+                return { ...row, content: typeof row.content === "string" ? JSON.stringify(c) : c };
+              }
+            }
+          } catch {}
+        }
+        return row;
+      });
+      res.json(normalized);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
