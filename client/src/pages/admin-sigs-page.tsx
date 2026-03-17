@@ -86,20 +86,22 @@ const CATEGORIES = [
 ];
 
 const INDUSTRIES = [
-  { value: "defense", label: "Defense & Military" },
-  { value: "healthcare", label: "Healthcare & Pharma" },
-  { value: "energy", label: "Energy & Oil" },
-  { value: "finance", label: "Finance & Banking" },
-  { value: "tech", label: "Technology" },
   { value: "agriculture", label: "Agriculture" },
-  { value: "real_estate", label: "Real Estate" },
-  { value: "transportation", label: "Transportation" },
-  { value: "telecom", label: "Telecommunications" },
+  { value: "defense", label: "Defense & Military" },
+  { value: "energy", label: "Energy & Oil" },
   { value: "entertainment", label: "Entertainment & Media" },
-  { value: "retail", label: "Retail" },
-  { value: "manufacturing", label: "Manufacturing" },
+  { value: "finance", label: "Finance & Banking" },
   { value: "foreign", label: "Foreign Entity" },
-  { value: "other", label: "Other" },
+  { value: "healthcare", label: "Healthcare & Pharma" },
+  { value: "manufacturing", label: "Manufacturing" },
+  { value: "political_party", label: "Political Party" },
+  { value: "real_estate", label: "Real Estate" },
+  { value: "retail", label: "Retail" },
+  { value: "small_business", label: "Small Business" },
+  { value: "tech", label: "Technology" },
+  { value: "telecom", label: "Telecommunications" },
+  { value: "transportation", label: "Transportation" },
+  { value: "other", label: "Other/NA" },
 ];
 
 export default function AdminSigsPage() {
