@@ -2444,7 +2444,7 @@ export type InsertCandidateProfileModule = z.infer<typeof insertCandidateProfile
 // ACE Pledge Requests — candidates upload a video pledge to earn an ACE badge
 export const acePledgeRequests = pgTable("ace_pledge_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  politicianId: varchar("politician_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  politicianId: varchar("politician_id").references(() => politicianProfiles.id, { onDelete: "cascade" }),
   sigId: varchar("sig_id").notNull().references(() => specialInterestGroups.id, { onDelete: "cascade" }),
   videoUrl: text("video_url").notNull(),
   status: text("status").notNull().default("pending"), // pending | approved | rejected

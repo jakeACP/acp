@@ -199,19 +199,6 @@ export default function CandidateEditProfilePage() {
     },
   });
 
-  if (!politicianId) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <div className="container mx-auto py-16 text-center">
-          <Shield className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-          <h2 className="text-2xl font-bold mb-2">No Claimed Profile</h2>
-          <p className="text-muted-foreground mb-4">You haven't claimed a politician profile yet.</p>
-          <Button onClick={() => navigate("/representatives")}>Browse Representatives</Button>
-        </div>
-      </div>
-    );
-  }
 
   if (politicianLoading) {
     return (
@@ -562,7 +549,7 @@ export default function CandidateEditProfilePage() {
   );
 }
 
-function AceBadgesModule({ politicianId }: { politicianId: string }) {
+function AceBadgesModule({ politicianId }: { politicianId?: string | null }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showApplyDialog, setShowApplyDialog] = React.useState(false);
@@ -719,7 +706,7 @@ function AceBadgesModule({ politicianId }: { politicianId: string }) {
   );
 }
 
-function ModuleContent({ module, politician, politicianId }: { module: ProfileModule; politician: PoliticianWithPosition | undefined; politicianId: string }) {
+function ModuleContent({ module, politician, politicianId }: { module: ProfileModule; politician: PoliticianWithPosition | undefined; politicianId?: string | null }) {
   if (module.type === "ace-badges") {
     return <AceBadgesModule politicianId={politicianId} />;
   }

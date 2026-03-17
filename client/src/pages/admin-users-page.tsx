@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminNavigation } from "@/components/admin-navigation";
@@ -193,9 +193,8 @@ export default function AdminUsersPage() {
                   </TableHeader>
                   <TableBody>
                     {users.map((user: any) => (
-                      <>
+                      <Fragment key={user.id}>
                         <TableRow
-                          key={user.id}
                           className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/40"
                           onClick={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}
                           data-testid={`row-user-${user.id}`}
@@ -296,7 +295,7 @@ export default function AdminUsersPage() {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     ))}
                   </TableBody>
                 </Table>

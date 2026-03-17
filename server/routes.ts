@@ -6468,27 +6468,27 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // ── ACE Pledge Requests ────────────────────────────────────
-  // Submit a new pledge (candidates with a claimed profile)
+  // Submit a new pledge (any authenticated candidate)
   app.post("/api/ace-pledges", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     try {
       const user = req.user as any;
-      if (!user.claimedPoliticianId) {
-        return res.status(403).json({ message: "You must have a claimed politician profile to submit an ACE pledge" });
-      }
+      const politicianId = user.claimedPoliticianId || null;
       const parsed = insertAcePledgeRequestSchema.safeParse({
-        politicianId: user.claimedPoliticianId,
+        politicianId,
         sigId: req.body.sigId,
         videoUrl: req.body.videoUrl,
       });
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid data", errors: parsed.error.errors });
       }
-      // Prevent duplicate pending/approved pledges for same politician+SIG
-      const existing = await storage.getAcePledgesByPolitician(user.claimedPoliticianId);
-      const dup = existing.find(p => p.sigId === req.body.sigId && (p.status === "pending" || p.status === "approved"));
-      if (dup) {
-        return res.status(409).json({ message: dup.status === "approved" ? "You already hold this ACE badge" : "A pending pledge for this ACE already exists" });
+      // Prevent duplicate pending/approved pledges for same user+SIG
+      if (politicianId) {
+        const existing = await storage.getAcePledgesByPolitician(politicianId);
+        const dup = existing.find(p => p.sigId === req.body.sigId && (p.status === "pending" || p.status === "approved"));
+        if (dup) {
+          return res.status(409).json({ message: dup.status === "approved" ? "You already hold this ACE badge" : "A pending pledge for this ACE already exists" });
+        }
       }
       const pledge = await storage.createAcePledgeRequest(parsed.data);
       res.json(pledge);
