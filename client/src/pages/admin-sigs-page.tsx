@@ -437,108 +437,138 @@ export default function AdminSigsPage() {
       <AdminNavigation />
       
       <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Building2 className="h-6 w-6" />
-              Special Interest Groups
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400 mt-1">
-              Manage organizations that sponsor politicians for corruption scorecard tracking
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              onClick={() => { setFixCNumbersResult(null); fixCNumbersMutation.mutate(); }}
-              disabled={fixCNumbersMutation.isPending}
-              title="Find SIGs whose name is a raw FEC committee ID (C00000000) and move it to the FEC ID field"
-            >
-              {fixCNumbersMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Fix C-Numbers
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => { setFindMissingResult(null); findMissingIdsMutation.mutate(); }}
-              disabled={findMissingIdsMutation.isPending}
-              title="Search FEC for committee IDs on SIGs that don't have one yet"
-            >
-              {findMissingIdsMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4 mr-2" />
-              )}
-              Find Missing IDs
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => downloadCsv(TEMPLATES.sigs.filename, TEMPLATES.sigs.headers, TEMPLATES.sigs.sample)}
-              title="Download blank CSV template for SIG data entry"
-            >
-              <FileDown className="h-4 w-4 mr-2" />
-              Download Template
-            </Button>
-            <input
-              ref={csvInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  setCsvUploadResult(null);
-                  uploadCsvMutation.mutate(file);
-                }
-                e.target.value = "";
-              }}
-            />
-            <Button
-              variant="outline"
-              onClick={() => csvInputRef.current?.click()}
-              disabled={uploadCsvMutation.isPending}
-              title="Upload a CSV to bulk-create or update SIGs"
-            >
-              {uploadCsvMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <FileUp className="h-4 w-4 mr-2" />
-              )}
-              Upload CSV
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => { setUpdateFecResult(null); updateSigsMutation.mutate(); }}
-              disabled={updateSigsMutation.isPending}
-              title="Pull fresh name, address, phone, website, and contributions from FEC for all SIGs with an ID"
-            >
-              {updateSigsMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Database className="h-4 w-4 mr-2" />
-              )}
-              Update SIGs
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => { setAiGradeResult(null); aiGradeMutation.mutate(); }}
-              disabled={aiGradeMutation.isPending}
-              title="Use AI to assign an initial influence score (-50 to +50) to ungraded SIGs"
-            >
-              {aiGradeMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4 mr-2" />
-              )}
-              AI Grade PACs
-            </Button>
-            <Button onClick={openCreateDialog} data-testid="btn-create-sig">
-              <Plus className="h-4 w-4 mr-2" />
-              Add SIG
-            </Button>
+        <div className="mb-8">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Building2 className="h-6 w-6" />
+                Special Interest Groups
+              </h1>
+              <p className="text-slate-600 dark:text-slate-400 mt-1">
+                Manage organizations that sponsor politicians for corruption scorecard tracking
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 shrink-0">
+              {/* Row 1: Data / file tools */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => downloadCsv(TEMPLATES.sigs.filename, TEMPLATES.sigs.headers, TEMPLATES.sigs.sample)}
+                  title="Download blank CSV template for SIG data entry"
+                >
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Download Template
+                </Button>
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setCsvUploadResult(null);
+                      uploadCsvMutation.mutate(file);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => csvInputRef.current?.click()}
+                  disabled={uploadCsvMutation.isPending}
+                  title="Upload a CSV to bulk-create or update SIGs"
+                >
+                  {uploadCsvMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileUp className="h-4 w-4 mr-2" />
+                  )}
+                  Import CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const headers = ["name","acronym","category","industry","headquarters","website","contactEmail","contactPhone","foundedYear","fecId","influenceScore","letterGrade","isActive","isAce","totalContributions","description","disclosureNotes"];
+                    const rows = sigs.map(s => headers.map(h => {
+                      const v = (s as any)[h];
+                      if (v === null || v === undefined) return "";
+                      const str = String(v);
+                      return str.includes(",") || str.includes('"') || str.includes("\n") ? `"${str.replace(/"/g, '""')}"` : str;
+                    }).join(","));
+                    const csv = [headers.join(","), ...rows].join("\n");
+                    const blob = new Blob([csv], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url; a.download = "sigs-export.csv"; a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  title="Export all current SIGs to a CSV file"
+                >
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export SIGs
+                </Button>
+                <Button onClick={openCreateDialog} data-testid="btn-create-sig">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add SIG
+                </Button>
+              </div>
+              {/* Row 2: FEC / AI data tools */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => { setFindMissingResult(null); findMissingIdsMutation.mutate(); }}
+                  disabled={findMissingIdsMutation.isPending}
+                  title="Search FEC for committee IDs on SIGs that don't have one yet"
+                >
+                  {findMissingIdsMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4 mr-2" />
+                  )}
+                  Find Missing IDs
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => { setUpdateFecResult(null); updateSigsMutation.mutate(); }}
+                  disabled={updateSigsMutation.isPending}
+                  title="Pull fresh name, address, phone, website, and contributions from FEC for all SIGs with an ID"
+                >
+                  {updateSigsMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Database className="h-4 w-4 mr-2" />
+                  )}
+                  Update SIGs
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => { setFixCNumbersResult(null); fixCNumbersMutation.mutate(); }}
+                  disabled={fixCNumbersMutation.isPending}
+                  title="Find SIGs whose name is a raw FEC committee ID (C00000000) and move it to the FEC ID field"
+                >
+                  {fixCNumbersMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Fix C-Numbers
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => { setAiGradeResult(null); aiGradeMutation.mutate(); }}
+                  disabled={aiGradeMutation.isPending}
+                  title="Use AI to assign an initial influence score (-50 to +50) to ungraded SIGs"
+                >
+                  {aiGradeMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 mr-2" />
+                  )}
+                  AI Grade PACs
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
 
