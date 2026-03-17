@@ -88,3 +88,11 @@ Preferred communication style: Simple, everyday language.
 - **Demerit System**: Admin-approved demerits appear as red `ShieldAlert` badges next to SIGs/ACEs on the Representatives page (both table and zip card view) and on the Trading tab of politician profiles.
 - **Admin Trading Flags Page**: `/admin/trading-flags` — review pending flags, approve with demerit assignment, or reject. Admin nav includes "Trading Flags" link.
 - **API Routes**: `GET /api/politician-profiles/:id/trades` (Quiver proxy), `POST /api/politician-profiles/:id/trades/flag` (submit flag, auth required), `GET /api/politician-profiles/:id/demerits` (public), `GET /api/admin/trading-flags` (admin), `POST /api/admin/trading-flags/:flagId/review` (admin), `POST /api/admin/politician-profiles/:politicianId/demerits` (admin), `DELETE /api/admin/demerits/:demeritId` (admin).
+
+### ACE Badges Module
+- **DB Table**: `ace_pledge_requests` — stores ACE pledge submissions with politicianId, sigId, videoUrl, status (pending/approved/rejected), reviewedBy, reviewNote, timestamps.
+- **Candidate Profile Module**: "ACE Badges" module available on candidate edit profile page (`/candidate/edit-profile`). Candidates with a claimed politician profile can view their existing pledges and apply for new ACE badges by selecting an ACE SIG and uploading a pledge video.
+- **Approval Flow**: Admin reviews pledges at `/admin/ace-pledges`. On approval, a `politician_sig_sponsorships` entry is created with `relationshipType: "ace_pledge"` which feeds into the corruption grade pipeline.
+- **Duplicate Prevention**: Backend blocks duplicate pending/approved pledges for the same politician+SIG pair.
+- **API Routes**: `POST /api/ace-pledges` (candidate submit), `GET /api/ace-pledges/my` (candidate list own), `GET /api/ace-pledges/politician/:id` (public approved only), `GET /api/admin/ace-pledges` (admin list with status filter), `POST /api/admin/ace-pledges/:id/review` (admin approve/reject).
+- **Admin Nav**: "ACE Pledges" link added to admin navigation under the "people" category.

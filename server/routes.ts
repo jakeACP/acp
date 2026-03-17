@@ -6,7 +6,7 @@ import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema } from "@shared/schema";
 import { eq, inArray, or, sql, asc } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
@@ -6452,6 +6452,99 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     try {
       await storage.deleteDemerit(req.params.demeritId);
       res.sendStatus(204);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ── ACE Pledge Requests ────────────────────────────────────
+  // Submit a new pledge (candidates with a claimed profile)
+  app.post("/api/ace-pledges", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const user = req.user as any;
+      if (!user.claimedPoliticianId) {
+        return res.status(403).json({ message: "You must have a claimed politician profile to submit an ACE pledge" });
+      }
+      const parsed = insertAcePledgeRequestSchema.safeParse({
+        politicianId: user.claimedPoliticianId,
+        sigId: req.body.sigId,
+        videoUrl: req.body.videoUrl,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid data", errors: parsed.error.errors });
+      }
+      // Prevent duplicate pending/approved pledges for same politician+SIG
+      const existing = await storage.getAcePledgesByPolitician(user.claimedPoliticianId);
+      const dup = existing.find(p => p.sigId === req.body.sigId && (p.status === "pending" || p.status === "approved"));
+      if (dup) {
+        return res.status(409).json({ message: dup.status === "approved" ? "You already hold this ACE badge" : "A pending pledge for this ACE already exists" });
+      }
+      const pledge = await storage.createAcePledgeRequest(parsed.data);
+      res.json(pledge);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get pledges for the authenticated candidate's profile
+  app.get("/api/ace-pledges/my", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const user = req.user as any;
+      if (!user.claimedPoliticianId) return res.json([]);
+      const pledges = await storage.getAcePledgesByPolitician(user.claimedPoliticianId);
+      res.json(pledges);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get all ACE pledges for a politician (public view)
+  app.get("/api/ace-pledges/politician/:politicianId", async (req, res) => {
+    try {
+      const pledges = await storage.getAcePledgesByPolitician(req.params.politicianId);
+      res.json(pledges.filter(p => p.status === "approved"));
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: list all ACE pledge requests
+  app.get("/api/admin/ace-pledges", ensureAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const pledges = await storage.getAllAcePledgeRequests(status);
+      res.json(pledges);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: approve or reject an ACE pledge
+  app.post("/api/admin/ace-pledges/:id/review", ensureAdmin, async (req, res) => {
+    try {
+      const { status, reviewNote } = req.body;
+      if (!status || !["approved", "rejected"].includes(status)) {
+        return res.status(400).json({ message: "Status must be 'approved' or 'rejected'" });
+      }
+      const pledge = await storage.reviewAcePledgeRequest(
+        req.params.id, status, (req.user as any).id, reviewNote
+      );
+      // On approval: create the SIG sponsorship so it affects grade
+      if (status === "approved") {
+        const existing = await storage.listPoliticianSponsors(pledge.politicianId);
+        const alreadyLinked = existing.find((s: any) => s.sigId === pledge.sigId);
+        if (!alreadyLinked) {
+          await storage.linkSponsorToPolitician({
+            politicianId: pledge.politicianId,
+            sigId: pledge.sigId,
+            reportedAmount: 0,
+            relationshipType: "ace_pledge",
+          });
+        }
+      }
+      res.json(pledge);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

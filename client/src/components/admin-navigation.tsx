@@ -13,7 +13,8 @@ import {
   BarChart3,
   Building2,
   MapPin,
-  Flag
+  Flag,
+  BadgeCheck
 } from "lucide-react";
 
 const adminMenuItems = [
@@ -26,6 +27,7 @@ const adminMenuItems = [
   { name: "SIGs", href: "/admin/sigs", icon: Building2, category: "people" },
   { name: "State Data", href: "/admin/state-data", icon: MapPin, category: "people" },
   { name: "Trading Flags", href: "/admin/trading-flags", icon: Flag, category: "people" },
+  { name: "ACE Pledges", href: "/admin/ace-pledges", icon: BadgeCheck, category: "people" },
   { name: "Security", href: "/admin/security", icon: Lock, category: "system" },
   { name: "Database", href: "/admin/database", icon: Database, category: "system" },
   { name: "Algorithm", href: "/admin/algorithm", icon: Cpu, category: "system" },

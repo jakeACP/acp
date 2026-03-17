@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Navigation } from "@/components/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -20,10 +20,10 @@ import {
   Edit, Plus, Save, Eye, Shield, User, Camera, Users, Heart,
   MessageSquare, Music, Image, Youtube, Flag, BarChart3,
   Calendar, Target, Zap, TrendingUp, Video, Crown, Loader2,
-  Send, AlertTriangle
+  Send, AlertTriangle, Upload, Clock, XCircle, CheckCircle
 } from "lucide-react";
 import { LoadingSpinner } from "@/components/loading-spinner";
-import type { PoliticianProfile, PoliticianSigSponsorship, SpecialInterestGroup, CandidateProfileModule } from "@shared/schema";
+import type { PoliticianProfile, PoliticianSigSponsorship, SpecialInterestGroup, CandidateProfileModule, AcePledgeRequest } from "@shared/schema";
 
 type PoliticianWithPosition = PoliticianProfile & {
   position?: { title: string; jurisdiction?: string | null } | null;
@@ -54,6 +54,7 @@ const availableModules = [
   { type: "photos", name: "Photo Gallery", icon: Camera, isPremium: false },
   { type: "feed", name: "Recent Posts", icon: MessageSquare, isPremium: false },
   { type: "youtube", name: "YouTube Video", icon: Youtube, isPremium: false },
+  { type: "ace-badges", name: "ACE Badges", icon: Shield, isPremium: false },
   { type: "badges", name: "Badges & Achievements", icon: Award, isPremium: false },
   { type: "issues", name: "Issue Interests", icon: Flag, isPremium: false },
   { type: "civic-tracker", name: "Civic Activity Tracker", icon: BarChart3, isPremium: false },
@@ -69,7 +70,7 @@ const availableModules = [
 
 const moduleIcons: Record<string, any> = {
   bio: User, photos: Camera, feed: MessageSquare, youtube: Youtube,
-  badges: Award, issues: Flag, "civic-tracker": BarChart3,
+  "ace-badges": Shield, badges: Award, issues: Flag, "civic-tracker": BarChart3,
   "pinned-post": Target, "debate-history": MessageSquare,
   events: Calendar, "political-compass": Target,
   "campaign-hub": TrendingUp, "media-hub": Video,
@@ -561,7 +562,167 @@ export default function CandidateEditProfilePage() {
   );
 }
 
+function AceBadgesModule({ politicianId }: { politicianId: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showApplyDialog, setShowApplyDialog] = React.useState(false);
+  const [selectedSigId, setSelectedSigId] = React.useState<string>("");
+  const [videoUrl, setVideoUrl] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+
+  const { data: pledges = [], isLoading: pledgesLoading } = useQuery<AcePledgeRequest[]>({
+    queryKey: ["/api/ace-pledges/my"],
+  });
+
+  const { data: sigs = [] } = useQuery<SpecialInterestGroup[]>({
+    queryKey: ["/api/sigs"],
+  });
+  const aceSigs = sigs.filter((s: SpecialInterestGroup) => s.isAce);
+
+  const submitMutation = useMutation({
+    mutationFn: (data: { sigId: string; videoUrl: string }) =>
+      apiRequest("/api/ace-pledges", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ace-pledges/my"] });
+      toast({ title: "Pledge submitted!", description: "Your ACE pledge is under review." });
+      setShowApplyDialog(false);
+      setSelectedSigId("");
+      setVideoUrl("");
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setVideoUrl(data.publicUrl || data.url || "");
+      toast({ title: "Video uploaded" });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const statusIcon = (status: string) => {
+    if (status === "approved") return <CheckCircle className="w-4 h-4 text-green-500" />;
+    if (status === "rejected") return <XCircle className="w-4 h-4 text-red-500" />;
+    return <Clock className="w-4 h-4 text-yellow-500" />;
+  };
+
+  const statusLabel = (status: string) => {
+    if (status === "approved") return "Approved";
+    if (status === "rejected") return "Rejected";
+    return "Pending Review";
+  };
+
+  if (pledgesLoading) return <LoadingSpinner />;
+
+  return (
+    <div className="space-y-3">
+      {pledges.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No ACE badge pledges yet. Apply below.</p>
+      ) : (
+        <div className="space-y-2">
+          {pledges.map((pledge: AcePledgeRequest) => (
+            <div key={pledge.id} className="flex items-center justify-between p-2 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-blue-500" />
+                <span className="text-sm font-medium">{(pledge as any).sigName || `SIG #${pledge.sigId}`}</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                {statusIcon(pledge.status)}
+                <span>{statusLabel(pledge.status)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Button size="sm" variant="outline" onClick={() => setShowApplyDialog(true)}>
+        <Plus className="w-4 h-4 mr-1" /> Apply for ACE Badge
+      </Button>
+
+      <Dialog open={showApplyDialog} onOpenChange={setShowApplyDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Apply for ACE Badge</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Select ACE SIG</Label>
+              <Select value={selectedSigId} onValueChange={setSelectedSigId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose an ACE SIG..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {aceSigs.map((sig: SpecialInterestGroup) => (
+                    <SelectItem key={sig.id} value={String(sig.id)}>
+                      {sig.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {aceSigs.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">No ACE SIGs available.</p>
+              )}
+            </div>
+            <div>
+              <Label>Pledge Video</Label>
+              <div className="space-y-2 mt-1">
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="file" accept="video/*" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                    <Button variant="outline" size="sm" type="button" disabled={uploading} asChild>
+                      <span>{uploading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Upload className="w-4 h-4 mr-1" />}
+                        {uploading ? "Uploading..." : "Upload Video"}
+                      </span>
+                    </Button>
+                  </label>
+                  <span className="text-xs text-muted-foreground">or paste URL</span>
+                </div>
+                <Input
+                  placeholder="https://..."
+                  value={videoUrl}
+                  onChange={e => setVideoUrl(e.target.value)}
+                />
+                {videoUrl && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Video ready
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowApplyDialog(false)}>Cancel</Button>
+            <Button
+              disabled={!selectedSigId || !videoUrl || submitMutation.isPending}
+              onClick={() => submitMutation.mutate({ sigId: selectedSigId, videoUrl })}
+            >
+              {submitMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Send className="w-4 h-4 mr-1" />}
+              Submit Pledge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 function ModuleContent({ module, politician, politicianId }: { module: ProfileModule; politician: PoliticianWithPosition | undefined; politicianId: string }) {
+  if (module.type === "ace-badges") {
+    return <AceBadgesModule politicianId={politicianId} />;
+  }
   if (module.type === "bio") {
     const text = module.customData?.text || politician?.biography;
     return <p className="text-sm text-muted-foreground">{text || "No bio added yet. Click customize to add one."}</p>;

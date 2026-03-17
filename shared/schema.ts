@@ -2440,3 +2440,23 @@ export const candidateProfileModules = pgTable("candidate_profile_modules", {
 export const insertCandidateProfileModuleSchema = createInsertSchema(candidateProfileModules).omit({ id: true, createdAt: true, updatedAt: true });
 export type CandidateProfileModule = typeof candidateProfileModules.$inferSelect;
 export type InsertCandidateProfileModule = z.infer<typeof insertCandidateProfileModuleSchema>;
+
+// ACE Pledge Requests — candidates upload a video pledge to earn an ACE badge
+export const acePledgeRequests = pgTable("ace_pledge_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  politicianId: varchar("politician_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  sigId: varchar("sig_id").notNull().references(() => specialInterestGroups.id, { onDelete: "cascade" }),
+  videoUrl: text("video_url").notNull(),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected
+  reviewedBy: integer("reviewed_by").references(() => users.id),
+  reviewNote: text("review_note"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  politicianIndex: index("ace_pledge_politician_idx").on(table.politicianId),
+  statusIndex: index("ace_pledge_status_idx").on(table.status),
+}));
+
+export const insertAcePledgeRequestSchema = createInsertSchema(acePledgeRequests).omit({ id: true, createdAt: true, updatedAt: true, reviewedBy: true, reviewNote: true, status: true });
+export type AcePledgeRequest = typeof acePledgeRequests.$inferSelect;
+export type InsertAcePledgeRequest = z.infer<typeof insertAcePledgeRequestSchema>;
