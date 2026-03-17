@@ -5540,6 +5540,66 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Fetch FEC data for a SIG by its stored fecId
+  app.post("/api/admin/sigs/:id/fetch-fec", ensureAdmin, async (req, res) => {
+    try {
+      const fecKey = process.env.FEC_API_KEY;
+      if (!fecKey) return res.status(400).json({ message: "FEC_API_KEY not configured" });
+
+      const sig = await storage.getSpecialInterestGroup(req.params.id);
+      if (!sig) return res.status(404).json({ message: "Special Interest Group not found" });
+      if (!sig.fecId) return res.status(400).json({ message: "This SIG has no FEC Committee ID set. Add one first." });
+
+      const fecId = sig.fecId.trim().toUpperCase();
+
+      // Fetch committee info
+      const commRes = await fetch(`https://api.open.fec.gov/v1/committee/${encodeURIComponent(fecId)}/?api_key=${fecKey}`, {
+        headers: { Accept: "application/json" },
+      });
+      if (!commRes.ok) {
+        return res.status(502).json({ message: `FEC API returned ${commRes.status} for committee ${fecId}` });
+      }
+      const commData = await commRes.json();
+      const comm = commData.result || {};
+
+      // Fetch financial totals (latest cycle)
+      const totalsRes = await fetch(
+        `https://api.open.fec.gov/v1/committee/${encodeURIComponent(fecId)}/totals/?api_key=${fecKey}&per_page=1&sort=-cycle`,
+        { headers: { Accept: "application/json" } }
+      );
+      let totalReceipts: number | null = null;
+      if (totalsRes.ok) {
+        const totalsData = await totalsRes.json();
+        const latest = totalsData.results?.[0];
+        if (latest) totalReceipts = Math.round(latest.total_receipts ?? latest.total_contributions ?? 0);
+      }
+
+      // Build update patch from FEC data
+      const patch: Partial<typeof sig> = {
+        dataSourceName: "FEC",
+        dataSourceUrl: `https://www.fec.gov/data/committee/${fecId}/`,
+      };
+      if (comm.name) patch.name = comm.name;
+      if (comm.website) patch.website = comm.website.startsWith("http") ? comm.website : `https://${comm.website}`;
+      if (comm.city && comm.state) patch.headquarters = `${comm.city}, ${comm.state}`;
+      else if (comm.state) patch.headquarters = comm.state;
+      if (totalReceipts !== null) patch.totalContributions = totalReceipts;
+
+      const updated = await storage.updateSpecialInterestGroup(sig.id, patch);
+
+      const fetched: string[] = [];
+      if (comm.name) fetched.push("name");
+      if (comm.website) fetched.push("website");
+      if (patch.headquarters) fetched.push("headquarters");
+      if (totalReceipts !== null) fetched.push("total contributions");
+
+      res.json({ sig: updated, fetched, message: fetched.length > 0 ? `Updated: ${fetched.join(", ")}` : "No new data found on FEC for this committee." });
+    } catch (error: any) {
+      console.error("FEC fetch error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Create a new SIG
   app.post("/api/admin/sigs", ensureAdmin, async (req, res) => {
     try {

@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, ShieldCheck, TrendingDown, TrendingUp } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, ShieldCheck, TrendingDown, TrendingUp, RefreshCw } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 
 function autoGrade(score: number): string {
@@ -101,6 +101,7 @@ export default function AdminSigsPage() {
   const [industryFilter, setIndustryFilter] = useState<string>("all");
   const [influenceSlider, setInfluenceSlider] = useState<number>(0);
   const [gradeOverride, setGradeOverride] = useState<string>("auto");
+  const [fetchingFecId, setFetchingFecId] = useState<string | null>(null);
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
@@ -170,6 +171,22 @@ export default function AdminSigsPage() {
     onError: (error: any) => {
       toast({ title: "Error deleting SIG", description: error.message, variant: "destructive" });
     },
+  });
+
+  const fetchFecMutation = useMutation({
+    mutationFn: async (id: string) => {
+      setFetchingFecId(id);
+      return await apiRequest(`/api/admin/sigs/${id}/fetch-fec`, "POST");
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+      toast({ title: "FEC data fetched", description: data?.message ?? "SIG updated from FEC." });
+      if (editingSig && data?.sig) setEditingSig(data.sig);
+    },
+    onError: (error: any) => {
+      toast({ title: "FEC fetch failed", description: error.message, variant: "destructive" });
+    },
+    onSettled: () => setFetchingFecId(null),
   });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -416,6 +433,20 @@ export default function AdminSigsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          {sig.fecId && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Fetch data from FEC"
+                              disabled={fetchingFecId === sig.id}
+                              onClick={() => fetchFecMutation.mutate(sig.id)}
+                              data-testid={`btn-fetch-fec-${sig.id}`}
+                            >
+                              {fetchingFecId === sig.id
+                                ? <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                                : <RefreshCw className="h-4 w-4 text-blue-500" />}
+                            </Button>
+                          )}
                           {sig.website && (
                             <Button
                               variant="ghost"
@@ -612,14 +643,32 @@ export default function AdminSigsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="fecId">FEC Committee ID</Label>
-                <Input
-                  id="fecId"
-                  name="fecId"
-                  defaultValue={editingSig?.fecId ?? ""}
-                  placeholder="e.g. C00000935"
-                  data-testid="input-sig-fec-id"
-                />
-                <p className="text-xs text-slate-500">FEC committee ID — links to the FEC.gov profile page for this group.</p>
+                <div className="flex gap-2">
+                  <Input
+                    id="fecId"
+                    name="fecId"
+                    defaultValue={editingSig?.fecId ?? ""}
+                    placeholder="e.g. C00000935"
+                    data-testid="input-sig-fec-id"
+                    className="flex-1"
+                  />
+                  {editingSig?.fecId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={fetchingFecId === editingSig.id}
+                      onClick={() => fetchFecMutation.mutate(editingSig.id)}
+                      className="whitespace-nowrap gap-1.5"
+                    >
+                      {fetchingFecId === editingSig.id
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <RefreshCw className="h-3.5 w-3.5" />}
+                      Fetch FEC Data
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">FEC committee ID — links to the FEC.gov profile page. Click "Fetch FEC Data" to auto-fill name, website, location, and total contributions.</p>
               </div>
 
               <div className="space-y-2">
