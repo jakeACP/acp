@@ -4363,8 +4363,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         WHERE pol.handle IS NULL OR pol.handle = ''
       `);
       const profiles = rows.rows as any[];
-      const existingHandles = await db.select({ handle: politicianProfiles.handle }).from(politicianProfiles);
-      const usedHandles = new Set<string>(existingHandles.map(h => (h.handle ?? '').toLowerCase()).filter(Boolean));
+      const existingHandlesResult = await db.execute(sql`SELECT handle FROM politician_profiles WHERE handle IS NOT NULL AND handle != ''`);
+      const usedHandles = new Set<string>((existingHandlesResult.rows as any[]).map((h: any) => (h.handle ?? '').toLowerCase()).filter(Boolean));
       let updated = 0;
 
       for (const profile of profiles) {
@@ -4379,7 +4379,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           suffix++;
         }
         usedHandles.add(finalHandle.toLowerCase());
-        await db.update(politicianProfiles).set({ handle: finalHandle } as any).where(eq(politicianProfiles.id, profile.id));
+        await db.execute(sql`UPDATE politician_profiles SET handle = ${finalHandle} WHERE id = ${profile.id}`);
         updated++;
       }
       res.json({ success: true, updated, total: profiles.length });
