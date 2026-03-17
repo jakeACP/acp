@@ -640,7 +640,114 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(userId: string): Promise<void> {
-    await db.delete(users).where(eq(users.id, userId));
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      // For system/config tables, null out the FK reference instead of deleting the row
+      const nullableFks: [string, string][] = [
+        ["ai_article_parameters", "updated_by"],
+        ["algorithm_settings", "updated_by"],
+        ["grading_algorithm_settings", "updated_by"],
+        ["blocked_ips", "blocked_by"],
+        ["blocked_ips", "unblocked_by"],
+      ];
+      for (const [table, col] of nullableFks) {
+        await client.query(`UPDATE ${table} SET ${col} = NULL WHERE ${col} = $1`, [userId]);
+      }
+      const tables = [
+        ["acp_wallets", "user_id"],
+        ["audit_logs", "actor_id"],
+        ["banned_users", "user_id"],
+        ["banned_users", "banned_by"],
+        ["banned_users", "unbanned_by"],
+        ["bias_votes", "voter_id"],
+        ["boycott_subscriptions", "user_id"],
+        ["boycotts", "creator_id"],
+        ["candidate_supports", "user_id"],
+        ["channel_members", "user_id"],
+        ["channel_messages", "sender_id"],
+        ["channels", "created_by"],
+        ["charities", "creator_id"],
+        ["charity_donations", "user_id"],
+        ["comments", "author_id"],
+        ["contact_uploads", "user_id"],
+        ["correction_requests", "submitted_by_user_id"],
+        ["flagged_content", "flagged_by"],
+        ["flagged_content", "reviewed_by"],
+        ["flags", "user_id"],
+        ["followed_representatives", "user_id"],
+        ["friend_groups", "user_id"],
+        ["friend_suggestion_dismissals", "user_id"],
+        ["friend_suggestion_dismissals", "dismissed_user_id"],
+        ["friend_suggestions", "user_id"],
+        ["friend_suggestions", "suggested_user_id"],
+        ["friendships", "requester_id"],
+        ["friendships", "addressee_id"],
+        ["group_members", "user_id"],
+        ["groups", "created_by"],
+        ["initiative_versions", "author_id"],
+        ["initiatives", "created_by"],
+        ["invitations", "invited_by"],
+        ["invitations", "used_by"],
+        ["likes", "user_id"],
+        ["live_stream_viewers", "user_id"],
+        ["live_streams", "owner_id"],
+        ["marketplace_purchases", "user_id"],
+        ["messages", "sender_id"],
+        ["messages", "recipient_id"],
+        ["moderator_review_queue", "user_id"],
+        ["moderator_review_queue", "reviewed_by"],
+        ["notifications", "user_id"],
+        ["petition_signatures", "signer_id"],
+        ["politician_corruption_ratings", "user_id"],
+        ["politician_demerits", "assigned_by"],
+        ["politician_profiles", "claim_request_user_id"],
+        ["politician_profiles", "claimed_by_user_id"],
+        ["poll_votes", "user_id"],
+        ["posts", "author_id"],
+        ["reactions", "user_id"],
+        ["sig_community_votes", "user_id"],
+        ["signal_chunks", "author_id"],
+        ["signal_comments", "author_id"],
+        ["signal_likes", "user_id"],
+        ["signals", "author_id"],
+        ["signatures", "user_id"],
+        ["signatures", "circulator_id"],
+        ["sms_otp_codes", "user_id"],
+        ["social_petition_signatures", "signer_id"],
+        ["social_petitions", "creator_id"],
+        ["subscription_rewards", "user_id"],
+        ["trading_flags", "flagged_by"],
+        ["trading_flags", "reviewed_by"],
+        ["trusted_devices", "user_id"],
+        ["two_factor_challenges", "user_id"],
+        ["union_memberships", "user_id"],
+        ["user_addresses", "user_id"],
+        ["user_contacts", "owner_id"],
+        ["user_contacts", "matched_user_id"],
+        ["user_follows", "follower_id"],
+        ["user_follows", "followee_id"],
+        ["user_referrals", "referrer_id"],
+        ["user_referrals", "referred_user_id"],
+        ["validation_events", "actor_id"],
+        ["volunteer_signups", "user_id"],
+        ["voter_verification_requests", "user_id"],
+        ["voter_verification_requests", "reviewed_by"],
+        ["whistleblowing_posts", "author_id"],
+        ["whistleblowing_votes", "user_id"],
+        ["candidates", "user_id"],
+      ];
+      for (const [table, col] of tables) {
+        await client.query(`DELETE FROM ${table} WHERE ${col} = $1`, [userId]);
+      }
+      await client.query("DELETE FROM users WHERE id = $1", [userId]);
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async updateUserPassword(userId: string, hashedPassword: string): Promise<User> {
