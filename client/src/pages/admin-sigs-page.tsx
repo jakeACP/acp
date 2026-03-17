@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -65,15 +65,24 @@ type SpecialInterestGroup = {
 };
 
 const CATEGORIES = [
-  { value: "corporate", label: "Corporate" },
-  { value: "pac", label: "Political Action Committee (PAC)" },
-  { value: "super_pac", label: "Super PAC" },
-  { value: "union", label: "Labor Union" },
-  { value: "lobby", label: "Lobbying Group" },
-  { value: "nonprofit", label: "Non-Profit Organization" },
-  { value: "industry", label: "Industry Association" },
-  { value: "Anti-Corruption Endorsement", label: "Anti-Corruption Endorsement (ACE)" },
-  { value: "other", label: "Other" },
+  { value: "pac_superpac", label: "PAC/SuperPAC (-)", sentiment: "negative" },
+  { value: "lobby_firm", label: "Lobby Firm (-)", sentiment: "negative" },
+  { value: "corporate_donation", label: "Corporate Donation (-)", sentiment: "negative" },
+  { value: "foreign_influence", label: "Foreign Influence (-)", sentiment: "negative" },
+  { value: "book_deal", label: "Book Deal (-)", sentiment: "negative" },
+  { value: "paid_speeches", label: "Paid Speeches (-)", sentiment: "negative" },
+  { value: "stock_gains", label: "Stock Gains (-)", sentiment: "negative" },
+  { value: "crypto_gains", label: "Crypto Gains (-)", sentiment: "negative" },
+  { value: "board_membership", label: "Board Membership (-)", sentiment: "negative" },
+  { value: "dark_money", label: "Dark Money (-)", sentiment: "negative" },
+  { value: "acd_demerit", label: "ACD (Demerit) (-)", sentiment: "negative" },
+  { value: "nonprofit", label: "Non Profit", sentiment: "neutral" },
+  { value: "labor_union", label: "Labor Union", sentiment: "neutral" },
+  { value: "fundraising_event", label: "Fundraising Event", sentiment: "neutral" },
+  { value: "bank_loan", label: "Bank Loan", sentiment: "neutral" },
+  { value: "ace_endorsement", label: "ACE (Endorsement) (+)", sentiment: "positive" },
+  { value: "grassroots_pac", label: "Grassroots PAC (+)", sentiment: "positive" },
+  { value: "public_funding", label: "Public Funding (+)", sentiment: "positive" },
 ];
 
 const INDUSTRIES = [
@@ -320,6 +329,17 @@ export default function AdminSigsPage() {
     return CATEGORIES.find(c => c.value === value)?.label || value;
   };
 
+  const getCategorySentiment = (value: string) => {
+    return CATEGORIES.find(c => c.value === value)?.sentiment || "neutral";
+  };
+
+  const categoryBadgeClass = (value: string) => {
+    const s = getCategorySentiment(value);
+    if (s === "negative") return "border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950";
+    if (s === "positive") return "border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950";
+    return "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400";
+  };
+
   const getIndustryLabel = (value: string) => {
     return INDUSTRIES.find(i => i.value === value)?.label || value;
   };
@@ -549,14 +569,32 @@ export default function AdminSigsPage() {
                 </div>
               </div>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[180px]" data-testid="select-category-filter">
+                <SelectTrigger className="w-[200px]" data-testid="select-category-filter">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {CATEGORIES.map(cat => (
-                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                  ))}
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel className="text-red-600 dark:text-red-400">Negative (-)</SelectLabel>
+                    {CATEGORIES.filter(c => c.sentiment === "negative").map(cat => (
+                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel className="text-slate-500">Neutral</SelectLabel>
+                    {CATEGORIES.filter(c => c.sentiment === "neutral").map(cat => (
+                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel className="text-green-600 dark:text-green-400">Positive (+)</SelectLabel>
+                    {CATEGORIES.filter(c => c.sentiment === "positive").map(cat => (
+                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
               <Select value={industryFilter} onValueChange={setIndustryFilter}>
@@ -617,7 +655,9 @@ export default function AdminSigsPage() {
                       </TableCell>
                       <TableCell className="py-1.5">
                         <div className="flex flex-wrap items-center gap-1">
-                          <Badge variant="outline" className="text-[10px] px-1 py-0 leading-tight">{getCategoryLabel(sig.category)}</Badge>
+                          <Badge variant="outline" className={`text-[10px] px-1 py-0 leading-tight ${categoryBadgeClass(sig.category)}`}>
+                            {getCategoryLabel(sig.category)}
+                          </Badge>
                           {sig.isAce && (
                             <Badge className="bg-emerald-600 text-white text-[10px] gap-0.5 px-1 py-0 leading-tight">
                               <ShieldCheck className="h-2.5 w-2.5" />ACE
@@ -787,9 +827,26 @@ export default function AdminSigsPage() {
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {CATEGORIES.map(cat => (
-                        <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                      ))}
+                      <SelectGroup>
+                        <SelectLabel className="text-red-600 dark:text-red-400">Negative (-)</SelectLabel>
+                        {CATEGORIES.filter(c => c.sentiment === "negative").map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel className="text-slate-500">Neutral</SelectLabel>
+                        {CATEGORIES.filter(c => c.sentiment === "neutral").map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel className="text-green-600 dark:text-green-400">Positive (+)</SelectLabel>
+                        {CATEGORIES.filter(c => c.sentiment === "positive").map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                 </div>

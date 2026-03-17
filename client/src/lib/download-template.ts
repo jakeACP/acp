@@ -26,7 +26,7 @@ export const TEMPLATES = {
     ],
     sample: [
       "Example PAC","EPAC","Brief description of the group",
-      "super_pac","finance","https://example.com",
+      "pac_superpac","finance","https://example.com",
       "info@example.com","202-555-0100","Washington, DC","2010",
       "","C00000000","5000000","-10",
       "D","1.0","true","Internal notes here",
