@@ -17,8 +17,21 @@ export function downloadCsv(filename: string, headers: string[], sampleRow?: str
 export const TEMPLATES = {
   sigs: {
     filename: "sigs_template.csv",
-    headers: ["NAME","ACRONYM","DESCRIPTION","CATEGORY","SENTIMENT","TAG","WEBSITE","DATA_SOURCE_NAME","DATA_SOURCE_URL","NOTES"],
-    sample: ["Example PAC","EPAC","Brief description of the group","Super PAC","negative","EXAMPLE_PAC","https://example.com","OpenSecrets","https://opensecrets.org","FEC ID: C00000000"],
+    headers: [
+      "NAME","ACRONYM","DESCRIPTION","CATEGORY","INTEREST","WEBSITE",
+      "CONTACT_EMAIL","CONTACT_PHONE","HEADQUARTERS","FOUNDED_YEAR",
+      "LOGO_URL","FEC_ID","TOTAL_CONTRIBUTIONS","INFLUENCE_SCORE",
+      "LETTER_GRADE","GRADE_WEIGHT","IS_ACTIVE","DISCLOSURE_NOTES",
+      "DATA_SOURCE_NAME","DATA_SOURCE_URL"
+    ],
+    sample: [
+      "Example PAC","EPAC","Brief description of the group",
+      "super_pac","finance","https://example.com",
+      "info@example.com","202-555-0100","Washington, DC","2010",
+      "","C00000000","5000000","-10",
+      "D","1.0","true","Internal notes here",
+      "OpenSecrets","https://opensecrets.org"
+    ],
   },
   politicians: {
     filename: "politicians_template.csv",

@@ -5758,6 +5758,137 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Upload CSV to bulk-create/update SIGs
+  app.post("/api/admin/sigs/upload-csv", ensureAdmin, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const text = req.file.buffer.toString("utf-8").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const lines = text.split("\n").filter(l => l.trim());
+      if (lines.length < 2) return res.status(400).json({ message: "CSV must have a header row and at least one data row" });
+
+      // Parse CSV (handles quoted fields)
+      function parseCsvRow(line: string): string[] {
+        const fields: string[] = [];
+        let cur = "";
+        let inQuote = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
+            else inQuote = !inQuote;
+          } else if (ch === "," && !inQuote) {
+            fields.push(cur.trim()); cur = "";
+          } else {
+            cur += ch;
+          }
+        }
+        fields.push(cur.trim());
+        return fields;
+      }
+
+      const headers = parseCsvRow(lines[0]).map(h => h.toUpperCase().replace(/\s+/g, "_"));
+      const col = (name: string) => headers.indexOf(name);
+
+      const existingSigs = await storage.listSpecialInterestGroups({});
+      const sigsByName: Record<string, string> = {};
+      for (const s of existingSigs) sigsByName[s.name.toLowerCase().trim()] = s.id;
+
+      let created = 0;
+      let updated = 0;
+      let errors = 0;
+      const errorDetails: string[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const vals = parseCsvRow(lines[i]);
+        if (vals.every(v => !v)) continue; // skip blank rows
+        const get = (header: string) => {
+          const idx = col(header);
+          return idx >= 0 ? (vals[idx] ?? "").trim() : "";
+        };
+
+        const name = get("NAME");
+        if (!name) { errors++; errorDetails.push(`Row ${i + 1}: NAME is required`); continue; }
+
+        const influenceRaw = get("INFLUENCE_SCORE");
+        const influenceScore = influenceRaw !== "" ? parseFloat(influenceRaw) : undefined;
+        const foundedRaw = get("FOUNDED_YEAR");
+        const foundedYear = foundedRaw ? parseInt(foundedRaw, 10) : undefined;
+        const contribRaw = get("TOTAL_CONTRIBUTIONS");
+        const totalContributions = contribRaw ? parseInt(contribRaw.replace(/[^0-9]/g, ""), 10) : undefined;
+        const gradeWeightRaw = get("GRADE_WEIGHT");
+        const gradeWeight = gradeWeightRaw ? parseFloat(gradeWeightRaw) : undefined;
+        const isActiveRaw = get("IS_ACTIVE").toLowerCase();
+        const isActive = isActiveRaw === "" ? true : isActiveRaw !== "false" && isActiveRaw !== "0" && isActiveRaw !== "no";
+
+        function computeAutoGrade(score?: number): string {
+          if (score === undefined) return "";
+          if (score >= 40) return "A+";
+          if (score >= 25) return "A";
+          if (score >= 10) return "B";
+          if (score >= 1) return "B-";
+          if (score === 0) return "C";
+          if (score >= -9) return "D+";
+          if (score >= -24) return "D";
+          if (score >= -39) return "F+";
+          return "F";
+        }
+
+        const letterGradeRaw = get("LETTER_GRADE");
+        const letterGrade = letterGradeRaw || (influenceScore !== undefined ? computeAutoGrade(influenceScore) : undefined);
+
+        const patch: Record<string, any> = {
+          name,
+          acronym: get("ACRONYM") || undefined,
+          description: get("DESCRIPTION") || undefined,
+          category: get("CATEGORY") || "other",
+          industry: get("INTEREST") || undefined,
+          website: get("WEBSITE") || undefined,
+          contactEmail: get("CONTACT_EMAIL") || undefined,
+          contactPhone: get("CONTACT_PHONE") || undefined,
+          headquarters: get("HEADQUARTERS") || undefined,
+          foundedYear: !isNaN(foundedYear!) ? foundedYear : undefined,
+          logoUrl: get("LOGO_URL") || undefined,
+          fecId: get("FEC_ID") || undefined,
+          totalContributions: !isNaN(totalContributions!) ? totalContributions : undefined,
+          influenceScore: !isNaN(influenceScore!) ? influenceScore : undefined,
+          letterGrade: letterGrade || undefined,
+          gradeWeight: !isNaN(gradeWeight!) ? gradeWeight : undefined,
+          isActive,
+          disclosureNotes: get("DISCLOSURE_NOTES") || undefined,
+          dataSourceName: get("DATA_SOURCE_NAME") || undefined,
+          dataSourceUrl: get("DATA_SOURCE_URL") || undefined,
+        };
+
+        try {
+          const existingId = sigsByName[name.toLowerCase().trim()];
+          if (existingId) {
+            await storage.updateSpecialInterestGroup(existingId, patch);
+            updated++;
+          } else {
+            await storage.createSpecialInterestGroup(patch as any);
+            created++;
+            sigsByName[name.toLowerCase().trim()] = "new";
+          }
+        } catch (rowErr: any) {
+          errors++;
+          errorDetails.push(`Row ${i + 1} (${name}): ${rowErr.message}`);
+        }
+      }
+
+      res.json({
+        created,
+        updated,
+        errors,
+        errorDetails: errorDetails.slice(0, 10),
+        message: `Imported ${created + updated} SIG(s) — ${created} created, ${updated} updated${errors > 0 ? `, ${errors} errors` : ""}.`,
+      });
+    } catch (error: any) {
+      console.error("CSV upload error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Fix C-number names: if a SIG's name looks like a FEC committee ID (C + 8 digits),
   // copy it to fecId and clear it from name so Update SIGs can fill in the real name.
   app.post("/api/admin/sigs/fix-c-numbers", ensureAdmin, async (req, res) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, ShieldCheck, TrendingDown, TrendingUp, RefreshCw, Sparkles } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, FileUp, ShieldCheck, TrendingDown, TrendingUp, RefreshCw, Sparkles } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 
 function autoGrade(score: number): string {
@@ -107,6 +107,8 @@ export default function AdminSigsPage() {
   const [updateFecResult, setUpdateFecResult] = useState<{ updated: number; skipped: number; total: number } | null>(null);
   const [aiGradeResult, setAiGradeResult] = useState<{ graded: number; errors: number; total: number } | null>(null);
   const [fixCNumbersResult, setFixCNumbersResult] = useState<{ fixed: number; message: string } | null>(null);
+  const [csvUploadResult, setCsvUploadResult] = useState<{ created: number; updated: number; errors: number; message: string } | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
@@ -242,6 +244,31 @@ export default function AdminSigsPage() {
     },
   });
 
+  const uploadCsvMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/sigs/upload-csv", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message);
+      }
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+      setCsvUploadResult({ created: data.created, updated: data.updated, errors: data.errors, message: data.message });
+      toast({ title: "CSV import complete", description: data.message });
+    },
+    onError: (error: any) => {
+      toast({ title: "CSV import failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -347,6 +374,33 @@ export default function AdminSigsPage() {
               <FileDown className="h-4 w-4 mr-2" />
               Download Template
             </Button>
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setCsvUploadResult(null);
+                  uploadCsvMutation.mutate(file);
+                }
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              onClick={() => csvInputRef.current?.click()}
+              disabled={uploadCsvMutation.isPending}
+              title="Upload a CSV to bulk-create or update SIGs"
+            >
+              {uploadCsvMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileUp className="h-4 w-4 mr-2" />
+              )}
+              Upload CSV
+            </Button>
             <Button
               variant="outline"
               onClick={() => { setUpdateFecResult(null); updateSigsMutation.mutate(); }}
@@ -442,6 +496,30 @@ export default function AdminSigsPage() {
               <span className="font-semibold">AI grading complete</span> — <span className="font-semibold text-purple-700 dark:text-purple-300">{aiGradeResult.graded} organizations graded</span> · {aiGradeResult.errors} errors
             </div>
             <button onClick={() => setAiGradeResult(null)} className="text-purple-600 dark:text-purple-400 text-xs underline ml-4">dismiss</button>
+          </div>
+        )}
+
+        {/* CSV Upload progress / result */}
+        {uploadCsvMutation.isPending && (
+          <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-4">
+            <div className="flex items-center gap-2 mb-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Importing SIGs from CSV…
+            </div>
+            <div className="w-full h-2 rounded-full bg-blue-200 dark:bg-blue-800 overflow-hidden">
+              <div className="h-full w-2/5 rounded-full bg-blue-500" style={{ animation: "indeterminate 1.5s ease-in-out infinite" }} />
+            </div>
+          </div>
+        )}
+        {!uploadCsvMutation.isPending && csvUploadResult && (
+          <div className="mb-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 p-4 flex items-center justify-between">
+            <div className="text-sm text-green-800 dark:text-green-200">
+              <span className="font-semibold">CSV import complete</span> —{" "}
+              <span className="font-semibold text-green-700 dark:text-green-300">{csvUploadResult.created} created</span>,{" "}
+              <span className="font-semibold text-green-700 dark:text-green-300">{csvUploadResult.updated} updated</span>
+              {csvUploadResult.errors > 0 && <span className="text-red-600 dark:text-red-400"> · {csvUploadResult.errors} errors</span>}
+            </div>
+            <button onClick={() => setCsvUploadResult(null)} className="text-green-600 dark:text-green-400 text-xs underline ml-4">dismiss</button>
           </div>
         )}
 
