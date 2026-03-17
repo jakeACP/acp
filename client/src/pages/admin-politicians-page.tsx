@@ -379,6 +379,9 @@ export default function AdminPoliticiansPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles", selectedPoliticianForSponsor?.id, "sponsors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles", managingSigsPolitician?.id, "sponsors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sigs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/politician-profiles", selectedPoliticianForSponsor?.id, "sponsors"] });
       toast({ title: "Sponsor linked successfully" });
     },
     onError: (error: any) => {
@@ -393,6 +396,8 @@ export default function AdminPoliticiansPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles", selectedPoliticianForSponsor?.id, "sponsors"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles", managingSigsPolitician?.id, "sponsors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sigs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/politician-profiles", managingSigsPolitician?.id, "sponsors"] });
       toast({ title: "Sponsor unlinked successfully" });
     },
     onError: (error: any) => {

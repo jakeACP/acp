@@ -6138,6 +6138,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Admin: Get sponsors for a politician
+  app.get("/api/admin/politician-profiles/:id/sponsors", ensureAdmin, async (req, res) => {
+    try {
+      const sponsors = await storage.listPoliticianSponsors(req.params.id);
+      res.json(sponsors);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin: Link a sponsor to a politician
   app.post("/api/admin/politician-profiles/:politicianId/sponsors", ensureAdmin, async (req, res) => {
     try {
