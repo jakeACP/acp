@@ -106,6 +106,7 @@ export default function AdminSigsPage() {
   const [findMissingResult, setFindMissingResult] = useState<{ found: number; skipped: number; total: number } | null>(null);
   const [updateFecResult, setUpdateFecResult] = useState<{ updated: number; skipped: number; total: number } | null>(null);
   const [aiGradeResult, setAiGradeResult] = useState<{ graded: number; errors: number; total: number } | null>(null);
+  const [fixCNumbersResult, setFixCNumbersResult] = useState<{ fixed: number; message: string } | null>(null);
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
@@ -229,6 +230,18 @@ export default function AdminSigsPage() {
     },
   });
 
+  const fixCNumbersMutation = useMutation({
+    mutationFn: async () => apiRequest("/api/admin/sigs/fix-c-numbers", "POST"),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+      setFixCNumbersResult({ fixed: data.fixed, message: data.message });
+      toast({ title: `${data.fixed} FEC IDs fixed`, description: data.message });
+    },
+    onError: (error: any) => {
+      toast({ title: "Fix failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -288,7 +301,7 @@ export default function AdminSigsPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <AdminNavigation />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -300,6 +313,19 @@ export default function AdminSigsPage() {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => { setFixCNumbersResult(null); fixCNumbersMutation.mutate(); }}
+              disabled={fixCNumbersMutation.isPending}
+              title="Find SIGs whose name is a raw FEC committee ID (C00000000) and move it to the FEC ID field"
+            >
+              {fixCNumbersMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Fix C-Numbers
+            </Button>
             <Button
               variant="outline"
               onClick={() => { setFindMissingResult(null); findMissingIdsMutation.mutate(); }}
@@ -419,6 +445,16 @@ export default function AdminSigsPage() {
           </div>
         )}
 
+        {/* Fix C-Numbers result */}
+        {!fixCNumbersMutation.isPending && fixCNumbersResult && (
+          <div className="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 flex items-center justify-between">
+            <div className="text-sm text-amber-800 dark:text-amber-200">
+              <span className="font-semibold">C-number fix complete</span> — <span className="font-semibold text-amber-700 dark:text-amber-300">{fixCNumbersResult.fixed} FEC IDs populated</span>. Run "Update SIGs" to pull their real names.
+            </div>
+            <button onClick={() => setFixCNumbersResult(null)} className="text-amber-600 dark:text-amber-400 text-xs underline ml-4">dismiss</button>
+          </div>
+        )}
+
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="flex flex-wrap gap-4">
@@ -475,131 +511,138 @@ export default function AdminSigsPage() {
                 No Special Interest Groups found. Click "Add SIG" to create one.
               </div>
             ) : (
-              <Table>
+              <div className="overflow-x-auto">
+              <Table className="text-xs">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Influence / Grade</TableHead>
-                    <TableHead>Industry</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Total Contributions</TableHead>
-                    <TableHead>FEC ID</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-[220px]">Name</TableHead>
+                    <TableHead className="w-[130px]">Category</TableHead>
+                    <TableHead className="w-[120px]">Grade</TableHead>
+                    <TableHead className="w-[110px]">Interest</TableHead>
+                    <TableHead className="w-[160px]">Location</TableHead>
+                    <TableHead className="w-[110px]">Contributions</TableHead>
+                    <TableHead className="w-[100px]">FEC ID</TableHead>
+                    <TableHead className="w-[68px]">Status</TableHead>
+                    <TableHead className="text-right w-[130px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sigs.map((sig) => (
-                    <TableRow key={sig.id} data-testid={`row-sig-${sig.id}`}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          {sig.logoUrl ? (
-                            <img src={sig.logoUrl} alt="" className="w-8 h-8 rounded object-cover" />
-                          ) : (
-                            <div className="w-8 h-8 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                              <Building2 className="h-4 w-4 text-slate-400" />
-                            </div>
+                    <TableRow key={sig.id} data-testid={`row-sig-${sig.id}`} className="h-9">
+                      <TableCell className="py-1.5">
+                        <div>
+                          <div className="font-medium leading-tight truncate max-w-[210px]" title={sig.name}>{sig.name}</div>
+                          {sig.acronym && (
+                            <div className="text-slate-400 leading-tight">({sig.acronym})</div>
                           )}
-                          <div>
-                            <div className="font-medium">{sig.name}</div>
-                            {sig.acronym && (
-                              <div className="text-sm text-slate-500">({sig.acronym})</div>
-                            )}
-                          </div>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <Badge variant="outline">{getCategoryLabel(sig.category)}</Badge>
+                      <TableCell className="py-1.5">
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 leading-tight">{getCategoryLabel(sig.category)}</Badge>
                           {sig.isAce && (
-                            <Badge className="bg-emerald-600 text-white text-xs gap-1 px-1.5">
-                              <ShieldCheck className="h-3 w-3" />ACE
+                            <Badge className="bg-emerald-600 text-white text-[10px] gap-0.5 px-1 py-0 leading-tight">
+                              <ShieldCheck className="h-2.5 w-2.5" />ACE
                             </Badge>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-1.5">
                         {sig.influenceScore !== null && sig.influenceScore !== undefined ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-2 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500 relative">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-12 h-1.5 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500 relative shrink-0">
                               <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: "50%" }} />
                               <div className="absolute top-0 h-full w-1 bg-white shadow-sm"
                                 style={{ left: `calc(${((sig.influenceScore + 50) / 100) * 100}% - 2px)` }} />
                             </div>
-                            <span className="text-xs text-slate-500">{sig.influenceScore > 0 ? "+" : ""}{sig.influenceScore}</span>
-                            <span className={`text-xs ${gradeColor(sig.letterGrade || autoGrade(sig.influenceScore))}`}>
+                            <span className="text-slate-400">{sig.influenceScore > 0 ? "+" : ""}{sig.influenceScore}</span>
+                            <span className={gradeColor(sig.letterGrade || autoGrade(sig.influenceScore))}>
                               {sig.letterGrade || autoGrade(sig.influenceScore)}
                             </span>
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                          <span className="text-slate-400">—</span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        {sig.industry ? getIndustryLabel(sig.industry) : "-"}
+                      <TableCell className="py-1.5 text-slate-600 dark:text-slate-400">
+                        {sig.industry ? getIndustryLabel(sig.industry) : <span className="text-slate-300">—</span>}
                       </TableCell>
-                      <TableCell>{sig.headquarters || "-"}</TableCell>
-                      <TableCell>
-                        {sig.totalContributions != null
-                          ? `$${sig.totalContributions.toLocaleString()}`
-                          : "-"}
+                      <TableCell className="py-1.5 text-slate-600 dark:text-slate-400 truncate max-w-[160px]" title={sig.headquarters || ""}>
+                        {sig.headquarters || <span className="text-slate-300">—</span>}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-1.5">
+                        {sig.totalContributions != null && sig.totalContributions > 0
+                          ? <span className="text-green-700 dark:text-green-400 font-medium">
+                              {sig.totalContributions >= 1_000_000
+                                ? `$${(sig.totalContributions / 1_000_000).toFixed(1)}M`
+                                : sig.totalContributions >= 1_000
+                                  ? `$${Math.round(sig.totalContributions / 1_000)}K`
+                                  : `$${sig.totalContributions.toLocaleString()}`}
+                            </span>
+                          : <span className="text-slate-300">—</span>}
+                      </TableCell>
+                      <TableCell className="py-1.5">
                         {sig.fecId ? (
                           <a
                             href={`https://www.fec.gov/data/committee/${sig.fecId}/`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs flex items-center gap-1"
+                            className="text-blue-600 dark:text-blue-400 hover:underline font-mono flex items-center gap-0.5"
                           >
                             {sig.fecId}
-                            <ExternalLink className="h-3 w-3 inline-block" />
+                            <ExternalLink className="h-2.5 w-2.5 shrink-0" />
                           </a>
-                        ) : "-"}
+                        ) : <span className="text-slate-300">—</span>}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={sig.isActive ? "default" : "secondary"}>
+                      <TableCell className="py-1.5">
+                        <Badge variant={sig.isActive ? "default" : "secondary"} className="text-[10px] px-1 py-0">
                           {sig.isActive ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                      <TableCell className="py-1.5 text-right">
+                        <div className="flex justify-end gap-0.5">
                           {sig.fecId && (
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-7 w-7"
                               title="Fetch data from FEC"
                               disabled={fetchingFecId === sig.id}
                               onClick={() => fetchFecMutation.mutate(sig.id)}
                               data-testid={`btn-fetch-fec-${sig.id}`}
                             >
                               {fetchingFecId === sig.id
-                                ? <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                                : <RefreshCw className="h-4 w-4 text-blue-500" />}
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                                : <RefreshCw className="h-3.5 w-3.5 text-blue-500" />}
                             </Button>
                           )}
                           {sig.website && (
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-7 w-7"
+                              title="Visit website"
                               onClick={() => window.open(sig.website, "_blank")}
                               data-testid={`btn-website-${sig.id}`}
                             >
-                              <ExternalLink className="h-4 w-4" />
+                              <ExternalLink className="h-3.5 w-3.5" />
                             </Button>
                           )}
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-7 w-7"
+                            title="Edit"
                             onClick={() => openEditDialog(sig)}
                             data-testid={`btn-edit-${sig.id}`}
                           >
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-7 w-7"
+                            title="Delete"
                             onClick={() => {
                               if (confirm(`Delete "${sig.name}"? This will also remove all sponsorship links.`)) {
                                 deleteSigMutation.mutate(sig.id);
@@ -607,7 +650,7 @@ export default function AdminSigsPage() {
                             }}
                             data-testid={`btn-delete-${sig.id}`}
                           >
-                            <Trash2 className="h-4 w-4 text-red-500" />
+                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
                           </Button>
                         </div>
                       </TableCell>
@@ -615,6 +658,7 @@ export default function AdminSigsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

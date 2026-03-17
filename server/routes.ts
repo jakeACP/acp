@@ -5758,6 +5758,41 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Fix C-number names: if a SIG's name looks like a FEC committee ID (C + 8 digits),
+  // copy it to fecId and clear it from name so Update SIGs can fill in the real name.
+  app.post("/api/admin/sigs/fix-c-numbers", ensureAdmin, async (req, res) => {
+    try {
+      const allSigs = await storage.listSpecialInterestGroups({});
+      const FEC_ID_RE = /^C\d{8}$/i;
+      let fixed = 0;
+      const fixedNames: string[] = [];
+
+      for (const sig of allSigs) {
+        const trimmed = sig.name?.trim() ?? "";
+        if (FEC_ID_RE.test(trimmed)) {
+          const committeeId = trimmed.toUpperCase();
+          const patch: Record<string, any> = { fecId: committeeId };
+          // Only overwrite name if it still looks like a raw ID (don't overwrite a real name)
+          if (!sig.fecId) {
+            // name is the raw ID — leave name as-is so Update SIGs will replace it
+          }
+          await storage.updateSpecialInterestGroup(sig.id, patch);
+          fixedNames.push(committeeId);
+          fixed++;
+        }
+      }
+
+      res.json({
+        fixed,
+        ids: fixedNames,
+        message: `Found ${fixed} SIG(s) with a raw FEC committee ID as their name — FEC ID field populated. Run "Update SIGs" to fetch their real names.`,
+      });
+    } catch (error: any) {
+      console.error("Fix C-numbers error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Get a single SIG
   app.get("/api/admin/sigs/:id", ensureAdmin, async (req, res) => {
     try {
