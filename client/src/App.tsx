@@ -67,8 +67,6 @@ import ArticlePage from "@/pages/article-page";
 import PublicLandingPage from "@/pages/public-landing-page";
 import PublicArticlePage from "@/pages/public-article-page";
 import NotFound from "@/pages/not-found";
-import { AlertTriangle, X } from "lucide-react";
-import { useState } from "react";
 import { useScrollLight } from "./hooks/useScrollLight";
 import { useAuth } from "./hooks/use-auth";
 import { Loader2 } from "lucide-react";
@@ -197,27 +195,6 @@ function Router() {
   );
 }
 
-function BetaBanner() {
-  const [dismissed, setDismissed] = useState(false);
-  if (dismissed) return null;
-  return (
-    <div className="bg-amber-500 dark:bg-amber-600 text-white py-1 px-4 text-center text-xs sticky bottom-0 z-[100]">
-      <div className="flex items-center justify-center gap-1.5 max-w-7xl mx-auto relative">
-        <AlertTriangle className="h-3 w-3 shrink-0" />
-        <span>
-          <strong>Beta Testing Mode:</strong> Data and users may be wiped when the final version is published. &copy; Copyright 2026
-        </span>
-        <button
-          onClick={() => setDismissed(true)}
-          className="absolute right-0 p-0.5 rounded hover:bg-white/20 transition-colors"
-          aria-label="Dismiss"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function AppContent() {
   const [location] = useLocation();
@@ -241,7 +218,6 @@ function AppContent() {
       <ErrorBoundary>
         <Router />
       </ErrorBoundary>
-      <BetaBanner />
     </>
   );
 }
