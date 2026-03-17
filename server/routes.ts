@@ -6049,7 +6049,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         fecId: z.string().optional().nullable(),
         contactPhone: z.string().optional().nullable(),
       }).parse(req.body);
-      const data = { ...rawData, isAce: rawData.category === 'Anti-Corruption Endorsement' };
+      const data = { ...rawData, isAce: rawData.category === 'ace_endorsement' };
 
       const sig = await storage.createSpecialInterestGroup(data);
       res.status(201).json(sig);
@@ -6087,7 +6087,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       }).parse(req.body);
       const data = {
         ...rawData,
-        ...(rawData.category !== undefined ? { isAce: rawData.category === 'Anti-Corruption Endorsement' } : {}),
+        ...(rawData.category !== undefined ? { isAce: rawData.category === 'ace_endorsement' } : {}),
       };
 
       const sig = await storage.updateSpecialInterestGroup(req.params.id, data);
