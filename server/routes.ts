@@ -5889,6 +5889,25 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Bulk update multiple SIGs
+  app.patch("/api/admin/sigs/bulk", ensureAdmin, async (req, res) => {
+    try {
+      const { ids, patch } = req.body as { ids: string[]; patch: Record<string, any> };
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "No SIG IDs provided" });
+      if (!patch || Object.keys(patch).length === 0) return res.status(400).json({ message: "No fields to update" });
+      let updated = 0;
+      for (const id of ids) {
+        try {
+          await storage.updateSpecialInterestGroup(id, patch);
+          updated++;
+        } catch { /* skip individual failures */ }
+      }
+      res.json({ updated, total: ids.length, message: `Updated ${updated} of ${ids.length} SIG(s).` });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Fix C-number names: if a SIG's name looks like a FEC committee ID (C + 8 digits),
   // copy it to fecId and clear it from name so Update SIGs can fill in the real name.
   app.post("/api/admin/sigs/fix-c-numbers", ensureAdmin, async (req, res) => {

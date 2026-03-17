@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,8 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, FileUp, ShieldCheck, TrendingDown, TrendingUp, RefreshCw, Sparkles } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, FileUp, ShieldCheck, TrendingDown, TrendingUp, RefreshCw, Sparkles, ChevronUp, ChevronDown, ChevronsUpDown, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 
 function autoGrade(score: number): string {
@@ -120,6 +121,12 @@ export default function AdminSigsPage() {
   const [fixCNumbersResult, setFixCNumbersResult] = useState<{ fixed: number; message: string } | null>(null);
   const [csvUploadResult, setCsvUploadResult] = useState<{ created: number; updated: number; errors: number; message: string } | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<string>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [bulkField, setBulkField] = useState<string>("");
+  const [bulkValue, setBulkValue] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
@@ -279,6 +286,85 @@ export default function AdminSigsPage() {
       toast({ title: "CSV import failed", description: error.message, variant: "destructive" });
     },
   });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ ids, patch }: { ids: string[]; patch: Record<string, any> }) => {
+      return await apiRequest("/api/admin/sigs/bulk", "PATCH", { ids, patch });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+      setSelectedIds(new Set());
+      setBulkField("");
+      setBulkValue("");
+      toast({ title: "Bulk update complete", description: data.message });
+    },
+    onError: (error: any) => {
+      toast({ title: "Bulk update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const displayedSigs = useMemo(() => {
+    let list = [...sigs];
+    if (statusFilter === "active") list = list.filter(s => s.isActive);
+    else if (statusFilter === "inactive") list = list.filter(s => !s.isActive);
+    else if (statusFilter === "graded") list = list.filter(s => s.influenceScore !== null && s.influenceScore !== undefined);
+    else if (statusFilter === "ungraded") list = list.filter(s => s.influenceScore === null || s.influenceScore === undefined);
+    else if (statusFilter === "has_fec") list = list.filter(s => !!s.fecId);
+    else if (statusFilter === "no_fec") list = list.filter(s => !s.fecId);
+    list.sort((a, b) => {
+      let av: any, bv: any;
+      if (sortField === "name") { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+      else if (sortField === "category") { av = a.category; bv = b.category; }
+      else if (sortField === "industry") { av = a.industry ?? ""; bv = b.industry ?? ""; }
+      else if (sortField === "grade") { av = a.influenceScore ?? -999; bv = b.influenceScore ?? -999; }
+      else if (sortField === "contributions") { av = a.totalContributions ?? 0; bv = b.totalContributions ?? 0; }
+      else if (sortField === "fecId") { av = a.fecId ?? ""; bv = b.fecId ?? ""; }
+      else { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [sigs, statusFilter, sortField, sortDir]);
+
+  const allSelected = displayedSigs.length > 0 && displayedSigs.every(s => selectedIds.has(s.id));
+  const someSelected = displayedSigs.some(s => selectedIds.has(s.id)) && !allSelected;
+
+  const toggleSelectAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(displayedSigs.map(s => s.id)));
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSort = (field: string) => {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("asc"); }
+  };
+
+  const handleBulkApply = () => {
+    if (!bulkField || !bulkValue || selectedIds.size === 0) return;
+    const patch: Record<string, any> = {};
+    if (bulkField === "category") patch.category = bulkValue;
+    else if (bulkField === "industry") patch.industry = bulkValue;
+    else if (bulkField === "isActive") patch.isActive = bulkValue === "true";
+    else if (bulkField === "letterGrade") patch.letterGrade = bulkValue === "auto" ? null : bulkValue;
+    else if (bulkField === "influenceScore") { const n = parseInt(bulkValue); if (!isNaN(n)) patch.influenceScore = n; }
+    bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), patch });
+  };
+
+  const SortBtn = ({ field, label }: { field: string; label: string }) => (
+    <button onClick={() => toggleSort(field)} className="flex items-center gap-0.5 hover:text-slate-900 dark:hover:text-white whitespace-nowrap">
+      {label}
+      {sortField === field ? (sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ChevronsUpDown className="h-3 w-3 opacity-30" />}
+    </button>
+  );
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -610,6 +696,23 @@ export default function AdminSigsPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Records</SelectItem>
+                  <SelectSeparator />
+                  <SelectItem value="active">Active Only</SelectItem>
+                  <SelectItem value="inactive">Inactive Only</SelectItem>
+                  <SelectSeparator />
+                  <SelectItem value="graded">Has Grade</SelectItem>
+                  <SelectItem value="ungraded">No Grade</SelectItem>
+                  <SelectSeparator />
+                  <SelectItem value="has_fec">Has FEC ID</SelectItem>
+                  <SelectItem value="no_fec">No FEC ID</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -618,7 +721,8 @@ export default function AdminSigsPage() {
           <CardHeader>
             <CardTitle>Organizations</CardTitle>
             <CardDescription>
-              {sigs.length} Special Interest Group{sigs.length !== 1 ? "s" : ""} found
+              {displayedSigs.length} of {sigs.length} Special Interest Group{sigs.length !== 1 ? "s" : ""}
+              {selectedIds.size > 0 && <span className="ml-2 text-blue-600 dark:text-blue-400 font-medium">· {selectedIds.size} selected</span>}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -629,27 +733,126 @@ export default function AdminSigsPage() {
                 No Special Interest Groups found. Click "Add SIG" to create one.
               </div>
             ) : (
+              <>
+              {/* Bulk action toolbar */}
+              {selectedIds.size > 0 && (
+                <div className="mb-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-2.5 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-300 shrink-0">
+                    {selectedIds.size} selected — Set
+                  </span>
+                  <Select value={bulkField} onValueChange={(v) => { setBulkField(v); setBulkValue(""); }}>
+                    <SelectTrigger className="h-7 text-xs w-[148px]">
+                      <SelectValue placeholder="choose field…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="category">Category</SelectItem>
+                      <SelectItem value="industry">Interest</SelectItem>
+                      <SelectItem value="isActive">Status</SelectItem>
+                      <SelectItem value="letterGrade">Letter Grade</SelectItem>
+                      <SelectItem value="influenceScore">Influence Score</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-blue-600 dark:text-blue-400 shrink-0">to</span>
+                  {bulkField === "category" && (
+                    <Select value={bulkValue} onValueChange={setBulkValue}>
+                      <SelectTrigger className="h-7 text-xs w-[190px]"><SelectValue placeholder="choose value…" /></SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {bulkField === "industry" && (
+                    <Select value={bulkValue} onValueChange={setBulkValue}>
+                      <SelectTrigger className="h-7 text-xs w-[180px]"><SelectValue placeholder="choose value…" /></SelectTrigger>
+                      <SelectContent>
+                        {INDUSTRIES.map(i => <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {bulkField === "isActive" && (
+                    <Select value={bulkValue} onValueChange={setBulkValue}>
+                      <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue placeholder="choose…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">Active</SelectItem>
+                        <SelectItem value="false">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {bulkField === "letterGrade" && (
+                    <Select value={bulkValue} onValueChange={setBulkValue}>
+                      <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue placeholder="choose…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto (clear override)</SelectItem>
+                        {["A+","A","B","B-","C","D+","D","F+","F"].map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {bulkField === "influenceScore" && (
+                    <Input
+                      type="number"
+                      min={-50} max={50}
+                      placeholder="-50 to +50"
+                      value={bulkValue}
+                      onChange={e => setBulkValue(e.target.value)}
+                      className="h-7 text-xs w-[110px]"
+                    />
+                  )}
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs px-3"
+                    disabled={!bulkField || !bulkValue || bulkUpdateMutation.isPending}
+                    onClick={handleBulkApply}
+                  >
+                    {bulkUpdateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                    Apply
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs px-2 text-blue-600 dark:text-blue-400"
+                    onClick={() => setSelectedIds(new Set())}
+                  >
+                    <X className="h-3 w-3 mr-1" />Clear
+                  </Button>
+                </div>
+              )}
               <div className="overflow-x-auto">
               <Table className="text-xs">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[220px]">Name</TableHead>
-                    <TableHead className="w-[130px]">Category</TableHead>
-                    <TableHead className="w-[120px]">Grade</TableHead>
-                    <TableHead className="w-[110px]">Interest</TableHead>
+                    <TableHead className="w-8 pr-0">
+                      <Checkbox
+                        checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Select all"
+                        className="h-3.5 w-3.5"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[210px]"><SortBtn field="name" label="Name" /></TableHead>
+                    <TableHead className="w-[130px]"><SortBtn field="category" label="Category" /></TableHead>
+                    <TableHead className="w-[120px]"><SortBtn field="grade" label="Grade" /></TableHead>
+                    <TableHead className="w-[110px]"><SortBtn field="industry" label="Interest" /></TableHead>
                     <TableHead className="w-[160px]">Location</TableHead>
-                    <TableHead className="w-[110px]">Contributions</TableHead>
-                    <TableHead className="w-[100px]">FEC ID</TableHead>
+                    <TableHead className="w-[110px]"><SortBtn field="contributions" label="Contributions" /></TableHead>
+                    <TableHead className="w-[100px]"><SortBtn field="fecId" label="FEC ID" /></TableHead>
                     <TableHead className="w-[68px]">Status</TableHead>
                     <TableHead className="text-right w-[130px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sigs.map((sig) => (
-                    <TableRow key={sig.id} data-testid={`row-sig-${sig.id}`} className="h-9">
+                  {displayedSigs.map((sig) => (
+                    <TableRow key={sig.id} data-testid={`row-sig-${sig.id}`} className={`h-9 ${selectedIds.has(sig.id) ? "bg-blue-50 dark:bg-blue-950/40" : ""}`}>
+                      <TableCell className="py-1.5 pr-0 w-8">
+                        <Checkbox
+                          checked={selectedIds.has(sig.id)}
+                          onCheckedChange={() => toggleSelect(sig.id)}
+                          aria-label={`Select ${sig.name}`}
+                          className="h-3.5 w-3.5"
+                        />
+                      </TableCell>
                       <TableCell className="py-1.5">
                         <div>
-                          <div className="font-medium leading-tight truncate max-w-[210px]" title={sig.name}>{sig.name}</div>
+                          <div className="font-medium leading-tight truncate max-w-[200px]" title={sig.name}>{sig.name}</div>
                           {sig.acronym && (
                             <div className="text-slate-400 leading-tight">({sig.acronym})</div>
                           )}
@@ -779,6 +982,7 @@ export default function AdminSigsPage() {
                 </TableBody>
               </Table>
               </div>
+              </>
             )}
           </CardContent>
         </Card>
