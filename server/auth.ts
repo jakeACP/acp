@@ -47,7 +47,7 @@ const scryptAsync = promisify(scrypt);
 
 // Rate limiters for security - prevents brute force attacks
 const loginLimiter = new RateLimiterMemory({
-  points: 5, // 5 attempts
+  points: 20, // 20 attempts
   duration: 60 * 15, // per 15 minutes
   blockDuration: 60 * 15, // block for 15 minutes if exceeded
 });
