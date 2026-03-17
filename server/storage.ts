@@ -654,7 +654,35 @@ export class DatabaseStorage implements IStorage {
       for (const [table, col] of nullableFks) {
         await client.query(`UPDATE ${table} SET ${col} = NULL WHERE ${col} = $1`, [userId]);
       }
-      const tables = [
+      // ── Channels created by user: cascade-delete members & messages first ──
+      await client.query(`DELETE FROM channel_messages WHERE channel_id IN (SELECT id FROM channels WHERE created_by = $1)`, [userId]);
+      await client.query(`DELETE FROM channel_members WHERE channel_id IN (SELECT id FROM channels WHERE created_by = $1)`, [userId]);
+
+      // ── Groups created by user: cascade-delete channels (with their members/messages), group_members, and boycotts ──
+      await client.query(`DELETE FROM channel_messages WHERE channel_id IN (SELECT id FROM channels WHERE group_id IN (SELECT id FROM groups WHERE created_by = $1))`, [userId]);
+      await client.query(`DELETE FROM channel_members WHERE channel_id IN (SELECT id FROM channels WHERE group_id IN (SELECT id FROM groups WHERE created_by = $1))`, [userId]);
+      await client.query(`DELETE FROM channels WHERE group_id IN (SELECT id FROM groups WHERE created_by = $1)`, [userId]);
+      await client.query(`DELETE FROM group_members WHERE group_id IN (SELECT id FROM groups WHERE created_by = $1)`, [userId]);
+      await client.query(`DELETE FROM boycotts WHERE group_id IN (SELECT id FROM groups WHERE created_by = $1)`, [userId]);
+
+      // ── Boycotts created by user: delete subscriptions first ──
+      await client.query(`DELETE FROM boycott_subscriptions WHERE boycott_id IN (SELECT id FROM boycotts WHERE creator_id = $1)`, [userId]);
+
+      // ── Posts by user: NULL out shared_post_id references, delete comments & reactions ──
+      await client.query(`UPDATE posts SET shared_post_id = NULL WHERE shared_post_id IN (SELECT id FROM posts WHERE author_id = $1)`, [userId]);
+      await client.query(`DELETE FROM comments WHERE post_id IN (SELECT id FROM posts WHERE author_id = $1)`, [userId]);
+      await client.query(`DELETE FROM reactions WHERE post_id IN (SELECT id FROM posts WHERE author_id = $1)`, [userId]);
+      await client.query(`DELETE FROM likes WHERE post_id IN (SELECT id FROM posts WHERE author_id = $1)`, [userId]);
+
+      // ── user_referrals references invitations.id — must be cleared before invitations ──
+      await client.query(`DELETE FROM user_referrals WHERE invitation_id IN (SELECT id FROM invitations WHERE invited_by = $1 OR used_by = $1)`, [userId]);
+
+      // ── Simple per-user deletes (ordered: children before parents) ──
+      const tables: [string, string][] = [
+        ["user_referrals", "referrer_id"],
+        ["user_referrals", "referred_user_id"],
+        ["invitations", "invited_by"],
+        ["invitations", "used_by"],
         ["acp_wallets", "user_id"],
         ["audit_logs", "actor_id"],
         ["banned_users", "user_id"],
@@ -687,8 +715,6 @@ export class DatabaseStorage implements IStorage {
         ["groups", "created_by"],
         ["initiative_versions", "author_id"],
         ["initiatives", "created_by"],
-        ["invitations", "invited_by"],
-        ["invitations", "used_by"],
         ["likes", "user_id"],
         ["live_stream_viewers", "user_id"],
         ["live_streams", "owner_id"],
@@ -727,8 +753,6 @@ export class DatabaseStorage implements IStorage {
         ["user_contacts", "matched_user_id"],
         ["user_follows", "follower_id"],
         ["user_follows", "followee_id"],
-        ["user_referrals", "referrer_id"],
-        ["user_referrals", "referred_user_id"],
         ["validation_events", "actor_id"],
         ["volunteer_signups", "user_id"],
         ["voter_verification_requests", "user_id"],
