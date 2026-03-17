@@ -5526,6 +5526,180 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Update all SIGs that have a fecId with fresh data from the FEC API
+  app.post("/api/admin/sigs/update-from-fec", ensureAdmin, async (req, res) => {
+    try {
+      const fecKey = process.env.FEC_API_KEY;
+      if (!fecKey) return res.status(400).json({ message: "FEC_API_KEY not configured" });
+
+      const allSigs = await storage.listSpecialInterestGroups({});
+      const withFecId = allSigs.filter(s => s.fecId);
+
+      let updated = 0;
+      let skipped = 0;
+
+      function makeAcronym(name: string): string {
+        return name.split(/\s+/).map(w => w[0]?.toUpperCase() ?? "").join("");
+      }
+
+      for (const sig of withFecId) {
+        await new Promise(r => setTimeout(r, 250));
+        try {
+          const fecId = sig.fecId!.trim().toUpperCase();
+
+          // Fetch committee details
+          const commRes = await fetch(
+            `https://api.open.fec.gov/v1/committee/${encodeURIComponent(fecId)}/?api_key=${fecKey}`,
+            { headers: { Accept: "application/json" } }
+          );
+          if (!commRes.ok) { skipped++; continue; }
+          const commData = await commRes.json();
+          const comm = commData.result || {};
+
+          // Fetch financial totals (latest cycle)
+          const totalsRes = await fetch(
+            `https://api.open.fec.gov/v1/committee/${encodeURIComponent(fecId)}/totals/?api_key=${fecKey}&per_page=1&sort=-cycle`,
+            { headers: { Accept: "application/json" } }
+          );
+          let totalReceipts: number | null = null;
+          if (totalsRes.ok) {
+            const totalsData = await totalsRes.json();
+            const latest = totalsData.results?.[0];
+            if (latest) totalReceipts = Math.round(latest.total_receipts ?? latest.total_contributions ?? 0);
+          }
+
+          const patch: Record<string, any> = {
+            dataSourceName: "FEC",
+            dataSourceUrl: `https://www.fec.gov/data/committee/${fecId}/`,
+          };
+
+          if (comm.name) {
+            patch.name = comm.name;
+            patch.acronym = makeAcronym(comm.name);
+          }
+          if (comm.website) {
+            patch.website = comm.website.startsWith("http") ? comm.website : `https://${comm.website}`;
+          }
+
+          // Mailing address
+          const parts: string[] = [];
+          if (comm.city) parts.push(comm.city);
+          if (comm.state) parts.push(comm.state);
+          if (comm.zip_code) parts.push(comm.zip_code);
+          if (parts.length > 0) patch.headquarters = parts.join(", ");
+
+          // Founded year from first_file_date
+          if (comm.first_file_date) {
+            const year = parseInt(comm.first_file_date.substring(0, 4), 10);
+            if (!isNaN(year)) patch.foundedYear = year;
+          }
+
+          // Contact phone (treasurer's phone)
+          if (comm.treasurer_phone) patch.contactPhone = comm.treasurer_phone;
+
+          // Total contributions
+          if (totalReceipts !== null) patch.totalContributions = totalReceipts;
+
+          await storage.updateSpecialInterestGroup(sig.id, patch);
+          updated++;
+        } catch {
+          skipped++;
+        }
+      }
+
+      res.json({
+        total: withFecId.length,
+        updated,
+        skipped,
+        message: `Updated ${updated} of ${withFecId.length} SIGs from FEC data.`,
+      });
+    } catch (error: any) {
+      console.error("Update SIGs from FEC error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // AI-grade all SIGs using OpenAI (influence score -50 to +50)
+  app.post("/api/admin/sigs/ai-grade", ensureAdmin, async (req, res) => {
+    try {
+      if (!process.env.OPENAI_API_KEY) return res.status(400).json({ message: "OPENAI_API_KEY not configured" });
+
+      const allSigs = await storage.listSpecialInterestGroups({});
+      // Only grade SIGs that don't already have a score (unless force=true)
+      const force = req.body?.force === true;
+      const toGrade = force ? allSigs : allSigs.filter(s => s.influenceScore === null || s.influenceScore === undefined);
+
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      function scoreToGrade(score: number): string {
+        if (score >= 40) return "A+";
+        if (score >= 25) return "A";
+        if (score >= 10) return "B";
+        if (score >= 1) return "B-";
+        if (score === 0) return "C";
+        if (score >= -9) return "D+";
+        if (score >= -24) return "D";
+        if (score >= -39) return "F+";
+        return "F";
+      }
+
+      let graded = 0;
+      let errors = 0;
+
+      // Process in batches of 10
+      for (let i = 0; i < toGrade.length; i += 10) {
+        const batch = toGrade.slice(i, i + 10);
+        const items = batch.map(s => ({ id: s.id, name: s.name, category: s.category, description: s.description ?? "" }));
+
+        try {
+          const resp = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            temperature: 0.3,
+            messages: [
+              {
+                role: "system",
+                content: `You are an objective political analyst rating organizations from the perspective of a neutral, uninterested American voter who values fairness, democracy, and anti-corruption. Score each organization on a scale from -50 (severely corrupting to democracy, self-serving, opaque) to +50 (very positive for democracy, transparent, pro-citizen). Score 0 for truly neutral groups. Return ONLY a JSON array: [{"id":"...","score":0}]`,
+              },
+              {
+                role: "user",
+                content: `Rate these organizations:\n${JSON.stringify(items, null, 2)}`,
+              },
+            ],
+          });
+
+          const raw = resp.choices[0]?.message?.content?.trim() ?? "[]";
+          const jsonStr = raw.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "");
+          const ratings: { id: string; score: number }[] = JSON.parse(jsonStr);
+
+          for (const r of ratings) {
+            const score = Math.max(-50, Math.min(50, Math.round(r.score)));
+            await storage.updateSpecialInterestGroup(r.id, {
+              influenceScore: score,
+              letterGrade: scoreToGrade(score),
+            });
+            graded++;
+          }
+        } catch (batchErr: any) {
+          console.error("AI grade batch error:", batchErr.message);
+          errors += batch.length;
+        }
+
+        await new Promise(r => setTimeout(r, 500)); // rate limit
+      }
+
+      res.json({
+        total: toGrade.length,
+        graded,
+        errors,
+        message: `AI-graded ${graded} of ${toGrade.length} organizations.`,
+      });
+    } catch (error: any) {
+      console.error("AI grade SIGs error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Find and assign missing FEC committee IDs by searching FEC API by name
   app.post("/api/admin/sigs/find-missing-fec-ids", ensureAdmin, async (req, res) => {
     try {
@@ -5671,6 +5845,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         isActive: z.boolean().optional(),
         totalContributions: z.number().int().nonnegative().optional().nullable(),
         fecId: z.string().optional().nullable(),
+        contactPhone: z.string().optional().nullable(),
       }).parse(req.body);
       const data = { ...rawData, isAce: rawData.category === 'Anti-Corruption Endorsement' };
 
@@ -5706,6 +5881,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         isActive: z.boolean().optional(),
         totalContributions: z.number().int().nonnegative().optional().nullable(),
         fecId: z.string().optional().nullable(),
+        contactPhone: z.string().optional().nullable(),
       }).parse(req.body);
       const data = {
         ...rawData,

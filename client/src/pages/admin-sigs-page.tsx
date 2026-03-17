@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, ShieldCheck, TrendingDown, TrendingUp, RefreshCw } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, ShieldCheck, TrendingDown, TrendingUp, RefreshCw, Sparkles } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 
 function autoGrade(score: number): string {
@@ -59,6 +59,7 @@ type SpecialInterestGroup = {
   isActive: boolean;
   totalContributions?: number | null;
   fecId?: string | null;
+  contactPhone?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -103,6 +104,8 @@ export default function AdminSigsPage() {
   const [gradeOverride, setGradeOverride] = useState<string>("auto");
   const [fetchingFecId, setFetchingFecId] = useState<string | null>(null);
   const [findMissingResult, setFindMissingResult] = useState<{ found: number; skipped: number; total: number } | null>(null);
+  const [updateFecResult, setUpdateFecResult] = useState<{ updated: number; skipped: number; total: number } | null>(null);
+  const [aiGradeResult, setAiGradeResult] = useState<{ graded: number; errors: number; total: number } | null>(null);
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
@@ -202,6 +205,30 @@ export default function AdminSigsPage() {
     },
   });
 
+  const updateSigsMutation = useMutation({
+    mutationFn: async () => apiRequest("/api/admin/sigs/update-from-fec", "POST"),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+      setUpdateFecResult({ updated: data.updated, skipped: data.skipped, total: data.total });
+      toast({ title: "SIGs updated from FEC", description: data.message });
+    },
+    onError: (error: any) => {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const aiGradeMutation = useMutation({
+    mutationFn: async () => apiRequest("/api/admin/sigs/ai-grade", "POST"),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+      setAiGradeResult({ graded: data.graded, errors: data.errors, total: data.total });
+      toast({ title: "AI grading complete", description: data.message });
+    },
+    onError: (error: any) => {
+      toast({ title: "AI grading failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -225,6 +252,7 @@ export default function AdminSigsPage() {
       isActive: formData.get("isActive") === "on",
       totalContributions: formData.get("totalContributions") ? parseInt(formData.get("totalContributions") as string) : undefined,
       fecId: formData.get("fecId") as string || undefined,
+      contactPhone: formData.get("contactPhone") as string || undefined,
     };
 
     if (editingSig) {
@@ -295,16 +323,29 @@ export default function AdminSigsPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => seedXlsxMutation.mutate()}
-              disabled={seedXlsxMutation.isPending}
-              title="Seed all 62 SIGs from the XLSX database"
+              onClick={() => { setUpdateFecResult(null); updateSigsMutation.mutate(); }}
+              disabled={updateSigsMutation.isPending}
+              title="Pull fresh name, address, phone, website, and contributions from FEC for all SIGs with an ID"
             >
-              {seedXlsxMutation.isPending ? (
+              {updateSigsMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Database className="h-4 w-4 mr-2" />
               )}
-              Seed 62 SIGs
+              Update SIGs
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => { setAiGradeResult(null); aiGradeMutation.mutate(); }}
+              disabled={aiGradeMutation.isPending}
+              title="Use AI to assign an initial influence score (-50 to +50) to ungraded SIGs"
+            >
+              {aiGradeMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              AI Grade PACs
             </Button>
             <Button onClick={openCreateDialog} data-testid="btn-create-sig">
               <Plus className="h-4 w-4 mr-2" />
@@ -333,6 +374,48 @@ export default function AdminSigsPage() {
               <span className="font-semibold">Scan complete</span> — scanned {findMissingResult.total} SIGs · <span className="font-semibold text-green-700 dark:text-green-300">{findMissingResult.found} IDs assigned</span> · {findMissingResult.skipped} no match
             </div>
             <button onClick={() => setFindMissingResult(null)} className="text-green-600 dark:text-green-400 text-xs underline ml-4">dismiss</button>
+          </div>
+        )}
+
+        {/* Update SIGs from FEC progress / result */}
+        {updateSigsMutation.isPending && (
+          <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-4">
+            <div className="flex items-center gap-2 mb-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Fetching full organization data from FEC for all SIGs…
+            </div>
+            <div className="w-full h-2 rounded-full bg-blue-200 dark:bg-blue-800 overflow-hidden">
+              <div className="h-full w-2/5 rounded-full bg-blue-500" style={{ animation: "indeterminate 1.5s ease-in-out infinite" }} />
+            </div>
+          </div>
+        )}
+        {!updateSigsMutation.isPending && updateFecResult && (
+          <div className="mb-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 p-4 flex items-center justify-between">
+            <div className="text-sm text-green-800 dark:text-green-200">
+              <span className="font-semibold">Update complete</span> — {updateFecResult.total} with FEC IDs · <span className="font-semibold text-green-700 dark:text-green-300">{updateFecResult.updated} updated</span> · {updateFecResult.skipped} skipped
+            </div>
+            <button onClick={() => setUpdateFecResult(null)} className="text-green-600 dark:text-green-400 text-xs underline ml-4">dismiss</button>
+          </div>
+        )}
+
+        {/* AI Grade PACs progress / result */}
+        {aiGradeMutation.isPending && (
+          <div className="mb-4 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950 p-4">
+            <div className="flex items-center gap-2 mb-2 text-sm font-medium text-purple-700 dark:text-purple-300">
+              <Sparkles className="h-4 w-4 animate-pulse" />
+              AI is grading organizations from the perspective of a neutral voter…
+            </div>
+            <div className="w-full h-2 rounded-full bg-purple-200 dark:bg-purple-800 overflow-hidden">
+              <div className="h-full w-2/5 rounded-full bg-purple-500" style={{ animation: "indeterminate 1.5s ease-in-out infinite" }} />
+            </div>
+          </div>
+        )}
+        {!aiGradeMutation.isPending && aiGradeResult && (
+          <div className="mb-4 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950 p-4 flex items-center justify-between">
+            <div className="text-sm text-purple-800 dark:text-purple-200">
+              <span className="font-semibold">AI grading complete</span> — <span className="font-semibold text-purple-700 dark:text-purple-300">{aiGradeResult.graded} organizations graded</span> · {aiGradeResult.errors} errors
+            </div>
+            <button onClick={() => setAiGradeResult(null)} className="text-purple-600 dark:text-purple-400 text-xs underline ml-4">dismiss</button>
           </div>
         )}
 
@@ -634,6 +717,17 @@ export default function AdminSigsPage() {
                     type="email"
                     defaultValue={editingSig?.contactEmail || ""}
                     data-testid="input-sig-email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contactPhone">Contact Phone</Label>
+                  <Input
+                    id="contactPhone"
+                    name="contactPhone"
+                    type="tel"
+                    defaultValue={editingSig?.contactPhone || ""}
+                    placeholder="e.g. (202) 555-0100"
+                    data-testid="input-sig-phone"
                   />
                 </div>
               </div>
