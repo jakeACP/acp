@@ -71,7 +71,6 @@ const CATEGORIES = [
   { value: "lobby", label: "Lobbying Group" },
   { value: "nonprofit", label: "Non-Profit Organization" },
   { value: "industry", label: "Industry Association" },
-  { value: "foreign", label: "Foreign Entity" },
   { value: "Anti-Corruption Endorsement", label: "Anti-Corruption Endorsement (ACE)" },
   { value: "other", label: "Other" },
 ];
@@ -89,6 +88,7 @@ const INDUSTRIES = [
   { value: "entertainment", label: "Entertainment & Media" },
   { value: "retail", label: "Retail" },
   { value: "manufacturing", label: "Manufacturing" },
+  { value: "foreign", label: "Foreign Entity" },
   { value: "other", label: "Other" },
 ];
 
@@ -509,7 +509,7 @@ export default function AdminSigsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="industry">Industry</Label>
+                  <Label htmlFor="industry">Interest</Label>
                   <Select name="industry" defaultValue={editingSig?.industry || ""}>
                     <SelectTrigger data-testid="select-sig-industry">
                       <SelectValue placeholder="Select industry" />
