@@ -58,6 +58,7 @@ type SpecialInterestGroup = {
   isAce?: boolean;
   isActive: boolean;
   totalContributions?: number | null;
+  fecId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -193,6 +194,7 @@ export default function AdminSigsPage() {
       letterGrade: computedGrade,
       isActive: formData.get("isActive") === "on",
       totalContributions: formData.get("totalContributions") ? parseInt(formData.get("totalContributions") as string) : undefined,
+      fecId: formData.get("fecId") as string || undefined,
     };
 
     if (editingSig) {
@@ -333,6 +335,7 @@ export default function AdminSigsPage() {
                     <TableHead>Industry</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Total Contributions</TableHead>
+                    <TableHead>FEC ID</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -392,6 +395,19 @@ export default function AdminSigsPage() {
                         {sig.totalContributions != null
                           ? `$${sig.totalContributions.toLocaleString()}`
                           : "-"}
+                      </TableCell>
+                      <TableCell>
+                        {sig.fecId ? (
+                          <a
+                            href={`https://www.fec.gov/data/committee/${sig.fecId}/`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs flex items-center gap-1"
+                          >
+                            {sig.fecId}
+                            <ExternalLink className="h-3 w-3 inline-block" />
+                          </a>
+                        ) : "-"}
                       </TableCell>
                       <TableCell>
                         <Badge variant={sig.isActive ? "default" : "secondary"}>
@@ -592,6 +608,18 @@ export default function AdminSigsPage() {
                   data-testid="input-sig-total-contributions"
                 />
                 <p className="text-xs text-slate-500">Grand total contributions in dollars (sourced from FEC / OpenSecrets).</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="fecId">FEC Committee ID</Label>
+                <Input
+                  id="fecId"
+                  name="fecId"
+                  defaultValue={editingSig?.fecId ?? ""}
+                  placeholder="e.g. C00000935"
+                  data-testid="input-sig-fec-id"
+                />
+                <p className="text-xs text-slate-500">FEC committee ID — links to the FEC.gov profile page for this group.</p>
               </div>
 
               <div className="space-y-2">

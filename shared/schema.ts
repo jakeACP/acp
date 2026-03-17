@@ -1449,6 +1449,7 @@ export const specialInterestGroups = pgTable("special_interest_groups", {
   letterGrade: text("letter_grade"), // Auto-computed or admin-set: A, B, C, D, F (with +/- modifiers)
   isAce: boolean("is_ace").default(false), // Anti-Corruption Endorsement — positive pledge
   totalContributions: bigint("total_contributions", { mode: "number" }), // Grand total contributions in dollars
+  fecId: text("fec_id"), // FEC committee ID, e.g. C00000935
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
