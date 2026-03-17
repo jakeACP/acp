@@ -102,6 +102,7 @@ export default function AdminSigsPage() {
   const [influenceSlider, setInfluenceSlider] = useState<number>(0);
   const [gradeOverride, setGradeOverride] = useState<string>("auto");
   const [fetchingFecId, setFetchingFecId] = useState<string | null>(null);
+  const [findMissingResult, setFindMissingResult] = useState<{ found: number; skipped: number; total: number } | null>(null);
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
@@ -189,6 +190,18 @@ export default function AdminSigsPage() {
     onSettled: () => setFetchingFecId(null),
   });
 
+  const findMissingIdsMutation = useMutation({
+    mutationFn: async () => apiRequest("/api/admin/sigs/find-missing-fec-ids", "POST"),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+      setFindMissingResult({ found: data.found, skipped: data.skipped, total: data.total });
+      toast({ title: "FEC ID scan complete", description: data.message });
+    },
+    onError: (error: any) => {
+      toast({ title: "Scan failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -261,6 +274,19 @@ export default function AdminSigsPage() {
           <div className="flex gap-2 flex-wrap">
             <Button
               variant="outline"
+              onClick={() => { setFindMissingResult(null); findMissingIdsMutation.mutate(); }}
+              disabled={findMissingIdsMutation.isPending}
+              title="Search FEC for committee IDs on SIGs that don't have one yet"
+            >
+              {findMissingIdsMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4 mr-2" />
+              )}
+              Find Missing IDs
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => downloadCsv(TEMPLATES.sigs.filename, TEMPLATES.sigs.headers, TEMPLATES.sigs.sample)}
               title="Download blank CSV template for SIG data entry"
             >
@@ -286,6 +312,29 @@ export default function AdminSigsPage() {
             </Button>
           </div>
         </div>
+
+        {/* FEC ID scan progress / result banner */}
+        {findMissingIdsMutation.isPending && (
+          <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-4">
+            <div className="flex items-center gap-2 mb-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Searching FEC database for committee IDs…
+            </div>
+            <div className="w-full h-2 rounded-full bg-blue-200 dark:bg-blue-800 overflow-hidden">
+              <div className="h-full w-2/5 rounded-full bg-blue-500"
+                style={{ animation: "indeterminate 1.5s ease-in-out infinite" }}
+              />
+            </div>
+          </div>
+        )}
+        {!findMissingIdsMutation.isPending && findMissingResult && (
+          <div className="mb-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 p-4 flex items-center justify-between">
+            <div className="text-sm text-green-800 dark:text-green-200">
+              <span className="font-semibold">Scan complete</span> — scanned {findMissingResult.total} SIGs · <span className="font-semibold text-green-700 dark:text-green-300">{findMissingResult.found} IDs assigned</span> · {findMissingResult.skipped} no match
+            </div>
+            <button onClick={() => setFindMissingResult(null)} className="text-green-600 dark:text-green-400 text-xs underline ml-4">dismiss</button>
+          </div>
+        )}
 
         <Card className="mb-6">
           <CardContent className="pt-6">

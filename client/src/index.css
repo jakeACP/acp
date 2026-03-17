@@ -698,3 +698,8 @@ body.has-floating-video .floating-card-lg:hover {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}

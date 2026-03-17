@@ -5526,6 +5526,58 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Find and assign missing FEC committee IDs by searching FEC API by name
+  app.post("/api/admin/sigs/find-missing-fec-ids", ensureAdmin, async (req, res) => {
+    try {
+      const fecKey = process.env.FEC_API_KEY;
+      if (!fecKey) return res.status(400).json({ message: "FEC_API_KEY not configured" });
+
+      const allSigs = await storage.listSpecialInterestGroups({ isActive: true });
+      const missing = allSigs.filter(s => !s.fecId);
+
+      let found = 0;
+      let skipped = 0;
+      const results: { name: string; fecId: string }[] = [];
+
+      for (const sig of missing) {
+        await new Promise(r => setTimeout(r, 250)); // rate-limit FEC requests
+        try {
+          const searchUrl = `https://api.open.fec.gov/v1/committees/?q=${encodeURIComponent(sig.name)}&api_key=${fecKey}&per_page=5&sort=-receipts`;
+          const searchRes = await fetch(searchUrl, { headers: { Accept: "application/json" } });
+          if (!searchRes.ok) { skipped++; continue; }
+          const searchData = await searchRes.json();
+          const candidates: any[] = searchData.results ?? [];
+
+          // Pick best match: prefer exact name match (case-insensitive), else first result
+          const sigNameNorm = sig.name.toLowerCase().trim();
+          const exact = candidates.find((c: any) => c.name?.toLowerCase().trim() === sigNameNorm);
+          const best = exact ?? (candidates.length > 0 ? candidates[0] : null);
+
+          if (best?.committee_id) {
+            await storage.updateSpecialInterestGroup(sig.id, { fecId: best.committee_id });
+            results.push({ name: sig.name, fecId: best.committee_id });
+            found++;
+          } else {
+            skipped++;
+          }
+        } catch {
+          skipped++;
+        }
+      }
+
+      res.json({
+        total: missing.length,
+        found,
+        skipped,
+        results,
+        message: `Scanned ${missing.length} SIGs without an FEC ID — assigned ${found}, no match for ${skipped}.`,
+      });
+    } catch (error: any) {
+      console.error("Find missing FEC IDs error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Get a single SIG
   app.get("/api/admin/sigs/:id", ensureAdmin, async (req, res) => {
     try {
