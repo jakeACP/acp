@@ -672,7 +672,8 @@ export class DatabaseStorage implements IStorage {
       await client.query(`UPDATE posts SET shared_post_id = NULL WHERE shared_post_id IN (SELECT id FROM posts WHERE author_id = $1)`, [userId]);
       await client.query(`DELETE FROM comments WHERE post_id IN (SELECT id FROM posts WHERE author_id = $1)`, [userId]);
       await client.query(`DELETE FROM reactions WHERE post_id IN (SELECT id FROM posts WHERE author_id = $1)`, [userId]);
-      await client.query(`DELETE FROM likes WHERE post_id IN (SELECT id FROM posts WHERE author_id = $1)`, [userId]);
+      // likes uses target_id + target_type, not post_id
+      await client.query(`DELETE FROM likes WHERE target_id IN (SELECT id FROM posts WHERE author_id = $1) AND target_type = 'post'`, [userId]);
 
       // ── user_referrals references invitations.id — must be cleared before invitations ──
       await client.query(`DELETE FROM user_referrals WHERE invitation_id IN (SELECT id FROM invitations WHERE invited_by = $1 OR used_by = $1)`, [userId]);
