@@ -6793,6 +6793,21 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Delete a user
+  app.delete("/api/admin/users/:id", ensureOwnerAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "User not found" });
+      if (target.role === "admin") return res.status(403).json({ message: "Cannot delete admin accounts" });
+      await storage.deleteUser(id);
+      res.json({ message: "User deleted successfully" });
+    } catch (error: any) {
+      console.error("Delete user error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Content Moderation APIs
   app.get("/api/admin/flagged-content", ensureAdmin, async (req, res) => {
     try {

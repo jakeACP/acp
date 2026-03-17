@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, Users, Globe, Shield, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users, Globe, Shield, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -25,6 +25,7 @@ export default function AdminUsersPage() {
   const [roleDialogUser, setRoleDialogUser] = useState<any>(null);
   const [selectedRole, setSelectedRole] = useState("citizen");
   const [selectedState, setSelectedState] = useState("all");
+  const [deleteDialogUser, setDeleteDialogUser] = useState<any>(null);
   const { toast } = useToast();
   const limit = 20;
 
@@ -50,6 +51,20 @@ export default function AdminUsersPage() {
     },
     onError: (error: any) => {
       toast({ title: "Failed to update role", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/admin/users/${id}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/users?limit=${limit}&offset=${page * limit}`] });
+      setDeleteDialogUser(null);
+      toast({ title: "User deleted successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to delete user", description: error.message, variant: "destructive" });
     },
   });
 
@@ -139,16 +154,30 @@ export default function AdminUsersPage() {
                           )}
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openRoleDialog(user)}
-                        className="flex items-center gap-1.5 flex-shrink-0"
-                        data-testid={`button-manage-role-${user.id}`}
-                      >
-                        <Shield className="h-3.5 w-3.5" />
-                        Manage Role
-                      </Button>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openRoleDialog(user)}
+                          className="flex items-center gap-1.5"
+                          data-testid={`button-manage-role-${user.id}`}
+                        >
+                          <Shield className="h-3.5 w-3.5" />
+                          Manage Role
+                        </Button>
+                        {user.role !== "admin" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setDeleteDialogUser(user)}
+                            className="flex items-center gap-1.5 text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:hover:bg-red-950"
+                            data-testid={`button-delete-user-${user.id}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -306,6 +335,39 @@ export default function AdminUsersPage() {
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
               ) : (
                 "Save Role"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <Dialog open={!!deleteDialogUser} onOpenChange={(open) => !open && setDeleteDialogUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Delete User
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete <strong>@{deleteDialogUser?.username}</strong>
+              {deleteDialogUser?.email ? ` (${deleteDialogUser.email})` : ""}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogUser(null)} disabled={deleteUserMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteUserMutation.mutate(deleteDialogUser.id)}
+              disabled={deleteUserMutation.isPending}
+            >
+              {deleteUserMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</>
+              ) : (
+                "Delete User"
               )}
             </Button>
           </DialogFooter>
