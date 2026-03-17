@@ -5554,7 +5554,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           );
           if (!commRes.ok) { skipped++; continue; }
           const commData = await commRes.json();
-          const comm = commData.result || {};
+          const comm = commData.results?.[0] ?? commData.result ?? {};
 
           // Fetch financial totals (latest cycle)
           const totalsRes = await fetch(
@@ -5565,7 +5565,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           if (totalsRes.ok) {
             const totalsData = await totalsRes.json();
             const latest = totalsData.results?.[0];
-            if (latest) totalReceipts = Math.round(latest.total_receipts ?? latest.total_contributions ?? 0);
+            if (latest) {
+              const raw = latest.receipts ?? latest.total_receipts ?? latest.total_contributions ?? null;
+              if (raw !== null) totalReceipts = Math.round(raw);
+            }
           }
 
           const patch: Record<string, any> = {
@@ -5581,12 +5584,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
             patch.website = comm.website.startsWith("http") ? comm.website : `https://${comm.website}`;
           }
 
-          // Mailing address
-          const parts: string[] = [];
-          if (comm.city) parts.push(comm.city);
-          if (comm.state) parts.push(comm.state);
-          if (comm.zip_code) parts.push(comm.zip_code);
-          if (parts.length > 0) patch.headquarters = parts.join(", ");
+          // Mailing address (street + city + state + zip)
+          const addrParts: string[] = [];
+          if (comm.street_1) addrParts.push(comm.street_1);
+          if (comm.street_2) addrParts.push(comm.street_2);
+          if (comm.city) addrParts.push(comm.city);
+          if (comm.state) addrParts.push(comm.state);
+          if (comm.zip) addrParts.push(comm.zip);
+          if (addrParts.length > 0) patch.headquarters = addrParts.join(", ");
 
           // Founded year from first_file_date
           if (comm.first_file_date) {
@@ -5594,8 +5599,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
             if (!isNaN(year)) patch.foundedYear = year;
           }
 
-          // Contact phone (treasurer's phone)
+          // Contact info
           if (comm.treasurer_phone) patch.contactPhone = comm.treasurer_phone;
+          if (comm.email) patch.contactEmail = comm.email;
 
           // Total contributions
           if (totalReceipts !== null) patch.totalContributions = totalReceipts;
@@ -5786,7 +5792,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         return res.status(502).json({ message: `FEC API returned ${commRes.status} for committee ${fecId}` });
       }
       const commData = await commRes.json();
-      const comm = commData.result || {};
+      const comm = commData.results?.[0] ?? commData.result ?? {};
 
       // Fetch financial totals (latest cycle)
       const totalsRes = await fetch(
@@ -5797,7 +5803,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (totalsRes.ok) {
         const totalsData = await totalsRes.json();
         const latest = totalsData.results?.[0];
-        if (latest) totalReceipts = Math.round(latest.total_receipts ?? latest.total_contributions ?? 0);
+        if (latest) {
+          const raw = latest.receipts ?? latest.total_receipts ?? latest.total_contributions ?? null;
+          if (raw !== null) totalReceipts = Math.round(raw);
+        }
       }
 
       // Build update patch from FEC data
@@ -5807,8 +5816,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       };
       if (comm.name) patch.name = comm.name;
       if (comm.website) patch.website = comm.website.startsWith("http") ? comm.website : `https://${comm.website}`;
-      if (comm.city && comm.state) patch.headquarters = `${comm.city}, ${comm.state}`;
-      else if (comm.state) patch.headquarters = comm.state;
+      // Address: street + city + state + zip
+      const addrParts: string[] = [];
+      if (comm.street_1) addrParts.push(comm.street_1);
+      if (comm.street_2) addrParts.push(comm.street_2);
+      if (comm.city) addrParts.push(comm.city);
+      if (comm.state) addrParts.push(comm.state);
+      if (comm.zip) addrParts.push(comm.zip);
+      if (addrParts.length > 0) patch.headquarters = addrParts.join(", ");
+      if (comm.treasurer_phone) patch.contactPhone = comm.treasurer_phone;
+      if (comm.email) patch.contactEmail = comm.email;
       if (totalReceipts !== null) patch.totalContributions = totalReceipts;
 
       const updated = await storage.updateSpecialInterestGroup(sig.id, patch);
