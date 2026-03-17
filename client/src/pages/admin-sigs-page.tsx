@@ -57,6 +57,7 @@ type SpecialInterestGroup = {
   letterGrade?: string | null;
   isAce?: boolean;
   isActive: boolean;
+  totalContributions?: number | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -191,6 +192,7 @@ export default function AdminSigsPage() {
       influenceScore: influenceSlider,
       letterGrade: computedGrade,
       isActive: formData.get("isActive") === "on",
+      totalContributions: formData.get("totalContributions") ? parseInt(formData.get("totalContributions") as string) : undefined,
     };
 
     if (editingSig) {
@@ -329,6 +331,8 @@ export default function AdminSigsPage() {
                     <TableHead>Category</TableHead>
                     <TableHead>Influence / Grade</TableHead>
                     <TableHead>Industry</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Total Contributions</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -384,6 +388,11 @@ export default function AdminSigsPage() {
                         {sig.industry ? getIndustryLabel(sig.industry) : "-"}
                       </TableCell>
                       <TableCell>{sig.headquarters || "-"}</TableCell>
+                      <TableCell>
+                        {sig.totalContributions != null
+                          ? `$${sig.totalContributions.toLocaleString()}`
+                          : "-"}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={sig.isActive ? "default" : "secondary"}>
                           {sig.isActive ? "Active" : "Inactive"}
@@ -568,6 +577,21 @@ export default function AdminSigsPage() {
                   placeholder="https://..."
                   data-testid="input-sig-logo"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="totalContributions">Total Contributions ($)</Label>
+                <Input
+                  id="totalContributions"
+                  name="totalContributions"
+                  type="number"
+                  min="0"
+                  step="1"
+                  defaultValue={editingSig?.totalContributions ?? ""}
+                  placeholder="e.g. 5000000"
+                  data-testid="input-sig-total-contributions"
+                />
+                <p className="text-xs text-slate-500">Grand total contributions in dollars (sourced from FEC / OpenSecrets).</p>
               </div>
 
               <div className="space-y-2">

@@ -1448,6 +1448,7 @@ export const specialInterestGroups = pgTable("special_interest_groups", {
   influenceScore: integer("influence_score"), // Admin-set: -50 (Corruption) to +50 (Progressive), null = unrated
   letterGrade: text("letter_grade"), // Auto-computed or admin-set: A, B, C, D, F (with +/- modifiers)
   isAce: boolean("is_ace").default(false), // Anti-Corruption Endorsement — positive pledge
+  totalContributions: bigint("total_contributions", { mode: "number" }), // Grand total contributions in dollars
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

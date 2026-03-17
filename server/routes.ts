@@ -5557,6 +5557,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         disclosureNotes: z.string().optional(),
         gradeWeight: z.number().min(0).max(10).optional(),
         isActive: z.boolean().optional(),
+        totalContributions: z.number().int().nonnegative().optional().nullable(),
       }).parse(req.body);
       const data = { ...rawData, isAce: rawData.category === 'Anti-Corruption Endorsement' };
 
@@ -5590,6 +5591,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         influenceScore: z.number().int().min(-50).max(50).optional().nullable(),
         letterGrade: z.string().optional().nullable(),
         isActive: z.boolean().optional(),
+        totalContributions: z.number().int().nonnegative().optional().nullable(),
       }).parse(req.body);
       const data = {
         ...rawData,
