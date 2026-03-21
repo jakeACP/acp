@@ -8181,6 +8181,11 @@ Only include people you are confident about. Return empty arrays/null if unknown
 
       const { scanFindings } = await import("@shared/schema");
 
+      const adminUserId = await storage.getAdminUserId();
+      if (!adminUserId) {
+        return res.status(500).json({ message: "ACP Administrator account not found — cannot post to feed" });
+      }
+
       const raw = req.body;
       const items: any[] = Array.isArray(raw) ? raw : [raw];
 
@@ -8202,11 +8207,6 @@ Only include people you are confident about. Return empty arrays/null if unknown
 
       if (rows.length > 0) {
         await db.insert(scanFindings).values(rows);
-      }
-
-      const adminUserId = await storage.getAdminUserId();
-      if (!adminUserId) {
-        return res.status(500).json({ message: "ACP Administrator account not found — cannot post to feed" });
       }
 
       const postsCreated: string[] = [];
