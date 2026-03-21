@@ -8196,7 +8196,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
             : (item["Entities involved"] ?? null),
           relevanceScore: Math.min(10, Math.max(0, parseInt(item["ACP Relevance Score"] ?? "0", 10) || 0)),
           suggestedAction: item["Suggested Action"] ?? null,
-          status: "pending",
+          status: "approved",
           scannedAt: new Date(),
         }));
 
@@ -8204,11 +8204,31 @@ Only include people you are confident about. Return empty arrays/null if unknown
         await db.insert(scanFindings).values(rows);
       }
 
+      const adminUserId = await storage.getAdminUserId();
+      if (!adminUserId) {
+        return res.status(500).json({ message: "ACP Administrator account not found — cannot post to feed" });
+      }
+
+      const postsCreated: string[] = [];
+      for (const row of rows) {
+        const post = await storage.createPost({
+          authorId: adminUserId,
+          type: "news",
+          title: row.headline,
+          content: row.summary ?? row.headline,
+          url: row.sourceUrl ?? null,
+          newsSourceName: "ACP Corruption Scanner",
+          tags: row.category ? [row.category] : [],
+        });
+        postsCreated.push(post.id);
+      }
+
       const highPriority = rows.filter((r) => r.relevanceScore >= 7).length;
       return res.json({
         received: rows.length,
         highPriority,
-        message: "Scan results ingested successfully",
+        postsCreated: postsCreated.length,
+        message: "Scan results ingested and posted to News Feed",
       });
     } catch (error: any) {
       console.error("Corruption scan webhook error:", error);
