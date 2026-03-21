@@ -1,0 +1,200 @@
+You are building a new feature for the ACP (Anti-Corruption Party) platform at anticorruptionparty.us. The stack is React + TypeScript (Vite), Express, Drizzle ORM, PostgreSQL, and Tailwind CSS with shadcn/ui. Do not change any existing functionality. Add the following feature end-to-end:
+
+---
+
+## FEATURE: Corruption News Scanner — Webhook Ingest + Admin Review UI
+
+---
+
+### 1. DATABASE SCHEMA
+
+Add a new Drizzle table called `scan_findings` to the existing schema file:
+```ts
+export const scanFindings = pgTable('scan_findings', {
+  id:               serial('id').primaryKey(),
+  headline:         text('headline').notNull(),
+  category:         text('category'),             // e.g. "Super PACs & Dark Money"
+  summary:          text('summary'),
+  sourceUrl:        text('source_url'),
+  entitiesInvolved: text('entities_involved'),    // JSON stringified array of names
+  relevanceScore:   integer('relevance_score').default(0),  // 1–10
+  suggestedAction:  text('suggested_action'),     // e.g. "Flag for SIG database"
+  status:           text('status').default('pending'),      // pending | approved | dismissed
+  scannedAt:        timestamp('scanned_at').defaultNow(),
+  reviewedAt:       timestamp('reviewed_at'),
+  reviewedBy:       text('reviewed_by'),
+  adminNotes:       text('admin_notes'),
+});
+```
+
+Run `drizzle-kit push` to apply the migration.
+
+---
+
+### 2. ENVIRONMENT VARIABLE
+
+Add to `.env`:
+ACP_WEBHOOK_SECRET=replace-with-a-strong-random-secret
+
+---
+
+### 3. EXPRESS WEBHOOK ENDPOINT
+
+Create `server/routes/webhookScan.ts`:
+
+- Route: POST `/api/webhooks/corruption-scan`
+- Read header `x-webhook-secret` and compare to `process.env.ACP_WEBHOOK_SECRET`. Return 401 if mismatch.
+- Accept a JSON body that is either a single object or an array of objects.
+- Normalize to array. For each item map these fields:
+  - `Headline` → `headline`
+  - `Category` → `category`
+  - `Summary` → `summary`
+  - `Source URL` → `sourceUrl`
+  - `Entities involved` → `entitiesInvolved` (JSON.stringify if array)
+  - `ACP Relevance Score` → `relevanceScore` (integer)
+  - `Suggested Action` → `suggestedAction`
+  - Set `status` to `'pending'`
+  - Set `scannedAt` to `new Date()`
+- Bulk insert all records into `scan_findings` using Drizzle.
+- Return JSON: `{ received: N, highPriority: N, message: "Scan results ingested successfully" }`
+  - `highPriority` = count of items where `relevanceScore >= 7`
+- Register this route in `server/index.ts`.
+
+---
+
+### 4. PYTHON CRON SCRIPT
+
+Create a file at the project root called `acp_corruption_scan.py`. This script is run every 4 hours via cron job on an external server. It should:
+
+1. Call the Anthropic API (`claude-opus-4-6`) with `max_tokens: 4000` and the `web_search_20250305` tool enabled.
+2. Use this exact user prompt:
+You are an investigative journalist AI working for the Anti-Corruption Party (ACP) platform at anticorruptionparty.us. Your job is to scan for recent news (last 4 hours) about political corruption in the United States. Be factual, citation-based, and politically neutral — report on corruption across all parties equally.
+Search for and summarize notable findings in each of the following categories:
+1. SUPER PACs & Dark Money
+
+New SuperPAC registrations or filings with the FEC
+SuperPACs with unusually large, sudden, or anonymous donations
+Dark money groups with undisclosed donors influencing federal or state elections
+Independent expenditure campaigns targeting or supporting specific candidates
+SuperPACs with known ties to foreign nationals or foreign-connected entities
+Coordination violations between campaigns and SuperPACs
+
+2. CANDIDATES & POLITICIANS
+
+Politicians under federal or state investigation for campaign finance violations
+Candidates accepting donations from banned or foreign sources
+Congressional members with suspicious stock trades near legislation votes (STOCK Act violations)
+Politicians who recently reversed positions after receiving large donor contributions
+Incumbents with new PAC money from industries they regulate
+Newly filed FEC complaints against any candidate
+
+3. SPECIAL INTEREST GROUPS (SIGs) & LOBBYISTS
+
+Lobbying disclosure reports showing unusual spending spikes
+Industry PACs making large bundled donations to multiple candidates simultaneously
+SIGs under investigation for illegal coordination or foreign ties
+Revolving door stories: former regulators joining lobbying firms or vice versa
+New SIGs registered with the IRS or FEC that show signs of dark money activity
+SIGs tied to foreign governments (FARA filings)
+
+4. LEGAL CASES & INVESTIGATIONS
+
+New DOJ, FEC, or state AG indictments or charges related to campaign finance
+Ongoing corruption trials with new developments
+Whistleblower disclosures related to political corruption
+FOIA releases revealing donor influence on policy decisions
+
+5. PROPAGANDA & DISINFORMATION
+
+Coordinated inauthentic behavior by political campaigns on social media
+Astroturfing campaigns funded by undisclosed donors
+PAC-funded disinformation campaigns targeting voters
+
+For each finding, return ONLY a valid JSON array with no markdown, no preamble, no backticks. Each object must have exactly these keys:
+
+"Headline" (string)
+"Category" (string, one of the 5 categories above)
+"Summary" (2-3 sentences, neutral tone)
+"Source URL" (string or null)
+"Entities involved" (array of strings: politician names, SIG names, PAC names)
+"ACP Relevance Score" (integer 1-10)
+"Suggested Action" (one of: "Flag for SIG database", "Update politician grade", "Create news article", "Admin review", "Monitor")
+
+
+3. Parse the JSON array from the response (strip any accidental markdown fences).
+4. POST the array to `https://anticorruptionparty.us/api/webhooks/corruption-scan` with headers:
+   - `Content-Type: application/json`
+   - `x-webhook-secret: <ACP_WEBHOOK_SECRET from env>`
+5. Log the webhook response status and summary to stdout.
+6. Handle errors gracefully with try/except — never crash silently.
+
+Include a `requirements.txt` with: `anthropic`, `requests`, `python-dotenv`
+
+Include a `.env.example` with: `ANTHROPIC_API_KEY=`, `ACP_WEBHOOK_SECRET=`, `WEBHOOK_URL=https://anticorruptionparty.us/api/webhooks/corruption-scan`
+
+Also include a cron comment at the top of the file:
+Cron: 0 */4 * * * /usr/bin/python3 /path/to/acp_corruption_scan.py >> /var/log/acp_scan.log 2>&1
+
+---
+
+### 5. ADMIN REVIEW UI
+
+Add a new page to the admin section called **"News Scanner"** (route: `/admin/scanner`). Add it to the existing admin sidebar navigation with a 📡 icon.
+
+The page should match the existing ACP admin dark theme and shadcn/ui component style. Build the following UI:
+
+#### A. Stats Bar (top of page)
+Four stat cards in a row:
+- **Total Scans** — count of all records in `scan_findings`
+- **Pending Review** — count where `status = 'pending'`
+- **High Priority** — count where `relevanceScore >= 7` AND `status = 'pending'`
+- **Approved Today** — count where `status = 'approved'` and `reviewedAt` is today
+
+#### B. Filter Bar
+Horizontal filter row with:
+- Status filter: All | Pending | Approved | Dismissed (default: Pending)
+- Category filter: All | Super PACs & Dark Money | Candidates & Politicians | SIGs & Lobbyists | Legal Cases | Propaganda (dropdown)
+- Priority filter: All | High Priority (7+) | Medium (4–6) | Low (1–3) (dropdown)
+- Search input: searches headline and summary text
+
+#### C. Findings Table
+A paginated table (25 per page) with columns:
+- **Score** — badge colored red (8-10), orange (5-7), gray (1-4)
+- **Headline** — truncated to 60 chars, full text on hover tooltip
+- **Category** — pill badge
+- **Entities** — comma-separated list of entity names (truncated at 3, "+N more" if longer)
+- **Suggested Action** — text
+- **Scanned** — relative timestamp (e.g. "2 hours ago")
+- **Status** — badge: Pending (yellow), Approved (green), Dismissed (gray)
+- **Actions** — three icon buttons: ✅ Approve, ❌ Dismiss, 🔗 View Source (opens sourceUrl in new tab)
+
+Clicking a row expands an inline detail panel showing:
+- Full headline
+- Full summary
+- All entities listed
+- Source URL as clickable link
+- Admin Notes textarea (saves on blur via PATCH)
+- Approve / Dismiss buttons
+
+#### D. API Routes needed (add to Express):
+
+- `GET /api/admin/scan-findings` — query params: `status`, `category`, `minScore`, `search`, `page`, `limit`. Returns `{ findings: [], total: N, page: N }`
+- `PATCH /api/admin/scan-findings/:id` — body: `{ status?, adminNotes?, reviewedBy? }`. Updates the record and sets `reviewedAt: new Date()`.
+
+Protect both routes with the existing admin auth middleware.
+
+---
+
+### ACCEPTANCE CRITERIA
+
+- [ ] `scan_findings` table exists in the database
+- [ ] POST `/api/webhooks/corruption-scan` accepts the JSON payload and inserts records correctly
+- [ ] Webhook returns 401 for missing or wrong secret
+- [ ] `acp_corruption_scan.py` runs without errors and posts to the webhook
+- [ ] `/admin/scanner` page is accessible from the admin sidebar
+- [ ] Stats bar shows correct live counts
+- [ ] Filters and search work correctly
+- [ ] Approve and Dismiss buttons update the record status instantly (optimistic UI)
+- [ ] Admin notes save on blur
+- [ ] High priority items (score 7+) are visually distinct in the table
+- [ ] All components match the existing admin dark theme
