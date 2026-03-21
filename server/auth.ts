@@ -156,6 +156,9 @@ export function setupAuth(app: Express) {
     if (safeMethods.includes(req.method)) {
       return next();
     }
+    if (req.path.startsWith("/api/webhooks/")) {
+      return next();
+    }
     doubleCsrfProtection(req, res, next);
   });
 

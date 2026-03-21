@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, bigint, boolean, json, decimal, real, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, bigint, boolean, json, decimal, real, index, serial } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -2460,3 +2460,29 @@ export const acePledgeRequests = pgTable("ace_pledge_requests", {
 export const insertAcePledgeRequestSchema = createInsertSchema(acePledgeRequests).omit({ id: true, createdAt: true, updatedAt: true, reviewedBy: true, reviewNote: true, status: true });
 export type AcePledgeRequest = typeof acePledgeRequests.$inferSelect;
 export type InsertAcePledgeRequest = z.infer<typeof insertAcePledgeRequestSchema>;
+
+// Corruption News Scanner — AI-ingested corruption findings for admin review
+export const scanFindings = pgTable('scan_findings', {
+  id:               serial('id').primaryKey(),
+  headline:         text('headline').notNull(),
+  category:         text('category'),
+  summary:          text('summary'),
+  sourceUrl:        text('source_url'),
+  entitiesInvolved: text('entities_involved'),
+  relevanceScore:   integer('relevance_score').default(0),
+  suggestedAction:  text('suggested_action'),
+  status:           text('status').default('pending'),
+  scannedAt:        timestamp('scanned_at').defaultNow(),
+  reviewedAt:       timestamp('reviewed_at'),
+  reviewedBy:       text('reviewed_by'),
+  adminNotes:       text('admin_notes'),
+}, (table) => ({
+  statusIndex:    index('scan_findings_status_idx').on(table.status),
+  categoryIndex:  index('scan_findings_category_idx').on(table.category),
+  scoreIndex:     index('scan_findings_score_idx').on(table.relevanceScore),
+  scannedAtIndex: index('scan_findings_scanned_at_idx').on(table.scannedAt),
+}));
+
+export const insertScanFindingSchema = createInsertSchema(scanFindings).omit({ id: true, scannedAt: true, reviewedAt: true, reviewedBy: true, adminNotes: true, status: true });
+export type ScanFinding = typeof scanFindings.$inferSelect;
+export type InsertScanFinding = z.infer<typeof insertScanFindingSchema>;

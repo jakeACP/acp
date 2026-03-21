@@ -8171,6 +8171,155 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  // ─── Corruption News Scanner — Webhook Ingest ────────────────────────────
+  app.post("/api/webhooks/corruption-scan", async (req, res) => {
+    try {
+      const secret = req.headers["x-webhook-secret"];
+      if (!secret || secret !== process.env.ACP_WEBHOOK_SECRET) {
+        return res.status(401).json({ message: "Unauthorized: invalid or missing x-webhook-secret" });
+      }
+
+      const { scanFindings } = await import("@shared/schema");
+
+      const raw = req.body;
+      const items: any[] = Array.isArray(raw) ? raw : [raw];
+
+      const rows = items.map((item: any) => ({
+        headline: String(item["Headline"] ?? ""),
+        category: item["Category"] ?? null,
+        summary: item["Summary"] ?? null,
+        sourceUrl: item["Source URL"] ?? null,
+        entitiesInvolved: Array.isArray(item["Entities involved"])
+          ? JSON.stringify(item["Entities involved"])
+          : (item["Entities involved"] ?? null),
+        relevanceScore: parseInt(item["ACP Relevance Score"] ?? "0", 10) || 0,
+        suggestedAction: item["Suggested Action"] ?? null,
+        status: "pending",
+        scannedAt: new Date(),
+      }));
+
+      if (rows.length > 0) {
+        await db.insert(scanFindings).values(rows);
+      }
+
+      const highPriority = rows.filter((r) => r.relevanceScore >= 7).length;
+      return res.json({
+        received: rows.length,
+        highPriority,
+        message: "Scan results ingested successfully",
+      });
+    } catch (error: any) {
+      console.error("Corruption scan webhook error:", error);
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ─── Admin: Scan Findings ─────────────────────────────────────────────────
+  app.get("/api/admin/scan-findings", ensureAdmin, async (req, res) => {
+    try {
+      const { scanFindings } = await import("@shared/schema");
+      const { and, desc, ilike, gte, or } = await import("drizzle-orm");
+
+      const status = (req.query.status as string) || "";
+      const category = (req.query.category as string) || "";
+      const minScore = parseInt(req.query.minScore as string, 10) || 0;
+      const search = (req.query.search as string) || "";
+      const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 25));
+      const offset = (page - 1) * limit;
+
+      const conditions: any[] = [];
+      if (status) conditions.push(eq(scanFindings.status, status));
+      if (category) conditions.push(eq(scanFindings.category, category));
+      if (minScore > 0) conditions.push(gte(scanFindings.relevanceScore, minScore));
+      if (search) {
+        conditions.push(
+          or(
+            ilike(scanFindings.headline, `%${search}%`),
+            ilike(scanFindings.summary, `%${search}%`)
+          )
+        );
+      }
+
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const [findings, countResult] = await Promise.all([
+        db.select().from(scanFindings)
+          .where(where)
+          .orderBy(desc(scanFindings.scannedAt))
+          .limit(limit)
+          .offset(offset),
+        db.select({ count: sql<number>`count(*)::int` }).from(scanFindings).where(where),
+      ]);
+
+      return res.json({
+        findings,
+        total: countResult[0]?.count ?? 0,
+        page,
+      });
+    } catch (error: any) {
+      console.error("Admin scan findings error:", error);
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/scan-findings/:id", ensureAdmin, async (req, res) => {
+    try {
+      const { scanFindings } = await import("@shared/schema");
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+
+      const { status, adminNotes, reviewedBy } = req.body;
+      const updateData: Record<string, any> = { reviewedAt: new Date() };
+      if (status !== undefined) updateData.status = status;
+      if (adminNotes !== undefined) updateData.adminNotes = adminNotes;
+      if (reviewedBy !== undefined) updateData.reviewedBy = reviewedBy;
+
+      const [updated] = await db.update(scanFindings)
+        .set(updateData)
+        .where(eq(scanFindings.id, id))
+        .returning();
+
+      if (!updated) return res.status(404).json({ message: "Finding not found" });
+      return res.json(updated);
+    } catch (error: any) {
+      console.error("Admin scan finding update error:", error);
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ─── Admin: Scan Findings Stats ──────────────────────────────────────────
+  app.get("/api/admin/scan-findings/stats", ensureAdmin, async (req, res) => {
+    try {
+      const { scanFindings } = await import("@shared/schema");
+      const { gte: gteOp, and: andOp } = await import("drizzle-orm");
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const [total, pending, highPriority, approvedToday] = await Promise.all([
+        db.select({ count: sql<number>`count(*)::int` }).from(scanFindings),
+        db.select({ count: sql<number>`count(*)::int` }).from(scanFindings).where(eq(scanFindings.status, "pending")),
+        db.select({ count: sql<number>`count(*)::int` }).from(scanFindings).where(
+          andOp(gteOp(scanFindings.relevanceScore, 7), eq(scanFindings.status, "pending"))
+        ),
+        db.select({ count: sql<number>`count(*)::int` }).from(scanFindings).where(
+          andOp(eq(scanFindings.status, "approved"), gteOp(scanFindings.reviewedAt, todayStart))
+        ),
+      ]);
+
+      return res.json({
+        total: total[0]?.count ?? 0,
+        pending: pending[0]?.count ?? 0,
+        highPriority: highPriority[0]?.count ?? 0,
+        approvedToday: approvedToday[0]?.count ?? 0,
+      });
+    } catch (error: any) {
+      console.error("Scan findings stats error:", error);
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
   return httpServer;
 }
 
