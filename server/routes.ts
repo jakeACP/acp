@@ -8184,19 +8184,21 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const raw = req.body;
       const items: any[] = Array.isArray(raw) ? raw : [raw];
 
-      const rows = items.map((item: any) => ({
-        headline: String(item["Headline"] ?? ""),
-        category: item["Category"] ?? null,
-        summary: item["Summary"] ?? null,
-        sourceUrl: item["Source URL"] ?? null,
-        entitiesInvolved: Array.isArray(item["Entities involved"])
-          ? JSON.stringify(item["Entities involved"])
-          : (item["Entities involved"] ?? null),
-        relevanceScore: parseInt(item["ACP Relevance Score"] ?? "0", 10) || 0,
-        suggestedAction: item["Suggested Action"] ?? null,
-        status: "pending",
-        scannedAt: new Date(),
-      }));
+      const rows = items
+        .filter((item: any) => typeof item["Headline"] === "string" && item["Headline"].trim().length > 0)
+        .map((item: any) => ({
+          headline: item["Headline"].trim(),
+          category: item["Category"] ?? null,
+          summary: item["Summary"] ?? null,
+          sourceUrl: item["Source URL"] ?? null,
+          entitiesInvolved: Array.isArray(item["Entities involved"])
+            ? JSON.stringify(item["Entities involved"])
+            : (item["Entities involved"] ?? null),
+          relevanceScore: Math.min(10, Math.max(0, parseInt(item["ACP Relevance Score"] ?? "0", 10) || 0)),
+          suggestedAction: item["Suggested Action"] ?? null,
+          status: "pending",
+          scannedAt: new Date(),
+        }));
 
       if (rows.length > 0) {
         await db.insert(scanFindings).values(rows);
@@ -8273,7 +8275,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const updateData: Record<string, any> = { reviewedAt: new Date() };
       if (status !== undefined) updateData.status = status;
       if (adminNotes !== undefined) updateData.adminNotes = adminNotes;
-      if (reviewedBy !== undefined) updateData.reviewedBy = reviewedBy;
+      updateData.reviewedBy = reviewedBy ?? req.user?.username ?? req.user?.id ?? "admin";
 
       const [updated] = await db.update(scanFindings)
         .set(updateData)
