@@ -27,7 +27,7 @@ type AuthContextType = {
   verify2FAMutation: UseMutationResult<SelectUser, Error, TwoFactorVerifyData>;
 };
 
-type LoginData = { identifier: string; password: string };
+type LoginData = Pick<InsertUser, "username" | "password">;
 
 type TwoFactorVerifyData = {
   challengeToken: string;

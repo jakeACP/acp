@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { ObjectUploader } from "@/components/ObjectUploader";
-import { ArrowLeft, Lock, User, Mail, Camera, Shield, Settings as SettingsIcon, CheckCircle2, AlertCircle, BadgeCheck, MapPin } from "lucide-react";
+import { ArrowLeft, Lock, User, Mail, Camera, Shield, Settings as SettingsIcon, CheckCircle2, AlertCircle, BadgeCheck } from "lucide-react";
 import { TwoFactorSettings } from "@/components/two-factor-settings";
 import { Link } from "wouter";
 import type { UploadResult } from "@uppy/core";
@@ -95,37 +95,6 @@ export default function SettingsPage() {
         description: message,
         variant: "destructive",
       });
-    },
-  });
-
-  const addressSchema = z.object({
-    addressZip: z.string().min(1, "ZIP code is required"),
-    addressStreet: z.string().optional(),
-    addressCity: z.string().optional(),
-    addressState: z.string().optional(),
-  });
-  type AddressData = z.infer<typeof addressSchema>;
-
-  const addressForm = useForm<AddressData>({
-    resolver: zodResolver(addressSchema),
-    defaultValues: {
-      addressZip: (user as any)?.addressZip || "",
-      addressStreet: (user as any)?.addressStreet || "",
-      addressCity: (user as any)?.addressCity || "",
-      addressState: (user as any)?.addressState || "",
-    },
-  });
-
-  const addressMutation = useMutation({
-    mutationFn: async (data: AddressData) => {
-      return apiRequest("/api/user/address", "PUT", data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({ title: "Address Updated", description: "Your address information has been saved." });
-    },
-    onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to update address.", variant: "destructive" });
     },
   });
 
@@ -426,69 +395,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-
-          {/* Address Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                Address Information
-              </CardTitle>
-              <CardDescription>
-                Used to match you with the most relevant local candidates. Never shared publicly.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={addressForm.handleSubmit((data) => addressMutation.mutate(data))} className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-slate-700">ZIP Code <span className="text-destructive">*</span></label>
-                  <Input
-                    {...addressForm.register("addressZip")}
-                    placeholder="ZIP code"
-                    maxLength={10}
-                    className="mt-1"
-                    disabled={addressMutation.isPending}
-                  />
-                  {addressForm.formState.errors.addressZip && (
-                    <p className="text-xs text-destructive mt-1">{addressForm.formState.errors.addressZip.message}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-slate-700">Street <span className="text-slate-400 font-normal">(optional)</span></label>
-                  <Input
-                    {...addressForm.register("addressStreet")}
-                    placeholder="123 Main St"
-                    className="mt-1"
-                    disabled={addressMutation.isPending}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm font-medium text-slate-700">City <span className="text-slate-400 font-normal">(optional)</span></label>
-                    <Input
-                      {...addressForm.register("addressCity")}
-                      placeholder="City"
-                      className="mt-1"
-                      disabled={addressMutation.isPending}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-slate-700">State <span className="text-slate-400 font-normal">(optional)</span></label>
-                    <Input
-                      {...addressForm.register("addressState")}
-                      placeholder="CA"
-                      maxLength={2}
-                      className="mt-1"
-                      disabled={addressMutation.isPending}
-                    />
-                  </div>
-                </div>
-                <Button type="submit" disabled={addressMutation.isPending} className="w-full">
-                  {addressMutation.isPending ? "Updating..." : "Update Address"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
 
           {/* Admin Panel - Only visible to admins */}
           {user?.role === "admin" && (
