@@ -273,11 +273,11 @@ export default function AuthPage() {
                     <>
                       <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
                         <div>
-                          <Label htmlFor="username">Username</Label>
+                          <Label htmlFor="username">Username, email, or phone</Label>
                           <Input
                             id="username"
                             {...loginForm.register("username")}
-                            placeholder="Enter your username"
+                            placeholder="Enter your username, email, or phone"
                             disabled={loginMutation.isPending}
                           />
                           {loginForm.formState.errors.username && (
