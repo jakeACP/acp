@@ -163,8 +163,8 @@ export function setupAuth(app: Express) {
   });
 
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
-      const user = await storage.getUserByUsername(username);
+    new LocalStrategy({ usernameField: "identifier" }, async (identifier, password, done) => {
+      const user = await storage.getUserByIdentifier(identifier);
       if (!user || !(await comparePasswords(password, user.password))) {
         return done(null, false);
       } else {
@@ -206,9 +206,16 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      const existingEmail = await storage.getUserByEmail(userData.email);
+      const existingEmail = await storage.getUserByEmail(userData.email?.toLowerCase());
       if (existingEmail) {
         return res.status(400).json({ message: "Email already exists" });
+      }
+
+      if (userData.phoneNumber) {
+        const existingPhone = await storage.getUserByPhone(userData.phoneNumber);
+        if (existingPhone) {
+          return res.status(400).json({ message: "Phone number already in use" });
+        }
       }
 
       // Check if this is the first user - if so, make them admin
@@ -219,14 +226,17 @@ export function setupAuth(app: Express) {
       const registrationIp = getClientIp(req);
       const registrationCountry = await getCountryFromIp(registrationIp);
 
+      const { addressZip, addressStreet, addressCity, addressState, ...coreData } = userData;
       const user = await storage.createUser({
-        ...userData,
-        password: await hashPassword(userData.password),
+        ...coreData,
+        email: coreData.email?.toLowerCase(),
+        password: await hashPassword(coreData.password),
         role: isFirstUser ? "admin" : "citizen",
         registrationIp,
         registrationCountry,
         lastLoginIp: registrationIp,
         lastLoginCountry: registrationCountry,
+        ...(addressZip ? { addressZip, addressStreet: addressStreet || null, addressCity: addressCity || null, addressState: addressState || null, addressVerified: false } : {}),
       });
 
       // Mark invitation as used if one was provided

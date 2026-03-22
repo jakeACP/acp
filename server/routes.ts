@@ -6726,6 +6726,38 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // ─── User Address ─────────────────────────────────────────────────────────
+  app.put("/api/user/address", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const addressSchema = z.object({
+        addressZip: z.string().min(1, "ZIP code is required"),
+        addressStreet: z.string().optional().nullable(),
+        addressCity: z.string().optional().nullable(),
+        addressState: z.string().optional().nullable(),
+      });
+      const { addressZip, addressStreet, addressCity, addressState } = addressSchema.parse(req.body);
+      const updated = await storage.updateUser(req.user.id, {
+        addressZip,
+        addressStreet: addressStreet ?? null,
+        addressCity: addressCity ?? null,
+        addressState: addressState ?? null,
+        addressVerified: false,
+      });
+      return res.json({
+        addressZip: updated.addressZip,
+        addressStreet: updated.addressStreet,
+        addressCity: updated.addressCity,
+        addressState: updated.addressState,
+        addressVerified: updated.addressVerified,
+      });
+    } catch (error: any) {
+      if (error.name === "ZodError") return res.status(400).json({ message: error.errors[0]?.message || "Invalid address data" });
+      console.error("Update address error:", error);
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin Analytics APIs
   app.get("/api/admin/analytics", ensureAdmin, async (req, res) => {
     try {

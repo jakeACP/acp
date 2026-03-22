@@ -3,13 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth, TwoFactorRequirement } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { Vote, Users, Shield, Megaphone, AlertCircle, Smartphone, Key } from "lucide-react";
+import { Vote, Users, Shield, Megaphone, AlertCircle, Smartphone, Key, MapPin } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { Redirect, Link, useLocation } from "wouter";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -18,7 +17,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
 
-const loginSchema = insertUserSchema.pick({ username: true, password: true });
+const loginSchema = z.object({
+  identifier: z.string().min(1, "Please enter your username, email, or phone"),
+  password: z.string().min(1, "Password is required"),
+});
 
 const phoneNumberRegex = /^[\d\s\-\(\)\+]+$/;
 
@@ -34,6 +36,10 @@ const registerSchema = insertUserSchema.extend({
       "Phone number must contain at least 10 digits"
     ),
   invitationToken: z.string().optional(),
+  addressZip: z.string().min(1, "ZIP code is required"),
+  addressStreet: z.string().optional(),
+  addressCity: z.string().optional(),
+  addressState: z.string().optional(),
 });
 
 type LoginData = z.infer<typeof loginSchema>;
@@ -41,11 +47,10 @@ type RegisterData = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation, verify2FAMutation } = useAuth();
-  const [activeTab, setActiveTab] = useState("login");
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
   const [location] = useLocation();
-  
+
   const [twoFactorData, setTwoFactorData] = useState<TwoFactorRequirement | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [rememberDevice, setRememberDevice] = useState(false);
@@ -53,6 +58,7 @@ export default function AuthPage() {
 
   const loginForm = useForm<LoginData>({
     resolver: zodResolver(loginSchema),
+    defaultValues: { identifier: "", password: "" },
   });
 
   const registerForm = useForm<RegisterData>({
@@ -60,22 +66,21 @@ export default function AuthPage() {
     defaultValues: {
       invitationToken: "",
       phoneNumber: "",
+      addressZip: "",
+      addressStreet: "",
+      addressCity: "",
+      addressState: "",
     },
   });
 
-  // Extract invitation token from URL parameters
   useEffect(() => {
     const controller = new AbortController();
-
     const urlParams = new URLSearchParams(location.split('?')[1] || '');
     const token = urlParams.get('invitation');
-    
+
     if (token) {
       setInvitationToken(token);
       registerForm.setValue('invitationToken', token);
-      setActiveTab('register'); // Switch to register tab if invitation link is used
-      
-      // Validate invitation token
       fetch(`/api/invitations/${token}/validate`, { signal: controller.signal })
         .then(res => res.json())
         .then(data => {
@@ -91,14 +96,11 @@ export default function AuthPage() {
           }
         });
     } else {
-      // No invitation token - allow open registration
       setInvitationError(null);
     }
-
     return () => controller.abort();
   }, [location, registerForm]);
 
-  // Redirect if already logged in
   if (user) {
     return <Redirect to="/" />;
   }
@@ -129,7 +131,6 @@ export default function AuthPage() {
 
   const onVerify2FA = () => {
     if (!twoFactorData) return;
-    
     verify2FAMutation.mutate({
       challengeToken: twoFactorData.challengeToken,
       method: twoFactorData.twoFactorMethod || 'totp',
@@ -150,387 +151,354 @@ export default function AuthPage() {
   };
 
   const onRegister = (data: RegisterData) => {
-    // Remove invitationToken if it's empty/undefined
     const { invitationToken, ...rest } = data;
     const payload = invitationToken ? data : rest;
     registerMutation.mutate(payload as any);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      {/* Left side - Auth Forms */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center mb-4">
-              <img src={logoPath} alt="Anti-Corruption Party" className="h-12 w-12 mr-3" />
-              <h1 className="text-2xl font-bold text-slate-900">ACP Democracy</h1>
-            </div>
-            <p className="text-slate-600">Join the Anti-Corruption Party movement for transparent governance</p>
-          </div>
-
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Sign In</TabsTrigger>
-              <TabsTrigger value="register">Sign Up</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="login">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{twoFactorData ? "Two-Factor Authentication" : "Welcome Back"}</CardTitle>
-                  <CardDescription>
-                    {twoFactorData 
-                      ? twoFactorData.twoFactorMethod === 'sms'
-                        ? `Enter the code sent to ${twoFactorData.phone}`
-                        : "Enter the code from your authenticator app"
-                      : "Sign in to your account to continue participating in democracy"
-                    }
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {twoFactorData ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-center mb-4">
-                        {twoFactorData.twoFactorMethod === 'sms' ? (
-                          <Smartphone className="h-12 w-12 text-primary" />
-                        ) : (
-                          <Key className="h-12 w-12 text-primary" />
-                        )}
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="twoFactorCode">Verification Code</Label>
-                        <Input
-                          id="twoFactorCode"
-                          value={twoFactorCode}
-                          onChange={(e) => setTwoFactorCode(e.target.value)}
-                          placeholder="Enter 6-digit code"
-                          maxLength={6}
-                          className="text-center text-2xl tracking-widest"
-                          disabled={verify2FAMutation.isPending}
-                        />
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <Checkbox 
-                          id="rememberDevice" 
-                          checked={rememberDevice}
-                          onCheckedChange={(checked) => setRememberDevice(checked === true)}
-                        />
-                        <Label htmlFor="rememberDevice" className="text-sm text-slate-600">
-                          Trust this device for 60 days
-                        </Label>
-                      </div>
-
-                      {verify2FAMutation.error && (
-                        <ErrorMessage
-                          message={verify2FAMutation.error.message || "Verification failed. Please try again."}
-                          variant="error"
-                        />
-                      )}
-
-                      <div className="space-y-2">
-                        <Button
-                          type="button"
-                          className="w-full"
-                          onClick={onVerify2FA}
-                          disabled={verify2FAMutation.isPending || twoFactorCode.length < 6}
-                        >
-                          {verify2FAMutation.isPending ? (
-                            <>
-                              <LoadingSpinner size="sm" className="mr-2" />
-                              Verifying...
-                            </>
-                          ) : (
-                            "Verify"
-                          )}
-                        </Button>
-
-                        {twoFactorData.twoFactorMethod === 'sms' && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => sendSmsCode(twoFactorData.challengeToken)}
-                            disabled={smsSending}
-                          >
-                            {smsSending ? "Sending..." : "Resend Code"}
-                          </Button>
-                        )}
-
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="w-full"
-                          onClick={cancelTwoFactor}
-                        >
-                          Back to Login
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
-                        <div>
-                          <Label htmlFor="username">Username</Label>
-                          <Input
-                            id="username"
-                            {...loginForm.register("username")}
-                            placeholder="Enter your username"
-                            disabled={loginMutation.isPending}
-                          />
-                          {loginForm.formState.errors.username && (
-                            <p className="text-sm text-destructive mt-1">
-                              {loginForm.formState.errors.username.message}
-                            </p>
-                          )}
-                        </div>
-
-                        <div>
-                          <Label htmlFor="password">Password</Label>
-                          <Input
-                            id="password"
-                            type="password"
-                            {...loginForm.register("password")}
-                            placeholder="Enter your password"
-                            disabled={loginMutation.isPending}
-                          />
-                          {loginForm.formState.errors.password && (
-                            <p className="text-sm text-destructive mt-1">
-                              {loginForm.formState.errors.password.message}
-                            </p>
-                          )}
-                        </div>
-
-                        {loginMutation.error && (
-                          <ErrorMessage
-                            message={loginMutation.error.message || "Login failed. Please check your credentials and try again."}
-                            variant="error"
-                            className="mb-4"
-                            data-testid="login-error-alert"
-                          />
-                        )}
-
-                        <Button
-                          type="submit"
-                          className="w-full"
-                          disabled={loginMutation.isPending}
-                          data-testid="button-login-submit"
-                        >
-                          {loginMutation.isPending ? (
-                            <>
-                              <LoadingSpinner size="sm" className="mr-2" />
-                              Signing In...
-                            </>
-                          ) : (
-                            "Sign In"
-                          )}
-                        </Button>
-                      </form>
-                      
-                      <div className="mt-4 text-center">
-                        <Link href="/forgot-password">
-                          <Button variant="link" className="text-sm text-slate-600 hover:text-slate-900">
-                            Forgot your password?
-                          </Button>
-                        </Link>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="register">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Create Account</CardTitle>
-                  <CardDescription>
-                    Join thousands of citizens working for transparent democracy
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {invitationError && (
-                    <Alert className="mb-4" variant="destructive" data-testid="alert-invitation-error">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        {invitationError}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="firstName">First Name</Label>
-                        <Input
-                          id="firstName"
-                          {...registerForm.register("firstName")}
-                          placeholder="First name"
-                          disabled={registerMutation.isPending}
-                        />
-                        {registerForm.formState.errors.firstName && (
-                          <p className="text-sm text-destructive mt-1">
-                            {registerForm.formState.errors.firstName.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <Label htmlFor="lastName">Last Name</Label>
-                        <Input
-                          id="lastName"
-                          {...registerForm.register("lastName")}
-                          placeholder="Last name"
-                          disabled={registerMutation.isPending}
-                        />
-                        {registerForm.formState.errors.lastName && (
-                          <p className="text-sm text-destructive mt-1">
-                            {registerForm.formState.errors.lastName.message}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        {...registerForm.register("email")}
-                        placeholder="Enter your email"
-                        disabled={registerMutation.isPending}
-                        data-testid="input-email"
-                      />
-                      {registerForm.formState.errors.email && (
-                        <p className="text-sm text-destructive mt-1">
-                          {registerForm.formState.errors.email.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="phoneNumber">Phone Number</Label>
-                      <Input
-                        id="phoneNumber"
-                        type="tel"
-                        {...registerForm.register("phoneNumber")}
-                        placeholder="(555) 123-4567"
-                        disabled={registerMutation.isPending}
-                        data-testid="input-phone-number"
-                      />
-                      {registerForm.formState.errors.phoneNumber && (
-                        <p className="text-sm text-destructive mt-1">
-                          {registerForm.formState.errors.phoneNumber.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="regUsername">Username</Label>
-                      <Input
-                        id="regUsername"
-                        {...registerForm.register("username")}
-                        placeholder="Choose a username"
-                        disabled={registerMutation.isPending}
-                      />
-                      {registerForm.formState.errors.username && (
-                        <p className="text-sm text-destructive mt-1">
-                          {registerForm.formState.errors.username.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="regPassword">Password</Label>
-                      <Input
-                        id="regPassword"
-                        type="password"
-                        {...registerForm.register("password")}
-                        placeholder="Create a password"
-                        disabled={registerMutation.isPending}
-                      />
-                      {registerForm.formState.errors.password && (
-                        <p className="text-sm text-destructive mt-1">
-                          {registerForm.formState.errors.password.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="invitationToken">Invitation Code (Optional)</Label>
-                      <Input
-                        id="invitationToken"
-                        type="text"
-                        {...registerForm.register("invitationToken")}
-                        placeholder="Enter your invite code"
-                        disabled={registerMutation.isPending || !!invitationToken}
-                      />
-                      {invitationError && (
-                        <p className="text-sm text-destructive mt-1">
-                          {invitationError}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        If you were invited by a member, enter their code to become friends automatically
-                      </p>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={registerMutation.isPending || !!invitationError}
-                      data-testid="button-register"
-                    >
-                      {registerMutation.isPending ? "Creating Account..." : "Create Account"}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <div className="bg-primary text-primary-foreground py-4 px-8 flex items-center gap-3">
+        <img src={logoPath} alt="ACP" className="h-8 w-8" />
+        <span className="text-xl font-bold">ACP Democracy</span>
       </div>
 
-      {/* Right side - Hero Section */}
-      <div className="flex-1 bg-primary text-primary-foreground p-8 flex items-center justify-center">
-        <div className="max-w-lg text-center">
-          <div className="mb-8">
-            <img src={logoPath} alt="Anti-Corruption Party" className="h-20 w-20 mx-auto mb-4 opacity-90" />
+      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-60px)]">
+
+        {/* ── LEFT: Login ──────────────────────────────────────────────── */}
+        <div className="flex-1 flex items-start lg:items-center justify-center p-6 lg:p-10 bg-white border-b lg:border-b-0 lg:border-r border-slate-200">
+          <div className="w-full max-w-sm">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-slate-900">Sign In</h2>
+              <p className="text-slate-500 text-sm mt-1">Access your ACP account</p>
+            </div>
+
+            {twoFactorData ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{twoFactorData.twoFactorMethod === 'sms' ? "Check Your Phone" : "Authenticator Code"}</CardTitle>
+                  <CardDescription>
+                    {twoFactorData.twoFactorMethod === 'sms'
+                      ? `Enter the code sent to ${twoFactorData.phone}`
+                      : "Enter the code from your authenticator app"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-center mb-2">
+                    {twoFactorData.twoFactorMethod === 'sms'
+                      ? <Smartphone className="h-10 w-10 text-primary" />
+                      : <Key className="h-10 w-10 text-primary" />}
+                  </div>
+                  <div>
+                    <Label htmlFor="twoFactorCode">Verification Code</Label>
+                    <Input
+                      id="twoFactorCode"
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value)}
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      className="text-center text-2xl tracking-widest mt-1"
+                      disabled={verify2FAMutation.isPending}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="rememberDevice"
+                      checked={rememberDevice}
+                      onCheckedChange={(checked) => setRememberDevice(checked === true)}
+                    />
+                    <Label htmlFor="rememberDevice" className="text-sm text-slate-600">
+                      Trust this device for 60 days
+                    </Label>
+                  </div>
+                  {verify2FAMutation.error && (
+                    <ErrorMessage message={verify2FAMutation.error.message || "Verification failed."} variant="error" />
+                  )}
+                  <Button className="w-full" onClick={onVerify2FA} disabled={verify2FAMutation.isPending || twoFactorCode.length < 6}>
+                    {verify2FAMutation.isPending ? <><LoadingSpinner size="sm" className="mr-2" />Verifying...</> : "Verify"}
+                  </Button>
+                  {twoFactorData.twoFactorMethod === 'sms' && (
+                    <Button variant="outline" className="w-full" onClick={() => sendSmsCode(twoFactorData.challengeToken)} disabled={smsSending}>
+                      {smsSending ? "Sending..." : "Resend Code"}
+                    </Button>
+                  )}
+                  <Button variant="ghost" className="w-full" onClick={cancelTwoFactor}>Back to Login</Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
+                <div>
+                  <Label htmlFor="identifier">Username, Email, or Phone</Label>
+                  <Input
+                    id="identifier"
+                    {...loginForm.register("identifier")}
+                    placeholder="Enter username, email, or phone"
+                    autoComplete="username"
+                    disabled={loginMutation.isPending}
+                    className="mt-1"
+                  />
+                  {loginForm.formState.errors.identifier && (
+                    <p className="text-sm text-destructive mt-1">{loginForm.formState.errors.identifier.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="loginPassword">Password</Label>
+                  <Input
+                    id="loginPassword"
+                    type="password"
+                    {...loginForm.register("password")}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    disabled={loginMutation.isPending}
+                    className="mt-1"
+                  />
+                  {loginForm.formState.errors.password && (
+                    <p className="text-sm text-destructive mt-1">{loginForm.formState.errors.password.message}</p>
+                  )}
+                </div>
+
+                {loginMutation.error && (
+                  <ErrorMessage
+                    message={loginMutation.error.message || "Login failed. Please check your credentials."}
+                    variant="error"
+                    data-testid="login-error-alert"
+                  />
+                )}
+
+                <Button type="submit" className="w-full" disabled={loginMutation.isPending} data-testid="button-login-submit">
+                  {loginMutation.isPending ? <><LoadingSpinner size="sm" className="mr-2" />Signing In...</> : "Sign In"}
+                </Button>
+
+                <div className="text-center">
+                  <Link href="/forgot-password">
+                    <Button variant="link" className="text-sm text-slate-500 hover:text-slate-800 p-0 h-auto">
+                      Forgot your password?
+                    </Button>
+                  </Link>
+                </div>
+              </form>
+            )}
+
+            {/* Feature highlights */}
+            <div className="mt-8 pt-6 border-t border-slate-100 grid grid-cols-2 gap-3">
+              {[
+                { icon: Users, label: "Community Driven" },
+                { icon: Vote, label: "Direct Democracy" },
+                { icon: Shield, label: "Transparent" },
+                { icon: Megaphone, label: "Candidate Support" },
+              ].map(({ icon: Icon, label }) => (
+                <div key={label} className="flex items-center gap-2 text-xs text-slate-500">
+                  <Icon className="h-4 w-4 text-primary flex-shrink-0" />
+                  {label}
+                </div>
+              ))}
+            </div>
           </div>
-          <h2 className="text-3xl font-bold mb-6">
-            Democracy That Works for Everyone
-          </h2>
-          <p className="text-lg mb-8 opacity-90">
-            Join the Anti-Corruption Party platform where transparency meets action.
-            Vote on issues that matter, connect with like-minded citizens, and help
-            build a better democracy.
-          </p>
+        </div>
 
-          <div className="grid grid-cols-2 gap-6">
-            <div className="text-center">
-              <Users className="h-8 w-8 mx-auto mb-2 opacity-80" />
-              <h3 className="font-semibold mb-1">Community Driven</h3>
-              <p className="text-sm opacity-75">Join groups focused on issues you care about</p>
+        {/* ── RIGHT: Sign Up ────────────────────────────────────────────── */}
+        <div className="flex-1 flex items-start justify-center p-6 lg:p-10 bg-slate-50 overflow-y-auto">
+          <div className="w-full max-w-sm">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-slate-900">Create Account</h2>
+              <p className="text-slate-500 text-sm mt-1">Join the movement for transparent governance</p>
             </div>
 
-            <div className="text-center">
-              <Vote className="h-8 w-8 mx-auto mb-2 opacity-80" />
-              <h3 className="font-semibold mb-1">Direct Democracy</h3>
-              <p className="text-sm opacity-75">Vote on polls and referenda that shape policy</p>
-            </div>
+            {invitationError && (
+              <Alert className="mb-4" variant="destructive" data-testid="alert-invitation-error">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{invitationError}</AlertDescription>
+              </Alert>
+            )}
 
-            <div className="text-center">
-              <Shield className="h-8 w-8 mx-auto mb-2 opacity-80" />
-              <h3 className="font-semibold mb-1">Transparent</h3>
-              <p className="text-sm opacity-75">All funding and decisions are public record</p>
-            </div>
+            <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-3">
+              {/* Name row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    {...registerForm.register("firstName")}
+                    placeholder="First name"
+                    disabled={registerMutation.isPending}
+                    className="mt-1"
+                  />
+                  {registerForm.formState.errors.firstName && (
+                    <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.firstName.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    {...registerForm.register("lastName")}
+                    placeholder="Last name"
+                    disabled={registerMutation.isPending}
+                    className="mt-1"
+                  />
+                  {registerForm.formState.errors.lastName && (
+                    <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.lastName.message}</p>
+                  )}
+                </div>
+              </div>
 
-            <div className="text-center">
-              <Megaphone className="h-8 w-8 mx-auto mb-2 opacity-80" />
-              <h3 className="font-semibold mb-1">Candidate Support</h3>
-              <p className="text-sm opacity-75">Connect with candidates who share your values</p>
-            </div>
+              <div>
+                <Label htmlFor="regUsername">Username</Label>
+                <Input
+                  id="regUsername"
+                  {...registerForm.register("username")}
+                  placeholder="Choose a username"
+                  disabled={registerMutation.isPending}
+                  className="mt-1"
+                />
+                {registerForm.formState.errors.username && (
+                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.username.message}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="regEmail">Email</Label>
+                <Input
+                  id="regEmail"
+                  type="email"
+                  {...registerForm.register("email")}
+                  placeholder="Enter your email"
+                  disabled={registerMutation.isPending}
+                  data-testid="input-email"
+                  className="mt-1"
+                />
+                {registerForm.formState.errors.email && (
+                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.email.message}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="regPhone">Phone Number</Label>
+                <Input
+                  id="regPhone"
+                  type="tel"
+                  {...registerForm.register("phoneNumber")}
+                  placeholder="(555) 123-4567"
+                  disabled={registerMutation.isPending}
+                  data-testid="input-phone-number"
+                  className="mt-1"
+                />
+                {registerForm.formState.errors.phoneNumber && (
+                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.phoneNumber.message}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="regPassword">Password</Label>
+                <Input
+                  id="regPassword"
+                  type="password"
+                  {...registerForm.register("password")}
+                  placeholder="Create a password"
+                  disabled={registerMutation.isPending}
+                  className="mt-1"
+                />
+                {registerForm.formState.errors.password && (
+                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.password.message}</p>
+                )}
+              </div>
+
+              {/* ── Address Section ── */}
+              <div className="pt-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold text-slate-700">Address Information</span>
+                </div>
+
+                <div>
+                  <Label htmlFor="addressZip">
+                    ZIP Code <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="addressZip"
+                    {...registerForm.register("addressZip")}
+                    placeholder="ZIP code"
+                    maxLength={10}
+                    disabled={registerMutation.isPending}
+                    className="mt-1"
+                  />
+                  {registerForm.formState.errors.addressZip && (
+                    <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.addressZip.message}</p>
+                  )}
+                  <p className="text-xs text-slate-400 mt-1">
+                    To match you with the most accurate candidates, a verified address is recommended. We will never share this information.
+                  </p>
+                </div>
+
+                <div className="mt-3">
+                  <Label htmlFor="addressStreet">Street <span className="text-slate-400 font-normal">(optional)</span></Label>
+                  <Input
+                    id="addressStreet"
+                    {...registerForm.register("addressStreet")}
+                    placeholder="123 Main St"
+                    disabled={registerMutation.isPending}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <Label htmlFor="addressCity">City <span className="text-slate-400 font-normal">(optional)</span></Label>
+                    <Input
+                      id="addressCity"
+                      {...registerForm.register("addressCity")}
+                      placeholder="City"
+                      disabled={registerMutation.isPending}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="addressState">State <span className="text-slate-400 font-normal">(optional)</span></Label>
+                    <Input
+                      id="addressState"
+                      {...registerForm.register("addressState")}
+                      placeholder="CA"
+                      maxLength={2}
+                      disabled={registerMutation.isPending}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Invitation token */}
+              <div>
+                <Label htmlFor="invitationToken">Invitation Code <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <Input
+                  id="invitationToken"
+                  {...registerForm.register("invitationToken")}
+                  placeholder="Enter invite code"
+                  disabled={registerMutation.isPending || !!invitationToken}
+                  className="mt-1"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  If you were invited, enter their code to become friends automatically
+                </p>
+              </div>
+
+              {registerMutation.error && (
+                <ErrorMessage
+                  message={registerMutation.error.message || "Registration failed. Please try again."}
+                  variant="error"
+                />
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={registerMutation.isPending || !!invitationError}
+                data-testid="button-register"
+              >
+                {registerMutation.isPending ? "Creating Account..." : "Create Account"}
+              </Button>
+            </form>
           </div>
         </div>
       </div>

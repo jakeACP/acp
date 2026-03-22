@@ -63,6 +63,12 @@ export const users = pgTable("users", {
   twoFactorPhone: text("two_factor_phone"), // Phone number for SMS 2FA
   // Credits system
   credits: integer("credits").default(0), // User credits for referrals
+  // Address information (kept private, used for candidate matching)
+  addressZip: text("address_zip"),
+  addressStreet: text("address_street"),
+  addressCity: text("address_city"),
+  addressState: text("address_state"),
+  addressVerified: boolean("address_verified").default(false),
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,

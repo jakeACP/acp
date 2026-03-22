@@ -1,0 +1,210 @@
+You are updating an existing full-stack web app (ACP). Implement the following authentication, UI, and user profile upgrades. Do NOT break existing functionality. Make clean, modular changes.
+
+========================
+1. AUTH SYSTEM UPGRADE
+========================
+
+GOAL:
+Allow users to log in using:
+- Username OR
+- Email OR
+- Phone number
+
+BACKEND:
+
+1. Modify login route to accept:
+   - identifier (string)
+   - password
+
+2. Update login logic:
+
+- Normalize identifier:
+  - email → lowercase
+  - phone → convert to E.164 format (use a helper)
+
+- Query user:
+
+  Find user where:
+    username == identifier
+    OR email == identifier
+    OR phone == identifier
+
+3. Example logic:
+
+- const identifier = req.body.identifier;
+- const user = await User.findOne({
+    $or: [
+      { username: identifier },
+      { email: identifier.toLowerCase() },
+      { phone: normalizedPhone }
+    ]
+  });
+
+4. Validate password using bcrypt.
+
+5. Return auth token/session as currently implemented.
+
+DATABASE:
+
+Ensure fields exist and are UNIQUE:
+- username
+- email
+- phone
+
+Add indexes for performance.
+
+========================
+2. USER MODEL UPDATE
+========================
+
+Add address object:
+
+address: {
+  zip: String (REQUIRED),
+  street: String,
+  city: String,
+  state: String,
+  verified: Boolean (default: false)
+}
+
+Ensure existing users are backward compatible.
+
+========================
+3. LANDING PAGE REDESIGN
+========================
+
+Modify homepage layout:
+
+LEFT SIDE:
+Replace current "Join the Movement" section with LOGIN PANEL.
+
+RIGHT SIDE:
+Place SIGN UP FORM.
+
+------------------------
+LEFT (LOGIN UI)
+------------------------
+
+Fields:
+- Identifier input (label: "Username, Email, or Phone")
+- Password
+- Login button
+- "Forgot Password?" link
+
+------------------------
+RIGHT (SIGNUP UI)
+------------------------
+
+Fields:
+- Username
+- Email
+- Phone
+- Password
+- Confirm Password
+
+ADDRESS SECTION:
+
+- ZIP Code (REQUIRED)
+- Street (optional)
+- City (optional)
+- State (optional)
+
+Add note under ZIP:
+
+"To match you with the most accurate candidates, a verified address is recommended. We will never share this information."
+
+========================
+4. SIGNUP LOGIC
+========================
+
+- Require ZIP code
+- Save address object
+- Set address.verified = false
+
+- Normalize:
+  - email → lowercase
+  - phone → E.164
+
+- Validate uniqueness:
+  - username
+  - email
+  - phone
+
+========================
+5. PROFILE: EDIT ADDRESS
+========================
+
+Add section in user profile:
+
+"Address Information"
+
+Fields:
+- ZIP
+- Street
+- City
+- State
+
+Add button:
+"Update Address"
+
+BACKEND ROUTE:
+
+PUT /api/user/address
+
+- Auth required
+- Update address fields
+- Reset verified = false if changed
+
+========================
+6. SECURITY REQUIREMENTS
+========================
+
+- Hash passwords with bcrypt
+- Do NOT expose address publicly
+- Rate limit login attempts
+- Sanitize all inputs
+
+========================
+7. OPTIONAL (PREP FOR FUTURE)
+========================
+
+Structure code so address verification can later integrate with:
+- USPS API
+- Google Maps API
+
+Do not implement yet, just keep it modular.
+
+========================
+8. FRONTEND NOTES
+========================
+
+- Keep styling consistent with ACP theme
+- Ensure responsive layout (mobile + desktop)
+- Validate forms client-side before submit
+- Show clear error messages
+
+========================
+9. TESTING
+========================
+
+Test cases:
+
+- Login with username
+- Login with email
+- Login with phone
+- Duplicate email/phone rejected
+- Signup requires ZIP
+- Address saves correctly
+- Profile address update works
+
+========================
+FINAL GOAL
+========================
+
+Users can:
+- Log in with username/email/phone
+- Sign up with minimal friction (ZIP required)
+- Optionally provide full address
+- Update address later
+
+Do all changes cleanly and commit in logical steps.

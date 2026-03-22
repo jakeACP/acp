@@ -17,6 +17,8 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByPhone(phone: string): Promise<User | undefined>;
+  getUserByIdentifier(identifier: string): Promise<User | undefined>;
   getUserCount(search?: string): Promise<number>;
   getAllUsers(limit?: number, offset?: number, search?: string): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
@@ -577,6 +579,26 @@ export class DatabaseStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user || undefined;
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const normalized = phone.replace(/\D/g, "");
+    const [user] = await db.select().from(users).where(
+      sql`regexp_replace(${users.phoneNumber}, '[^0-9]', '', 'g') = ${normalized}`
+    );
+    return user || undefined;
+  }
+
+  async getUserByIdentifier(identifier: string): Promise<User | undefined> {
+    const byUsername = await this.getUserByUsername(identifier);
+    if (byUsername) return byUsername;
+    const byEmail = await this.getUserByEmail(identifier.toLowerCase());
+    if (byEmail) return byEmail;
+    const digitsOnly = identifier.replace(/\D/g, "");
+    if (digitsOnly.length >= 10) {
+      return this.getUserByPhone(identifier);
+    }
+    return undefined;
   }
 
   async getUserCount(search = ""): Promise<number> {
