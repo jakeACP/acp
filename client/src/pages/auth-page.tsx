@@ -172,8 +172,252 @@ export default function AuthPage() {
 
       <div className="flex flex-col lg:flex-row min-h-[calc(100vh-60px)]">
 
-        {/* ── LEFT: Login (15%) ─────────────────────────────────────────── */}
+        {/* ── LEFT: Create Account (15%) ───────────────────────────────── */}
         <div className="lg:w-[15%] lg:min-w-[200px] flex items-start justify-center p-4 lg:p-5 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 overflow-y-auto lg:max-h-[calc(100vh-60px)]">
+          <div className="w-full">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-slate-900">Create Account</h2>
+              <p className="text-slate-500 text-xs mt-1">Join the movement for transparent governance</p>
+            </div>
+
+            {invitationError && (
+              <Alert className="mb-4" variant="destructive" data-testid="alert-invitation-error">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{invitationError}</AlertDescription>
+              </Alert>
+            )}
+
+            <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    {...registerForm.register("firstName")}
+                    placeholder="First name"
+                    disabled={registerMutation.isPending}
+                    className="mt-1"
+                  />
+                  {registerForm.formState.errors.firstName && (
+                    <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.firstName.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    {...registerForm.register("lastName")}
+                    placeholder="Last name"
+                    disabled={registerMutation.isPending}
+                    className="mt-1"
+                  />
+                  {registerForm.formState.errors.lastName && (
+                    <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.lastName.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="regUsername">Username</Label>
+                <Input
+                  id="regUsername"
+                  {...registerForm.register("username")}
+                  placeholder="Choose a username"
+                  disabled={registerMutation.isPending}
+                  className="mt-1"
+                />
+                {registerForm.formState.errors.username && (
+                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.username.message}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="regEmail">Email</Label>
+                <Input
+                  id="regEmail"
+                  type="email"
+                  {...registerForm.register("email")}
+                  placeholder="Enter your email"
+                  disabled={registerMutation.isPending}
+                  data-testid="input-email"
+                  className="mt-1"
+                />
+                {registerForm.formState.errors.email && (
+                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.email.message}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="regPhone">Phone Number</Label>
+                <Input
+                  id="regPhone"
+                  type="tel"
+                  {...registerForm.register("phoneNumber")}
+                  placeholder="(555) 123-4567"
+                  disabled={registerMutation.isPending}
+                  data-testid="input-phone-number"
+                  className="mt-1"
+                />
+                {registerForm.formState.errors.phoneNumber && (
+                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.phoneNumber.message}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="regPassword">Password</Label>
+                <Input
+                  id="regPassword"
+                  type="password"
+                  {...registerForm.register("password")}
+                  placeholder="Create a password"
+                  disabled={registerMutation.isPending}
+                  className="mt-1"
+                />
+                {registerForm.formState.errors.password && (
+                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.password.message}</p>
+                )}
+              </div>
+
+              <div className="pt-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold text-slate-700">Address</span>
+                </div>
+                <div>
+                  <Label htmlFor="addressZip">ZIP Code <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="addressZip"
+                    {...registerForm.register("addressZip")}
+                    placeholder="ZIP code"
+                    maxLength={10}
+                    disabled={registerMutation.isPending}
+                    className="mt-1"
+                  />
+                  {registerForm.formState.errors.addressZip && (
+                    <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.addressZip.message}</p>
+                  )}
+                </div>
+                <div className="mt-2">
+                  <Label htmlFor="addressStreet">Street <span className="text-slate-400 font-normal">(optional)</span></Label>
+                  <Input
+                    id="addressStreet"
+                    {...registerForm.register("addressStreet")}
+                    placeholder="123 Main St"
+                    disabled={registerMutation.isPending}
+                    className="mt-1"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div>
+                    <Label htmlFor="addressCity">City</Label>
+                    <Input
+                      id="addressCity"
+                      {...registerForm.register("addressCity")}
+                      placeholder="City"
+                      disabled={registerMutation.isPending}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="addressState">State</Label>
+                    <Input
+                      id="addressState"
+                      {...registerForm.register("addressState")}
+                      placeholder="CA"
+                      maxLength={2}
+                      disabled={registerMutation.isPending}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="invitationToken">Invite Code <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <Input
+                  id="invitationToken"
+                  {...registerForm.register("invitationToken")}
+                  placeholder="Enter invite code"
+                  disabled={registerMutation.isPending || !!invitationToken}
+                  className="mt-1"
+                />
+              </div>
+
+              {registerMutation.error && (
+                <ErrorMessage
+                  message={registerMutation.error.message || "Registration failed. Please try again."}
+                  variant="error"
+                />
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={registerMutation.isPending || !!invitationError}
+                data-testid="button-register"
+              >
+                {registerMutation.isPending ? "Creating Account..." : "Create Account"}
+              </Button>
+            </form>
+          </div>
+        </div>
+
+        {/* ── CENTER: Articles Feed (70%) ───────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-50 lg:max-h-[calc(100vh-60px)]">
+          <div className="flex items-center gap-2 mb-4">
+            <Newspaper className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold text-slate-800">Latest News</h2>
+          </div>
+          {publicArticles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+              <Newspaper className="h-12 w-12 mb-3 opacity-30" />
+              <p className="text-sm">No articles yet — check back soon.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {publicArticles.map((article: any) => (
+                <Card key={article.id} className="bg-white shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    {(article.image || article.featuredImage) && (
+                      <img
+                        src={article.image || article.featuredImage}
+                        alt={article.title}
+                        className="w-full h-40 object-cover rounded-md mb-3"
+                      />
+                    )}
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {article.type && (
+                        <span className="text-xs font-semibold uppercase tracking-wide text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                          {article.type.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                      {article.createdAt && (
+                        <span className="flex items-center gap-1 text-xs text-slate-400">
+                          <Clock className="h-3 w-3" />
+                          {new Date(article.createdAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    {article.title && (
+                      <h3 className="font-semibold text-slate-900 leading-snug mb-1">{article.title}</h3>
+                    )}
+                    {(article.excerpt || article.content) && (
+                      <p className="text-sm text-slate-500 line-clamp-3">{article.excerpt || article.content}</p>
+                    )}
+                    {(article.newsSourceName || article.author?.displayName) && (
+                      <p className="text-xs text-slate-400 mt-2">
+                        {article.newsSourceName || `By ${article.author?.displayName}`}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── RIGHT: Sign In (15%) ──────────────────────────────────────── */}
+        <div className="lg:w-[15%] lg:min-w-[200px] flex items-start justify-center p-4 lg:p-5 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 overflow-y-auto lg:max-h-[calc(100vh-60px)]">
           <div className="w-full">
             <div className="mb-4">
               <h2 className="text-lg font-bold text-slate-900">Sign In</h2>
@@ -287,7 +531,6 @@ export default function AuthPage() {
               </form>
             )}
 
-            {/* Feature highlights */}
             <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col gap-2">
               {[
                 { icon: Users, label: "Community Driven" },
@@ -301,264 +544,6 @@ export default function AuthPage() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* ── CENTER: Articles Feed (70%) ───────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-50 lg:max-h-[calc(100vh-60px)]">
-          <div className="flex items-center gap-2 mb-4">
-            <Newspaper className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-bold text-slate-800">Latest News</h2>
-          </div>
-          {publicArticles.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-              <Newspaper className="h-12 w-12 mb-3 opacity-30" />
-              <p className="text-sm">No articles yet — check back soon.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {publicArticles.map((article: any) => (
-                <Card key={article.id} className="bg-white shadow-sm hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    {(article.image || article.featuredImage) && (
-                      <img
-                        src={article.image || article.featuredImage}
-                        alt={article.title}
-                        className="w-full h-40 object-cover rounded-md mb-3"
-                      />
-                    )}
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      {article.type && (
-                        <span className="text-xs font-semibold uppercase tracking-wide text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                          {article.type.replace(/_/g, ' ')}
-                        </span>
-                      )}
-                      {article.createdAt && (
-                        <span className="flex items-center gap-1 text-xs text-slate-400">
-                          <Clock className="h-3 w-3" />
-                          {new Date(article.createdAt).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                    {article.title && (
-                      <h3 className="font-semibold text-slate-900 leading-snug mb-1">{article.title}</h3>
-                    )}
-                    {(article.excerpt || article.content) && (
-                      <p className="text-sm text-slate-500 line-clamp-3">{article.excerpt || article.content}</p>
-                    )}
-                    {(article.newsSourceName || article.author?.displayName) && (
-                      <p className="text-xs text-slate-400 mt-2">
-                        {article.newsSourceName || `By ${article.author?.displayName}`}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* ── RIGHT: Sign Up (15%) ──────────────────────────────────────── */}
-        <div className="lg:w-[15%] lg:min-w-[200px] flex items-start justify-center p-4 lg:p-5 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 overflow-y-auto lg:max-h-[calc(100vh-60px)]">
-          <div className="w-full">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold text-slate-900">Create Account</h2>
-              <p className="text-slate-500 text-xs mt-1">Join the movement for transparent governance</p>
-            </div>
-
-            {invitationError && (
-              <Alert className="mb-4" variant="destructive" data-testid="alert-invitation-error">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{invitationError}</AlertDescription>
-              </Alert>
-            )}
-
-            <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-3">
-              {/* Name row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input
-                    id="firstName"
-                    {...registerForm.register("firstName")}
-                    placeholder="First name"
-                    disabled={registerMutation.isPending}
-                    className="mt-1"
-                  />
-                  {registerForm.formState.errors.firstName && (
-                    <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.firstName.message}</p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input
-                    id="lastName"
-                    {...registerForm.register("lastName")}
-                    placeholder="Last name"
-                    disabled={registerMutation.isPending}
-                    className="mt-1"
-                  />
-                  {registerForm.formState.errors.lastName && (
-                    <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.lastName.message}</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="regUsername">Username</Label>
-                <Input
-                  id="regUsername"
-                  {...registerForm.register("username")}
-                  placeholder="Choose a username"
-                  disabled={registerMutation.isPending}
-                  className="mt-1"
-                />
-                {registerForm.formState.errors.username && (
-                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.username.message}</p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="regEmail">Email</Label>
-                <Input
-                  id="regEmail"
-                  type="email"
-                  {...registerForm.register("email")}
-                  placeholder="Enter your email"
-                  disabled={registerMutation.isPending}
-                  data-testid="input-email"
-                  className="mt-1"
-                />
-                {registerForm.formState.errors.email && (
-                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.email.message}</p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="regPhone">Phone Number</Label>
-                <Input
-                  id="regPhone"
-                  type="tel"
-                  {...registerForm.register("phoneNumber")}
-                  placeholder="(555) 123-4567"
-                  disabled={registerMutation.isPending}
-                  data-testid="input-phone-number"
-                  className="mt-1"
-                />
-                {registerForm.formState.errors.phoneNumber && (
-                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.phoneNumber.message}</p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="regPassword">Password</Label>
-                <Input
-                  id="regPassword"
-                  type="password"
-                  {...registerForm.register("password")}
-                  placeholder="Create a password"
-                  disabled={registerMutation.isPending}
-                  className="mt-1"
-                />
-                {registerForm.formState.errors.password && (
-                  <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.password.message}</p>
-                )}
-              </div>
-
-              {/* ── Address Section ── */}
-              <div className="pt-2">
-                <div className="flex items-center gap-2 mb-3">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold text-slate-700">Address Information</span>
-                </div>
-
-                <div>
-                  <Label htmlFor="addressZip">
-                    ZIP Code <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="addressZip"
-                    {...registerForm.register("addressZip")}
-                    placeholder="ZIP code"
-                    maxLength={10}
-                    disabled={registerMutation.isPending}
-                    className="mt-1"
-                  />
-                  {registerForm.formState.errors.addressZip && (
-                    <p className="text-xs text-destructive mt-1">{registerForm.formState.errors.addressZip.message}</p>
-                  )}
-                  <p className="text-xs text-slate-400 mt-1">
-                    To match you with the most accurate candidates, a verified address is recommended. We will never share this information.
-                  </p>
-                </div>
-
-                <div className="mt-3">
-                  <Label htmlFor="addressStreet">Street <span className="text-slate-400 font-normal">(optional)</span></Label>
-                  <Input
-                    id="addressStreet"
-                    {...registerForm.register("addressStreet")}
-                    placeholder="123 Main St"
-                    disabled={registerMutation.isPending}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div>
-                    <Label htmlFor="addressCity">City <span className="text-slate-400 font-normal">(optional)</span></Label>
-                    <Input
-                      id="addressCity"
-                      {...registerForm.register("addressCity")}
-                      placeholder="City"
-                      disabled={registerMutation.isPending}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="addressState">State <span className="text-slate-400 font-normal">(optional)</span></Label>
-                    <Input
-                      id="addressState"
-                      {...registerForm.register("addressState")}
-                      placeholder="CA"
-                      maxLength={2}
-                      disabled={registerMutation.isPending}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Invitation token */}
-              <div>
-                <Label htmlFor="invitationToken">Invitation Code <span className="text-slate-400 font-normal">(optional)</span></Label>
-                <Input
-                  id="invitationToken"
-                  {...registerForm.register("invitationToken")}
-                  placeholder="Enter invite code"
-                  disabled={registerMutation.isPending || !!invitationToken}
-                  className="mt-1"
-                />
-                <p className="text-xs text-slate-400 mt-1">
-                  If you were invited, enter their code to become friends automatically
-                </p>
-              </div>
-
-              {registerMutation.error && (
-                <ErrorMessage
-                  message={registerMutation.error.message || "Registration failed. Please try again."}
-                  variant="error"
-                />
-              )}
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={registerMutation.isPending || !!invitationError}
-                data-testid="button-register"
-              >
-                {registerMutation.isPending ? "Creating Account..." : "Create Account"}
-              </Button>
-            </form>
           </div>
         </div>
       </div>

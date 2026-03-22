@@ -504,7 +504,7 @@ export function PostCard({ post }: PostCardProps) {
                   {getDisplayName()}
                 </h4>
               </WouterLink>
-              <p className="text-sm text-white">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {timeAgo || "Recently"}
               </p>
             </div>
