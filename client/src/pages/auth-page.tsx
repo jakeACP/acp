@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { Vote, Users, Shield, Megaphone, AlertCircle, Smartphone, Key, MapPin } from "lucide-react";
+import { Vote, Users, Shield, Megaphone, AlertCircle, Smartphone, Key, MapPin, Newspaper, Clock } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { Redirect, Link, useLocation } from "wouter";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -16,6 +16,7 @@ import { ErrorMessage } from "@/components/error-message";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 
 const loginSchema = z.object({
   identifier: z.string().min(1, "Please enter your username, email, or phone"),
@@ -150,6 +151,11 @@ export default function AuthPage() {
     setRememberDevice(false);
   };
 
+  const { data: publicArticles = [] } = useQuery<any[]>({
+    queryKey: ["/api/public/articles"],
+    staleTime: 60_000,
+  });
+
   const onRegister = (data: RegisterData) => {
     const { invitationToken, ...rest } = data;
     const payload = invitationToken ? data : rest;
@@ -166,12 +172,12 @@ export default function AuthPage() {
 
       <div className="flex flex-col lg:flex-row min-h-[calc(100vh-60px)]">
 
-        {/* ── LEFT: Login ──────────────────────────────────────────────── */}
-        <div className="flex-1 flex items-start lg:items-center justify-center p-6 lg:p-10 bg-white border-b lg:border-b-0 lg:border-r border-slate-200">
-          <div className="w-full max-w-sm">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-slate-900">Sign In</h2>
-              <p className="text-slate-500 text-sm mt-1">Access your ACP account</p>
+        {/* ── LEFT: Login (15%) ─────────────────────────────────────────── */}
+        <div className="lg:w-[15%] lg:min-w-[200px] flex items-start justify-center p-4 lg:p-5 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 overflow-y-auto lg:max-h-[calc(100vh-60px)]">
+          <div className="w-full">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-slate-900">Sign In</h2>
+              <p className="text-slate-500 text-xs mt-1">Access your ACP account</p>
             </div>
 
             {twoFactorData ? (
@@ -282,7 +288,7 @@ export default function AuthPage() {
             )}
 
             {/* Feature highlights */}
-            <div className="mt-8 pt-6 border-t border-slate-100 grid grid-cols-2 gap-3">
+            <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col gap-2">
               {[
                 { icon: Users, label: "Community Driven" },
                 { icon: Vote, label: "Direct Democracy" },
@@ -298,12 +304,66 @@ export default function AuthPage() {
           </div>
         </div>
 
-        {/* ── RIGHT: Sign Up ────────────────────────────────────────────── */}
-        <div className="flex-1 flex items-start justify-center p-6 lg:p-10 bg-slate-50 overflow-y-auto">
-          <div className="w-full max-w-sm">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-slate-900">Create Account</h2>
-              <p className="text-slate-500 text-sm mt-1">Join the movement for transparent governance</p>
+        {/* ── CENTER: Articles Feed (70%) ───────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-50 lg:max-h-[calc(100vh-60px)]">
+          <div className="flex items-center gap-2 mb-4">
+            <Newspaper className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold text-slate-800">Latest News</h2>
+          </div>
+          {publicArticles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+              <Newspaper className="h-12 w-12 mb-3 opacity-30" />
+              <p className="text-sm">No articles yet — check back soon.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {publicArticles.map((article: any) => (
+                <Card key={article.id} className="bg-white shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    {(article.image || article.featuredImage) && (
+                      <img
+                        src={article.image || article.featuredImage}
+                        alt={article.title}
+                        className="w-full h-40 object-cover rounded-md mb-3"
+                      />
+                    )}
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {article.type && (
+                        <span className="text-xs font-semibold uppercase tracking-wide text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                          {article.type.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                      {article.createdAt && (
+                        <span className="flex items-center gap-1 text-xs text-slate-400">
+                          <Clock className="h-3 w-3" />
+                          {new Date(article.createdAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    {article.title && (
+                      <h3 className="font-semibold text-slate-900 leading-snug mb-1">{article.title}</h3>
+                    )}
+                    {(article.excerpt || article.content) && (
+                      <p className="text-sm text-slate-500 line-clamp-3">{article.excerpt || article.content}</p>
+                    )}
+                    {(article.newsSourceName || article.author?.displayName) && (
+                      <p className="text-xs text-slate-400 mt-2">
+                        {article.newsSourceName || `By ${article.author?.displayName}`}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── RIGHT: Sign Up (15%) ──────────────────────────────────────── */}
+        <div className="lg:w-[15%] lg:min-w-[200px] flex items-start justify-center p-4 lg:p-5 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 overflow-y-auto lg:max-h-[calc(100vh-60px)]">
+          <div className="w-full">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-slate-900">Create Account</h2>
+              <p className="text-slate-500 text-xs mt-1">Join the movement for transparent governance</p>
             </div>
 
             {invitationError && (
