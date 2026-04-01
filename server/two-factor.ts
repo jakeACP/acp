@@ -130,8 +130,10 @@ export async function disableTotp(userId: string): Promise<void> {
 /**
  * Send a 2FA OTP via Twilio Verify.
  * Throws on failure so the caller can surface the real error.
+ * `_userId` is kept for API compatibility but is not needed — Twilio Verify
+ * manages code delivery without a local user context.
  */
-export async function sendSms2FA(userId: string, phoneNumber: string): Promise<void> {
+export async function sendSms2FA(_userId: string, phoneNumber: string): Promise<void> {
   await sendVerifyOtp(phoneNumber);
 }
 

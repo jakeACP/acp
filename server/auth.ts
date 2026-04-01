@@ -824,14 +824,22 @@ export function setupAuth(app: Express) {
       if (!phoneNumber || !code) {
         return res.status(400).json({ message: "Phone number and verification code are required" });
       }
+
+      // Normalize once, then use the canonical form throughout
+      let canonicalPhone: string;
+      try {
+        canonicalPhone = normalizePhone(phoneNumber);
+      } catch (normErr: any) {
+        return res.status(400).json({ message: normErr.message || "Invalid phone number" });
+      }
       
       // Verify the code first (phone may not be saved yet, so pass it explicitly)
-      const result = await verifySms2FA(req.user.id, code, phoneNumber);
+      const result = await verifySms2FA(req.user.id, code, canonicalPhone);
       if (!result.success) {
         return res.status(400).json({ message: result.reason || "Invalid code" });
       }
       
-      await enableSms2FA(req.user.id, phoneNumber);
+      await enableSms2FA(req.user.id, canonicalPhone);
       res.json({ message: "SMS 2FA enabled successfully" });
     } catch (error: any) {
       console.error("SMS enable error:", error);
