@@ -8376,6 +8376,14 @@ Only include people you are confident about. Return empty arrays/null if unknown
       if (!phone || typeof phone !== "string") {
         return res.status(400).json({ message: "Phone number is required" });
       }
+      const { sendSmsOtp, normalizePhone } = await import("./twilio");
+      // Validate phone format before creating invitation — return 400 for bad input
+      let normalizedPhone: string;
+      try {
+        normalizedPhone = normalizePhone(phone);
+      } catch (normErr: any) {
+        return res.status(400).json({ message: normErr.message || "Invalid phone number" });
+      }
       const { randomBytes } = await import("crypto");
       const token = randomBytes(20).toString("hex");
       await storage.createInvitation({ token, invitedBy: req.user.id, maxUses: 1 });
@@ -8383,9 +8391,8 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const displayName = req.user.firstName
         ? `${req.user.firstName}${req.user.lastName ? " " + req.user.lastName : ""}`
         : req.user.username;
-      const { sendSmsOtp } = await import("./twilio");
       const inviteBody = `${displayName} invited you to join the Anti-Corruption Party! Create your account and connect as friends instantly: ${inviteUrl}`;
-      await sendSmsOtp(phone, inviteBody);
+      await sendSmsOtp(normalizedPhone, inviteBody);
       res.json({ success: true });
     } catch (error: any) {
       console.error("SMS invite error:", error);

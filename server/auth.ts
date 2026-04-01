@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import { User as SelectUser } from "@shared/schema";
 import { getClientIp, getCountryFromIp } from "./ip-utils";
 import { sendPasswordResetEmail } from "./email";
+import { normalizePhone } from './twilio';
 import { 
   setupTotp, 
   verifyTotp, 
@@ -737,8 +738,16 @@ export function setupAuth(app: Express) {
       if (!targetPhone) {
         return res.status(400).json({ message: "Phone number is required" });
       }
-      
-      await sendSms2FA(targetUserId, targetPhone);
+
+      // Validate phone format before attempting to send — return 400 for bad input
+      let normalizedTargetPhone: string;
+      try {
+        normalizedTargetPhone = normalizePhone(targetPhone);
+      } catch (normErr: any) {
+        return res.status(400).json({ message: normErr.message || "Invalid phone number" });
+      }
+
+      await sendSms2FA(targetUserId, normalizedTargetPhone);
       res.json({ message: "OTP sent successfully" });
     } catch (error: any) {
       console.error("SMS send error:", error);
