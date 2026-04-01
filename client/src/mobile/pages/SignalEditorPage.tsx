@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   ChevronLeft, Type, Music, Film, ImageIcon, Check,
-  Play, Pause, Plus, Trash2, X, Camera, Layers,
+  Play, Pause, Plus, Trash2, X, Camera, Layers, Upload,
 } from "lucide-react";
 import { getClips, clearSession, saveClip, type ClipEntry } from "@/mobile/lib/clipSession";
 import { useToast } from "@/hooks/use-toast";
@@ -212,6 +212,17 @@ export function SignalEditorPage() {
 
   // Active bottom sheet
   const [sheet, setSheet] = useState<"none" | "text" | "sound" | "category" | "processing" | "addMedia" | "thumbnail">("none");
+
+  // Clips track container ref for auto-stretch
+  const clipsContainerRef = useRef<HTMLDivElement>(null);
+  const [clipsContainerWidth, setClipsContainerWidth] = useState(0);
+  useEffect(() => {
+    const el = clipsContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setClipsContainerWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Text annotation state
   const [annotations, setAnnotations] = useState<TextAnnotation[]>([]);
@@ -678,7 +689,7 @@ export function SignalEditorPage() {
       </div>
 
       {/* Preview player */}
-      <div className="relative bg-black shrink-0" style={{ aspectRatio: "9/16", maxHeight: "55vh" }}>
+      <div className="relative bg-black shrink-0" style={{ aspectRatio: "9/16", maxHeight: "62vh" }}>
         {/* Video element — visible only for clip entries */}
         <video
           ref={videoRef}
@@ -719,15 +730,6 @@ export function SignalEditorPage() {
           </div>
         </button>
 
-        {/* Thumbnail button — top-right corner of preview */}
-        <button
-          onClick={() => setSheet("thumbnail")}
-          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center"
-          title="Change thumbnail"
-        >
-          <Camera className="w-4 h-4 text-white" />
-        </button>
-
         {/* Scrubber bar with tap-to-pin for text annotations */}
         <div
           className="absolute bottom-0 left-0 right-0 h-6 flex items-center px-2 cursor-pointer"
@@ -748,6 +750,17 @@ export function SignalEditorPage() {
             />
           </div>
         </div>
+      </div>
+
+      {/* Thumbnail button — centered below preview */}
+      <div className="flex justify-center py-1.5 shrink-0">
+        <button
+          onClick={() => setSheet("thumbnail")}
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/10 text-white/70 text-xs hover:bg-white/20 active:bg-white/25 transition-colors"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          Change Thumbnail
+        </button>
       </div>
 
       {/* Hidden file inputs */}
@@ -811,21 +824,29 @@ export function SignalEditorPage() {
             <Film className="w-3 h-3 text-white/40" />
             <span className="text-white/40 text-[10px]">Clips</span>
           </div>
-          {/* Scrollable clips */}
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
-            <div className="flex gap-2 items-end" style={{ minWidth: "max-content" }}>
-              {entries.map((entry, idx) => (
-                <TimelineClip
-                  key={entry.id}
-                  entry={entry}
-                  isActive={idx === currentEntryIdx}
-                  onClick={() => { setCurrentEntryIdx(idx); setPlaying(false); videoRef.current?.pause(); }}
-                  onTrimIn={(delta) => handleTrimIn(entry.id, delta)}
-                  onTrimOut={(delta) => handleTrimOut(entry.id, delta)}
-                  onRemove={() => removeEntry(entry.id)}
-                />
-              ))}
-            </div>
+          {/* Stretched clips — fills available space */}
+          <div ref={clipsContainerRef} className="flex-1 overflow-hidden">
+            {(() => {
+              const pxPerSec = totalDuration > 0 && clipsContainerWidth > 0
+                ? clipsContainerWidth / totalDuration
+                : 12;
+              return (
+                <div className="flex gap-0.5 items-end w-full">
+                  {entries.map((entry, idx) => (
+                    <TimelineClip
+                      key={entry.id}
+                      entry={entry}
+                      isActive={idx === currentEntryIdx}
+                      pxPerSec={pxPerSec}
+                      onClick={() => { setCurrentEntryIdx(idx); setPlaying(false); videoRef.current?.pause(); }}
+                      onTrimIn={(delta) => handleTrimIn(entry.id, delta)}
+                      onTrimOut={(delta) => handleTrimOut(entry.id, delta)}
+                      onRemove={() => removeEntry(entry.id)}
+                    />
+                  ))}
+                </div>
+              );
+            })()}
           </div>
           {/* + add video or photo */}
           <button
@@ -1144,32 +1165,32 @@ export function SignalEditorPage() {
 interface TimelineClipProps {
   entry: TimelineEntry;
   isActive: boolean;
+  pxPerSec: number;
   onClick: () => void;
   onTrimIn: (delta: number) => void;
   onTrimOut: (delta: number) => void;
   onRemove: () => void;
 }
 
-function TimelineClip({ entry, isActive, onClick, onTrimIn, onTrimOut, onRemove }: TimelineClipProps) {
+function TimelineClip({ entry, isActive, pxPerSec, onClick, onTrimIn, onTrimOut, onRemove }: TimelineClipProps) {
   const trimInDragRef = useRef<{ startX: number; startVal: number } | null>(null);
   const trimOutDragRef = useRef<{ startX: number; startVal: number } | null>(null);
   const clampedDuration = Math.max(entry.duration - entry.trimIn - entry.trimOut, 0.1);
-  const widthPx = Math.max(clampedDuration * 12, THUMB_W + 20);
+  const widthPx = Math.max(clampedDuration * pxPerSec, THUMB_W + 20);
 
   const startTrimIn = (clientX: number) => { trimInDragRef.current = { startX: clientX, startVal: entry.trimIn }; };
   const startTrimOut = (clientX: number) => { trimOutDragRef.current = { startX: clientX, startVal: entry.trimOut }; };
 
   const moveDrag = useCallback((clientX: number) => {
-    const PX_PER_SEC = 12;
     if (trimInDragRef.current) {
-      const delta = (clientX - trimInDragRef.current.startX) / PX_PER_SEC;
+      const delta = (clientX - trimInDragRef.current.startX) / pxPerSec;
       onTrimIn(delta - (entry.trimIn - trimInDragRef.current.startVal));
     }
     if (trimOutDragRef.current) {
-      const delta = (trimOutDragRef.current.startX - clientX) / PX_PER_SEC;
+      const delta = (trimOutDragRef.current.startX - clientX) / pxPerSec;
       onTrimOut(delta - (entry.trimOut - trimOutDragRef.current.startVal));
     }
-  }, [entry.trimIn, entry.trimOut, onTrimIn, onTrimOut]);
+  }, [entry.trimIn, entry.trimOut, onTrimIn, onTrimOut, pxPerSec]);
 
   const endDrag = () => { trimInDragRef.current = null; trimOutDragRef.current = null; };
 
