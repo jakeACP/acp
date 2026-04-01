@@ -16,12 +16,16 @@ import {
   Sparkles,
   Upload,
   ChevronRight,
-  UserCheck
+  UserCheck,
+  Copy,
+  Send,
+  Link2,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
 import { ContactSyncModal } from "../components/ContactSyncModal";
 import type { Group } from "@shared/schema";
@@ -63,6 +67,39 @@ export function MobileFriendsPage() {
   const [mainTab, setMainTab] = useState<"friends" | "groups">("friends");
   const [activeTab, setActiveTab] = useState<TabType>("suggestions");
   const [showContactSync, setShowContactSync] = useState(false);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [emailInput, setEmailInput] = useState("");
+  const [showSmsForm, setShowSmsForm] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+
+  const { data: inviteData } = useQuery<{ token: string; inviteUrl: string }>({
+    queryKey: ['/api/invite/my-link'],
+    staleTime: Infinity,
+  });
+
+  const smsMutation = useMutation({
+    mutationFn: (phone: string) => apiRequest('/api/invite/sms', 'POST', { phone }),
+    onSuccess: () => {
+      toast({ title: "Text sent!", description: "Your invite was delivered." });
+      setPhoneInput("");
+      setShowSmsForm(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to send text", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const emailMutation = useMutation({
+    mutationFn: (email: string) => apiRequest('/api/invite/email', 'POST', { email }),
+    onSuccess: () => {
+      toast({ title: "Email sent!", description: "Your invite was delivered." });
+      setEmailInput("");
+      setShowEmailForm(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to send email", description: err.message, variant: "destructive" });
+    },
+  });
 
   const { data: groups = [], isLoading: groupsLoading } = useQuery<Group[]>({
     queryKey: ['/api/groups'],
@@ -468,80 +505,120 @@ export function MobileFriendsPage() {
         {/* Invite Tab */}
         {activeTab === "invite" && (
           <div className="space-y-4">
-            <div className="text-center py-6">
-              <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-red-500 to-blue-600 flex items-center justify-center mb-4">
-                <Share2 className="w-10 h-10 text-white" />
+            <div className="text-center py-4">
+              <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-red-500 to-blue-600 flex items-center justify-center mb-3">
+                <Share2 className="w-8 h-8 text-white" />
               </div>
-              <h2 className="text-white text-xl font-bold mb-2">
-                Invite Patriots
-              </h2>
+              <h2 className="text-white text-xl font-bold mb-1">Invite Patriots</h2>
               <p className="text-white/60 text-sm max-w-xs mx-auto">
-                Share the movement with friends and family. Together we're stronger.
+                Everyone who joins with your link auto-connects with you as a friend.
               </p>
             </div>
 
             <div className="space-y-3">
+              {/* Copy Invite Link */}
               <button
-                onClick={() => {
-                  if (navigator.share) {
-                    navigator.share({
-                      title: 'Join the Anti-Corruption Party',
-                      text: 'Join me on the ACP social platform to fight corruption and build a better democracy!',
-                      url: window.location.origin,
-                    });
-                  } else {
-                    navigator.clipboard.writeText(window.location.origin);
-                    toast({ title: "Link copied to clipboard!" });
-                  }
+                onClick={async () => {
+                  const url = inviteData?.inviteUrl || window.location.origin;
+                  await navigator.clipboard.writeText(url);
+                  toast({ title: "Invite link copied!", description: "Share it anywhere — new members auto-friend you." });
                 }}
-                className="glass-card p-4 w-full"
+                className="glass-card p-4 w-full text-left"
                 data-testid="share-link"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-                    <Share2 className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center flex-shrink-0">
+                    <Copy className="w-6 h-6 text-white" />
                   </div>
-                  <div className="flex-1 text-left">
-                    <h3 className="text-white font-semibold">Share Link</h3>
-                    <p className="text-white/60 text-sm">Send invite via any app</p>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-white font-semibold">Copy Invite Link</h3>
+                    <p className="text-white/50 text-xs truncate">{inviteData?.inviteUrl || "Loading…"}</p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-white/40" />
+                  <Link2 className="w-5 h-5 text-white/40 flex-shrink-0" />
                 </div>
               </button>
 
-              <a
-                href={`sms:?&body=Join me on the Anti-Corruption Party app! ${window.location.origin}`}
-                className="glass-card p-4 block"
-                data-testid="sms-invite"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                    <Phone className="w-6 h-6 text-white" />
+              {/* Text Message */}
+              <div className="glass-card overflow-hidden">
+                <button
+                  onClick={() => { setShowSmsForm(v => !v); setShowEmailForm(false); }}
+                  className="w-full p-4 text-left"
+                  data-testid="sms-invite"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
+                      <Phone className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h3 className="text-white font-semibold">Text Message</h3>
+                      <p className="text-white/60 text-sm">Send invite via SMS</p>
+                    </div>
+                    <ChevronRight className={`w-5 h-5 text-white/40 transition-transform ${showSmsForm ? 'rotate-90' : ''}`} />
                   </div>
-                  <div className="flex-1 text-left">
-                    <h3 className="text-white font-semibold">Text Message</h3>
-                    <p className="text-white/60 text-sm">Invite via SMS</p>
+                </button>
+                {showSmsForm && (
+                  <div className="px-4 pb-4 border-t border-white/10">
+                    <p className="text-white/50 text-xs mb-2 mt-3">Enter their phone number (e.g. +12125551234)</p>
+                    <div className="flex gap-2">
+                      <Input
+                        type="tel"
+                        placeholder="+1 (555) 000-0000"
+                        value={phoneInput}
+                        onChange={e => setPhoneInput(e.target.value)}
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/30 flex-1"
+                      />
+                      <Button
+                        onClick={() => phoneInput.trim() && smsMutation.mutate(phoneInput.trim())}
+                        disabled={smsMutation.isPending || !phoneInput.trim()}
+                        className="bg-gradient-to-r from-red-500 to-blue-600 text-white px-4"
+                      >
+                        {smsMutation.isPending ? "…" : <Send className="w-4 h-4" />}
+                      </Button>
+                    </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-white/40" />
-                </div>
-              </a>
+                )}
+              </div>
 
-              <a
-                href={`mailto:?subject=Join the Anti-Corruption Party&body=Join me on the ACP social platform to fight corruption and build a better democracy! ${window.location.origin}`}
-                className="glass-card p-4 block"
-                data-testid="email-invite"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
-                    <Mail className="w-6 h-6 text-white" />
+              {/* Email */}
+              <div className="glass-card overflow-hidden">
+                <button
+                  onClick={() => { setShowEmailForm(v => !v); setShowSmsForm(false); }}
+                  className="w-full p-4 text-left"
+                  data-testid="email-invite"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0">
+                      <Mail className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h3 className="text-white font-semibold">Email</h3>
+                      <p className="text-white/60 text-sm">Send email invitation</p>
+                    </div>
+                    <ChevronRight className={`w-5 h-5 text-white/40 transition-transform ${showEmailForm ? 'rotate-90' : ''}`} />
                   </div>
-                  <div className="flex-1 text-left">
-                    <h3 className="text-white font-semibold">Email</h3>
-                    <p className="text-white/60 text-sm">Send email invitation</p>
+                </button>
+                {showEmailForm && (
+                  <div className="px-4 pb-4 border-t border-white/10">
+                    <p className="text-white/50 text-xs mb-2 mt-3">Enter their email address</p>
+                    <div className="flex gap-2">
+                      <Input
+                        type="email"
+                        placeholder="friend@example.com"
+                        value={emailInput}
+                        onChange={e => setEmailInput(e.target.value)}
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/30 flex-1"
+                      />
+                      <Button
+                        onClick={() => emailInput.trim() && emailMutation.mutate(emailInput.trim())}
+                        disabled={emailMutation.isPending || !emailInput.trim()}
+                        className="bg-gradient-to-r from-red-500 to-blue-600 text-white px-4"
+                      >
+                        {emailMutation.isPending ? "…" : <Send className="w-4 h-4" />}
+                      </Button>
+                    </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-white/40" />
-                </div>
-              </a>
+                )}
+              </div>
             </div>
 
             <div className="glass-card p-4 mt-6">

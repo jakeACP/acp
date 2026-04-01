@@ -8342,6 +8342,86 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  // ── Personal Invite Link ──────────────────────────────────────────────────
+  app.get("/api/invite/my-link", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const { randomBytes } = await import("crypto");
+      const existing = await storage.getInvitationsByUser(req.user.id);
+      const multiUse = existing.find(inv => (inv.maxUses ?? 1) >= 50 && !inv.expiresAt);
+      let token: string;
+      if (multiUse) {
+        token = multiUse.token;
+      } else {
+        token = randomBytes(20).toString("hex");
+        await storage.createInvitation({
+          token,
+          invitedBy: req.user.id,
+          maxUses: 100,
+        });
+      }
+      const inviteUrl = `${req.protocol}://${req.get("host")}/auth?invitation=${token}`;
+      res.json({ token, inviteUrl });
+    } catch (error: any) {
+      console.error("Invite link error:", error);
+      res.status(500).json({ message: "Failed to generate invite link" });
+    }
+  });
+
+  // ── Send SMS Invite ───────────────────────────────────────────────────────
+  app.post("/api/invite/sms", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const { phone } = req.body;
+      if (!phone || typeof phone !== "string") {
+        return res.status(400).json({ message: "Phone number is required" });
+      }
+      const { randomBytes } = await import("crypto");
+      const token = randomBytes(20).toString("hex");
+      await storage.createInvitation({ token, invitedBy: req.user.id, maxUses: 1 });
+      const inviteUrl = `${req.protocol}://${req.get("host")}/auth?invitation=${token}`;
+      const displayName = req.user.firstName
+        ? `${req.user.firstName}${req.user.lastName ? " " + req.user.lastName : ""}`
+        : req.user.username;
+      const { getTwilioClient, getTwilioFromPhoneNumber } = await import("./twilio");
+      const client = await getTwilioClient();
+      const fromNumber = await getTwilioFromPhoneNumber();
+      await client.messages.create({
+        body: `${displayName} invited you to join the Anti-Corruption Party! Create your account and connect as friends instantly: ${inviteUrl}`,
+        from: fromNumber,
+        to: phone,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("SMS invite error:", error);
+      res.status(500).json({ message: error.message || "Failed to send SMS" });
+    }
+  });
+
+  // ── Send Email Invite ─────────────────────────────────────────────────────
+  app.post("/api/invite/email", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ message: "Email is required" });
+      }
+      const { randomBytes } = await import("crypto");
+      const token = randomBytes(20).toString("hex");
+      await storage.createInvitation({ token, email, invitedBy: req.user.id, maxUses: 1 });
+      const inviteUrl = `${req.protocol}://${req.get("host")}/auth?invitation=${token}`;
+      const displayName = req.user.firstName
+        ? `${req.user.firstName}${req.user.lastName ? " " + req.user.lastName : ""}`
+        : req.user.username;
+      const { sendInviteEmail } = await import("./email");
+      await sendInviteEmail(email, displayName, inviteUrl);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Email invite error:", error);
+      res.status(500).json({ message: error.message || "Failed to send email" });
+    }
+  });
+
   return httpServer;
 }
 
