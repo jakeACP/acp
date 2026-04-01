@@ -1,9 +1,9 @@
-import type { ReactNode } from "react";
+import type { ReactNode, ChangeEvent } from "react";
 import { useLocation } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   ChevronLeft, Type, Music, Film, ImageIcon, Check,
-  Play, Pause, Plus, Trash2, X,
+  Play, Pause, Plus, Trash2, X, Camera,
 } from "lucide-react";
 import { getClips, clearSession, saveClip, type ClipEntry } from "@/mobile/lib/clipSession";
 import { useToast } from "@/hooks/use-toast";
@@ -115,6 +115,81 @@ async function generatePhotoThumb(blob: Blob): Promise<string[]> {
   });
 }
 
+// ── Thumbnail helpers ──────────────────────────────────────────────────────────
+
+const THUMB_OUT_W = 720;
+const THUMB_OUT_H = 1280;
+
+/** Capture first frame of a video blob and center-crop to 9:16 portrait. */
+async function generateFirstFrameBlob(blob: Blob): Promise<{ blob: Blob; dataUrl: string } | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.preload = "auto";
+    video.src = url;
+
+    const capture = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = THUMB_OUT_W;
+      canvas.height = THUMB_OUT_H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
+
+      const vW = video.videoWidth || THUMB_OUT_W;
+      const vH = video.videoHeight || THUMB_OUT_H;
+      const targetR = THUMB_OUT_W / THUMB_OUT_H;
+      const videoR = vW / vH;
+      let sx = 0, sy = 0, sw = vW, sh = vH;
+      if (videoR > targetR) { sw = Math.round(vH * targetR); sx = Math.round((vW - sw) / 2); }
+      else { sh = Math.round(vW / targetR); sy = Math.round((vH - sh) / 2); }
+
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, THUMB_OUT_W, THUMB_OUT_H);
+      URL.revokeObjectURL(url);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      canvas.toBlob((b) => resolve(b ? { blob: b, dataUrl } : null), "image/jpeg", 0.85);
+    };
+
+    video.addEventListener("loadeddata", () => { video.currentTime = 0; }, { once: true });
+    video.addEventListener("seeked", capture, { once: true });
+    video.addEventListener("error", () => { URL.revokeObjectURL(url); resolve(null); }, { once: true });
+    video.load();
+  });
+}
+
+/**
+ * Load an image File and center-crop it to 9:16 portrait (720×1280).
+ * Enforces the correct aspect ratio for Signal thumbnails.
+ */
+async function cropImageTo916(file: File): Promise<{ blob: Blob; dataUrl: string } | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = THUMB_OUT_W;
+      canvas.height = THUMB_OUT_H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
+
+      const iW = img.naturalWidth;
+      const iH = img.naturalHeight;
+      const targetR = THUMB_OUT_W / THUMB_OUT_H;
+      const imgR = iW / iH;
+      let sx = 0, sy = 0, sw = iW, sh = iH;
+      if (imgR > targetR) { sw = Math.round(iH * targetR); sx = Math.round((iW - sw) / 2); }
+      else { sh = Math.round(iW / targetR); sy = Math.round((iH - sh) / 2); }
+
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, THUMB_OUT_W, THUMB_OUT_H);
+      URL.revokeObjectURL(url);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      canvas.toBlob((b) => resolve(b ? { blob: b, dataUrl } : null), "image/jpeg", 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function SignalEditorPage() {
@@ -159,6 +234,12 @@ export function SignalEditorPage() {
   const [posting, setPosting] = useState(false);
   const pollIntervalRef = useRef<number | null>(null);
 
+  // Thumbnail
+  const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string | null>(null);
+  const [thumbnailBlob, setThumbnailBlob] = useState<Blob | null>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailCameraRef = useRef<HTMLInputElement>(null);
+
   // ── Load clips from IDB ───────────────────────────────────────────────────
 
   useEffect(() => {
@@ -189,6 +270,26 @@ export function SignalEditorPage() {
       if (!cancelled) {
         setEntries(built);
         setLoading(false);
+
+        // Auto-generate thumbnail from first entry (first frame of first clip, or first photo)
+        if (built.length > 0) {
+          const first = built[0];
+          if (first.type === "clip") {
+            generateFirstFrameBlob(first.blob).then((result) => {
+              if (result && !cancelled) {
+                setThumbnailBlob(result.blob);
+                setThumbnailDataUrl(result.dataUrl);
+              }
+            });
+          } else {
+            // Photo: use the already-generated thumbnail data URL
+            const dataUrl = first.thumbnails[0];
+            if (dataUrl) {
+              setThumbnailDataUrl(dataUrl);
+              fetch(dataUrl).then(r => r.blob()).then(b => { if (!cancelled) setThumbnailBlob(b); });
+            }
+          }
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -405,6 +506,27 @@ export function SignalEditorPage() {
     setSheet("none");
   };
 
+  // ── Thumbnail pick handlers ───────────────────────────────────────────────
+
+  const handleThumbnailPick = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\//.test(file.type)) {
+      toast({ title: "Please select an image file", variant: "destructive" });
+      e.target.value = "";
+      return;
+    }
+    const result = await cropImageTo916(file);
+    if (result) {
+      setThumbnailDataUrl(result.dataUrl);
+      setThumbnailBlob(result.blob);
+      toast({ title: "Thumbnail updated", description: "Auto-cropped to 9:16 portrait." });
+    } else {
+      toast({ title: "Couldn't load image", variant: "destructive" });
+    }
+    e.target.value = "";
+  };
+
   // ── Compose / Post ────────────────────────────────────────────────────────
 
   const totalDuration = entries.reduce((s, e) => s + (e.duration - e.trimIn - e.trimOut), 0);
@@ -448,6 +570,10 @@ export function SignalEditorPage() {
       if (selectedAudio) {
         fd.append("audioTrack", selectedAudio);
         fd.append("audioVolume", String(audioVolume));
+      }
+      // Include thumbnail (auto-generated or user-selected)
+      if (thumbnailBlob) {
+        fd.append("thumbnail", thumbnailBlob, "thumbnail.jpg");
       }
 
       const res = await fetch("/api/mobile/signals/compose", { method: "POST", body: fd });
@@ -630,6 +756,11 @@ export function SignalEditorPage() {
         onChange={(e) => { const f = e.target.files?.[0]; if (f) addFootage(f); e.target.value = ""; }} />
       <input ref={photoInputRef} type="file" accept="image/*" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) addPhoto(f); e.target.value = ""; }} />
+      {/* Hidden thumbnail inputs */}
+      <input ref={thumbnailInputRef} type="file" accept="image/*" className="hidden"
+        onChange={handleThumbnailPick} />
+      <input ref={thumbnailCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={handleThumbnailPick} />
 
       {/* Timeline strip */}
       <div className="flex-1 overflow-hidden flex flex-col">
@@ -801,6 +932,39 @@ export function SignalEditorPage() {
                 ))}
               </div>
             </div>
+            {/* Thumbnail picker */}
+            <div>
+              <p className="text-white/50 text-xs mb-2">Thumbnail</p>
+              <div className="flex gap-3 items-start">
+                {/* Preview */}
+                <div className="shrink-0 rounded-lg overflow-hidden border border-white/20"
+                  style={{ width: 48, aspectRatio: "9/16" }}>
+                  {thumbnailDataUrl
+                    ? <img src={thumbnailDataUrl} className="w-full h-full object-cover" alt="Thumbnail" />
+                    : <div className="w-full h-full bg-white/10 flex items-center justify-center">
+                        <ImageIcon className="w-4 h-4 text-white/30" />
+                      </div>
+                  }
+                </div>
+                {/* Actions */}
+                <div className="flex flex-col gap-2 flex-1">
+                  <button type="button" onClick={() => thumbnailInputRef.current?.click()}
+                    className="py-2 px-3 rounded-xl bg-white/10 text-white/70 text-sm text-left flex items-center gap-2 active:bg-white/20">
+                    <ImageIcon className="w-4 h-4 shrink-0" />
+                    <span>Upload from Library</span>
+                  </button>
+                  <button type="button" onClick={() => thumbnailCameraRef.current?.click()}
+                    className="py-2 px-3 rounded-xl bg-white/10 text-white/70 text-sm text-left flex items-center gap-2 active:bg-white/20">
+                    <Camera className="w-4 h-4 shrink-0" />
+                    <span>Take Photo</span>
+                  </button>
+                </div>
+              </div>
+              <p className="text-white/30 text-[10px] mt-1.5">
+                {thumbnailDataUrl ? "Auto-cropped to 9:16 portrait — tap above to change." : "Using first frame. Tap above to choose a different image."}
+              </p>
+            </div>
+
             <p className="text-white/40 text-xs text-center">This Signal will be posted publicly.</p>
             <button
               onClick={startCompose}

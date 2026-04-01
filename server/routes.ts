@@ -7275,9 +7275,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     fileFilter: (_req, file, cb) => {
       const isClipField = CLIP_FIELD_RE.test(file.fieldname);
       const isPhotoField = PHOTO_FIELD_RE.test(file.fieldname);
-      if (!isClipField && !isPhotoField) return cb(new Error(`Unexpected field: ${file.fieldname}`));
+      const isThumbnailField = file.fieldname === 'thumbnail';
+      if (!isClipField && !isPhotoField && !isThumbnailField) return cb(new Error(`Unexpected field: ${file.fieldname}`));
       if (isClipField && !/^video\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for clip: ${file.mimetype}`));
       if (isPhotoField && !/^image\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for photo: ${file.mimetype}`));
+      if (isThumbnailField && !/^image\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for thumbnail: ${file.mimetype}`));
       cb(null, true);
     },
   });
@@ -7319,6 +7321,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const photoFiles = files
         .filter(f => PHOTO_FIELD_RE.test(f.fieldname))
         .sort((a, b) => parseInt(a.fieldname.replace('photo_', '')) - parseInt(b.fieldname.replace('photo_', '')));
+      const thumbnailFile = files.find(f => f.fieldname === 'thumbnail') ?? null;
 
       if (clipFiles.length === 0 && photoFiles.length === 0) {
         cleanupUploads();
@@ -7501,12 +7504,42 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           }
           await runFfmpeg(finalArgs);
 
+          // ── Thumbnail: use uploaded file or extract first frame from video ─────
+          const signalsDir = path.join(process.cwd(), 'uploads/signals');
+          let thumbnailUrl: string | undefined;
+          const thumbFilename = `${randomUUID()}-thumb.jpg`;
+          const thumbDest = path.join(signalsDir, thumbFilename);
+
+          if (thumbnailFile) {
+            // User supplied a thumbnail — copy to uploads/signals/
+            try {
+              fs.copyFileSync(thumbnailFile.path, thumbDest);
+              thumbnailUrl = `/uploads/signals/${thumbFilename}`;
+            } catch {
+              // Non-fatal — proceed without thumbnail
+            }
+          } else {
+            // Fallback: extract first frame from the composed video
+            try {
+              await runFfmpeg([
+                '-y', '-i', outputPath,
+                '-vframes', '1',
+                '-vf', 'scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2',
+                '-q:v', '2',
+                thumbDest,
+              ]);
+              thumbnailUrl = `/uploads/signals/${thumbFilename}`;
+            } catch {
+              // Non-fatal — proceed without thumbnail
+            }
+          }
+
           // Cleanup temp files
           for (const f of tempFiles) { try { fs.unlinkSync(f); } catch { /* best-effort */ } }
 
           const videoUrl = `/uploads/signals/${path.basename(outputPath)}`;
           const signal = await storage.createSignal({
-            authorId: user.id, title, description: '', videoUrl, thumbnailUrl: undefined,
+            authorId: user.id, title, description: '', videoUrl, thumbnailUrl,
             duration: 0, maxDuration: user.subscriptionStatus === 'premium' ? 600 : 180,
             filter: 'none', overlays: null, tags: category ? [category] : [], isPublic: true,
           });
