@@ -84,6 +84,7 @@ export function SignalRecorderPage() {
   const elapsedRef = useRef(0);
   const segmentStartRef = useRef(0);
   const isHoldingRef = useRef(false);
+  const isCountdownHoldingRef = useRef(false);
   const isInitialized = useRef(false);
 
   const isPremium = user?.subscriptionStatus === 'premium';
@@ -243,6 +244,7 @@ export function SignalRecorderPage() {
 
     if (countdownEnabled && segments.length === 0) {
       let count = 3;
+      isCountdownHoldingRef.current = true;
       setCountdown(count);
       setState('countdown');
       countdownTimerRef.current = setInterval(() => {
@@ -250,7 +252,11 @@ export function SignalRecorderPage() {
         if (count <= 0) {
           clearInterval(countdownTimerRef.current!);
           countdownTimerRef.current = null;
-          startActualRecording();
+          if (isCountdownHoldingRef.current) {
+            startActualRecording();
+          } else {
+            setState('idle');
+          }
         } else {
           setCountdown(count);
         }
@@ -262,8 +268,14 @@ export function SignalRecorderPage() {
   }, [state, countdownEnabled, segments.length, startActualRecording]);
 
   const handleHoldEnd = useCallback(() => {
+    isCountdownHoldingRef.current = false;
     if (state === 'recording') {
       stopCurrentClip(false);
+    }
+    if (state === 'countdown' && countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+      setState('idle');
     }
   }, [state, stopCurrentClip]);
 
