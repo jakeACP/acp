@@ -48,20 +48,78 @@ export async function getTwilioFromPhoneNumber() {
   return phoneNumber;
 }
 
-export async function sendSmsOtp(toPhoneNumber: string, code: string): Promise<boolean> {
-  try {
-    const client = await getTwilioClient();
-    const fromNumber = await getTwilioFromPhoneNumber();
-    
-    await client.messages.create({
-      body: `Your ACP verification code is: ${code}. This code expires in 5 minutes.`,
-      from: fromNumber,
-      to: toPhoneNumber
-    });
-    
-    return true;
-  } catch (error) {
-    console.error('Failed to send SMS:', error);
-    return false;
+/**
+ * Normalize a phone number to E.164 format.
+ * - Strips all non-digit characters.
+ * - If 10 digits, assumes US and prepends +1.
+ * - If 11 digits starting with 1, prepends +.
+ * - Otherwise prepends + and leaves as-is.
+ */
+export function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (phone.startsWith('+')) return phone;
+  return `+${digits}`;
+}
+
+/**
+ * Send an invite SMS via the Twilio Messages API.
+ * Throws on failure so callers can surface the real error to the user.
+ */
+export async function sendSmsOtp(toPhoneNumber: string, body: string): Promise<void> {
+  const client = await getTwilioClient();
+  const fromNumber = await getTwilioFromPhoneNumber();
+  const to = normalizePhone(toPhoneNumber);
+
+  const messageParams: Record<string, string> = { body, to };
+  // If the from value looks like a Messaging Service SID (starts with MG), use messagingServiceSid
+  if (fromNumber && fromNumber.startsWith('MG')) {
+    messageParams.messagingServiceSid = fromNumber;
+  } else {
+    messageParams.from = fromNumber;
   }
+
+  await client.messages.create(messageParams as any);
+}
+
+/**
+ * Send a 2FA OTP via Twilio Verify.
+ * Uses the Verify Service SID from the TwillioACP2FA environment variable.
+ * Throws on failure.
+ */
+export async function sendVerifyOtp(toPhone: string): Promise<void> {
+  const serviceSid = process.env.TwillioACP2FA;
+  if (!serviceSid) {
+    throw new Error('Twilio Verify Service SID (TwillioACP2FA) is not configured');
+  }
+
+  const client = await getTwilioClient();
+  const to = normalizePhone(toPhone);
+
+  await client.verify.v2.services(serviceSid).verifications.create({
+    to,
+    channel: 'sms'
+  });
+}
+
+/**
+ * Check a Twilio Verify OTP entered by the user.
+ * Returns true if the code is correct and approved.
+ */
+export async function checkVerifyOtp(toPhone: string, code: string): Promise<boolean> {
+  const serviceSid = process.env.TwillioACP2FA;
+  if (!serviceSid) {
+    throw new Error('Twilio Verify Service SID (TwillioACP2FA) is not configured');
+  }
+
+  const client = await getTwilioClient();
+  const to = normalizePhone(toPhone);
+
+  const check = await client.verify.v2.services(serviceSid).verificationChecks.create({
+    to,
+    code
+  });
+
+  return check.status === 'approved';
 }

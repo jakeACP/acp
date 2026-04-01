@@ -738,15 +738,11 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Phone number is required" });
       }
       
-      const sent = await sendSms2FA(targetUserId, targetPhone);
-      if (sent) {
-        res.json({ message: "OTP sent successfully" });
-      } else {
-        res.status(500).json({ message: "Failed to send OTP" });
-      }
+      await sendSms2FA(targetUserId, targetPhone);
+      res.json({ message: "OTP sent successfully" });
     } catch (error: any) {
       console.error("SMS send error:", error);
-      res.status(500).json({ message: "Failed to send OTP" });
+      res.status(500).json({ message: error.message || "Failed to send OTP" });
     }
   });
 
@@ -766,8 +762,9 @@ export function setupAuth(app: Express) {
       }
       
       const userId = challenge.userId;
-      
-      const result = await verifySms2FA(userId, code);
+
+      const challengeUser = await storage.getUser(userId);
+      const result = await verifySms2FA(userId, code, challengeUser?.twoFactorPhone || undefined);
       if (!result.success) {
         return res.status(400).json({ message: result.reason || "Invalid code" });
       }
@@ -819,8 +816,8 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Phone number and verification code are required" });
       }
       
-      // Verify the code first
-      const result = await verifySms2FA(req.user.id, code);
+      // Verify the code first (phone may not be saved yet, so pass it explicitly)
+      const result = await verifySms2FA(req.user.id, code, phoneNumber);
       if (!result.success) {
         return res.status(400).json({ message: result.reason || "Invalid code" });
       }

@@ -2,7 +2,7 @@ import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'crypt
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { storage } from './storage';
-import { sendSmsOtp } from './twilio';
+import { sendVerifyOtp, checkVerifyOtp } from './twilio';
 
 // CRITICAL: TOTP encryption key must be stable across restarts
 const ENCRYPTION_KEY_HEX = process.env.TOTP_ENCRYPTION_KEY;
@@ -127,21 +127,37 @@ export async function disableTotp(userId: string): Promise<void> {
   });
 }
 
-export async function sendSms2FA(userId: string, phoneNumber: string): Promise<boolean> {
-  const code = generateOtpCode();
-  const codeHash = hashCode(code);
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-  
-  await storage.createSmsOtp(userId, codeHash, phoneNumber, expiresAt);
-  
-  const sent = await sendSmsOtp(phoneNumber, code);
-  return sent;
+/**
+ * Send a 2FA OTP via Twilio Verify.
+ * Throws on failure so the caller can surface the real error.
+ */
+export async function sendSms2FA(userId: string, phoneNumber: string): Promise<void> {
+  await sendVerifyOtp(phoneNumber);
 }
 
-export async function verifySms2FA(userId: string, code: string): Promise<{ success: boolean; reason?: string }> {
-  const codeHash = hashCode(code);
-  const result = await storage.verifySmsOtp(userId, codeHash);
-  return result;
+/**
+ * Verify a 2FA OTP via Twilio Verify.
+ * Accepts an optional phone override — used during the enable flow
+ * before the phone is saved to the user record.
+ */
+export async function verifySms2FA(userId: string, code: string, phone?: string): Promise<{ success: boolean; reason?: string }> {
+  let toPhone = phone;
+  if (!toPhone) {
+    const user = await storage.getUser(userId);
+    toPhone = user?.twoFactorPhone || undefined;
+  }
+  if (!toPhone) {
+    return { success: false, reason: 'No phone number on file. Please re-enable SMS 2FA.' };
+  }
+  try {
+    const approved = await checkVerifyOtp(toPhone, code);
+    if (approved) {
+      return { success: true };
+    }
+    return { success: false, reason: 'Invalid or expired code.' };
+  } catch (error: any) {
+    return { success: false, reason: error.message || 'Verification failed.' };
+  }
 }
 
 export async function enableSms2FA(userId: string, phoneNumber: string): Promise<void> {
