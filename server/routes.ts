@@ -76,9 +76,12 @@ const objectStorageService = new ObjectStorageService();
 export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   setupAuth(app);
 
-  // Serve uploaded signal videos
+  // Serve uploaded signal videos and built-in audio tracks
   const express = await import("express");
   app.use('/uploads/signals', express.default.static(signalsUploadDir));
+  const audioDir = path.resolve(process.cwd(), 'public/audio');
+  if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+  app.use('/public/audio', express.default.static(audioDir));
 
   (async () => {
     try {
@@ -7054,6 +7057,18 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.get("/api/mobile/signals/compose/:jobId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const job = await storage.getComposeJob(req.params.jobId);
+      if (!job) return res.status(404).json({ message: 'Job not found' });
+      if (job.authorId !== req.user!.id) return res.sendStatus(403);
+      res.json({ status: job.status, signalId: job.signalId, errorMessage: job.errorMessage });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/mobile/signals/:id", async (req, res) => {
     try {
       const signal = await storage.getSignalById(req.params.id);
@@ -7231,6 +7246,177 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       res.json({ success: true });
     } catch (error: any) {
       console.error("Increment view count error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ── Compose endpoint (editor → async FFmpeg job) ──────────────────────────
+  const composeTempDir = path.join(os.tmpdir(), 'acp-compose');
+  if (!fs.existsSync(composeTempDir)) fs.mkdirSync(composeTempDir, { recursive: true });
+
+  const COMPOSE_RATE_LIMIT = 5; // 5 composes per user per hour
+  const COMPOSE_RATE_WINDOW_MS = 60 * 60 * 1000;
+  const ALLOWED_VIDEO_MIME = /^video\//;
+  const ALLOWED_IMAGE_MIME = /^image\//;
+  const MAX_COMPOSE_SIZE = 500 * 1024 * 1024;
+  const MAX_COMPOSE_FILES = 60;
+
+  const composeStorage = multer.diskStorage({
+    destination: composeTempDir,
+    filename: (_req, _file, cb) => cb(null, `${randomUUID()}-${Date.now()}`),
+  });
+  const composeUpload = multer({
+    storage: composeStorage,
+    limits: { fileSize: MAX_COMPOSE_SIZE, files: MAX_COMPOSE_FILES },
+    fileFilter: (_req, file, cb) => {
+      if (/^clip_\d+$/.test(file.fieldname) && ALLOWED_VIDEO_MIME.test(file.mimetype)) return cb(null, true);
+      if (/^photo_\d+$/.test(file.fieldname) && ALLOWED_IMAGE_MIME.test(file.mimetype)) return cb(null, true);
+      cb(null, false);
+    },
+  });
+
+  app.post("/api/mobile/signals/compose", (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    composeUpload.any()(req, res, (err) => {
+      if (err) return res.status(400).json({ message: err.message || 'Upload error' });
+      next();
+    });
+  }, async (req, res) => {
+    try {
+      const user = req.user!;
+      const recentCount = await storage.countRecentComposeJobs(user.id, COMPOSE_RATE_WINDOW_MS);
+      if (recentCount >= COMPOSE_RATE_LIMIT) {
+        return res.status(429).json({ message: 'Rate limit: max 5 composes per hour.' });
+      }
+
+      const files = (req as any).files as Express.Multer.File[] | undefined ?? [];
+      const clipFiles = files.filter(f => /^clip_\d+$/.test(f.fieldname)).sort((a, b) => {
+        return parseInt(a.fieldname.replace('clip_', '')) - parseInt(b.fieldname.replace('clip_', ''));
+      });
+      const photoFiles = files.filter(f => /^photo_\d+$/.test(f.fieldname)).sort((a, b) => {
+        return parseInt(a.fieldname.replace('photo_', '')) - parseInt(b.fieldname.replace('photo_', ''));
+      });
+
+      if (clipFiles.length === 0 && photoFiles.length === 0) {
+        return res.status(400).json({ message: 'No media files provided' });
+      }
+
+      let trimData: Record<string, { trimIn: number; trimOut: number }> = {};
+      try { trimData = JSON.parse(req.body.trimData || '{}'); } catch { trimData = {}; }
+
+      let textAnnotations: Array<{ text: string; color: string; fontSize: number; startTime: number; endTime: number }> = [];
+      try { textAnnotations = JSON.parse(req.body.textAnnotations || '[]'); } catch { textAnnotations = []; }
+
+      const audioTrack = req.body.audioTrack || '';
+      const audioVolume = parseFloat(req.body.audioVolume ?? '0.8');
+      const category = req.body.category || '';
+      const title = req.body.title || '';
+
+      const job = await storage.createComposeJob(user.id);
+      res.status(202).json({ jobId: job.id });
+
+      // ── Async FFmpeg pipeline ──────────────────────────────────────────────
+      setImmediate(async () => {
+        const tempFiles: string[] = [];
+        try {
+          const outputPath = path.join(signalsUploadDir, `${randomUUID()}.mp4`);
+          const ffmpegBin = 'ffmpeg';
+
+          let inputs: string[] = [];
+          let filterParts: string[] = [];
+          let inputIdx = 0;
+
+          // Build concat list — clips with optional trim, then photo stills
+          const concatListPath = path.join(composeTempDir, `${randomUUID()}.txt`);
+          tempFiles.push(concatListPath);
+          const concatLines: string[] = [];
+
+          for (const clip of clipFiles) {
+            const trim = trimData[clip.fieldname];
+            let clipsrc = clip.path;
+            if (trim && (trim.trimIn > 0 || trim.trimOut > 0)) {
+              const trimmed = path.join(composeTempDir, `${randomUUID()}.mp4`);
+              tempFiles.push(trimmed);
+              const ss = trim.trimIn > 0 ? `-ss ${trim.trimIn}` : '';
+              const to = trim.trimOut > 0 ? `-to ${trim.trimOut}` : '';
+              await execAsync(`${ffmpegBin} -y ${ss} -i "${clip.path}" ${to} -c copy "${trimmed}"`);
+              clipsrc = trimmed;
+            }
+            tempFiles.push(clip.path);
+            concatLines.push(`file '${clipsrc}'`);
+          }
+
+          // Photo stills
+          for (const photo of photoFiles) {
+            const trimKey = photo.fieldname;
+            const dur = trimData[trimKey]?.trimOut ?? 2;
+            const stillPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
+            tempFiles.push(photo.path);
+            tempFiles.push(stillPath);
+            await execAsync(`${ffmpegBin} -y -loop 1 -i "${photo.path}" -t ${dur} -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" -c:v libx264 -r 30 -pix_fmt yuv420p "${stillPath}"`);
+            concatLines.push(`file '${stillPath}'`);
+          }
+
+          fs.writeFileSync(concatListPath, concatLines.join('\n'));
+
+          // First pass: concat
+          const concatOut = path.join(composeTempDir, `${randomUUID()}.mp4`);
+          tempFiles.push(concatOut);
+          await execAsync(`${ffmpegBin} -y -f concat -safe 0 -i "${concatListPath}" -c copy "${concatOut}"`);
+
+          // Build drawtext filters for text annotations
+          const drawtextFilters = textAnnotations.map(ann => {
+            const safe = ann.text.replace(/[':]/g, ' ');
+            const r = parseInt(ann.color.slice(1, 3) || 'ff', 16);
+            const g = parseInt(ann.color.slice(3, 5) || 'ff', 16);
+            const b = parseInt(ann.color.slice(5, 7) || 'ff', 16);
+            return `drawtext=text='${safe}':fontsize=${ann.fontSize || 24}:fontcolor=0x${ann.color.replace('#', '')}:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${ann.startTime},${ann.endTime})'`;
+          }).join(',');
+
+          // Audio track path
+          const audioSrcPath = audioTrack ? path.join(process.cwd(), 'public/audio', path.basename(audioTrack)) : '';
+          const hasAudio = audioTrack && fs.existsSync(audioSrcPath);
+
+          // Final encode
+          let vf = drawtextFilters || 'null';
+          let audioFlags = '';
+          if (hasAudio) {
+            audioFlags = `-i "${audioSrcPath}" -filter_complex "[1:a]volume=${audioVolume}[aout]" -map 0:v -map "[aout]" -shortest`;
+          } else {
+            audioFlags = '-an';
+          }
+
+          await execAsync(
+            `${ffmpegBin} -y -i "${concatOut}" ${audioFlags} -vf "${vf}" -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k "${outputPath}"`
+          );
+
+          // Cleanup temp files
+          for (const f of tempFiles) { try { fs.unlinkSync(f); } catch {} }
+
+          const videoUrl = `/uploads/signals/${path.basename(outputPath)}`;
+          const signalData = {
+            authorId: user.id,
+            title,
+            description: '',
+            videoUrl,
+            thumbnailUrl: undefined,
+            duration: 0,
+            maxDuration: user.subscriptionStatus === 'premium' ? 600 : 180,
+            filter: 'none',
+            overlays: null,
+            tags: category ? [category] : [],
+            isPublic: true,
+          };
+          const signal = await storage.createSignal(signalData);
+          await storage.updateComposeJob(job.id, { status: 'done', signalId: signal.id });
+        } catch (err: any) {
+          console.error('Compose job failed:', err);
+          for (const f of tempFiles) { try { fs.unlinkSync(f); } catch {} }
+          await storage.updateComposeJob(job.id, { status: 'error', errorMessage: err.message || 'FFmpeg error' });
+        }
+      });
+    } catch (error: any) {
+      console.error("Compose error:", error);
       res.status(500).json({ message: error.message });
     }
   });

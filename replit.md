@@ -3,6 +3,13 @@
 ## Overview
 This project is a full-stack social democracy platform for the Anti-Corruption Party, a grassroots, subscription-funded political movement. It provides tools for democratic participation, including advanced voting systems (Ranked Choice, Blockchain-verified), polling, group management, candidate profiles, and community engagement. The platform aims to create a transparent and fair system for advanced democratic participation, fostering a new era of political engagement and accountability.
 
+## Recent Features (Task #17 & #18)
+- **Signal Video Recorder** (`/mobile/create`): Hold-to-record multi-clip with IDB, FFmpeg stitch
+- **Signal Choice Page** (`/mobile/signal-choice`): Duration picker, Record/Paste entry point
+- **Signal Editor** (`/mobile/edit`): Timeline editor with trim handles, text annotations with time pins, sound picker (8 built-in tracks in `public/audio/`), add footage/photos
+- **Compose API** (`POST /api/mobile/signals/compose`): Async FFmpeg job (concat + photo stills + drawtext + audio), rate-limited 5/hr, returns jobId for polling
+- **Compose Jobs DB** (`compose_jobs` table): status: processing/done/error, signalId after done
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 

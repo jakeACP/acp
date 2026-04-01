@@ -1,7 +1,7 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
 import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote } from "@shared/schema";
-import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest } from "@shared/schema";
+import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, composeJobs, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest, type ComposeJob } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, inArray, gte, ilike } from "drizzle-orm";
@@ -555,6 +555,12 @@ export interface IStorage {
   likeSignal(signalId: string, userId: string): Promise<void>;
   unlikeSignal(signalId: string, userId: string): Promise<void>;
   incrementSignalViewCount(signalId: string): Promise<void>;
+
+  // Compose jobs (async FFmpeg editor pipeline)
+  createComposeJob(authorId: string): Promise<ComposeJob>;
+  getComposeJob(id: string): Promise<ComposeJob | undefined>;
+  updateComposeJob(id: string, update: { status: string; signalId?: string; errorMessage?: string }): Promise<void>;
+  countRecentComposeJobs(authorId: string, sinceMs: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -8870,6 +8876,29 @@ export class DatabaseStorage implements IStorage {
       .where(eq(acePledgeRequests.id, id))
       .returning();
     return result;
+  }
+
+  async createComposeJob(authorId: string): Promise<ComposeJob> {
+    const [job] = await db.insert(composeJobs).values({ authorId, status: 'processing' }).returning();
+    return job;
+  }
+
+  async getComposeJob(id: string): Promise<ComposeJob | undefined> {
+    const [job] = await db.select().from(composeJobs).where(eq(composeJobs.id, id));
+    return job;
+  }
+
+  async updateComposeJob(id: string, update: { status: string; signalId?: string; errorMessage?: string }): Promise<void> {
+    await db.update(composeJobs)
+      .set({ status: update.status, signalId: update.signalId ?? null, errorMessage: update.errorMessage ?? null })
+      .where(eq(composeJobs.id, id));
+  }
+
+  async countRecentComposeJobs(authorId: string, sinceMs: number): Promise<number> {
+    const since = new Date(Date.now() - sinceMs);
+    const rows = await db.select({ cnt: count() }).from(composeJobs)
+      .where(and(eq(composeJobs.authorId, authorId), gte(composeJobs.createdAt, since)));
+    return rows[0]?.cnt ?? 0;
   }
 }
 

@@ -2358,6 +2358,20 @@ export type LiveStreamWithOwner = LiveStream & {
   } | null;
 };
 
+// Compose jobs — async FFmpeg pipeline for editor uploads
+export const composeJobs = pgTable("compose_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  authorId: varchar("author_id").notNull().references(() => users.id),
+  status: text("status").notNull().default("processing"), // processing | done | error
+  signalId: varchar("signal_id").references(() => signals.id),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertComposeJobSchema = createInsertSchema(composeJobs).omit({ id: true, createdAt: true, status: true, signalId: true, errorMessage: true });
+export type ComposeJob = typeof composeJobs.$inferSelect;
+export type InsertComposeJob = z.infer<typeof insertComposeJobSchema>;
+
 // Mobile Signals types
 export type Signal = typeof signals.$inferSelect;
 export type InsertSignal = z.infer<typeof insertSignalSchema>;
