@@ -7351,6 +7351,15 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           endTime: Math.max(0, parseFloat(String(a.endTime)) || 5),
         }));
 
+      // Parse ordered timeline manifest (preserves interleaved clip+photo order)
+      interface TimelineManifestEntry { type: 'clip' | 'photo'; field: string; }
+      let rawTimeline: unknown[] = [];
+      try { rawTimeline = JSON.parse(req.body.timeline || '[]'); } catch { rawTimeline = []; }
+      const timelineManifest: TimelineManifestEntry[] = rawTimeline
+        .filter((t): t is Record<string, unknown> => typeof t === 'object' && t !== null)
+        .map(t => ({ type: t.type === 'photo' ? 'photo' : 'clip', field: String(t.field || '') }))
+        .filter(t => (CLIP_FIELD_RE.test(t.field) || PHOTO_FIELD_RE.test(t.field)));
+
       // Validate audio track: must be a basename matching allowed filenames only
       const allowedAudioFiles = new Set([
         'Freedom_March.mp3','Pulse_of_Truth.mp3','Rising_Voice.mp3','Civic_Anthem.mp3',
@@ -7386,51 +7395,61 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           tempFiles.push(concatListPath);
           const concatLines: string[] = [];
 
-          // ── Clips: trim + transcode to normalized H.264/AAC ──────────────────
-          // trimIn  = seconds from start (seek position)
-          // trimOut = seconds from end → duration = clipDuration - trimIn - trimOut
-          // clipDuration is supplied by the client in trimData (avoids bundled ffprobe need).
-          for (const clip of clipFiles) {
-            tempFiles.push(clip.path);
-            const trim = trimData[clip.fieldname];
-            const normalizedPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
-            tempFiles.push(normalizedPath);
-
-            const args: string[] = ['-y'];
-            const seekIn = trim?.trimIn ?? 0;
-            if (seekIn > 0) args.push('-ss', String(seekIn));
-            args.push('-i', clip.path);
-            if (trim && trim.trimOut > 0 && trim.clipDuration > 0) {
-              // Compute play duration: total - seekIn - tailTrim
-              const playDur = Math.max(0.1, trim.clipDuration - seekIn - trim.trimOut);
-              args.push('-t', String(playDur));
-            }
-            // Transcode to unified codec — note: no -an so original audio is preserved
-            args.push('-vf', NORM_VF, ...NORM_VCODEC, ...NORM_ACODEC, normalizedPath);
-            await runFfmpeg(args);
-            concatLines.push(`file '${normalizedPath}'`);
+          // ── Build ordered segment lookup from uploaded files ──────────────────
+          const fileByField = new Map<string, Express.Multer.File>();
+          for (const f of [...clipFiles, ...photoFiles]) {
+            fileByField.set(f.fieldname, f);
+            tempFiles.push(f.path);
           }
 
-          // ── Photos: encode as H.264 still with SILENT AAC track ───────────────
-          // Critical: all concat inputs must have the same number of streams.
-          // We give photos a silent audio track via anullsrc so concat works uniformly.
-          for (const photo of photoFiles) {
-            tempFiles.push(photo.path);
-            const photoTrim = trimData[photo.fieldname];
-            const dur = Math.max(0.5, Math.min(30, photoTrim?.trimOut > 0 ? photoTrim.trimOut : 2));
-            const stillPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
-            tempFiles.push(stillPath);
-            await runFfmpeg([
-              '-y',
-              '-loop', '1', '-i', photo.path,           // video: looped image
-              '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',  // audio: silence
-              '-t', String(dur),
-              '-filter_complex', `[0:v]${NORM_VF}[vout]`,
-              '-map', '[vout]', '-map', '1:a',
-              ...NORM_VCODEC, ...NORM_ACODEC,
-              stillPath,
-            ]);
-            concatLines.push(`file '${stillPath}'`);
+          // ── Use timeline manifest to process segments in user-defined order ───
+          // Falls back to clips-then-photos if no manifest provided.
+          const orderedManifest = timelineManifest.length > 0
+            ? timelineManifest
+            : [
+                ...clipFiles.map(f => ({ type: 'clip' as const, field: f.fieldname })),
+                ...photoFiles.map(f => ({ type: 'photo' as const, field: f.fieldname })),
+              ];
+
+          for (const segment of orderedManifest) {
+            const file = fileByField.get(segment.field);
+            if (!file) continue; // skip if field not found in upload
+
+            if (segment.type === 'clip') {
+              // Clip: trim + transcode to H.264/AAC (original audio preserved)
+              const trim = trimData[segment.field];
+              const normalizedPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
+              tempFiles.push(normalizedPath);
+
+              const args: string[] = ['-y'];
+              const seekIn = trim?.trimIn ?? 0;
+              if (seekIn > 0) args.push('-ss', String(seekIn));
+              args.push('-i', file.path);
+              if (trim && trim.trimOut > 0 && trim.clipDuration > 0) {
+                const playDur = Math.max(0.1, trim.clipDuration - seekIn - trim.trimOut);
+                args.push('-t', String(playDur));
+              }
+              args.push('-vf', NORM_VF, ...NORM_VCODEC, ...NORM_ACODEC, normalizedPath);
+              await runFfmpeg(args);
+              concatLines.push(`file '${normalizedPath}'`);
+            } else {
+              // Photo: H.264 still with silent stereo AAC (uniform stream layout)
+              const photoTrim = trimData[segment.field];
+              const dur = Math.max(0.5, Math.min(30, photoTrim?.trimOut > 0 ? photoTrim.trimOut : 2));
+              const stillPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
+              tempFiles.push(stillPath);
+              await runFfmpeg([
+                '-y',
+                '-loop', '1', '-i', file.path,
+                '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+                '-t', String(dur),
+                '-filter_complex', `[0:v]${NORM_VF}[vout]`,
+                '-map', '[vout]', '-map', '1:a',
+                ...NORM_VCODEC, ...NORM_ACODEC,
+                stillPath,
+              ]);
+              concatLines.push(`file '${stillPath}'`);
+            }
           }
 
           // ── Concat (all segments: H.264 video + stereo AAC — stream copy safe) ─
@@ -7440,8 +7459,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           await runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatListPath, '-c', 'copy', concatOut]);
 
           // ── Final encode: text overlays + audio handling ──────────────────────
+          // FFmpeg drawtext escaping: the text value needs backslash-escaping for
+          // special chars. In an ffmpeg filter string:
+          //   - Single quotes, backslashes, colons, and commas are significant.
+          //   - We sanitize at parse time (replaces ' and :) and here escape backslashes,
+          //     colons, and commas for the filter context.
+          const escapeDtText = (s: string) =>
+            s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:').replace(/,/g, '\\,').replace(/%/g, '\\%');
+
           const vfFilters = textAnnotations.map(ann =>
-            `drawtext=text='${ann.text}':fontsize=${ann.fontSize}` +
+            `drawtext=text='${escapeDtText(ann.text)}':fontsize=${ann.fontSize}` +
             `:fontcolor=${ann.color.replace('#', '0x')}` +
             `:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${ann.startTime},${ann.endTime})'`
           );

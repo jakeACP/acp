@@ -421,21 +421,28 @@ export function SignalEditorPage() {
       fd.append("title", postTitle);
       fd.append("category", category);
 
-      const clipEntries = entries.filter((e) => e.type === "clip");
-      const photoEntries = entries.filter((e) => e.type === "photo");
-
-      clipEntries.forEach((e, i) => fd.append(`clip_${i}`, e.blob, `clip_${i}.webm`));
-      photoEntries.forEach((e, i) => fd.append(`photo_${i}`, e.blob, `photo_${i}.jpg`));
-
+      // Assign field names and build ordered timeline manifest
+      let clipIdx = 0;
+      let photoIdx = 0;
+      const timelineManifest: Array<{ type: "clip" | "photo"; field: string }> = [];
       const trimData: Record<string, { trimIn: number; trimOut: number; clipDuration: number }> = {};
-      clipEntries.forEach((e, i) => {
-        trimData[`clip_${i}`] = { trimIn: e.trimIn, trimOut: e.trimOut, clipDuration: e.duration };
-      });
-      photoEntries.forEach((e, i) => {
-        // For photos: effective display duration = base duration - trimOut (trim handles shorten display time)
-        const displayDur = Math.max(0.5, e.duration - e.trimOut);
-        trimData[`photo_${i}`] = { trimIn: 0, trimOut: displayDur, clipDuration: e.duration };
-      });
+
+      for (const e of entries) {
+        if (e.type === "clip") {
+          const field = `clip_${clipIdx++}`;
+          fd.append(field, e.blob, `${field}.webm`);
+          trimData[field] = { trimIn: e.trimIn, trimOut: e.trimOut, clipDuration: e.duration };
+          timelineManifest.push({ type: "clip", field });
+        } else {
+          const field = `photo_${photoIdx++}`;
+          fd.append(field, e.blob, `${field}.jpg`);
+          const displayDur = Math.max(0.5, e.duration - e.trimOut);
+          trimData[field] = { trimIn: 0, trimOut: displayDur, clipDuration: e.duration };
+          timelineManifest.push({ type: "photo", field });
+        }
+      }
+
+      fd.append("timeline", JSON.stringify(timelineManifest));
       fd.append("trimData", JSON.stringify(trimData));
       fd.append("textAnnotations", JSON.stringify(annotations));
       if (selectedAudio) {
