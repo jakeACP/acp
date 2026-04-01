@@ -801,7 +801,7 @@ export function setupAuth(app: Express) {
       });
     } catch (error: any) {
       console.error("SMS verify error:", error);
-      res.status(500).json({ message: "Failed to verify OTP" });
+      res.status(500).json({ message: error.message || "Failed to verify OTP" });
     }
   });
 
@@ -826,7 +826,7 @@ export function setupAuth(app: Express) {
       res.json({ message: "SMS 2FA enabled successfully" });
     } catch (error: any) {
       console.error("SMS enable error:", error);
-      res.status(500).json({ message: "Failed to enable SMS 2FA" });
+      res.status(500).json({ message: error.message || "Failed to enable SMS 2FA" });
     }
   });
 
