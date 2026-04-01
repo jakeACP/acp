@@ -417,12 +417,14 @@ export function SignalEditorPage() {
   useEffect(() => { videoReadyRef.current = false; }, [videoSrc]);
 
   // Shared handler for both onCanPlay and onLoadedMetadata — whichever fires first triggers play.
-  // Seeks to trimIn only AFTER play() resolves, and only when duration is finite
+  // IMPORTANT: only consume the gate (videoReadyRef = true) when we're actually going to play,
+  // so that if the user hasn't tapped play yet the gate remains open for togglePlay to use.
+  // Seeks to trimIn only AFTER play() resolves and only when duration is finite
   // (WebM blobs without metadata report duration === Infinity, making seeks deadlock).
   const handleVideoReady = useCallback(() => {
-    if (videoReadyRef.current) return;
-    videoReadyRef.current = true;
-    if (!playingRef.current) return;
+    if (videoReadyRef.current) return;  // Already handled
+    if (!playingRef.current) return;    // Not playing yet — leave gate open for togglePlay
+    videoReadyRef.current = true;       // Consume gate only when we're going to play
     const v = videoRef.current;
     if (!v) return;
     v.play()
@@ -469,9 +471,19 @@ export function SignalEditorPage() {
     } else {
       playingRef.current = true;
       if (entry.type === "clip") {
-        // Resume from current position — no seek here; initial trimIn seek is
-        // handled by handleVideoReady (fires once on clip load via onCanPlay/onLoadedMetadata).
-        videoRef.current?.play().catch(() => {});
+        const v = videoRef.current;
+        // needsInitialSeek: true only when handleVideoReady hasn't fired yet for this clip
+        // (gate is still open), meaning the user tapped play after canplay/loadedmetadata
+        // already fired but while paused.  False on subsequent pause→resume (gate consumed).
+        const needsInitialSeek = !videoReadyRef.current;
+        videoReadyRef.current = true;  // Consume gate so handleVideoReady won't double-seek
+        v?.play()
+          .then(() => {
+            if (needsInitialSeek && v && entry.trimIn > 0 && isFinite(v.duration)) {
+              v.currentTime = entry.trimIn;
+            }
+          })
+          .catch(() => {});
       } else {
         // For photo entry: start a timer to advance
         const displayDur = Math.max(0.1, entry.duration - entry.trimIn - entry.trimOut) * 1000;
