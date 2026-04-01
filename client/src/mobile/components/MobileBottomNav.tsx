@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { Home, Landmark, Plus, Users, User } from "lucide-react";
+import { Home, Landmark, Plus, UserCheck, User } from "lucide-react";
 import { CreatePostModal } from "./CreatePostModal";
 
 interface NavItem {
@@ -14,7 +14,7 @@ const navItems: NavItem[] = [
   { href: "/mobile", icon: Home, label: "Home" },
   { href: "/mobile/reps", icon: Landmark, label: "Reps" },
   { href: "/mobile/create", icon: Plus, label: "Create", isCreate: true },
-  { href: "/mobile/groups", icon: Users, label: "Groups" },
+  { href: "/mobile/friends", icon: UserCheck, label: "Friends" },
   { href: "/mobile/profile", icon: User, label: "Profile" },
 ];
 

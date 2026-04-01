@@ -24,6 +24,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ContactSyncModal } from "../components/ContactSyncModal";
+import type { Group } from "@shared/schema";
 
 type TabType = "suggestions" | "contacts" | "invite";
 
@@ -59,8 +60,14 @@ interface MatchedContact {
 export function MobileFriendsPage() {
   useScrollLight();
   const { toast } = useToast();
+  const [mainTab, setMainTab] = useState<"friends" | "groups">("friends");
   const [activeTab, setActiveTab] = useState<TabType>("suggestions");
   const [showContactSync, setShowContactSync] = useState(false);
+
+  const { data: groups = [], isLoading: groupsLoading } = useQuery<Group[]>({
+    queryKey: ['/api/groups'],
+    staleTime: 60000,
+  });
 
   const { data: suggestions = [], isLoading: loadingSuggestions } = useQuery<FriendSuggestion[]>({
     queryKey: ['/api/friends/suggestions'],
@@ -148,48 +155,130 @@ export function MobileFriendsPage() {
 
   return (
     <div className="mobile-root" data-testid="mobile-friends-page">
-      <MobileTopBar title="FRIENDS" subtitle="Connect with Patriots" />
+      <MobileTopBar title="COMMUNITY" subtitle="Friends & Groups" />
 
-      {/* Pending Requests Banner */}
-      {pendingRequests.length > 0 && (
-        <div className="px-4 mb-3">
-          <div className="glass-card p-3 border-l-4 border-l-red-500">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-red-400" />
-                <span className="text-white text-sm font-medium">
-                  {pendingRequests.length} pending request{pendingRequests.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-white/40" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab Navigation */}
+      {/* Main Tab Switcher */}
       <div className="px-4 mb-4">
         <div className="flex rounded-xl bg-white/5 backdrop-blur-sm p-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === tab.key
-                  ? "bg-gradient-to-r from-red-500 to-blue-600 text-white"
-                  : "text-white/60"
-              }`}
-              data-testid={`tab-${tab.key}`}
-            >
-              <tab.icon className="w-4 h-4" />
-              <span className="hidden sm:inline">{tab.label}</span>
-            </button>
-          ))}
+          <button
+            onClick={() => setMainTab("friends")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              mainTab === "friends"
+                ? "bg-gradient-to-r from-red-500 to-blue-600 text-white"
+                : "text-white/60"
+            }`}
+          >
+            <UserCheck className="w-4 h-4" />
+            Friends
+          </button>
+          <button
+            onClick={() => setMainTab("groups")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              mainTab === "groups"
+                ? "bg-gradient-to-r from-red-500 to-blue-600 text-white"
+                : "text-white/60"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Groups
+          </button>
         </div>
       </div>
 
-      {/* Tab Content */}
-      <div className="px-4 pb-28">
+      {/* Groups Tab */}
+      {mainTab === "groups" && (
+        <div className="px-4 pb-28 space-y-3">
+          {groupsLoading ? (
+            <>
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="glass-card p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="skeleton w-12 h-12 rounded-full" />
+                    <div className="flex-1">
+                      <div className="skeleton h-4 w-32 mb-2" />
+                      <div className="skeleton h-3 w-20" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : groups.length === 0 ? (
+            <div className="text-center py-12 text-white/60">
+              <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg mb-2">No groups yet</p>
+              <p className="text-sm">Create or join a group to get started</p>
+            </div>
+          ) : (
+            groups.map((group) => (
+              <Link key={group.id} href={`/mobile/groups/${group.id}`}>
+                <article className="glass-card p-4 cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-500 to-blue-600 flex items-center justify-center flex-shrink-0">
+                      {group.image ? (
+                        <img src={group.image} alt={group.name} className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        <Users className="w-6 h-6 text-white" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-white font-semibold truncate">{group.name}</h3>
+                      <p className="text-white/60 text-sm">{group.memberCount?.toLocaleString() || 0} members</p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-white/40" />
+                  </div>
+                  {group.description && (
+                    <p className="text-white/70 text-sm mt-3 line-clamp-2">{group.description}</p>
+                  )}
+                </article>
+              </Link>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Friends Tab */}
+      {mainTab === "friends" && (
+        <>
+          {/* Pending Requests Banner */}
+          {pendingRequests.length > 0 && (
+            <div className="px-4 mb-3">
+              <div className="glass-card p-3 border-l-4 border-l-red-500">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-5 h-5 text-red-400" />
+                    <span className="text-white text-sm font-medium">
+                      {pendingRequests.length} pending request{pendingRequests.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-white/40" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Friends Sub-Tab Navigation */}
+          <div className="px-4 mb-4">
+            <div className="flex rounded-xl bg-white/5 backdrop-blur-sm p-1">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-2 rounded-lg text-xs font-medium transition-all ${
+                    activeTab === tab.key
+                      ? "bg-white/20 text-white"
+                      : "text-white/50"
+                  }`}
+                  data-testid={`tab-${tab.key}`}
+                >
+                  <tab.icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Friends Tab Content */}
+          <div className="px-4 pb-28">
         {/* Suggestions Tab */}
         {activeTab === "suggestions" && (
           <div className="space-y-3">
@@ -473,7 +562,9 @@ export function MobileFriendsPage() {
             </div>
           </div>
         )}
-      </div>
+          </div>
+        </>
+      )}
 
       {/* Contact Sync Modal */}
       {showContactSync && (
