@@ -139,6 +139,8 @@ export async function sendSms2FA(userId: string, phoneNumber: string): Promise<v
  * Verify a 2FA OTP via Twilio Verify.
  * Accepts an optional phone override — used during the enable flow
  * before the phone is saved to the user record.
+ * Throws on infrastructure/config errors (caller returns 500).
+ * Returns { success: false } only for wrong/expired codes (caller returns 400).
  */
 export async function verifySms2FA(userId: string, code: string, phone?: string): Promise<{ success: boolean; reason?: string }> {
   let toPhone = phone;
@@ -149,15 +151,10 @@ export async function verifySms2FA(userId: string, code: string, phone?: string)
   if (!toPhone) {
     return { success: false, reason: 'No phone number on file. Please re-enable SMS 2FA.' };
   }
-  try {
-    const approved = await checkVerifyOtp(toPhone, code);
-    if (approved) {
-      return { success: true };
-    }
-    return { success: false, reason: 'Invalid or expired code.' };
-  } catch (error: any) {
-    return { success: false, reason: error.message || 'Verification failed.' };
-  }
+  // Throws on Twilio infrastructure/config errors — let those bubble up as 500.
+  const approved = await checkVerifyOtp(toPhone, code);
+  if (approved) return { success: true };
+  return { success: false, reason: 'Invalid or expired code.' };
 }
 
 export async function enableSms2FA(userId: string, phoneNumber: string): Promise<void> {
