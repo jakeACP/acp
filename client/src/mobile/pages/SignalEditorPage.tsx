@@ -768,7 +768,43 @@ export function SignalEditorPage() {
           <p className="text-white/40 text-xs">Timeline · {totalDuration.toFixed(1)}s</p>
         </div>
 
-        {/* Track 1 — Clips */}
+        {/* Track 1 — Overlays */}
+        <div className="flex items-center gap-0 shrink-0 px-3 pb-2">
+          {/* Label */}
+          <div className="w-14 shrink-0 flex items-center gap-1">
+            <Layers className="w-3 h-3 text-white/40" />
+            <span className="text-white/40 text-[10px]">Overlays</span>
+          </div>
+          {/* Content — annotation pills */}
+          <div className="flex-1 overflow-x-auto">
+            {annotations.length > 0 ? (
+              <div className="flex gap-1.5" style={{ minWidth: "max-content" }}>
+                {annotations.map((ann) => (
+                  <div key={ann.id} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs shrink-0"
+                    style={{ background: ann.color + "25", color: ann.color, border: `1px solid ${ann.color}40` }}>
+                    <Type className="w-2.5 h-2.5 shrink-0" />
+                    <span className="truncate max-w-[60px]">{ann.text}</span>
+                    <span className="text-white/30">{ann.startTime.toFixed(0)}s</span>
+                    <button onClick={() => setAnnotations((p) => p.filter((a) => a.id !== ann.id))}>
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-white/20 text-xs italic">No overlays</span>
+            )}
+          </div>
+          {/* + add text overlay */}
+          <button
+            onClick={() => setSheet("text")}
+            className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 border-dashed flex items-center justify-center shrink-0 ml-2"
+          >
+            <Plus className="w-4 h-4 text-white/50" />
+          </button>
+        </div>
+
+        {/* Track 2 — Clips */}
         <div className="flex items-center gap-0 shrink-0 px-3 pb-2">
           {/* Label */}
           <div className="w-14 shrink-0 flex items-center gap-1">
@@ -800,7 +836,7 @@ export function SignalEditorPage() {
           </button>
         </div>
 
-        {/* Track 2 — Sound */}
+        {/* Track 3 — Sound */}
         <div className="flex items-center gap-0 shrink-0 px-3 pb-2">
           {/* Label */}
           <div className="w-14 shrink-0 flex items-center gap-1">
@@ -826,42 +862,6 @@ export function SignalEditorPage() {
           {/* + add sound */}
           <button
             onClick={() => setSheet("sound")}
-            className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 border-dashed flex items-center justify-center shrink-0 ml-2"
-          >
-            <Plus className="w-4 h-4 text-white/50" />
-          </button>
-        </div>
-
-        {/* Track 3 — Overlays */}
-        <div className="flex items-center gap-0 shrink-0 px-3 pb-2">
-          {/* Label */}
-          <div className="w-14 shrink-0 flex items-center gap-1">
-            <Layers className="w-3 h-3 text-white/40" />
-            <span className="text-white/40 text-[10px]">Overlays</span>
-          </div>
-          {/* Content — annotation pills */}
-          <div className="flex-1 overflow-x-auto">
-            {annotations.length > 0 ? (
-              <div className="flex gap-1.5" style={{ minWidth: "max-content" }}>
-                {annotations.map((ann) => (
-                  <div key={ann.id} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs shrink-0"
-                    style={{ background: ann.color + "25", color: ann.color, border: `1px solid ${ann.color}40` }}>
-                    <Type className="w-2.5 h-2.5 shrink-0" />
-                    <span className="truncate max-w-[60px]">{ann.text}</span>
-                    <span className="text-white/30">{ann.startTime.toFixed(0)}s</span>
-                    <button onClick={() => setAnnotations((p) => p.filter((a) => a.id !== ann.id))}>
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <span className="text-white/20 text-xs italic">No overlays</span>
-            )}
-          </div>
-          {/* + add text overlay */}
-          <button
-            onClick={() => setSheet("text")}
             className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 border-dashed flex items-center justify-center shrink-0 ml-2"
           >
             <Plus className="w-4 h-4 text-white/50" />
