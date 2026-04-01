@@ -469,14 +469,9 @@ export function SignalEditorPage() {
     } else {
       playingRef.current = true;
       if (entry.type === "clip") {
-        const v = videoRef.current;
-        v?.play()
-          .then(() => {
-            if (v && entry.trimIn > 0 && isFinite(v.duration)) {
-              v.currentTime = entry.trimIn;
-            }
-          })
-          .catch(() => {});
+        // Resume from current position — no seek here; initial trimIn seek is
+        // handled by handleVideoReady (fires once on clip load via onCanPlay/onLoadedMetadata).
+        videoRef.current?.play().catch(() => {});
       } else {
         // For photo entry: start a timer to advance
         const displayDur = Math.max(0.1, entry.duration - entry.trimIn - entry.trimOut) * 1000;
