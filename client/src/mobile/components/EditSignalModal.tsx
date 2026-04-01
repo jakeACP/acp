@@ -2,7 +2,7 @@ import type { ChangeEvent } from "react";
 import { useState, useRef } from "react";
 import { X, ImageIcon, Camera, Pencil } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, getCsrfToken, fetchCsrfToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { SignalWithAuthor } from "@shared/schema";
 
@@ -101,8 +101,12 @@ export function EditSignalModal({ signal, onClose }: EditSignalModalProps) {
       fd.append("tags", JSON.stringify(allTags));
       if (thumbBlob) fd.append("thumbnail", thumbBlob, "thumbnail.jpg");
 
+      let csrf = getCsrfToken();
+      if (!csrf) csrf = await fetchCsrfToken();
+
       const res = await fetch(`/api/mobile/signals/${signal.id}`, {
         method: "PATCH",
+        headers: { "x-csrf-token": csrf },
         body: fd,
         credentials: "include",
       });
@@ -143,7 +147,7 @@ export function EditSignalModal({ signal, onClose }: EditSignalModalProps) {
         </div>
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-4 py-4 space-y-4">
+        <div className="overflow-y-auto flex-1 px-4 py-4 space-y-4 pb-2">
 
           {/* Title */}
           <div>
@@ -255,8 +259,10 @@ export function EditSignalModal({ signal, onClose }: EditSignalModalProps) {
           {/* Hidden inputs */}
           <input ref={libInputRef} type="file" accept="image/*" className="hidden" onChange={handleThumbPick} />
           <input ref={camInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleThumbPick} />
+        </div>
 
-          {/* Save */}
+        {/* Pinned footer — always visible above nav bar */}
+        <div className="shrink-0 px-4 pt-3 pb-20 border-t border-white/10 bg-[#111]">
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
