@@ -388,9 +388,9 @@ export function SignalEditorPage() {
       clipEntries.forEach((e, i) => fd.append(`clip_${i}`, e.blob, `clip_${i}.webm`));
       photoEntries.forEach((e, i) => fd.append(`photo_${i}`, e.blob, `photo_${i}.jpg`));
 
-      const trimData: Record<string, { trimIn: number; trimOut: number }> = {};
-      clipEntries.forEach((e, i) => { trimData[`clip_${i}`] = { trimIn: e.trimIn, trimOut: e.trimOut }; });
-      photoEntries.forEach((e, i) => { trimData[`photo_${i}`] = { trimIn: 0, trimOut: e.duration > 0 ? e.duration : 2 }; });
+      const trimData: Record<string, { trimIn: number; trimOut: number; clipDuration: number }> = {};
+      clipEntries.forEach((e, i) => { trimData[`clip_${i}`] = { trimIn: e.trimIn, trimOut: e.trimOut, clipDuration: e.duration }; });
+      photoEntries.forEach((e, i) => { trimData[`photo_${i}`] = { trimIn: 0, trimOut: e.duration > 0 ? e.duration : 2, clipDuration: e.duration > 0 ? e.duration : 2 }; });
       fd.append("trimData", JSON.stringify(trimData));
       fd.append("textAnnotations", JSON.stringify(annotations));
       if (selectedAudio) {

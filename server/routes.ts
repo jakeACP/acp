@@ -7286,14 +7286,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   const runFfmpeg = (args: string[]): Promise<void> =>
     execFileAsync(ffmpegBin, args, { maxBuffer: 50 * 1024 * 1024 }).then(() => {});
 
-  // Helper: get media duration in seconds via ffprobe
-  const getMediaDuration = async (filePath: string): Promise<number> => {
-    const { stdout } = await execFileAsync('ffprobe', [
-      '-v', 'error', '-show_entries', 'format=duration',
-      '-of', 'default=noprint_wrappers=1:nokey=1', filePath,
-    ], { maxBuffer: 1 * 1024 * 1024 });
-    return parseFloat(stdout.trim()) || 0;
-  };
 
   app.post("/api/mobile/signals/compose", (req, res, next) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -7334,13 +7326,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       // Parse and strictly validate body fields
       let rawTrimData: Record<string, unknown> = {};
       try { rawTrimData = JSON.parse(req.body.trimData || '{}'); } catch { rawTrimData = {}; }
-      const trimData: Record<string, { trimIn: number; trimOut: number }> = {};
+      const trimData: Record<string, { trimIn: number; trimOut: number; clipDuration: number }> = {};
       for (const [k, v] of Object.entries(rawTrimData)) {
         if (typeof v === 'object' && v !== null) {
           const vObj = v as Record<string, unknown>;
           const ti = parseFloat(String(vObj.trimIn ?? '0')) || 0;
           const to = parseFloat(String(vObj.trimOut ?? '0')) || 0;
-          trimData[k] = { trimIn: Math.max(0, ti), trimOut: Math.max(0, to) };
+          const dur = parseFloat(String(vObj.clipDuration ?? '0')) || 0;
+          trimData[k] = { trimIn: Math.max(0, ti), trimOut: Math.max(0, to), clipDuration: Math.max(0, dur) };
         }
       }
 
@@ -7370,14 +7363,19 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const job = await storage.createComposeJob(user.id);
       res.status(202).json({ jobId: job.id });
 
-      // ── Async FFmpeg pipeline (no shell interpolation) ─────────────────────
-      // All intermediate segments are transcoded to H.264/AAC before concat,
-      // ensuring codec compatibility regardless of input format (WebM, MP4, JPEG, etc.)
+      // ── Async FFmpeg pipeline (ffmpeg-static binary, execFile — no shell) ────
+      // Strategy:
+      //   1. Normalize every segment to H.264 + silent AAC (uniform stream layout).
+      //   2. Photo stills get a real silent AAC track so concat never has stream-count mismatch.
+      //   3. Concat all normalized segments with -c copy (safe because all codecs match).
+      //   4. Final pass: apply drawtext overlays, preserve or mix audio from concat:
+      //      - No BGM: keep original clip audio (no -an).
+      //      - With BGM: mix concat audio with BGM using amix filter (additive, not replacement).
       setImmediate(async () => {
         const tempFiles: string[] = [];
-        // Common normalized segment settings
         const NORM_VF = 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2';
         const NORM_VCODEC = ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-r', '30', '-pix_fmt', 'yuv420p'];
+        // Normalize audio: always produce a stereo AAC track (silent or from source)
         const NORM_ACODEC = ['-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2'];
 
         try {
@@ -7386,9 +7384,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           tempFiles.push(concatListPath);
           const concatLines: string[] = [];
 
-          // ── Clips: transcode to normalized H.264/AAC, applying trim ──────────
-          // Client models trimIn as seconds from start, trimOut as seconds from end.
-          // We convert trimOut → absolute stop time using ffprobe duration.
+          // ── Clips: trim + transcode to normalized H.264/AAC ──────────────────
+          // trimIn  = seconds from start (seek position)
+          // trimOut = seconds from end → duration = clipDuration - trimIn - trimOut
+          // clipDuration is supplied by the client in trimData (avoids bundled ffprobe need).
           for (const clip of clipFiles) {
             tempFiles.push(clip.path);
             const trim = trimData[clip.fieldname];
@@ -7396,25 +7395,23 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
             tempFiles.push(normalizedPath);
 
             const args: string[] = ['-y'];
-            if (trim && trim.trimIn > 0) {
-              args.push('-ss', String(trim.trimIn));
-            }
+            const seekIn = trim?.trimIn ?? 0;
+            if (seekIn > 0) args.push('-ss', String(seekIn));
             args.push('-i', clip.path);
-            if (trim && trim.trimOut > 0) {
-              // Convert "seconds from end" to absolute end time
-              const clipDuration = await getMediaDuration(clip.path);
-              const absoluteEnd = Math.max(0, clipDuration - trim.trimOut - (trim.trimIn || 0));
-              if (absoluteEnd > 0) {
-                args.push('-t', String(absoluteEnd));
-              }
+            if (trim && trim.trimOut > 0 && trim.clipDuration > 0) {
+              // Compute play duration: total - seekIn - tailTrim
+              const playDur = Math.max(0.1, trim.clipDuration - seekIn - trim.trimOut);
+              args.push('-t', String(playDur));
             }
-            // Always transcode to normalized codec/profile so concat works
+            // Transcode to unified codec — note: no -an so original audio is preserved
             args.push('-vf', NORM_VF, ...NORM_VCODEC, ...NORM_ACODEC, normalizedPath);
             await runFfmpeg(args);
             concatLines.push(`file '${normalizedPath}'`);
           }
 
-          // ── Photos: encode to normalized H.264 still at requested duration ──
+          // ── Photos: encode as H.264 still with SILENT AAC track ───────────────
+          // Critical: all concat inputs must have the same number of streams.
+          // We give photos a silent audio track via anullsrc so concat works uniformly.
           for (const photo of photoFiles) {
             tempFiles.push(photo.path);
             const photoTrim = trimData[photo.fieldname];
@@ -7422,25 +7419,28 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
             const stillPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
             tempFiles.push(stillPath);
             await runFfmpeg([
-              '-y', '-loop', '1', '-i', photo.path,
+              '-y',
+              '-loop', '1', '-i', photo.path,           // video: looped image
+              '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',  // audio: silence
               '-t', String(dur),
-              '-vf', NORM_VF,
-              ...NORM_VCODEC,
-              '-an',
+              '-filter_complex', `[0:v]${NORM_VF}[vout]`,
+              '-map', '[vout]', '-map', '1:a',
+              ...NORM_VCODEC, ...NORM_ACODEC,
               stillPath,
             ]);
             concatLines.push(`file '${stillPath}'`);
           }
 
-          // Write concat list and concat (all segments now share same codec/params)
+          // ── Concat (all segments: H.264 video + stereo AAC — stream copy safe) ─
           fs.writeFileSync(concatListPath, concatLines.join('\n'));
           const concatOut = path.join(composeTempDir, `${randomUUID()}.mp4`);
           tempFiles.push(concatOut);
           await runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatListPath, '-c', 'copy', concatOut]);
 
-          // ── Final encode: drawtext overlays + optional audio mix ──────────────
+          // ── Final encode: text overlays + audio handling ──────────────────────
           const vfFilters = textAnnotations.map(ann =>
-            `drawtext=text='${ann.text}':fontsize=${ann.fontSize}:fontcolor=${ann.color.replace('#', '0x')}` +
+            `drawtext=text='${ann.text}':fontsize=${ann.fontSize}` +
+            `:fontcolor=${ann.color.replace('#', '0x')}` +
             `:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${ann.startTime},${ann.endTime})'`
           );
           const vf = vfFilters.length > 0 ? vfFilters.join(',') : 'null';
@@ -7450,19 +7450,23 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
           const finalArgs = ['-y', '-i', concatOut];
           if (hasAudio) {
+            // Mix original audio with BGM (additive, not replacement)
             finalArgs.push(
               '-i', audioSrcPath,
-              '-filter_complex', `[0:v]${vf}[vout];[1:a]volume=${audioVolume}[aout]`,
-              '-map', '[vout]', '-map', '[aout]', '-shortest',
+              '-filter_complex',
+              `[0:v]${vf}[vout];[0:a][1:a]amix=inputs=2:duration=first:weights=1 ${audioVolume}[aout]`,
+              '-map', '[vout]', '-map', '[aout]',
               '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
               '-c:a', 'aac', '-b:a', '128k',
               outputPath,
             );
           } else {
+            // Preserve original clip audio — pass through without -an
             finalArgs.push(
-              '-vf', vf,
+              '-filter_complex', `[0:v]${vf}[vout]`,
+              '-map', '[vout]', '-map', '0:a',
               '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-              '-an',
+              '-c:a', 'aac', '-b:a', '128k',
               outputPath,
             );
           }
