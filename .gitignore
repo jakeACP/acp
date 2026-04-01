@@ -4,3 +4,6 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+uploads/signals/*.mp4
+uploads/signals/*.webm
+uploads/signals/*.mov
