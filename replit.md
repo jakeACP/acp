@@ -58,6 +58,12 @@ Preferred communication style: Simple, everyday language.
 - **Duplicate Profile Detection & Merge**: `merge_candidates` DB table tracks potential duplicate politician profiles with `politician_a_id`, `politician_b_id`, `reason`, `status` (pending/merged/dismissed). Admin merge tool shows side-by-side comparison of each pair with "Keep A" / "Keep B" merge buttons and dismiss option. Merge copies missing fields from removed profile to kept profile, then soft-deletes the removed one.
 - **Claim Request System**: Users can claim politician profiles. Approval elevates user to `candidate` role, sets `claimed_by_user_id` on the profile, and auto-generates a handle if missing. Reject supports optional reason. Admin Claims tab shows pending count badge.
 
+- **Mobile-First Interface** (`/mobile`): TikTok-style mobile app with feed, Signals (short video), groups, friends, messages, events, and representative lookup tabs. Fully separate routing under `MobileApp.tsx`.
+- **Signal Video Recorder** (`/mobile/create`): Multi-clip hold-to-record camera experience. Hold the record button to capture, release to pause between clips. Features: multi-segment color progress bar, flip camera, countdown timer toggle, filter strip (none/vivid/mono/cool/warm), text overlays. Duration limits: 15s / 60s / 3min (free); +10min for premium. On finish: Delete / Edit (goes to `/mobile/edit`) / Post action sheet. Post flow: pick Signal category (Politicians, Corruption, Current Events, Legislation, Voting & Elections, Justice, Economy, Community), optional title, then uploads as multipart to `POST /api/mobile/signals`. IDB session (`client/src/mobile/lib/clipSession.ts`) holds clip blobs + metadata for handoff to editor. Uploaded videos stored at `uploads/signals/` and served as static files.
+- **Signal Editor** (`/mobile/edit`): Placeholder for Task #18 (Timeline editor with trim, text annotations, audio, footage/photos, and FFmpeg stitching).
+- **CreatePostModal Signal flow**: Selecting "Signal Video" now shows a choice screen — "Record Video" (clears IDB session + navigates to `/mobile/create`) or "Paste Link" (existing URL input flow).
+- **2FA Trusted Devices**: Revamped UI — separate "Trusted Devices" card with UA parser, relative timestamps, "This device" badge, per-device + "Log out all" buttons. 180-day expiry on cookies and DB records. `getCurrentTrustedDeviceId` storage method for accurate current-device detection.
+
 ## External Dependencies
 
 ### Database Infrastructure

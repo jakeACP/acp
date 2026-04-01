@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
-import { X, FileText, Video, Image, BarChart2, Calendar, Megaphone, Send, MapPin, Clock, Users, Link as LinkIcon, BookOpen } from "lucide-react";
+import { useLocation } from "wouter";
+import { X, FileText, Video, Image, BarChart2, Calendar, Megaphone, Send, MapPin, Clock, Users, Link as LinkIcon, BookOpen, Camera } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { clearSession } from "@/mobile/lib/clipSession";
 
 interface CreatePostModalProps {
   isOpen: boolean;
@@ -69,7 +71,9 @@ const initialBlogData: BlogFormData = {
 };
 
 export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
+  const [, navigate] = useLocation();
   const [selectedType, setSelectedType] = useState<PostType | null>(null);
+  const [signalMode, setSignalMode] = useState<'choice' | 'paste' | null>(null);
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
@@ -142,6 +146,7 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
 
   const handleClose = () => {
     setSelectedType(null);
+    setSignalMode(null);
     setContent('');
     setTitle('');
     setVideoUrl('');
@@ -149,6 +154,21 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
     setEventData(initialEventData);
     setBlogData(initialBlogData);
     onClose();
+  };
+
+  const handleSignalTypeSelect = (type: PostType) => {
+    if (type === 'signal') {
+      setSelectedType('signal');
+      setSignalMode('choice');
+    } else {
+      setSelectedType(type);
+    }
+  };
+
+  const handleRecordVideo = async () => {
+    await clearSession();
+    handleClose();
+    navigate('/mobile/create');
   };
 
   const handleSubmit = () => {
@@ -295,7 +315,13 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
       >
         <div className="flex items-center justify-between p-4 border-b border-white/10">
           <h2 className="text-white font-semibold text-lg">
-            {selectedType ? `Create ${postTypes.find(p => p.type === selectedType)?.label}` : 'Create Post'}
+            {selectedType === 'signal' && signalMode === 'choice'
+              ? 'Signal Video'
+              : selectedType === 'signal' && signalMode === 'paste'
+              ? 'Paste Video Link'
+              : selectedType
+              ? `Create ${postTypes.find(p => p.type === selectedType)?.label}`
+              : 'Create Post'}
           </h2>
           <button 
             onClick={handleClose}
@@ -312,7 +338,7 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
               {postTypes.map(({ type, icon: Icon, label, color }) => (
                 <button
                   key={type}
-                  onClick={() => setSelectedType(type)}
+                  onClick={() => handleSignalTypeSelect(type)}
                   className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-all active:scale-95"
                   data-testid={`create-${type}`}
                 >
@@ -322,6 +348,36 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
                   <span className="text-white text-[10px] font-medium text-center leading-tight">{label}</span>
                 </button>
               ))}
+            </div>
+          ) : selectedType === 'signal' && signalMode === 'choice' ? (
+            <div className="space-y-3">
+              <p className="text-white/60 text-sm text-center mb-4">How do you want to create your Signal?</p>
+              <button
+                onClick={handleRecordVideo}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-red-500/20 to-pink-500/20 border border-red-500/30 hover:border-red-400/50 active:scale-[0.98] transition-all"
+                data-testid="record-video-option"
+              >
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center shrink-0">
+                  <Camera className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-left">
+                  <p className="text-white font-semibold">Record Video</p>
+                  <p className="text-white/50 text-xs mt-0.5">Use your camera to record a new Signal</p>
+                </div>
+              </button>
+              <button
+                onClick={() => setSignalMode('paste')}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 active:scale-[0.98] transition-all"
+                data-testid="paste-link-option"
+              >
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shrink-0">
+                  <LinkIcon className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-left">
+                  <p className="text-white font-semibold">Paste Link</p>
+                  <p className="text-white/50 text-xs mt-0.5">Share a YouTube, TikTok, or other video link</p>
+                </div>
+              </button>
             </div>
           ) : (
             <div className="space-y-4">

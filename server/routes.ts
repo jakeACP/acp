@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import fs from "fs";
+import path from "path";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
@@ -48,10 +50,30 @@ const upload = multer({
   }
 });
 
+// Multer for Signal video uploads (disk storage, up to 500MB)
+const signalsUploadDir = path.resolve(process.cwd(), 'uploads/signals');
+if (!fs.existsSync(signalsUploadDir)) fs.mkdirSync(signalsUploadDir, { recursive: true });
+const signalVideoStorage = multer.diskStorage({
+  destination: signalsUploadDir,
+  filename: (_req, _file, cb) => cb(null, `${randomUUID()}.webm`),
+});
+const signalUpload = multer({
+  storage: signalVideoStorage,
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['video/webm', 'video/mp4', 'video/quicktime'];
+    cb(null, allowed.includes(file.mimetype) || file.originalname.match(/\.(webm|mp4|mov)$/i) != null);
+  },
+});
+
 const objectStorageService = new ObjectStorageService();
 
 export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   setupAuth(app);
+
+  // Serve uploaded signal videos
+  const express = await import("express");
+  app.use('/uploads/signals', express.default.static(signalsUploadDir));
 
   (async () => {
     try {
@@ -7040,27 +7062,45 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  app.post("/api/mobile/signals", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
-
+  app.post("/api/mobile/signals", (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    signalUpload.single('video')(req, res, (err) => {
+      if (err) {
+        console.error("Signal upload multer error:", err);
+        return res.status(400).json({ message: err.message || "Upload failed" });
+      }
+      next();
+    });
+  }, async (req, res) => {
     try {
-      // For now, handle as JSON - video upload will be handled separately
+      let videoUrl = req.body.videoUrl || '';
+      if ((req as any).file) {
+        const filename = (req as any).file.filename;
+        videoUrl = `/uploads/signals/${filename}`;
+      }
+
+      let overlays: any = null;
+      if (req.body.overlays) {
+        try { overlays = JSON.parse(req.body.overlays); } catch { overlays = null; }
+      }
+
+      const category = req.body.category || '';
+      const tags = category ? [category] : (req.body.tags || []);
+
       const signalData = {
-        authorId: req.user.id,
+        authorId: req.user!.id,
         title: req.body.title || '',
         description: req.body.description || '',
-        videoUrl: req.body.videoUrl || '',
+        videoUrl,
         thumbnailUrl: req.body.thumbnailUrl,
         duration: parseInt(req.body.duration) || 0,
-        maxDuration: req.user.subscriptionStatus === 'premium' ? 300 : 60,
+        maxDuration: req.user!.subscriptionStatus === 'premium' ? 600 : 180,
         filter: req.body.filter || 'none',
-        overlays: req.body.overlays,
-        tags: req.body.tags || [],
+        overlays,
+        tags,
         isPublic: true,
       };
-      
+
       const signal = await storage.createSignal(signalData);
       res.status(201).json(signal);
     } catch (error: any) {
