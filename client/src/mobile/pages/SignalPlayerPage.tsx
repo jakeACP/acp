@@ -242,7 +242,7 @@ export function SignalPlayerPage() {
         <video
           ref={videoRef}
           src={signal.videoUrl}
-          className="w-full h-full object-contain"
+          className="w-full h-full object-cover"
           loop
           playsInline
           muted={muted}
@@ -255,7 +255,7 @@ export function SignalPlayerPage() {
           <img
             src={signal.thumbnailUrl}
             alt=""
-            className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />
         )}
       </div>
