@@ -7373,6 +7373,13 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const audioVolume = Math.max(0, Math.min(1, parseFloat(req.body.audioVolume ?? '0.8') || 0.8));
       const category = String(req.body.category || '').slice(0, 80);
       const title = String(req.body.title || '').slice(0, 200);
+      // Parse user tags (JSON array of strings, up to 5, each up to 50 chars)
+      let rawTagsArr: unknown[] = [];
+      try { rawTagsArr = JSON.parse(req.body.tags || '[]'); } catch { rawTagsArr = []; }
+      const userTags: string[] = Array.isArray(rawTagsArr)
+        ? rawTagsArr.map(t => String(t).slice(0, 50).trim()).filter(Boolean).slice(0, 6)
+        : [];
+      const signalTags = userTags.length > 0 ? userTags : (category ? [category] : []);
 
       const job = await storage.createComposeJob(user.id);
       res.status(202).json({ jobId: job.id });
@@ -7541,7 +7548,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           const signal = await storage.createSignal({
             authorId: user.id, title, description: '', videoUrl, thumbnailUrl,
             duration: 0, maxDuration: user.subscriptionStatus === 'premium' ? 600 : 180,
-            filter: 'none', overlays: null, tags: category ? [category] : [], isPublic: true,
+            filter: 'none', overlays: null, tags: signalTags, isPublic: true,
           });
           await storage.updateComposeJob(job.id, { status: 'done', signalId: signal.id });
         } catch (err: unknown) {

@@ -230,6 +230,8 @@ export function SignalEditorPage() {
   // Category / posting
   const [category, setCategory] = useState("");
   const [postTitle, setPostTitle] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const pollIntervalRef = useRef<number | null>(null);
@@ -531,8 +533,14 @@ export function SignalEditorPage() {
 
   const totalDuration = entries.reduce((s, e) => s + (e.duration - e.trimIn - e.trimOut), 0);
 
+  const addTag = () => {
+    const t = tagInput.trim().replace(/^#/, "").replace(/\s+/g, "-").toLowerCase();
+    if (!t || tags.length >= 5 || tags.includes(t)) { setTagInput(""); return; }
+    setTags((prev) => [...prev, t]);
+    setTagInput("");
+  };
+
   const startCompose = async () => {
-    if (!category) { toast({ title: "Pick a category", variant: "destructive" }); return; }
     if (entries.length === 0) { toast({ title: "No clips to post", variant: "destructive" }); return; }
 
     setPosting(true);
@@ -541,7 +549,10 @@ export function SignalEditorPage() {
     try {
       const fd = new FormData();
       fd.append("title", postTitle);
-      fd.append("category", category);
+      if (category) fd.append("category", category);
+      // Tags: up to 5 user tags, category prepended if selected
+      const allTags = category ? [category, ...tags] : tags;
+      fd.append("tags", JSON.stringify(allTags));
 
       // Assign field names and build ordered timeline manifest
       let clipIdx = 0;
@@ -921,16 +932,55 @@ export function SignalEditorPage() {
               maxLength={120}
             />
             <div>
-              <p className="text-white/50 text-xs mb-2">Category</p>
+              <p className="text-white/50 text-xs mb-2">Category <span className="text-white/30">(optional)</span></p>
               <div className="grid grid-cols-2 gap-2">
                 {SIGNAL_CATEGORIES.map((cat) => (
-                  <button key={cat} onClick={() => setCategory(cat)}
+                  <button key={cat}
+                    onClick={() => setCategory((prev) => prev === cat ? "" : cat)}
                     className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all text-left
                       ${category === cat ? "bg-red-500 text-white" : "bg-white/10 text-white/70"}`}>
                     {cat}
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Tags */}
+            <div>
+              <p className="text-white/50 text-xs mb-2">Tags <span className="text-white/30">({tags.length}/5)</span></p>
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {tags.map((tag) => (
+                    <span key={tag}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 text-white text-xs">
+                      <span className="text-white/50">#</span>{tag}
+                      <button onClick={() => setTags((p) => p.filter((t) => t !== tag))} className="ml-0.5">
+                        <X className="w-3 h-3 text-white/50" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {tags.length < 5 && (
+                <div className="flex gap-2">
+                  <input
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(); } }}
+                    placeholder="Add a tag…"
+                    className="flex-1 bg-white/10 text-white rounded-xl px-3 py-2.5 text-sm outline-none placeholder:text-white/30"
+                    maxLength={32}
+                  />
+                  <button
+                    type="button"
+                    onClick={addTag}
+                    disabled={!tagInput.trim()}
+                    className="px-4 py-2.5 rounded-xl bg-white/10 text-white/70 text-sm font-medium disabled:opacity-40 active:bg-white/20"
+                  >
+                    Add
+                  </button>
+                </div>
+              )}
             </div>
             {/* Thumbnail picker */}
             <div>
@@ -968,7 +1018,7 @@ export function SignalEditorPage() {
             <p className="text-white/40 text-xs text-center">This Signal will be posted publicly.</p>
             <button
               onClick={startCompose}
-              disabled={!category || posting}
+              disabled={posting}
               className="w-full py-3 rounded-xl bg-red-500 text-white font-bold disabled:opacity-40"
             >
               {posting ? "Uploading…" : "Post Signal"}
