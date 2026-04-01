@@ -1,4 +1,4 @@
-import { Bell, Palette } from "lucide-react";
+import { MessageCircle, Palette } from "lucide-react";
 import { Link } from "wouter";
 import acpLogo from "@assets/logo-tpb_1763998990798.png";
 import { useTheme } from "@/hooks/use-theme";
@@ -53,13 +53,13 @@ export function MobileTopBar({ title, subtitle }: MobileTopBarProps) {
             <Palette className="w-5 h-5" />
           </button>
 
-          <Link href="/mobile/notifications">
+          <Link href="/mobile/messages">
             <button 
               className="notification-button"
-              data-testid="mobile-notifications"
-              aria-label="Notifications"
+              data-testid="mobile-messages"
+              aria-label="Messages"
             >
-              <Bell className="w-5 h-5" />
+              <MessageCircle className="w-5 h-5" />
             </button>
           </Link>
         </div>
