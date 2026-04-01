@@ -7,6 +7,7 @@ import { MobileUserProfilePage } from "./pages/MobileUserProfilePage";
 import { MobileFriendsPage } from "./pages/MobileFriendsPage";
 import { SignalRecorderPage } from "./pages/SignalRecorderPage";
 import { SignalEditorPage } from "./pages/SignalEditorPage";
+import { SignalChoicePage } from "./pages/SignalChoicePage";
 import MobileEventsPage from "./pages/MobileEventsPage";
 import { MobileRepsPage } from "./pages/MobileRepsPage";
 import { MobileMessagesPage } from "./pages/MobileMessagesPage";
@@ -20,6 +21,7 @@ export function MobileApp() {
       <Route path="/mobile/events" component={MobileEventsPage} />
       <Route path="/mobile/reps" component={MobileRepsPage} />
       <Route path="/mobile/messages" component={MobileMessagesPage} />
+      <Route path="/mobile/signal-choice" component={SignalChoicePage} />
       <Route path="/mobile/create" component={SignalRecorderPage} />
       <Route path="/mobile/edit" component={SignalEditorPage} />
       <Route path="/mobile/groups" component={MobileGroupsPage} />

@@ -314,7 +314,7 @@ export function SignalRecorderPage() {
     }
   }, [segments]);
 
-  const discardAndReset = useCallback(async () => {
+  const discardAndGoChoice = useCallback(async () => {
     stopTimer();
     if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     if (currentMRRef.current && currentMRRef.current.state !== 'inactive') {
@@ -322,12 +322,10 @@ export function SignalRecorderPage() {
     }
     currentMRRef.current = null;
     currentChunksRef.current = [];
+    streamRef.current?.getTracks().forEach(t => t.stop());
     await clearSession();
-    elapsedRef.current = 0;
-    setElapsed(0);
-    setSegments([]);
-    setState('idle');
-  }, [stopTimer]);
+    setLocation('/mobile/signal-choice');
+  }, [stopTimer, setLocation]);
 
   const exitRecorder = useCallback(async () => {
     stopTimer();
@@ -677,7 +675,7 @@ export function SignalRecorderPage() {
           {/* Done state action sheet */}
           {state === 'done' && (
             <div className="flex justify-center gap-6 mb-6 px-8">
-              <button onClick={discardAndReset} className="flex flex-col items-center gap-1">
+              <button onClick={discardAndGoChoice} className="flex flex-col items-center gap-1">
                 <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
                   <Trash2 className="w-6 h-6 text-white" />
                 </div>

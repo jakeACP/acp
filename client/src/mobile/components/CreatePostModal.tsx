@@ -4,7 +4,6 @@ import { X, FileText, Video, Image, BarChart2, Calendar, Megaphone, Send, MapPin
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { clearSession } from "@/mobile/lib/clipSession";
 
 interface CreatePostModalProps {
   isOpen: boolean;
@@ -165,10 +164,9 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
     }
   };
 
-  const handleRecordVideo = async () => {
-    await clearSession();
+  const handleSignalVideo = () => {
     handleClose();
-    navigate('/mobile/create');
+    navigate('/mobile/signal-choice');
   };
 
   const handleSubmit = () => {
@@ -353,7 +351,7 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
             <div className="space-y-3">
               <p className="text-white/60 text-sm text-center mb-4">How do you want to create your Signal?</p>
               <button
-                onClick={handleRecordVideo}
+                onClick={handleSignalVideo}
                 className="w-full flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-red-500/20 to-pink-500/20 border border-red-500/30 hover:border-red-400/50 active:scale-[0.98] transition-all"
                 data-testid="record-video-option"
               >
