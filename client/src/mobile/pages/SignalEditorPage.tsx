@@ -6,6 +6,7 @@ import {
   Play, Pause, Plus, Trash2, X, Camera, Layers, Upload,
 } from "lucide-react";
 import { getClips, clearSession, saveClip, type ClipEntry } from "@/mobile/lib/clipSession";
+import { fetchCsrfToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -564,7 +565,7 @@ export function SignalEditorPage() {
       startTime: newStartTime,
       endTime: newEndTime,
       x: 50,
-      y: 50,
+      y: 25,
     }]);
     setNewText("");
     setSheet("none");
@@ -649,7 +650,14 @@ export function SignalEditorPage() {
         fd.append("thumbnail", thumbnailBlob, "thumbnail.jpg");
       }
 
-      const res = await fetch("/api/mobile/signals/compose", { method: "POST", body: fd });
+      // Always fetch a fresh CSRF token before the multipart POST
+      const csrfToken = await fetchCsrfToken();
+      const res = await fetch("/api/mobile/signals/compose", {
+        method: "POST",
+        headers: { "x-csrf-token": csrfToken },
+        body: fd,
+        credentials: "include",
+      });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: "Upload failed" }));
         throw new Error(err.message);
