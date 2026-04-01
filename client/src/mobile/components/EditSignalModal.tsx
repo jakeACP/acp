@@ -2,7 +2,7 @@ import type { ChangeEvent } from "react";
 import { useState, useRef } from "react";
 import { X, ImageIcon, Camera, Pencil } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient, getCsrfToken, fetchCsrfToken } from "@/lib/queryClient";
+import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { SignalWithAuthor } from "@shared/schema";
 
@@ -101,8 +101,9 @@ export function EditSignalModal({ signal, onClose }: EditSignalModalProps) {
       fd.append("tags", JSON.stringify(allTags));
       if (thumbBlob) fd.append("thumbnail", thumbBlob, "thumbnail.jpg");
 
-      let csrf = getCsrfToken();
-      if (!csrf) csrf = await fetchCsrfToken();
+      // Always fetch a fresh token — cached tokens can fall out of sync
+      // with the server-side CSRF cookie, causing 403 rejections.
+      const csrf = await fetchCsrfToken();
 
       const res = await fetch(`/api/mobile/signals/${signal.id}`, {
         method: "PATCH",
