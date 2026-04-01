@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useScrollLight } from "../hooks/useScrollLight";
 import { MobileTopBar } from "../components/MobileTopBar";
@@ -76,8 +77,17 @@ type FeedItem =
 
 export function MobileFeedPage() {
   useScrollLight();
+  const [, navigate] = useLocation();
   const [activeFilter, setActiveFilter] = useState("all");
   const [expandedItem, setExpandedItem] = useState<FeedItem | null>(null);
+
+  const handleFilterChange = (filter: string) => {
+    if (filter === "signals") {
+      navigate("/mobile/signals");
+    } else {
+      setActiveFilter(filter);
+    }
+  };
 
   const { data: signals = [], isLoading: signalsLoading } = useQuery<SignalWithAuthor[]>({
     queryKey: ['/api/mobile/signals'],
@@ -361,7 +371,7 @@ export function MobileFeedPage() {
       
       <FilterTabs 
         activeFilter={activeFilter} 
-        onFilterChange={setActiveFilter} 
+        onFilterChange={handleFilterChange} 
       />
 
       <FriendSuggestionsWidget />
