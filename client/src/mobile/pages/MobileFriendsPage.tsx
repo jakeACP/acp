@@ -18,7 +18,6 @@ import {
   ChevronRight,
   UserCheck,
   Copy,
-  Send,
   Link2,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -67,26 +66,15 @@ export function MobileFriendsPage() {
   const [mainTab, setMainTab] = useState<"friends" | "groups">("friends");
   const [activeTab, setActiveTab] = useState<TabType>("suggestions");
   const [showContactSync, setShowContactSync] = useState(false);
-  const [phoneInput, setPhoneInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
-  const [showSmsForm, setShowSmsForm] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
+
+  // Detect real mobile device (touch-capable) to decide whether to show native SMS option
+  const isMobileDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
   const { data: inviteData } = useQuery<{ token: string; inviteUrl: string }>({
     queryKey: ['/api/invite/my-link'],
     staleTime: Infinity,
-  });
-
-  const smsMutation = useMutation({
-    mutationFn: (phone: string) => apiRequest('/api/invite/sms', 'POST', { phone }),
-    onSuccess: () => {
-      toast({ title: "Text sent!", description: "Your invite was delivered." });
-      setPhoneInput("");
-      setShowSmsForm(false);
-    },
-    onError: (err: any) => {
-      toast({ title: "Failed to send text", description: err.message, variant: "destructive" });
-    },
   });
 
   const emailMutation = useMutation({
@@ -538,11 +526,19 @@ export function MobileFriendsPage() {
                 </div>
               </button>
 
-              {/* Text Message */}
-              <div className="glass-card overflow-hidden">
+              {/* Text Message — only on real mobile devices */}
+              {isMobileDevice && (
                 <button
-                  onClick={() => { setShowSmsForm(v => !v); setShowEmailForm(false); }}
-                  className="w-full p-4 text-left"
+                  onClick={() => {
+                    const inviteUrl = inviteData?.inviteUrl || window.location.origin;
+                    const msg = `Join me on the Anti-Corruption Party app! Create your account and we'll instantly connect as friends: ${inviteUrl}`;
+                    if (navigator.share) {
+                      navigator.share({ title: "Join ACP", text: msg }).catch(() => {});
+                    } else {
+                      window.open(`sms:?body=${encodeURIComponent(msg)}`, '_self');
+                    }
+                  }}
+                  className="glass-card p-4 w-full text-left"
                   data-testid="sms-invite"
                 >
                   <div className="flex items-center gap-3">
@@ -551,33 +547,12 @@ export function MobileFriendsPage() {
                     </div>
                     <div className="flex-1 text-left">
                       <h3 className="text-white font-semibold">Text Message</h3>
-                      <p className="text-white/60 text-sm">Send invite via SMS</p>
+                      <p className="text-white/60 text-sm">Open your Messages app to send</p>
                     </div>
-                    <ChevronRight className={`w-5 h-5 text-white/40 transition-transform ${showSmsForm ? 'rotate-90' : ''}`} />
+                    <Share2 className="w-5 h-5 text-white/40" />
                   </div>
                 </button>
-                {showSmsForm && (
-                  <div className="px-4 pb-4 border-t border-white/10">
-                    <p className="text-white/50 text-xs mb-2 mt-3">Enter their phone number (e.g. +12125551234)</p>
-                    <div className="flex gap-2">
-                      <Input
-                        type="tel"
-                        placeholder="+1 (555) 000-0000"
-                        value={phoneInput}
-                        onChange={e => setPhoneInput(e.target.value)}
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/30 flex-1"
-                      />
-                      <Button
-                        onClick={() => phoneInput.trim() && smsMutation.mutate(phoneInput.trim())}
-                        disabled={smsMutation.isPending || !phoneInput.trim()}
-                        className="bg-gradient-to-r from-red-500 to-blue-600 text-white px-4"
-                      >
-                        {smsMutation.isPending ? "…" : <Send className="w-4 h-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Email */}
               <div className="glass-card overflow-hidden">
