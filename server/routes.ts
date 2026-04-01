@@ -7082,6 +7082,61 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // PATCH /api/mobile/signals/:id — owner-only metadata + thumbnail edit
+  const signalEditThumbStorage = multer.diskStorage({
+    destination: path.join(process.cwd(), 'uploads/signals'),
+    filename: (_req, _file, cb) => cb(null, `${randomUUID()}-thumb.jpg`),
+  });
+  const signalEditUpload = multer({
+    storage: signalEditThumbStorage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+    fileFilter: (_req, file, cb) => {
+      if (file.fieldname !== 'thumbnail') return cb(new Error('Unexpected field'));
+      if (!/^image\//.test(file.mimetype)) return cb(new Error('Thumbnail must be an image'));
+      cb(null, true);
+    },
+  });
+
+  app.patch("/api/mobile/signals/:id", (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    signalEditUpload.single('thumbnail')(req, res, (err) => {
+      if (err) return res.status(400).json({ message: err.message });
+      next();
+    });
+  }, async (req, res) => {
+    try {
+      const user = req.user!;
+      const signal = await storage.getSignalById(req.params.id);
+      if (!signal) return res.status(404).json({ message: 'Signal not found' });
+      if (signal.authorId !== user.id) return res.sendStatus(403);
+
+      const updates: { title?: string; description?: string; tags?: string[]; thumbnailUrl?: string } = {};
+
+      if (req.body.title !== undefined) updates.title = String(req.body.title).slice(0, 200);
+      if (req.body.description !== undefined) updates.description = String(req.body.description).slice(0, 2000);
+
+      // Parse tags JSON array
+      if (req.body.tags !== undefined) {
+        let rawTags: unknown[] = [];
+        try { rawTags = JSON.parse(req.body.tags); } catch { rawTags = []; }
+        updates.tags = Array.isArray(rawTags)
+          ? rawTags.map(t => String(t).slice(0, 50).trim()).filter(Boolean).slice(0, 6)
+          : [];
+      }
+
+      // New thumbnail — save to uploads/signals/
+      if (req.file) {
+        updates.thumbnailUrl = `/uploads/signals/${req.file.filename}`;
+      }
+
+      const updated = await storage.updateSignal(signal.id, updates);
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Signal edit error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   const MAX_CLIPS = 50;
   const ALLOWED_CLIP_MIMETYPES = new Set(['video/webm', 'video/mp4', 'video/quicktime']);
   const signalMultiUpload = multer({
