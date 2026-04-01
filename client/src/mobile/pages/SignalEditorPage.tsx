@@ -390,7 +390,7 @@ export function SignalEditorPage() {
 
       const trimData: Record<string, { trimIn: number; trimOut: number }> = {};
       clipEntries.forEach((e, i) => { trimData[`clip_${i}`] = { trimIn: e.trimIn, trimOut: e.trimOut }; });
-      photoEntries.forEach((e, i) => { trimData[`photo_${i}`] = { trimIn: 0, trimOut: 0 }; });
+      photoEntries.forEach((e, i) => { trimData[`photo_${i}`] = { trimIn: 0, trimOut: e.duration > 0 ? e.duration : 2 }; });
       fd.append("trimData", JSON.stringify(trimData));
       fd.append("textAnnotations", JSON.stringify(annotations));
       if (selectedAudio) {

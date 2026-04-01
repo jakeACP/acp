@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import os from "os";
 import { setupAuth } from "./auth";
@@ -7251,15 +7251,19 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // ── Compose endpoint (editor → async FFmpeg job) ──────────────────────────
+  const { default: _ffmpegStatic } = await import('ffmpeg-static') as unknown as { default: string };
+  const ffmpegBin: string = _ffmpegStatic ?? 'ffmpeg';
+  const execFileAsync = promisify(execFile);
+
   const composeTempDir = path.join(os.tmpdir(), 'acp-compose');
   if (!fs.existsSync(composeTempDir)) fs.mkdirSync(composeTempDir, { recursive: true });
 
-  const COMPOSE_RATE_LIMIT = 5; // 5 composes per user per hour
+  const COMPOSE_RATE_LIMIT = 5;
   const COMPOSE_RATE_WINDOW_MS = 60 * 60 * 1000;
-  const ALLOWED_VIDEO_MIME = /^video\//;
-  const ALLOWED_IMAGE_MIME = /^image\//;
-  const MAX_COMPOSE_SIZE = 500 * 1024 * 1024;
+  const MAX_COMPOSE_TOTAL_BYTES = 500 * 1024 * 1024; // 500 MB aggregate cap
   const MAX_COMPOSE_FILES = 60;
+  const CLIP_FIELD_RE = /^clip_(\d+)$/;
+  const PHOTO_FIELD_RE = /^photo_(\d+)$/;
 
   const composeStorage = multer.diskStorage({
     destination: composeTempDir,
@@ -7267,13 +7271,20 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
   const composeUpload = multer({
     storage: composeStorage,
-    limits: { fileSize: MAX_COMPOSE_SIZE, files: MAX_COMPOSE_FILES },
+    limits: { fileSize: MAX_COMPOSE_TOTAL_BYTES, files: MAX_COMPOSE_FILES },
     fileFilter: (_req, file, cb) => {
-      if (/^clip_\d+$/.test(file.fieldname) && ALLOWED_VIDEO_MIME.test(file.mimetype)) return cb(null, true);
-      if (/^photo_\d+$/.test(file.fieldname) && ALLOWED_IMAGE_MIME.test(file.mimetype)) return cb(null, true);
-      cb(null, false);
+      const isClipField = CLIP_FIELD_RE.test(file.fieldname);
+      const isPhotoField = PHOTO_FIELD_RE.test(file.fieldname);
+      if (!isClipField && !isPhotoField) return cb(new Error(`Unexpected field: ${file.fieldname}`));
+      if (isClipField && !/^video\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for clip: ${file.mimetype}`));
+      if (isPhotoField && !/^image\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for photo: ${file.mimetype}`));
+      cb(null, true);
     },
   });
+
+  // Helper: run ffmpeg via execFile (no shell interpolation, safe from injection)
+  const runFfmpeg = (args: string[]): Promise<void> =>
+    execFileAsync(ffmpegBin, args, { maxBuffer: 50 * 1024 * 1024 }).then(() => {});
 
   app.post("/api/mobile/signals/compose", (req, res, next) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -7284,130 +7295,158 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   }, async (req, res) => {
     try {
       const user = req.user!;
+
+      // Rate limit check
       const recentCount = await storage.countRecentComposeJobs(user.id, COMPOSE_RATE_WINDOW_MS);
       if (recentCount >= COMPOSE_RATE_LIMIT) {
         return res.status(429).json({ message: 'Rate limit: max 5 composes per hour.' });
       }
 
       const files = (req as any).files as Express.Multer.File[] | undefined ?? [];
-      const clipFiles = files.filter(f => /^clip_\d+$/.test(f.fieldname)).sort((a, b) => {
-        return parseInt(a.fieldname.replace('clip_', '')) - parseInt(b.fieldname.replace('clip_', ''));
-      });
-      const photoFiles = files.filter(f => /^photo_\d+$/.test(f.fieldname)).sort((a, b) => {
-        return parseInt(a.fieldname.replace('photo_', '')) - parseInt(b.fieldname.replace('photo_', ''));
-      });
+
+      // Enforce aggregate 500 MB total size
+      const totalBytes = files.reduce((s, f) => s + f.size, 0);
+      if (totalBytes > MAX_COMPOSE_TOTAL_BYTES) {
+        for (const f of files) fs.unlink(f.path, () => {});
+        return res.status(413).json({ message: 'Total upload exceeds 500 MB limit.' });
+      }
+
+      const clipFiles = files
+        .filter(f => CLIP_FIELD_RE.test(f.fieldname))
+        .sort((a, b) => parseInt(a.fieldname.replace('clip_', '')) - parseInt(b.fieldname.replace('clip_', '')));
+      const photoFiles = files
+        .filter(f => PHOTO_FIELD_RE.test(f.fieldname))
+        .sort((a, b) => parseInt(a.fieldname.replace('photo_', '')) - parseInt(b.fieldname.replace('photo_', '')));
 
       if (clipFiles.length === 0 && photoFiles.length === 0) {
         return res.status(400).json({ message: 'No media files provided' });
       }
 
-      let trimData: Record<string, { trimIn: number; trimOut: number }> = {};
-      try { trimData = JSON.parse(req.body.trimData || '{}'); } catch { trimData = {}; }
+      // Parse and strictly validate body fields
+      let rawTrimData: Record<string, unknown> = {};
+      try { rawTrimData = JSON.parse(req.body.trimData || '{}'); } catch { rawTrimData = {}; }
+      const trimData: Record<string, { trimIn: number; trimOut: number }> = {};
+      for (const [k, v] of Object.entries(rawTrimData)) {
+        if (typeof v === 'object' && v !== null) {
+          const ti = parseFloat((v as any).trimIn) || 0;
+          const to = parseFloat((v as any).trimOut) || 0;
+          trimData[k] = { trimIn: Math.max(0, ti), trimOut: Math.max(0, to) };
+        }
+      }
 
-      let textAnnotations: Array<{ text: string; color: string; fontSize: number; startTime: number; endTime: number }> = [];
-      try { textAnnotations = JSON.parse(req.body.textAnnotations || '[]'); } catch { textAnnotations = []; }
+      let rawAnnotations: unknown[] = [];
+      try { rawAnnotations = JSON.parse(req.body.textAnnotations || '[]'); } catch { rawAnnotations = []; }
+      const textAnnotations = rawAnnotations
+        .filter((a): a is Record<string, unknown> => typeof a === 'object' && a !== null)
+        .map(a => ({
+          text: String(a.text || '').replace(/[':]/g, ' ').slice(0, 200),
+          color: /^#[0-9a-fA-F]{6}$/.test(String(a.color)) ? String(a.color) : '#ffffff',
+          fontSize: Math.max(10, Math.min(80, parseInt(String(a.fontSize)) || 24)),
+          startTime: Math.max(0, parseFloat(String(a.startTime)) || 0),
+          endTime: Math.max(0, parseFloat(String(a.endTime)) || 5),
+        }));
 
-      const audioTrack = req.body.audioTrack || '';
-      const audioVolume = parseFloat(req.body.audioVolume ?? '0.8');
-      const category = req.body.category || '';
-      const title = req.body.title || '';
+      // Validate audio track: must be a basename matching allowed filenames only
+      const allowedAudioFiles = new Set([
+        'Freedom_March.mp3','Pulse_of_Truth.mp3','Rising_Voice.mp3','Civic_Anthem.mp3',
+        'Silent_Resolve.mp3','Power_To_The_People.mp3','New_Dawn.mp3','Stand_Together.mp3',
+      ]);
+      const rawAudio = path.basename(req.body.audioTrack || '');
+      const audioTrack = allowedAudioFiles.has(rawAudio) ? rawAudio : '';
+      const audioVolume = Math.max(0, Math.min(1, parseFloat(req.body.audioVolume ?? '0.8') || 0.8));
+      const category = String(req.body.category || '').slice(0, 80);
+      const title = String(req.body.title || '').slice(0, 200);
 
       const job = await storage.createComposeJob(user.id);
       res.status(202).json({ jobId: job.id });
 
-      // ── Async FFmpeg pipeline ──────────────────────────────────────────────
+      // ── Async FFmpeg pipeline (no shell interpolation) ─────────────────────
       setImmediate(async () => {
         const tempFiles: string[] = [];
         try {
           const outputPath = path.join(signalsUploadDir, `${randomUUID()}.mp4`);
-          const ffmpegBin = 'ffmpeg';
-
-          let inputs: string[] = [];
-          let filterParts: string[] = [];
-          let inputIdx = 0;
-
-          // Build concat list — clips with optional trim, then photo stills
           const concatListPath = path.join(composeTempDir, `${randomUUID()}.txt`);
           tempFiles.push(concatListPath);
           const concatLines: string[] = [];
 
+          // Clips — optional trim via separate ffmpeg pass
           for (const clip of clipFiles) {
+            tempFiles.push(clip.path);
             const trim = trimData[clip.fieldname];
-            let clipsrc = clip.path;
             if (trim && (trim.trimIn > 0 || trim.trimOut > 0)) {
               const trimmed = path.join(composeTempDir, `${randomUUID()}.mp4`);
               tempFiles.push(trimmed);
-              const ss = trim.trimIn > 0 ? `-ss ${trim.trimIn}` : '';
-              const to = trim.trimOut > 0 ? `-to ${trim.trimOut}` : '';
-              await execAsync(`${ffmpegBin} -y ${ss} -i "${clip.path}" ${to} -c copy "${trimmed}"`);
-              clipsrc = trimmed;
+              const args = ['-y'];
+              if (trim.trimIn > 0) { args.push('-ss', String(trim.trimIn)); }
+              args.push('-i', clip.path);
+              if (trim.trimOut > 0) { args.push('-to', String(trim.trimOut)); }
+              args.push('-c', 'copy', trimmed);
+              await runFfmpeg(args);
+              concatLines.push(`file '${trimmed}'`);
+            } else {
+              concatLines.push(`file '${clip.path}'`);
             }
-            tempFiles.push(clip.path);
-            concatLines.push(`file '${clipsrc}'`);
           }
 
-          // Photo stills
+          // Photos — default 2s still, honor adjustable duration from trimData
           for (const photo of photoFiles) {
-            const trimKey = photo.fieldname;
-            const dur = trimData[trimKey]?.trimOut ?? 2;
-            const stillPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
             tempFiles.push(photo.path);
+            const dur = Math.max(0.5, Math.min(30,
+              trimData[photo.fieldname]?.trimOut > 0
+                ? trimData[photo.fieldname].trimOut
+                : 2
+            ));
+            const stillPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
             tempFiles.push(stillPath);
-            await execAsync(`${ffmpegBin} -y -loop 1 -i "${photo.path}" -t ${dur} -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" -c:v libx264 -r 30 -pix_fmt yuv420p "${stillPath}"`);
+            await runFfmpeg([
+              '-y', '-loop', '1', '-i', photo.path,
+              '-t', String(dur),
+              '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
+              '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p',
+              stillPath,
+            ]);
             concatLines.push(`file '${stillPath}'`);
           }
 
+          // Write concat list
           fs.writeFileSync(concatListPath, concatLines.join('\n'));
 
-          // First pass: concat
+          // Concat all segments
           const concatOut = path.join(composeTempDir, `${randomUUID()}.mp4`);
           tempFiles.push(concatOut);
-          await execAsync(`${ffmpegBin} -y -f concat -safe 0 -i "${concatListPath}" -c copy "${concatOut}"`);
+          await runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatListPath, '-c', 'copy', concatOut]);
 
-          // Build drawtext filters for text annotations
-          const drawtextFilters = textAnnotations.map(ann => {
-            const safe = ann.text.replace(/[':]/g, ' ');
-            const r = parseInt(ann.color.slice(1, 3) || 'ff', 16);
-            const g = parseInt(ann.color.slice(3, 5) || 'ff', 16);
-            const b = parseInt(ann.color.slice(5, 7) || 'ff', 16);
-            return `drawtext=text='${safe}':fontsize=${ann.fontSize || 24}:fontcolor=0x${ann.color.replace('#', '')}:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${ann.startTime},${ann.endTime})'`;
-          }).join(',');
-
-          // Audio track path
-          const audioSrcPath = audioTrack ? path.join(process.cwd(), 'public/audio', path.basename(audioTrack)) : '';
-          const hasAudio = audioTrack && fs.existsSync(audioSrcPath);
-
-          // Final encode
-          let vf = drawtextFilters || 'null';
-          let audioFlags = '';
-          if (hasAudio) {
-            audioFlags = `-i "${audioSrcPath}" -filter_complex "[1:a]volume=${audioVolume}[aout]" -map 0:v -map "[aout]" -shortest`;
-          } else {
-            audioFlags = '-an';
-          }
-
-          await execAsync(
-            `${ffmpegBin} -y -i "${concatOut}" ${audioFlags} -vf "${vf}" -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k "${outputPath}"`
+          // Final encode: optional drawtext + optional audio mix
+          const vfFilters = textAnnotations.map(ann =>
+            `drawtext=text='${ann.text}':fontsize=${ann.fontSize}:fontcolor=${ann.color.replace('#', '0x')}` +
+            `:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${ann.startTime},${ann.endTime})'`
           );
+          const vf = vfFilters.length > 0 ? vfFilters.join(',') : 'null';
+
+          const audioSrcPath = audioTrack ? path.join(process.cwd(), 'public/audio', audioTrack) : '';
+          const hasAudio = audioTrack !== '' && fs.existsSync(audioSrcPath);
+
+          const finalArgs = ['-y', '-i', concatOut];
+          if (hasAudio) {
+            finalArgs.push('-i', audioSrcPath,
+              '-filter_complex', `[1:a]volume=${audioVolume}[aout]`,
+              '-map', '0:v', '-map', '[aout]', '-shortest',
+            );
+          } else {
+            finalArgs.push('-an');
+          }
+          finalArgs.push('-vf', vf, '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', outputPath);
+          await runFfmpeg(finalArgs);
 
           // Cleanup temp files
           for (const f of tempFiles) { try { fs.unlinkSync(f); } catch {} }
 
           const videoUrl = `/uploads/signals/${path.basename(outputPath)}`;
-          const signalData = {
-            authorId: user.id,
-            title,
-            description: '',
-            videoUrl,
-            thumbnailUrl: undefined,
-            duration: 0,
-            maxDuration: user.subscriptionStatus === 'premium' ? 600 : 180,
-            filter: 'none',
-            overlays: null,
-            tags: category ? [category] : [],
-            isPublic: true,
-          };
-          const signal = await storage.createSignal(signalData);
+          const signal = await storage.createSignal({
+            authorId: user.id, title, description: '', videoUrl, thumbnailUrl: undefined,
+            duration: 0, maxDuration: user.subscriptionStatus === 'premium' ? 600 : 180,
+            filter: 'none', overlays: null, tags: category ? [category] : [], isPublic: true,
+          });
           await storage.updateComposeJob(job.id, { status: 'done', signalId: signal.id });
         } catch (err: any) {
           console.error('Compose job failed:', err);
