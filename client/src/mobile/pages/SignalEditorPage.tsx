@@ -866,7 +866,7 @@ export function SignalEditorPage() {
           key={videoSrc}
           ref={videoRef}
           src={videoSrc || undefined}
-          className={`w-full h-full object-contain ${currentEntry?.type === "photo" ? "hidden" : "block"}`}
+          className={`w-full h-full object-cover ${currentEntry?.type === "photo" ? "hidden" : "block"}`}
           playsInline
           preload="auto"
           onEnded={handleEnded}
@@ -880,7 +880,7 @@ export function SignalEditorPage() {
         {currentEntry?.type === "photo" && (
           <img
             src={blobUrlsRef.current[currentEntryIdx] ?? ""}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-cover"
             alt="Photo preview"
           />
         )}
