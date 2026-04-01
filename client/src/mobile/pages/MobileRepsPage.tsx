@@ -13,16 +13,31 @@ interface Demerit {
   type: string;
 }
 
+interface PoliticianPosition {
+  id: string;
+  title: string;
+  officeType: string;
+  level: string;
+  jurisdiction: string;
+  district: string | null;
+  termLength: number | null;
+  isElected: boolean;
+  displayOrder: number;
+}
+
 interface Politician {
-  id: number;
-  name: string;
-  party: string;
-  position: string;
-  state: string;
-  district?: string | null;
-  photoUrl?: string | null;
-  grade?: string | null;
-  isCurrent?: boolean;
+  id: string;
+  fullName: string;
+  party: string | null;
+  position: PoliticianPosition;
+  state: string | null;
+  photoUrl: string | null;
+  corruptionGrade: string | null;
+  numericScore: number | null;
+  isCurrent: boolean;
+  isVerified: boolean;
+  profileType: string | null;
+  handle: string | null;
   totalLobbyAmount?: number;
   sigAcronyms?: string[];
   rejectsAIPAC?: boolean;
@@ -46,7 +61,7 @@ function gradeColor(grade: string | null | undefined) {
   return "text-red-400";
 }
 
-function partyColor(party: string) {
+function partyColor(party: string | null) {
   const p = party?.toLowerCase() ?? "";
   if (p.includes("democrat")) return "bg-blue-600";
   if (p.includes("republican")) return "bg-red-600";
@@ -54,7 +69,7 @@ function partyColor(party: string) {
   return "bg-slate-600";
 }
 
-function partyInitial(party: string) {
+function partyInitial(party: string | null) {
   const p = party?.toLowerCase() ?? "";
   if (p.includes("democrat")) return "D";
   if (p.includes("republican")) return "R";
@@ -68,6 +83,11 @@ function formatMoney(amount: number) {
   return `$${amount}`;
 }
 
+function isSenator(rep: Politician) {
+  const title = rep.position?.title?.toLowerCase() ?? "";
+  return title.includes("senator") || title.includes("senate");
+}
+
 function RepCard({ rep }: { rep: Politician }) {
   return (
     <Link href={`/politicians/${rep.id}`}>
@@ -76,7 +96,7 @@ function RepCard({ rep }: { rep: Politician }) {
           {rep.photoUrl ? (
             <img
               src={rep.photoUrl}
-              alt={rep.name}
+              alt={rep.fullName}
               className="w-14 h-14 rounded-full object-cover border-2 border-white/20"
             />
           ) : (
@@ -88,13 +108,13 @@ function RepCard({ rep }: { rep: Politician }) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="font-bold text-sm text-white leading-tight">{rep.name}</p>
-              <p className="text-xs text-white/60 mt-0.5 leading-snug">{rep.position}</p>
+            <div className="min-w-0">
+              <p className="font-bold text-sm text-white leading-tight">{rep.fullName}</p>
+              <p className="text-xs text-white/60 mt-0.5 leading-snug truncate">{rep.position?.title}</p>
             </div>
             <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              {rep.grade && (
-                <span className={`text-lg font-black ${gradeColor(rep.grade)}`}>{rep.grade}</span>
+              {rep.corruptionGrade && (
+                <span className={`text-lg font-black ${gradeColor(rep.corruptionGrade)}`}>{rep.corruptionGrade}</span>
               )}
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${partyColor(rep.party)} text-white`}>
                 {partyInitial(rep.party)}
@@ -165,12 +185,8 @@ export function MobileRepsPage() {
     }
   };
 
-  const senators = data?.politicians.filter((p) =>
-    p.position?.toLowerCase().includes("senator")
-  ) ?? [];
-  const reps = data?.politicians.filter((p) =>
-    !p.position?.toLowerCase().includes("senator")
-  ) ?? [];
+  const senators = data?.politicians.filter(isSenator) ?? [];
+  const reps = data?.politicians.filter((p) => !isSenator(p)) ?? [];
 
   return (
     <div className="mobile-root" data-testid="mobile-reps-page">
@@ -201,7 +217,7 @@ export function MobileRepsPage() {
         {!activeZip && (
           <div className="text-center py-12 text-white/50 space-y-2">
             <MapPin className="w-12 h-12 mx-auto text-white/20" />
-            <p className="text-base font-semibold">Search Your Zip Code</p>
+            <p className="text-base font-semibold">Search Your ZIP Code</p>
             <p className="text-sm">Find the U.S. Senators and House Representative for your district.</p>
           </div>
         )}
@@ -233,9 +249,7 @@ export function MobileRepsPage() {
           <>
             <div className="flex items-center gap-2 text-white/60 text-xs">
               <MapPin className="w-3.5 h-3.5" />
-              <span>
-                {data.state} · {data.districtLabel}
-              </span>
+              <span>{data.state} · {data.districtLabel}</span>
               <span className="ml-auto text-white/40">{data.politicians.length} reps found</span>
             </div>
 
