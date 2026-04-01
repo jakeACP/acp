@@ -1,0 +1,386 @@
+My Feedback: 
+
+I am OK limiting recording to 720p for free users. I also think we should limit the time to 3 minutes. 10 Minutes for Paid Users and Paste Video for longer than 10 minutes. I think this should resolve some of the issues that OpenAI and Claude found in the plan, but here is what they said when asked to review this plan: 
+
+Replit Plan: 
+#17 - Multi-Clip Signal Video Recorder
+What & Why
+Overhaul the Signal creation flow so it starts from the "+" button with a clear choice screen, then leads into a TikTok-style multi-clip camera recorder that defaults to the selfie (front) camera. After recording, the user picks from three explicit actions: Delete, Edit, or Post.
+
+Done looks like
+Entry point
+Tapping "+" on the mobile bottom nav (or wherever the create button lives) opens a creation sheet or menu.
+One option is "Signal Video". Tapping it opens a choice screen with two large cards: "Paste Link" and "Record Video".
+"Paste Link" opens the existing URL-input flow (unchanged).
+"Record Video" opens the camera recorder screen.
+Camera recorder
+Defaults to front (selfie) camera; flip button switches to rear.
+Hold record button → records; release → pauses. Each hold/release produces one clip segment stored in memory.
+Progress bar across the top shows each segment as a distinct colored block, growing in real time. Auto-stops at the duration limit (15s / 60s / 5m).
+"✕ Last" button (left side) deletes the most recent segment and shrinks the bar.
+Existing tools stay: camera flip, countdown, filters, text overlay, emoji.
+When the user lifts their finger and decides they're done, a "Done ✓" button appears (active when ≥1 segment exists).
+After recording — three choices
+Tapping "Done ✓" stops the session and shows a bottom sheet or overlaid button row with three options:
+Delete — discard all segments, return to the choice screen.
+Edit — serialise clip blobs + metadata to sessionStorage, navigate to /mobile/edit (Timeline Editor).
+Post — upload all segments directly (server stitches them) and publish without editing.
+Out of scope
+Timeline editing, audio, text timing (Task #18)
+Green screen
+Tasks
+Creation choice screen — Add a "Signal Video" entry to the "+" creation flow. Build the Paste Link / Record Video choice screen at a new route or as a modal step before the recorder opens.
+
+Hold-to-record multi-clip engine — Replace the tap-toggle recorder with touchstart/touchend + mousedown/mouseup handlers. Each press starts a new MediaRecorder segment; release stops and pushes the Blob to a segments array. Front camera is the default facingMode.
+
+Segment progress bar — Replace the single-bar with per-segment colored blocks. Show a growing active block during recording.
+
+Delete-last, Done, and post-recording action sheet — Add "✕ Last" and "Done ✓" controls. On Done, show Delete / Edit / Post options. Wire Delete (discard + back), Edit (sessionStorage + navigate to /mobile/edit), and Post (upload + publish directly).
+
+Relevant files
+client/src/mobile/pages/SignalRecorderPage.tsx
+client/src/mobile/MobileApp.tsx
+client/src/mobile/components/MobileBottomNav.tsx
+
+#18 - Timeline Editor — Text, Sound, Footage & Photos
+What & Why
+The timeline editor is reached by tapping "Edit" after recording. It lets users enrich their video with text, background music, additional footage clips, or photo cards before posting — all from a mobile-first touch interface.
+
+Done looks like
+New page at /mobile/edit reads clip Blob URLs + metadata from sessionStorage.
+Full-width preview player at the top plays through all clips continuously.
+Horizontally scrollable timeline strip below shows each clip as a thumbnail with left/right drag handles for trimming.
+Four action buttons below the timeline:
+Text — opens a bottom sheet to type text, pick colour/size, and set a start/end time range (draggable pins on the timeline). Text annotations render as coloured bars on the timeline and as overlays during preview.
+Sound — opens a bottom sheet with 8–10 built-in royalty-free tracks plus a volume slider. One track can be selected and previewed in-app.
++ Footage — opens the device media picker (or returns to the recorder) so the user can append additional video clips. New clips appear at the end of the timeline strip.
++ Photo — opens the device image picker. Selected photos are inserted as 2-second still-frame clips in the timeline (duration adjustable via trim handles).
+"Post" button (top-right) uploads all clips/photos + trim metadata + text annotations + audio choice to POST /api/mobile/signals/compose.
+Server endpoint uses the system FFmpeg binary to: concatenate clips respecting trim points, insert photo stills, overlay timed drawtext filters, mix the chosen audio track at the selected volume, encode to H.264/AAC mp4, save the file, and create the DB signal record.
+A "Processing…" progress modal is shown while the server works; on success, navigates to /mobile/signals with a success toast.
+Out of scope
+Clip reordering via drag-and-drop (future)
+Uploading user's own audio files
+Green screen / chroma key
+Tasks
+Editor page scaffold + preview player — Create MobileEditPage at /mobile/edit, register route. Load clips from sessionStorage. Build a preview player that plays clips in sequence using MediaSource or sequential src-swap.
+
+Timeline strip with trim handles — Render a scrollable clip strip with video thumbnail frames captured via canvas. Implement left/right drag handles that update trim-in/trim-out values in state.
+
+Text annotation UI + timeline pins — Text bottom sheet with input, colour picker, and time-range selector. Render text bars on the timeline and overlays on the preview player. Annotations array passed to the server.
+
+Sound picker — Bottom sheet listing built-in audio tracks (files in public/audio/). In-app preview via Audio element. Volume slider. One active selection stored in state.
+
+Add Footage and Add Photo — "+ Footage" triggers a file input (accept video/) or routes back to the recorder; new clips appended to the session. "+ Photo" triggers a file input (accept image/); each image becomes a 2s still-frame entry in the clip list. Both update the timeline strip.
+
+Compose API + FFmpeg stitching — POST /api/mobile/signals/compose accepts multipart: clips[], photos[], trimData JSON, textAnnotations JSON, audioTrack, audioVolume. Server builds and executes an FFmpeg concat-demuxer pipeline, saves output, and inserts a signal DB record. Returns signal ID on success.
+
+Relevant files
+client/src/mobile/MobileApp.tsx
+client/src/mobile/pages/SignalRecorderPage.tsx
+server/routes.ts
+client/src/mobile/mobile-theme.css
+Dependencies
+Multi-clip Signal Video recorder
+
+
+
+Claude Feedback: 
+
+Critical Issues to Address First
+1. sessionStorage for video blobs is a trap
+The plan routes clip blobs through sessionStorage between the recorder and editor. Video blobs are binary and often large — sessionStorage has a 5MB limit and will silently fail or throw on mobile. Replace this with:
+
+An in-memory React context/store (e.g. useContext + useRef) shared between recorder and editor routes, or
+IndexedDB (via a tiny wrapper like idb) which handles binary blobs correctly
+
+Add this to the prompt explicitly or Replit will implement sessionStorage as written and it'll break on any real video.
+2. MediaSource for sequential playback is complex and fragile
+Task #18 says "sequential src-swap" as the fallback — lean into that. It works fine for 2–5 clips. MediaSource API is genuinely complex and has inconsistent mobile browser support. Tell Replit: "Use sequential src-swap for preview playback, not MediaSource."
+3. FFmpeg on the server is a hard dependency
+The plan assumes ffmpeg is available in the Replit environment. It may not be, or may be sandboxed. Specify: "Confirm FFmpeg is available via which ffmpeg before building the compose endpoint. If not, install via shell or use ffmpeg-static npm package as fallback."
+
+🟡 UX/Performance Improvements Worth Adding
+4. Specify the duration limits clearly
+The plan mentions "15s / 60s / 5m" but doesn't say which is default or how the user selects them. TikTok lets users choose before recording. Add: "Include a duration selector (15s / 60s / 3min) on the choice screen before entering the recorder. Default to 60s."
+5. Thumbnail generation for the timeline strip needs a strategy
+Task #18 mentions "video thumbnail frames captured via canvas" but doesn't address timing. Capturing frames mid-recording is expensive. Specify: "Generate timeline thumbnails after recording is complete by seeking a hidden <video> element to evenly spaced timestamps and drawing to canvas — not during active recording."
+6. Front camera + iOS Safari quirk
+facingMode: "user" (front camera default) works well on Android but iOS Safari sometimes requires facingMode: { ideal: "user" }. Add: "Use { video: { facingMode: { ideal: 'user' } }, audio: true } as the default getUserMedia constraint."
+7. Touch event handlers need passive listener consideration
+touchstart/touchend for hold-to-record: add { passive: false } and preventDefault() to avoid scroll-jitter on mobile while holding the record button. Mention this explicitly.
+
+🟢 Library Recommendations
+NeedRecommendationWhyBlob/binary storage between routesidb (1.5kb)Replaces sessionStorage for video blobsTimeline drag handles@dnd-kit/core (already common in React projects)Touch-friendly, accessibleAudio tracksRoyalty-free tracks from mixkit.co (free)Don't bundle audio in the repo — fetch from CDN or store in /public/audio as the plan saysFFmpeg fallbackffmpeg-static npm packageBundles a static binary, no system install neededProgress during uploadKeep it simple — native XMLHttpRequest with upload.onprogressAvoids adding axios just for progress
+
+🔵 ACP-Specific Considerations
+Civic content context matters for the UI. Since this is a political transparency platform, the video creation flow should include:
+
+A topic/category tag step before posting (Current Events, Politicians, Proposals, etc.) — matches your existing article categories
+A subtle reminder that posted signals are public and subject to ACP community standards
+Consider defaulting new Signal videos to the user's represented district for discoverability
+
+Security note: The POST /api/mobile/signals/compose endpoint will accept multipart video uploads. Make sure Replit adds:
+
+File size limits (suggest 500MB max)
+MIME type validation (reject non-video/non-image)
+Auth middleware (authenticated users only)
+Rate limiting on the compose endpoint
+
+These are easy to miss when Replit is focused on the FFmpeg logic.
+
+Suggested Additions to Paste Back
+Add this block to the bottom of your prompt before sending:
+Additional requirements:
+1. Use IndexedDB (via the `idb` package) instead of sessionStorage for passing clip blobs between recorder and editor — sessionStorage cannot handle binary video data.
+2. Use sequential src-swap for preview playback in the editor, not MediaSource API.
+3. Verify FFmpeg availability via `which ffmpeg`; use `ffmpeg-static` npm package if not available in the environment.
+4. Use `{ video: { facingMode: { ideal: 'user' } }, audio: true }` for getUserMedia defaults (iOS Safari compatibility).
+5. Add `{ passive: false }` + preventDefault() to touchstart/touchend record handlers to prevent scroll interference.
+6. Generate timeline thumbnails after recording completes by seeking a hidden video element — not during active recording.
+7. Add file size limit (500MB), MIME type validation, auth middleware, and rate limiting to POST /api/mobile/signals/compose.
+8. Add a category tag selector (matching existing article categories) as a step before posting.
+
+
+OpenAI Feedback: 
+
+Critical Changes (Do Not Skip)
+1. Replace sessionStorage (this will break immediately)
+
+Replit will implement exactly what you wrote.
+
+Problem:
+
+5MB limit
+Blobs will fail silently on mobile
+You’ll lose clips randomly → worst possible UX
+
+What to send back:
+
+Use IndexedDB via idb
+OR a global in-memory store (Zustand > Context for performance)
+
+Best option:
+
+Use Zustand + IndexedDB persistence
+Fast + survives refresh + simple API
+2. Kill MediaSource entirely
+
+You don’t need it. TikTok doesn’t use it for editing previews.
+
+Use:
+
+Sequential playback via <video> source swapping
+Preload next clip for smooth transitions
+3. Define FFmpeg strategy upfront
+
+This is a deployment blocker, not a feature.
+
+Tell Replit:
+
+Use ffmpeg-static
+Do NOT rely on system FFmpeg
+Confirm execution permissions
+
+Even better (future-proof):
+
+Queue processing (don’t block request)
+Return job ID → poll status
+⚡ Speed & UX Upgrades (This is what makes it “TikTok”)
+4. Instant playback after recording
+
+Right now your flow has a pause between record → edit.
+
+Upgrade:
+
+Auto-preview immediately after hitting “Done”
+Loop playback instantly
+5. Preload camera BEFORE user taps record
+
+TikTok feels instant because camera is already warm.
+
+Add:
+
+Pre-initialize getUserMedia when user opens “Signal Video”
+Cache stream
+6. Reduce perceived latency everywhere
+
+Tell Replit:
+
+Show UI immediately, load heavy stuff async
+Use skeleton loaders for timeline + thumbnails
+Don’t block UI on thumbnail generation
+7. Recording feel matters more than features
+
+Add micro-interactions:
+
+Haptic feedback on record start/stop
+Slight scale animation on record button
+Progress bar pulses while recording
+
+These are small but massively improve perceived quality.
+
+🎯 Recording Engine Improvements
+8. Don’t create a new MediaRecorder per segment
+
+That’s expensive and can stutter.
+
+Better:
+
+Keep one recorder running
+Split blobs manually OR
+Use timeslices and segment timestamps
+
+If Replit struggles, fallback to your current approach but note:
+
+“Minimize MediaRecorder re-instantiation”
+
+9. Add a hard max clip count
+
+Prevents memory blowups
+
+Example:
+
+Max 20 segments
+Or auto-merge older segments
+🎬 Timeline Editor (Make It Actually Usable)
+10. Trimming UX is harder than it looks
+
+Dragging tiny handles on mobile is painful.
+
+Improve:
+
+Snap-to increments (0.1s or 0.25s)
+Zoomable timeline (pinch or slider)
+11. Text timing UX
+
+Don’t make users manually set start/end numerically.
+
+Better:
+
+Drag text blocks directly on timeline
+Default text duration = full clip
+12. Audio sync edge case
+
+If clips have audio AND you add music:
+
+You need to duck original audio or mute it
+
+Tell Replit:
+
+Add toggle: “Keep original sound”
+💰 Cost Optimization (Important for scaling ACP)
+13. Server-side FFmpeg = expensive at scale
+
+Each video:
+
+CPU heavy
+Slows everything down
+
+Cheaper alternative (later phase):
+
+Client-side processing via:
+ffmpeg.wasm (heavy but no server cost)
+OR hybrid: trim client-side, stitch server-side
+14. Limit resolution early
+
+Tell Replit:
+
+Record at:
+720p (default)
+1080p optional
+
+This reduces:
+
+Upload time
+Processing cost
+Storage cost
+🔐 Security (Non-negotiable for ACP)
+
+Add explicitly:
+
+Max upload size (500MB is high — consider 100–200MB)
+MIME validation
+Strip metadata (privacy)
+Auth required
+Rate limiting (critical for bot abuse)
+🧠 ACP-Specific Advantage (This is where you beat TikTok)
+
+TikTok = entertainment
+ACP = targeted civic relevance
+
+15. Attach videos to districts automatically
+
+This is a killer feature.
+
+Add:
+
+Auto-tag video with:
+User’s district
+Relevant politicians
+Local issues
+
+Now content is:
+
+Not just viral — it’s actionable
+
+16. Structured metadata before posting
+
+Add a lightweight step:
+
+Category (Politics, Local Issue, Policy, etc.)
+Optional:
+Tag politician
+Tag bill / issue
+
+This enables:
+
+Better feeds
+Search
+Your “ballot-based” vision later
+🧰 Better Tooling / Libraries
+Must Add
+idb → storage
+zustand → state
+ffmpeg-static → backend reliability
+Optional but Powerful
+react-use-gesture → smoother drag interactions
+use-immer → cleaner state updates for timeline
+hls.js (future) → streaming playback
+📌 Final Block to Send Back to Replit
+
+Paste this into your prompt:
+
+Additional requirements (must follow):
+
+Replace sessionStorage with IndexedDB using the idb package for storing video blobs. Optionally use Zustand for state management with persistence.
+Use sequential <video> src swapping for playback instead of MediaSource API.
+Use ffmpeg-static for video processing instead of relying on system FFmpeg.
+Preload camera access (getUserMedia) when entering the “Signal Video” flow to reduce startup delay.
+Use { video: { facingMode: { ideal: 'user' } }, audio: true } for compatibility across mobile browsers.
+Add { passive: false } and preventDefault() to touch event handlers to prevent scroll interference during recording.
+Generate timeline thumbnails after recording completes using a hidden video element — not during recording.
+Limit max clip count and enforce recording resolution (default 720p).
+Add upload constraints: file size limit, MIME validation, authentication, and rate limiting.
+Implement immediate preview playback after recording completes.
+Add category tagging before posting (aligned with ACP content structure).
+Add option to keep or mute original audio when adding background music.
+Bottom Line
+
+If you fix:
+
+Storage (IndexedDB)
+Playback (simple, not clever)
+Camera preload
+FFmpeg reliability
+
+You’ll get something that feels fast enough to compete.
+
+If you also add:
+
+District tagging
+Structured metadata
+
+You’ll get something TikTok can’t replicate.
+
+If you want, next step is optimizing your feed algorithm + video ranking, which is where this becomes dangerous (in a good way).
