@@ -2,20 +2,38 @@ import { useLocation } from "wouter";
 import { Camera, Link as LinkIcon, X } from "lucide-react";
 import { useState } from "react";
 import { clearSession } from "@/mobile/lib/clipSession";
+import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+const DURATION_OPTIONS = [
+  { label: '15s', value: 15 },
+  { label: '60s', value: 60 },
+  { label: '3 min', value: 180 },
+];
+const DURATION_OPTIONS_PAID = [
+  { label: '15s', value: 15 },
+  { label: '60s', value: 60 },
+  { label: '3 min', value: 180 },
+  { label: '10 min', value: 600 },
+];
+
 export function SignalChoicePage() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
   const [videoUrl, setVideoUrl] = useState('');
   const [mode, setMode] = useState<'choice' | 'paste'>('choice');
   const [title, setTitle] = useState('');
+  const [duration, setDuration] = useState(60);
   const { toast } = useToast();
+
+  const isPremium = user?.subscriptionStatus === 'premium';
+  const durationOptions = isPremium ? DURATION_OPTIONS_PAID : DURATION_OPTIONS;
 
   const handleRecordVideo = async () => {
     await clearSession();
-    setLocation('/mobile/create');
+    setLocation(`/mobile/create?duration=${duration}`);
   };
 
   const submitMutation = useMutation({
@@ -88,6 +106,22 @@ export function SignalChoicePage() {
         <p className="text-white/60 text-sm text-center mb-2">
           How do you want to create your Signal?
         </p>
+
+        <div className="flex justify-center mb-4">
+          <div className="flex gap-1 bg-white/10 rounded-full p-1">
+            {durationOptions.map(({ label, value }) => (
+              <button
+                key={value}
+                onClick={() => setDuration(value)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  duration === value ? 'bg-red-500 text-white' : 'text-white/60'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <button
           onClick={handleRecordVideo}

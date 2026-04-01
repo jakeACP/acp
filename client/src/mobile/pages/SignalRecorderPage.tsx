@@ -107,6 +107,10 @@ export function SignalRecorderPage() {
   const [newText, setNewText] = useState('');
 
   const hydrateFromIDB = useCallback(async () => {
+    const params = new URLSearchParams(window.location.search);
+    const qDuration = parseInt(params.get('duration') || '', 10);
+    if (qDuration > 0) setDuration(qDuration);
+
     const clips = await getClips();
     if (clips.length > 0) {
       const totalElapsed = clips.reduce((s, c) => s + c.duration, 0);
