@@ -394,9 +394,15 @@ export function SignalEditorPage() {
 
   const [blobUrlsVersion, setBlobUrlsVersion] = useState(0);
 
+  const prevBlobsRef = useRef<Blob[]>([]);
   useEffect(() => {
+    const prevBlobs = prevBlobsRef.current;
+    const curBlobs = entries.map(e => e.blob);
+    const changed = curBlobs.length !== prevBlobs.length || curBlobs.some((b, i) => b !== prevBlobs[i]);
+    if (!changed && blobUrlsRef.current.length === curBlobs.length) return;
     blobUrlsRef.current.forEach(URL.revokeObjectURL);
-    blobUrlsRef.current = entries.map((e) => URL.createObjectURL(e.blob));
+    blobUrlsRef.current = curBlobs.map((b) => URL.createObjectURL(b));
+    prevBlobsRef.current = curBlobs;
     setBlobUrlsVersion((v) => v + 1);
     return () => { blobUrlsRef.current.forEach(URL.revokeObjectURL); };
   }, [entries]);
@@ -545,6 +551,12 @@ export function SignalEditorPage() {
     setEntries((prev) =>
       prev.map((e) => {
         if (e.id !== entryId) return e;
+        if (e.type === "photo") {
+          const raw = e.trimOut + delta;
+          const maxTrimOut = e.duration - e.trimIn - 0.5;
+          const newTrimOut = Math.min(raw, maxTrimOut);
+          return { ...e, trimOut: newTrimOut };
+        }
         const newTrimOut = Math.max(0, Math.min(e.trimOut + delta, e.duration - e.trimIn - 0.5));
         return { ...e, trimOut: newTrimOut };
       })
@@ -856,8 +868,8 @@ export function SignalEditorPage() {
           onTimeUpdate={handleTimeUpdate}
           onCanPlay={handleVideoReady}
           onLoadedMetadata={handleVideoReady}
-          onPlay={() => { setPlaying(true); playingRef.current = true; }}
-          onPause={() => { setPlaying(false); playingRef.current = false; }}
+          onPlay={() => { setPlaying(true); }}
+          onPause={() => { if (!playingRef.current) setPlaying(false); }}
         />
         {/* Photo preview — visible only for photo entries */}
         {currentEntry?.type === "photo" && (
