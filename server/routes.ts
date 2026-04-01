@@ -7306,8 +7306,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // ── Compose endpoint (editor → async FFmpeg job) ──────────────────────────
-  const { default: _ffmpegStatic } = await import('ffmpeg-static') as unknown as { default: string };
-  const ffmpegBin: string = _ffmpegStatic ?? 'ffmpeg';
+  // Prefer the system ffmpeg (has drawtext/libfreetype) over the npm static build which lacks it.
+  const ffmpegBin: string = 'ffmpeg';
   const execFileAsync = promisify(execFile);
 
   const composeTempDir = path.join(os.tmpdir(), 'acp-compose');
