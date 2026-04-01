@@ -65,37 +65,51 @@ async function generateThumbnails(blob: Blob, count: number): Promise<string[]> 
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const video = document.createElement("video");
-    video.preload = "metadata";
+    video.preload = "auto";
     video.muted = true;
+    video.playsInline = true;
     video.src = url;
     const thumbs: string[] = [];
     let idx = 0;
+    let settled = false;
+
+    const finish = (result: string[]) => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      resolve(result);
+    };
+
+    const timeout = setTimeout(() => finish(thumbs.length > 0 ? thumbs : []), 4000);
+
+    const snap = (): string => {
+      const c = document.createElement("canvas");
+      c.width = THUMB_W; c.height = THUMB_H;
+      const ctx = c.getContext("2d");
+      if (ctx) ctx.drawImage(video, 0, 0, THUMB_W, THUMB_H);
+      return c.toDataURL("image/jpeg", 0.5);
+    };
 
     const captureFrame = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = THUMB_W;
-      canvas.height = THUMB_H;
-      const ctx = canvas.getContext("2d");
-      if (ctx) ctx.drawImage(video, 0, 0, THUMB_W, THUMB_H);
-      thumbs.push(canvas.toDataURL("image/jpeg", 0.5));
+      thumbs.push(snap());
       idx++;
-      if (idx < count) {
-        video.currentTime = (idx / Math.max(count - 1, 1)) * (video.duration || 1);
+      const dur = video.duration;
+      if (idx < count && isFinite(dur) && dur > 0) {
+        video.currentTime = (idx / Math.max(count - 1, 1)) * dur;
       } else {
-        URL.revokeObjectURL(url);
-        resolve(thumbs);
+        while (thumbs.length < count && thumbs.length > 0) thumbs.push(thumbs[0]);
+        clearTimeout(timeout);
+        finish(thumbs);
       }
     };
 
-    video.addEventListener("loadedmetadata", () => {
+    video.addEventListener("loadeddata", () => {
       video.addEventListener("seeked", captureFrame);
       video.currentTime = 0;
-    });
+    }, { once: true });
 
-    video.addEventListener("error", () => {
-      URL.revokeObjectURL(url);
-      resolve([]);
-    });
+    video.addEventListener("error", () => { clearTimeout(timeout); finish([]); }, { once: true });
+    video.load();
   });
 }
 
@@ -132,12 +146,15 @@ async function generateFirstFrameBlob(blob: Blob): Promise<{ blob: Blob; dataUrl
     video.preload = "auto";
     video.src = url;
 
+    let settled = false;
+    const done = (r: { blob: Blob; dataUrl: string } | null) => { if (!settled) { settled = true; resolve(r); } };
+
     const capture = () => {
       const canvas = document.createElement("canvas");
       canvas.width = THUMB_OUT_W;
       canvas.height = THUMB_OUT_H;
       const ctx = canvas.getContext("2d");
-      if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
+      if (!ctx) { URL.revokeObjectURL(url); done(null); return; }
 
       const vW = video.videoWidth || THUMB_OUT_W;
       const vH = video.videoHeight || THUMB_OUT_H;
@@ -150,12 +167,15 @@ async function generateFirstFrameBlob(blob: Blob): Promise<{ blob: Blob; dataUrl
       ctx.drawImage(video, sx, sy, sw, sh, 0, 0, THUMB_OUT_W, THUMB_OUT_H);
       URL.revokeObjectURL(url);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      canvas.toBlob((b) => resolve(b ? { blob: b, dataUrl } : null), "image/jpeg", 0.85);
+      canvas.toBlob((b) => done(b ? { blob: b, dataUrl } : null), "image/jpeg", 0.85);
     };
+    const timeout = setTimeout(() => { URL.revokeObjectURL(url); done(null); }, 4000);
 
-    video.addEventListener("loadeddata", () => { video.currentTime = 0; }, { once: true });
-    video.addEventListener("seeked", capture, { once: true });
-    video.addEventListener("error", () => { URL.revokeObjectURL(url); resolve(null); }, { once: true });
+    video.addEventListener("loadeddata", () => {
+      capture();
+      clearTimeout(timeout);
+    }, { once: true });
+    video.addEventListener("error", () => { clearTimeout(timeout); URL.revokeObjectURL(url); done(null); }, { once: true });
     video.load();
   });
 }
@@ -317,47 +337,50 @@ export function SignalEditorPage() {
       const clips = await getClips();
       if (cancelled) return;
 
-      const built: TimelineEntry[] = await Promise.all(
-        clips.map(async (clip) => {
-          const isPhoto = clip.id.startsWith("photo-");
-          const thumbs = isPhoto
-            ? await generatePhotoThumb(clip.blob)
-            : await generateThumbnails(clip.blob, THUMB_PER_CLIP);
-          return {
-            id: clip.id,
-            type: isPhoto ? ("photo" as const) : ("clip" as const),
-            blob: clip.blob,
-            duration: clip.duration,
-            trimIn: 0,
-            trimOut: 0,
-            thumbnails: thumbs,
-          };
-        })
-      );
+      // Phase 1: Set entries immediately (empty thumbnails) so the editor is usable right away
+      const built: TimelineEntry[] = clips.map((clip) => ({
+        id: clip.id,
+        type: clip.id.startsWith("photo-") ? ("photo" as const) : ("clip" as const),
+        blob: clip.blob,
+        duration: clip.duration,
+        trimIn: 0,
+        trimOut: 0,
+        thumbnails: [],
+      }));
 
-      if (!cancelled) {
-        setEntries(built);
-        setLoading(false);
+      setEntries(built);
+      setLoading(false);
 
-        // Auto-generate thumbnail from first entry (first frame of first clip, or first photo)
-        if (built.length > 0) {
-          const first = built[0];
-          if (first.type === "clip") {
-            generateFirstFrameBlob(first.blob).then((result) => {
-              if (result && !cancelled) {
-                setThumbnailBlob(result.blob);
-                setThumbnailDataUrl(result.dataUrl);
-              }
-            });
-          } else {
-            // Photo: use the already-generated thumbnail data URL
-            const dataUrl = first.thumbnails[0];
-            if (dataUrl) {
+      // Auto-generate poster thumbnail from first entry
+      if (built.length > 0) {
+        const first = built[0];
+        if (first.type === "clip") {
+          generateFirstFrameBlob(first.blob).then((result) => {
+            if (result && !cancelled) {
+              setThumbnailBlob(result.blob);
+              setThumbnailDataUrl(result.dataUrl);
+            }
+          });
+        } else {
+          generatePhotoThumb(first.blob).then((thumbs) => {
+            const dataUrl = thumbs[0];
+            if (dataUrl && !cancelled) {
               setThumbnailDataUrl(dataUrl);
               fetch(dataUrl).then(r => r.blob()).then(b => { if (!cancelled) setThumbnailBlob(b); });
             }
-          }
+          });
         }
+      }
+
+      // Phase 2: Generate timeline thumbnails lazily in background — update entries as they finish
+      for (let i = 0; i < built.length; i++) {
+        if (cancelled) return;
+        const entry = built[i];
+        const thumbs = entry.type === "photo"
+          ? await generatePhotoThumb(entry.blob)
+          : await generateThumbnails(entry.blob, THUMB_PER_CLIP);
+        if (cancelled) return;
+        setEntries((prev) => prev.map((e, idx) => idx === i ? { ...e, thumbnails: thumbs } : e));
       }
     })();
     return () => { cancelled = true; };
@@ -665,7 +688,8 @@ export function SignalEditorPage() {
       for (const e of entries) {
         if (e.type === "clip") {
           const field = `clip_${clipIdx++}`;
-          fd.append(field, e.blob, `${field}.webm`);
+          const ext = e.blob.type.includes("mp4") ? "mp4" : "webm";
+          fd.append(field, e.blob, `${field}.${ext}`);
           trimData[field] = { trimIn: e.trimIn, trimOut: e.trimOut, clipDuration: e.duration };
           timelineManifest.push({ type: "clip", field });
         } else {
@@ -821,8 +845,9 @@ export function SignalEditorPage() {
         {/* Hidden preload video */}
         <video ref={nextVideoRef} className="hidden" playsInline muted />
 
-        {/* Thumbnail overlay — shown when paused */}
-        {thumbnailDataUrl && !playing && (
+        {/* Thumbnail overlay — only shown before any playback starts (first frame poster).
+            Once the video loads, the <video> element itself shows the first frame. */}
+        {thumbnailDataUrl && !videoSrc && !playing && (
           <img
             src={thumbnailDataUrl}
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
@@ -979,7 +1004,7 @@ export function SignalEditorPage() {
             <span className="text-white/40 text-[10px]">Clips</span>
           </div>
           {/* Stretched clips — fills available space */}
-          <div ref={clipsContainerRef} className="flex-1 overflow-hidden">
+          <div ref={clipsContainerRef} className="flex-1 overflow-hidden relative">
             {(() => {
               const pxPerSec = totalDuration > 0 && clipsContainerWidth > 0
                 ? clipsContainerWidth / totalDuration
@@ -1001,6 +1026,16 @@ export function SignalEditorPage() {
                 </div>
               );
             })()}
+            {/* Playback position marker — white line with dot */}
+            {totalDuration > 0 && (
+              <div
+                className="absolute top-0 bottom-0 z-10 pointer-events-none"
+                style={{ left: `${Math.min(100, (currentTime / totalDuration) * 100)}%` }}
+              >
+                <div className="w-0.5 h-full bg-white shadow-[0_0_4px_rgba(255,255,255,0.6)]" />
+                <div className="absolute -top-1 -left-[3px] w-2 h-2 rounded-full bg-white shadow-md" />
+              </div>
+            )}
           </div>
           {/* + add video or photo */}
           <button
