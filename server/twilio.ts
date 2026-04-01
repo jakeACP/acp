@@ -50,16 +50,15 @@ export async function getTwilioFromPhoneNumber() {
 
 /**
  * Normalize a phone number to E.164 format.
- * - Strips all non-digit characters.
+ * - Strips ALL non-digit characters first.
  * - If 10 digits, assumes US and prepends +1.
  * - If 11 digits starting with 1, prepends +.
- * - Otherwise prepends + and leaves as-is.
+ * - Otherwise prepends + (for international numbers).
  */
 export function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
-  if (phone.startsWith('+')) return phone;
   return `+${digits}`;
 }
 
@@ -72,15 +71,12 @@ export async function sendSmsOtp(toPhoneNumber: string, body: string): Promise<v
   const fromNumber = await getTwilioFromPhoneNumber();
   const to = normalizePhone(toPhoneNumber);
 
-  const messageParams: Record<string, string> = { body, to };
   // If the from value looks like a Messaging Service SID (starts with MG), use messagingServiceSid
   if (fromNumber && fromNumber.startsWith('MG')) {
-    messageParams.messagingServiceSid = fromNumber;
+    await client.messages.create({ body, to, messagingServiceSid: fromNumber });
   } else {
-    messageParams.from = fromNumber;
+    await client.messages.create({ body, to, from: fromNumber });
   }
-
-  await client.messages.create(messageParams as any);
 }
 
 /**

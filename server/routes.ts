@@ -8387,16 +8387,12 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const client = await getTwilioClient();
       const fromNumber = await getTwilioFromPhoneNumber();
       const toPhone = normalizePhone(phone);
-      const messageParams: Record<string, string> = {
-        body: `${displayName} invited you to join the Anti-Corruption Party! Create your account and connect as friends instantly: ${inviteUrl}`,
-        to: toPhone,
-      };
+      const inviteBody = `${displayName} invited you to join the Anti-Corruption Party! Create your account and connect as friends instantly: ${inviteUrl}`;
       if (fromNumber && fromNumber.startsWith('MG')) {
-        messageParams.messagingServiceSid = fromNumber;
+        await client.messages.create({ body: inviteBody, to: toPhone, messagingServiceSid: fromNumber });
       } else {
-        messageParams.from = fromNumber;
+        await client.messages.create({ body: inviteBody, to: toPhone, from: fromNumber });
       }
-      await client.messages.create(messageParams as any);
       res.json({ success: true });
     } catch (error: any) {
       console.error("SMS invite error:", error);
