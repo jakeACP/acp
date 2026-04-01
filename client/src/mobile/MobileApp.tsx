@@ -16,7 +16,7 @@ import "../mobile/mobile-theme.css";
 export function MobileApp() {
   return (
     <Switch>
-      <Route path="/mobile" component={MobileFeedPage} />
+      <Route path="/mobile" component={MobileSignalsPage} />
       <Route path="/mobile/signals" component={MobileSignalsPage} />
       <Route path="/mobile/events" component={MobileEventsPage} />
       <Route path="/mobile/reps" component={MobileRepsPage} />
@@ -29,7 +29,7 @@ export function MobileApp() {
       <Route path="/mobile/profile/:userId" component={MobileUserProfilePage} />
       <Route path="/mobile/profile" component={MobileProfilePage} />
       <Route>
-        <MobileFeedPage />
+        <MobileSignalsPage />
       </Route>
     </Switch>
   );
