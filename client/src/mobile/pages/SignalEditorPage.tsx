@@ -217,6 +217,9 @@ export function SignalEditorPage() {
 
   // Ref that always mirrors `playing` — used in event listeners to avoid stale closure
   const playingRef = useRef(false);
+  // Dedup ref: reset to false whenever videoSrc changes; set to true when the first of
+  // onCanPlay / onLoadedMetadata fires so both don't attempt play simultaneously
+  const videoReadyRef = useRef(false);
 
   // Active bottom sheet
   const [sheet, setSheet] = useState<"none" | "text" | "sound" | "category" | "processing" | "addMedia" | "thumbnail">("none");
@@ -410,6 +413,28 @@ export function SignalEditorPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEntryIdx, blobUrlsVersion]);
 
+  // Reset videoReadyRef whenever a new clip is loaded (videoSrc changes)
+  useEffect(() => { videoReadyRef.current = false; }, [videoSrc]);
+
+  // Shared handler for both onCanPlay and onLoadedMetadata — whichever fires first triggers play.
+  // Seeks to trimIn only AFTER play() resolves, and only when duration is finite
+  // (WebM blobs without metadata report duration === Infinity, making seeks deadlock).
+  const handleVideoReady = useCallback(() => {
+    if (videoReadyRef.current) return;
+    videoReadyRef.current = true;
+    if (!playingRef.current) return;
+    const v = videoRef.current;
+    if (!v) return;
+    v.play()
+      .then(() => {
+        const entry = entries[currentEntryIdx];
+        if (entry?.trimIn && entry.trimIn > 0 && isFinite(v.duration)) {
+          v.currentTime = entry.trimIn;
+        }
+      })
+      .catch(() => {});
+  }, [entries, currentEntryIdx]);
+
   // Preload next clip (skip photos)
   useEffect(() => {
     const nv = nextVideoRef.current;
@@ -444,7 +469,14 @@ export function SignalEditorPage() {
     } else {
       playingRef.current = true;
       if (entry.type === "clip") {
-        videoRef.current?.play().catch(() => {});
+        const v = videoRef.current;
+        v?.play()
+          .then(() => {
+            if (v && entry.trimIn > 0 && isFinite(v.duration)) {
+              v.currentTime = entry.trimIn;
+            }
+          })
+          .catch(() => {});
       } else {
         // For photo entry: start a timer to advance
         const displayDur = Math.max(0.1, entry.duration - entry.trimIn - entry.trimOut) * 1000;
@@ -766,13 +798,8 @@ export function SignalEditorPage() {
           preload="auto"
           onEnded={handleEnded}
           onTimeUpdate={handleTimeUpdate}
-          onCanPlay={() => {
-            const v = videoRef.current;
-            if (!v) return;
-            const entry = entries[currentEntryIdx];
-            if (entry?.trimIn && entry.trimIn > 0) v.currentTime = entry.trimIn;
-            if (playingRef.current) v.play().catch(() => {});
-          }}
+          onCanPlay={handleVideoReady}
+          onLoadedMetadata={handleVideoReady}
         />
         {/* Photo preview — visible only for photo entries */}
         {currentEntry?.type === "photo" && (

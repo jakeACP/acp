@@ -238,7 +238,7 @@ export function SignalRecorderPage() {
     await new Promise<void>(resolve => {
       mr.onstop = async () => {
         if (clipDuration > 0.2 && currentChunksRef.current.length > 0) {
-          const blob = new Blob(currentChunksRef.current, { type: 'video/webm' });
+          const blob = new Blob(currentChunksRef.current, { type: mr.mimeType || 'video/webm' });
           const clipId = `clip-${Date.now()}`;
           await saveClip({ id: clipId, blob, duration: clipDuration, timestamp: Date.now() });
           setSegments(prev => [...prev, { clipId, duration: clipDuration }]);
@@ -261,7 +261,9 @@ export function SignalRecorderPage() {
     if (!streamRef.current) return;
     isHoldingRef.current = true;
 
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4')
+      ? 'video/mp4'
+      : MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
       ? 'video/webm;codecs=vp9'
       : 'video/webm';
 
