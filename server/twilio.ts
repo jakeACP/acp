@@ -61,6 +61,9 @@ export function normalizePhone(phone: string): string {
   if (digits.length < 7) {
     throw new Error(`Phone number "${phone}" is too short to be valid.`);
   }
+  if (digits.length > 15) {
+    throw new Error(`Phone number "${phone}" exceeds the maximum E.164 length.`);
+  }
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
   return `+${digits}`;
