@@ -224,7 +224,7 @@ export function MobileFriendsPage() {
 
       {/* Groups Tab */}
       {mainTab === "groups" && (
-        <div className="px-4 pb-28 space-y-3">
+        <div className="px-4 pb-28 space-y-5">
           {groupsLoading ? (
             <>
               {[1, 2, 3, 4].map((i) => (
