@@ -7333,7 +7333,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const isThumbnailField = file.fieldname === 'thumbnail';
       const isAudioField = file.fieldname === 'audioFile';
       if (!isClipField && !isPhotoField && !isThumbnailField && !isAudioField) return cb(new Error(`Unexpected field: ${file.fieldname}`));
-      if (isClipField && !/^video\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for clip: ${file.mimetype}`));
       if (isPhotoField && !/^image\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for photo: ${file.mimetype}`));
       if (isThumbnailField && !/^image\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for thumbnail: ${file.mimetype}`));
       if (isAudioField && !/^audio\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for audio: ${file.mimetype}`));
