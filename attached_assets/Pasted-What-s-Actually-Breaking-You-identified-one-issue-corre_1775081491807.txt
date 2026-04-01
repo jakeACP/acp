@@ -1,0 +1,197 @@
+What’s Actually Breaking
+
+You identified one issue correctly:
+
+WebM blobs often lack duration + seek metadata
+Calling currentTime = 0 can trigger a dead seek
+play() then silently fails
+
+But there are 3 separate problems, not one:
+
+1. Missing duration metadata (WebM issue)
+Causes broken seeking
+Especially bad on Safari/iOS
+2. Race conditions between:
+src assignment
+load()
+play()
+3. React not fully resetting the <video> element
+Old internal state persists unless forced
+✅ What Your Fix Did Right
+
+Your changes improved reliability:
+
+key={videoSrc} → forces remount → ✔️ correct
+onCanPlay instead of loadeddata → ✔️ more reliable trigger
+Avoiding currentTime = 0 → ✔️ avoids dead seek
+
+This is all good.
+
+⚠️ Why It Still Might Break
+
+Even with this fix:
+
+❌ WebM is still unstable on iOS Safari
+Some clips will:
+Not autoplay
+Freeze on first frame
+Refuse to seek entirely
+❌ onCanPlay is not guaranteed
+Some browsers fire:
+loadedmetadata but NOT canplay
+Or fire it inconsistently
+❌ Blob URLs can behave differently per clip
+Especially if segments vary in encoding timing
+🔧 The Real Fix (What You Should Tell Replit Next)
+1. Normalize video format immediately after recording
+
+This is the biggest upgrade you can make.
+
+Problem:
+
+MediaRecorder outputs WebM (usually VP8/VP9)
+Safari prefers MP4 (H.264)
+
+Solution:
+
+Convert clips before editing
+Options:
+Option A (Best UX, more CPU)
+
+Client-side:
+
+Use ffmpeg.wasm to convert to MP4
+Option B (Best balance)
+Keep WebM for recording
+Convert to MP4 on upload only
+BUT: disable seeking in editor (preview only)
+Option C (Fastest to implement)
+Force MediaRecorder to use MP4 if supported:
+const mimeType = MediaRecorder.isTypeSupported('video/mp4')
+  ? 'video/mp4'
+  : 'video/webm';
+
+⚠️ Not all browsers support this—but worth trying.
+
+2. Add a fallback play trigger (critical)
+
+Do NOT rely only on onCanPlay.
+
+Add this:
+
+onLoadedMetadata={() => {
+  if (shouldPlayRef.current) {
+    videoRef.current?.play().catch(() => {});
+  }
+}}
+
+This catches browsers that skip canplay.
+
+3. Remove all manual seeking unless necessary
+
+This line is still dangerous:
+
+video.currentTime = trimIn
+Replace with:
+Only seek after first successful play
+await video.play();
+if (trimIn > 0) video.currentTime = trimIn;
+4. Add explicit video.load() before play
+
+Even with React remounting, force it:
+
+video.load();
+
+Then play inside a microtask:
+
+setTimeout(() => video.play(), 0);
+5. Preload next clip (smooth transitions)
+
+When clip N is playing:
+
+Preload clip N+1 in a hidden <video>
+
+This removes:
+
+Black flashes
+Playback delay
+6. Add playsInline and muted (iOS requirement)
+
+Your <video> must include:
+
+<video playsInline muted />
+
+Otherwise:
+
+iOS blocks autoplay entirely
+⚡ Cleaner Pattern (What Your Video Component Should Look Like)
+
+Core idea:
+
+React controls source
+Browser controls playback
+You avoid fighting the video engine
+<video
+  key={videoSrc}
+  ref={videoRef}
+  src={videoSrc}
+  playsInline
+  muted
+  onCanPlay={handleReady}
+  onLoadedMetadata={handleFallbackReady}
+/>
+🧪 Debug Trick (Highly Recommended)
+
+Log this per clip:
+
+console.log({
+  duration: video.duration,
+  readyState: video.readyState,
+  currentTime: video.currentTime
+});
+
+If you see:
+
+duration === Infinity → metadata issue confirmed
+🧠 Strategic Advice (Important for ACP)
+
+Right now you're trying to make:
+
+WebM behave like TikTok-grade MP4 playback
+
+That’s fighting the browser.
+
+Better long-term path:
+
+Normalize everything to MP4 (H.264)
+Either:
+On-device (best UX)
+Or immediately after upload (best cost)
+📌 What To Send Back to Replit
+
+Add this:
+
+Additional playback reliability requirements:
+
+Add fallback playback trigger using onLoadedMetadata in addition to onCanPlay.
+Do not seek (currentTime) before the first successful play() call.
+Explicitly call video.load() before attempting playback.
+Ensure <video> includes playsInline and muted attributes for iOS compatibility.
+Attempt to use video/mp4 MIME type in MediaRecorder if supported.
+Log and handle cases where video.duration === Infinity (WebM metadata issue).
+Preload the next clip in sequence to ensure smooth playback transitions.
+Bottom Line
+
+Your current fix = good patch
+But the real issue = format + browser inconsistencies
+
+If you:
+
+Add fallback triggers
+Stop early seeking
+Normalize format (eventually)
+
+You’ll get stable playback.
+
+If you don’t:
+You’ll keep chasing random “video won’t play” bugs across devices.
