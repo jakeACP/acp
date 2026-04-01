@@ -7296,19 +7296,20 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   }, async (req, res) => {
     try {
       const user = req.user!;
+      const files: Express.Multer.File[] = (req.files as Express.Multer.File[] | undefined) ?? [];
+      const cleanupUploads = () => { for (const f of files) fs.unlink(f.path, () => {}); };
 
-      // Rate limit check
+      // Rate limit check — clean up temp files on rejection
       const recentCount = await storage.countRecentComposeJobs(user.id, COMPOSE_RATE_WINDOW_MS);
       if (recentCount >= COMPOSE_RATE_LIMIT) {
+        cleanupUploads();
         return res.status(429).json({ message: 'Rate limit: max 5 composes per hour.' });
       }
-
-      const files: Express.Multer.File[] = (req.files as Express.Multer.File[] | undefined) ?? [];
 
       // Enforce aggregate 500 MB total size
       const totalBytes = files.reduce((s, f) => s + f.size, 0);
       if (totalBytes > MAX_COMPOSE_TOTAL_BYTES) {
-        for (const f of files) fs.unlink(f.path, () => {});
+        cleanupUploads();
         return res.status(413).json({ message: 'Total upload exceeds 500 MB limit.' });
       }
 
@@ -7320,6 +7321,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         .sort((a, b) => parseInt(a.fieldname.replace('photo_', '')) - parseInt(b.fieldname.replace('photo_', '')));
 
       if (clipFiles.length === 0 && photoFiles.length === 0) {
+        cleanupUploads();
         return res.status(400).json({ message: 'No media files provided' });
       }
 

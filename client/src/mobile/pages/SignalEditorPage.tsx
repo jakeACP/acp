@@ -132,6 +132,8 @@ export function SignalEditorPage() {
   const [currentEntryIdx, setCurrentEntryIdx] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const blobUrlsRef = useRef<string[]>([]);
+  // Photo playback timer
+  const photoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Active bottom sheet
   const [sheet, setSheet] = useState<"none" | "text" | "sound" | "category" | "processing">("none");
@@ -168,10 +170,13 @@ export function SignalEditorPage() {
 
       const built: TimelineEntry[] = await Promise.all(
         clips.map(async (clip) => {
-          const thumbs = await generateThumbnails(clip.blob, THUMB_PER_CLIP);
+          const isPhoto = clip.id.startsWith("photo-");
+          const thumbs = isPhoto
+            ? await generatePhotoThumb(clip.blob)
+            : await generateThumbnails(clip.blob, THUMB_PER_CLIP);
           return {
             id: clip.id,
-            type: "clip" as const,
+            type: isPhoto ? ("photo" as const) : ("clip" as const),
             blob: clip.blob,
             duration: clip.duration,
             trimIn: 0,
@@ -197,31 +202,16 @@ export function SignalEditorPage() {
     return () => { blobUrlsRef.current.forEach(URL.revokeObjectURL); };
   }, [entries]);
 
-  // ── Preview player — sequential src-swap ─────────────────────────────────
+  // ── Preview player — sequential src-swap with photo support ─────────────
 
-  const loadEntry = useCallback((idx: number) => {
-    const v = videoRef.current;
-    if (!v || idx >= blobUrlsRef.current.length) return;
-    v.src = blobUrlsRef.current[idx];
-    v.currentTime = entries[idx]?.trimIn ?? 0;
-    if (playing) v.play().catch(() => {});
-  }, [entries, playing]);
+  // Clear photo timer helper
+  const clearPhotoTimer = () => {
+    if (photoTimerRef.current) { clearTimeout(photoTimerRef.current); photoTimerRef.current = null; }
+  };
 
-  useEffect(() => {
-    loadEntry(currentEntryIdx);
-  }, [currentEntryIdx, blobUrlsRef.current.length]);
-
-  // Preload next clip
-  useEffect(() => {
-    const nv = nextVideoRef.current;
-    const nextIdx = currentEntryIdx + 1;
-    if (nv && nextIdx < blobUrlsRef.current.length) {
-      nv.src = blobUrlsRef.current[nextIdx];
-    }
-  }, [currentEntryIdx, blobUrlsRef.current.length]);
-
-  // On ended, advance to next
+  // Advance to next entry (shared by video onEnded and photo timer)
   const handleEnded = useCallback(() => {
+    clearPhotoTimer();
     const nextIdx = currentEntryIdx + 1;
     if (nextIdx < entries.length) {
       setCurrentEntryIdx(nextIdx);
@@ -231,31 +221,77 @@ export function SignalEditorPage() {
     }
   }, [currentEntryIdx, entries.length]);
 
+  const loadEntry = useCallback((idx: number) => {
+    clearPhotoTimer();
+    const entry = entries[idx];
+    if (!entry) return;
+    const v = videoRef.current;
+
+    if (entry.type === "photo") {
+      // Photos: pause video, show image overlay; schedule advance after display duration
+      if (v) { v.pause(); v.src = ""; }
+      if (playing) {
+        const displayDur = Math.max(0.1, entry.duration - entry.trimIn - entry.trimOut) * 1000;
+        photoTimerRef.current = setTimeout(handleEnded, displayDur);
+      }
+    } else {
+      // Clips: load into video element
+      if (!v || idx >= blobUrlsRef.current.length) return;
+      v.src = blobUrlsRef.current[idx];
+      v.currentTime = entry.trimIn;
+      if (playing) v.play().catch(() => {});
+    }
+  }, [entries, playing, handleEnded]);
+
+  useEffect(() => {
+    loadEntry(currentEntryIdx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentEntryIdx, blobUrlsRef.current.length]);
+
+  // Preload next clip (skip photos)
+  useEffect(() => {
+    const nv = nextVideoRef.current;
+    const nextIdx = currentEntryIdx + 1;
+    if (nv && nextIdx < entries.length && entries[nextIdx]?.type === "clip") {
+      nv.src = blobUrlsRef.current[nextIdx] ?? "";
+    }
+  }, [currentEntryIdx, blobUrlsRef.current.length, entries]);
+
   const handleTimeUpdate = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
     const entry = entries[currentEntryIdx];
-    if (!entry) return;
+    if (!entry || entry.type === "photo") return;
     const elapsed = v.currentTime - entry.trimIn;
-    const totalBefore = entries.slice(0, currentEntryIdx).reduce((s, e) => s + (e.duration - e.trimIn - e.trimOut), 0);
+    const totalBefore = entries.slice(0, currentEntryIdx).reduce((s, e) => s + Math.max(0, e.duration - e.trimIn - e.trimOut), 0);
     setCurrentTime(totalBefore + Math.max(0, elapsed));
 
-    // Honor trimOut
-    const trimOut = entry.trimOut > 0 ? entry.duration - entry.trimOut : entry.duration;
-    if (v.currentTime >= trimOut) handleEnded();
+    // Honor trimOut: stop clip when reaching the trimmed end
+    const stopAt = entry.trimOut > 0 ? entry.duration - entry.trimOut : entry.duration;
+    if (v.currentTime >= stopAt) handleEnded();
   }, [entries, currentEntryIdx, handleEnded]);
 
   const togglePlay = () => {
-    const v = videoRef.current;
-    if (!v) return;
+    const entry = entries[currentEntryIdx];
+    if (!entry) return;
     if (playing) {
-      v.pause();
+      clearPhotoTimer();
+      videoRef.current?.pause();
       setPlaying(false);
     } else {
-      v.play().catch(() => {});
+      if (entry.type === "clip") {
+        videoRef.current?.play().catch(() => {});
+      } else {
+        // For photo entry: start a timer to advance
+        const displayDur = Math.max(0.1, entry.duration - entry.trimIn - entry.trimOut) * 1000;
+        photoTimerRef.current = setTimeout(handleEnded, displayDur);
+      }
       setPlaying(true);
     }
   };
+
+  // Cleanup photo timer on unmount
+  useEffect(() => () => clearPhotoTimer(), []);
 
   // ── Active text overlay during preview ───────────────────────────────────
 
@@ -320,17 +356,20 @@ export function SignalEditorPage() {
   const addPhoto = async (file: File) => {
     const blob = file;
     const thumbs = await generatePhotoThumb(blob);
+    const id = `photo-${Date.now()}`;
     const entry: TimelineEntry = {
-      id: `photo-${Date.now()}`,
+      id,
       type: "photo",
       blob,
-      duration: 2,
+      duration: 2,  // default 2s display duration
       trimIn: 0,
       trimOut: 0,
       thumbnails: thumbs,
     };
     setEntries((prev) => [...prev, entry]);
-    setPhotoBlobs((prev) => [...prev, { id: entry.id, blob }]);
+    setPhotoBlobs((prev) => [...prev, { id, blob }]);
+    // Persist photo to IDB so it survives page reload (same store as clips)
+    await saveClip({ id, blob, duration: 2, timestamp: Date.now() });
   };
 
   // ── Sound preview ─────────────────────────────────────────────────────────
@@ -389,8 +428,14 @@ export function SignalEditorPage() {
       photoEntries.forEach((e, i) => fd.append(`photo_${i}`, e.blob, `photo_${i}.jpg`));
 
       const trimData: Record<string, { trimIn: number; trimOut: number; clipDuration: number }> = {};
-      clipEntries.forEach((e, i) => { trimData[`clip_${i}`] = { trimIn: e.trimIn, trimOut: e.trimOut, clipDuration: e.duration }; });
-      photoEntries.forEach((e, i) => { trimData[`photo_${i}`] = { trimIn: 0, trimOut: e.duration > 0 ? e.duration : 2, clipDuration: e.duration > 0 ? e.duration : 2 }; });
+      clipEntries.forEach((e, i) => {
+        trimData[`clip_${i}`] = { trimIn: e.trimIn, trimOut: e.trimOut, clipDuration: e.duration };
+      });
+      photoEntries.forEach((e, i) => {
+        // For photos: effective display duration = base duration - trimOut (trim handles shorten display time)
+        const displayDur = Math.max(0.5, e.duration - e.trimOut);
+        trimData[`photo_${i}`] = { trimIn: 0, trimOut: displayDur, clipDuration: e.duration };
+      });
       fd.append("trimData", JSON.stringify(trimData));
       fd.append("textAnnotations", JSON.stringify(annotations));
       if (selectedAudio) {
@@ -490,13 +535,22 @@ export function SignalEditorPage() {
 
       {/* Preview player */}
       <div className="relative bg-black shrink-0" style={{ aspectRatio: "9/16", maxHeight: "45vh" }}>
+        {/* Video element — visible only for clip entries */}
         <video
           ref={videoRef}
-          className="w-full h-full object-contain"
+          className={`w-full h-full object-contain ${currentEntry?.type === "photo" ? "hidden" : "block"}`}
           playsInline
           onEnded={handleEnded}
           onTimeUpdate={handleTimeUpdate}
         />
+        {/* Photo preview — visible only for photo entries */}
+        {currentEntry?.type === "photo" && (
+          <img
+            src={blobUrlsRef.current[currentEntryIdx] ?? ""}
+            className="w-full h-full object-contain"
+            alt="Photo preview"
+          />
+        )}
         {/* Hidden preload video */}
         <video ref={nextVideoRef} className="hidden" playsInline muted />
 
@@ -520,6 +574,27 @@ export function SignalEditorPage() {
             {playing ? <Pause className="w-7 h-7 text-white" /> : <Play className="w-7 h-7 text-white ml-0.5" />}
           </div>
         </button>
+
+        {/* Scrubber bar with tap-to-pin for text annotations */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-6 flex items-center px-2 cursor-pointer"
+          title="Tap to set text pin time"
+          onClick={(e) => {
+            if (totalDuration <= 0) return;
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const t = ratio * totalDuration;
+            setNewStartTime(parseFloat(t.toFixed(1)));
+            setNewEndTime(parseFloat(Math.min(t + 3, totalDuration).toFixed(1)));
+          }}
+        >
+          <div className="w-full h-1 bg-white/20 rounded-full relative">
+            <div
+              className="absolute left-0 top-0 h-full bg-red-500 rounded-full"
+              style={{ width: totalDuration > 0 ? `${(currentTime / totalDuration) * 100}%` : "0%" }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Action buttons */}
@@ -639,19 +714,20 @@ export function SignalEditorPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-white/50 text-xs mb-1">Start: {newStartTime.toFixed(1)}s</p>
-                <input type="range" min={0} max={Math.max(totalDuration - 0.5, 0)} step={0.5}
+                <input type="range" min={0} max={Math.max(totalDuration - 0.5, 0)} step={0.1}
                   value={newStartTime}
                   onChange={(e) => setNewStartTime(Number(e.target.value))}
                   className="w-full accent-red-500" />
               </div>
               <div>
                 <p className="text-white/50 text-xs mb-1">End: {newEndTime.toFixed(1)}s</p>
-                <input type="range" min={0.5} max={Math.max(totalDuration, 0.5)} step={0.5}
+                <input type="range" min={0.5} max={Math.max(totalDuration, 0.5)} step={0.1}
                   value={newEndTime}
                   onChange={(e) => setNewEndTime(Number(e.target.value))}
                   className="w-full accent-red-500" />
               </div>
             </div>
+            <p className="text-white/30 text-[10px] text-center">Tip: tap the progress bar above to pin start time</p>
             <button
               onClick={addAnnotation}
               disabled={!newText.trim()}
