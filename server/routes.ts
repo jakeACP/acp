@@ -7067,8 +7067,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Multi-clip stitch endpoint — accepts clip_0, clip_1, ... fields, stitches with FFmpeg
-  const signalMultiUpload = multer({ storage: signalVideoStorage, limits: { fileSize: 500 * 1024 * 1024 } });
+  const MAX_CLIPS = 50;
+  const ALLOWED_CLIP_MIMETYPES = new Set(['video/webm', 'video/mp4', 'video/quicktime']);
+  const signalMultiUpload = multer({
+    storage: signalVideoStorage,
+    limits: { fileSize: 500 * 1024 * 1024, files: MAX_CLIPS },
+    fileFilter: (_req, file, cb) => {
+      if (!/^clip_\d+$/.test(file.fieldname)) return cb(null, false);
+      const ok = ALLOWED_CLIP_MIMETYPES.has(file.mimetype) || /\.(webm|mp4|mov)$/i.test(file.originalname);
+      cb(null, ok);
+    },
+  });
 
   app.post("/api/mobile/signals/stitch", (req, res, next) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
