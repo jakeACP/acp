@@ -723,7 +723,9 @@ export function SignalEditorPage() {
         if (e.type === "clip") {
           const field = `clip_${clipIdx++}`;
           const ext = e.blob.type.includes("mp4") ? "mp4" : "webm";
-          fd.append(field, e.blob, `${field}.${ext}`);
+          const mime = ext === "mp4" ? "video/mp4" : "video/webm";
+          const clipBlob = e.blob.type.startsWith("video/") ? e.blob : new Blob([e.blob], { type: mime });
+          fd.append(field, clipBlob, `${field}.${ext}`);
           trimData[field] = { trimIn: e.trimIn, trimOut: e.trimOut, clipDuration: e.duration };
           timelineManifest.push({ type: "clip", field });
         } else {
