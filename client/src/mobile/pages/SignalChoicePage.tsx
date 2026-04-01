@@ -1,7 +1,7 @@
 import { useLocation } from "wouter";
-import { Camera, Link as LinkIcon, X } from "lucide-react";
-import { useState } from "react";
-import { clearSession } from "@/mobile/lib/clipSession";
+import { Camera, Link as LinkIcon, Upload, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { clearSession, saveClip } from "@/mobile/lib/clipSession";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -19,6 +19,24 @@ const DURATION_OPTIONS_PAID = [
   { label: '10 min', value: 600 },
 ];
 
+function getMediaDuration(file: File): Promise<number> {
+  return new Promise((resolve) => {
+    if (file.type.startsWith("image/")) { resolve(2); return; }
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.src = url;
+    const fallback = setTimeout(() => { URL.revokeObjectURL(url); resolve(5); }, 5000);
+    v.addEventListener("loadedmetadata", () => {
+      clearTimeout(fallback);
+      const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : 5;
+      URL.revokeObjectURL(url);
+      resolve(dur);
+    }, { once: true });
+    v.addEventListener("error", () => { clearTimeout(fallback); URL.revokeObjectURL(url); resolve(5); }, { once: true });
+  });
+}
+
 export function SignalChoicePage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
@@ -26,7 +44,9 @@ export function SignalChoicePage() {
   const [mode, setMode] = useState<'choice' | 'paste'>('choice');
   const [title, setTitle] = useState('');
   const [duration, setDuration] = useState(60);
+  const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const isPremium = user?.subscriptionStatus === 'premium';
   const durationOptions = isPremium ? DURATION_OPTIONS_PAID : DURATION_OPTIONS;
@@ -34,6 +54,29 @@ export function SignalChoicePage() {
   const handleRecordVideo = async () => {
     await clearSession();
     setLocation(`/mobile/create?duration=${duration}`);
+  };
+
+  const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      await clearSession();
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const isImage = file.type.startsWith("image/");
+        const dur = await getMediaDuration(file);
+        const id = isImage ? `photo-upload-${Date.now()}-${i}` : `upload-${Date.now()}-${i}`;
+        const blob = isImage ? file : new Blob([file], { type: file.type.startsWith("video/") ? file.type : "video/mp4" });
+        await saveClip({ id, blob, duration: dur, timestamp: Date.now() + i });
+      }
+      setLocation("/mobile/edit");
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   };
 
   const submitMutation = useMutation({
@@ -136,6 +179,30 @@ export function SignalChoicePage() {
             <p className="text-white/50 text-sm mt-0.5">Use your camera to record a new Signal</p>
           </div>
         </button>
+
+        <button
+          onClick={() => uploadInputRef.current?.click()}
+          disabled={uploading}
+          className="w-full flex items-center gap-4 p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 active:scale-[0.98] transition-all disabled:opacity-50"
+          data-testid="upload-media-option"
+        >
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shrink-0">
+            <Upload className="w-7 h-7 text-white" />
+          </div>
+          <div className="text-left">
+            <p className="text-white font-semibold text-lg">{uploading ? "Importing…" : "Upload Media"}</p>
+            <p className="text-white/50 text-sm mt-0.5">Import videos or photos from your device</p>
+          </div>
+        </button>
+
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="video/*,image/*"
+          multiple
+          className="hidden"
+          onChange={handleUploadFiles}
+        />
 
         <button
           onClick={() => setMode('paste')}
