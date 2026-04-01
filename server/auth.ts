@@ -883,16 +883,35 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Get trusted devices
+  // Get trusted devices (marks the current device based on the browser cookie)
   app.get("/api/2fa/devices", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     
     try {
       const devices = await storage.getTrustedDevices(req.user.id);
-      res.json(devices);
+      const cookieToken = req.cookies?.trusted_device;
+      const currentHash = cookieToken ? hashCode(cookieToken) : null;
+      const devicesWithCurrent = devices.map((d: any) => {
+        const { tokenHash: _hash, ...rest } = d;
+        return { ...rest, isCurrent: currentHash ? d.tokenHash === currentHash : false };
+      });
+      res.json(devicesWithCurrent);
     } catch (error: any) {
       console.error("Get devices error:", error);
       res.status(500).json({ message: "Failed to get devices" });
+    }
+  });
+
+  // Remove all trusted devices
+  app.delete("/api/2fa/devices", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      await storage.removeAllTrustedDevices(req.user.id);
+      res.clearCookie('trusted_device');
+      res.json({ message: "All devices removed" });
+    } catch (error: any) {
+      console.error("Remove all devices error:", error);
+      res.status(500).json({ message: error.message || "Failed to remove devices" });
     }
   });
 

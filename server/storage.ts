@@ -449,6 +449,7 @@ export interface IStorage {
   createTrustedDevice(userId: string, tokenHash: string, userAgent: string, ipAddress: string, expiresAt: Date): Promise<void>;
   verifyTrustedDevice(userId: string, tokenHash: string): Promise<boolean>;
   removeTrustedDevice(userId: string, deviceId: string): Promise<void>;
+  removeAllTrustedDevices(userId: string): Promise<void>;
   getTrustedDevices(userId: string): Promise<any[]>;
   addUserCredits(userId: string, credits: number): Promise<void>;
 
@@ -7333,9 +7334,15 @@ export class DatabaseStorage implements IStorage {
     `);
   }
 
+  async removeAllTrustedDevices(userId: string): Promise<void> {
+    await db.execute(sql`
+      DELETE FROM trusted_devices WHERE user_id = ${userId}
+    `);
+  }
+
   async getTrustedDevices(userId: string): Promise<any[]> {
     const result = await db.execute(sql`
-      SELECT id, device_name, user_agent, ip_address, last_used_at, created_at
+      SELECT id, device_name, user_agent, ip_address, last_used_at, created_at, token_hash
       FROM trusted_devices
       WHERE user_id = ${userId} AND expires_at > NOW()
       ORDER BY last_used_at DESC
@@ -7347,6 +7354,7 @@ export class DatabaseStorage implements IStorage {
       ipAddress: row.ip_address,
       lastUsedAt: row.last_used_at,
       createdAt: row.created_at,
+      tokenHash: row.token_hash,
     }));
   }
 

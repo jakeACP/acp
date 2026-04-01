@@ -9,8 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { LoadingSpinner } from "@/components/loading-spinner";
-import { Shield, Smartphone, Key, Trash2, CheckCircle, XCircle } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Shield, Smartphone, Key, Trash2, CheckCircle, XCircle, Monitor, TabletSmartphone, LogOut } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 interface TwoFactorStatus {
   twoFactorEnabled: boolean;
@@ -22,11 +22,48 @@ interface TwoFactorStatus {
 
 interface TrustedDevice {
   id: string;
-  deviceName: string;
+  deviceName: string | null;
   userAgent: string;
   ipAddress: string;
   lastUsedAt: string;
   createdAt: string;
+  isCurrent: boolean;
+}
+
+function parseDevice(ua: string): { label: string; Icon: typeof Monitor } {
+  const isMobile = /iPhone|Android.*Mobile|iPod/.test(ua);
+  const isTablet = /iPad|Android(?!.*Mobile)/.test(ua);
+
+  let browser = 'Browser';
+  if (/Edg\//.test(ua)) browser = 'Edge';
+  else if (/OPR|Opera/.test(ua)) browser = 'Opera';
+  else if (/Chrome/.test(ua)) browser = 'Chrome';
+  else if (/Firefox/.test(ua)) browser = 'Firefox';
+  else if (/Safari/.test(ua)) browser = 'Safari';
+
+  let os = '';
+  if (/iPhone/.test(ua)) os = 'iPhone';
+  else if (/iPad/.test(ua)) os = 'iPad';
+  else if (/Android/.test(ua)) os = 'Android';
+  else if (/Windows/.test(ua)) os = 'Windows';
+  else if (/Mac OS X/.test(ua)) os = 'Mac';
+  else if (/Linux/.test(ua)) os = 'Linux';
+
+  const label = os ? `${browser} on ${os}` : browser;
+  const Icon = isMobile ? TabletSmartphone : isTablet ? TabletSmartphone : Monitor;
+  return { label, Icon };
+}
+
+function relativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
 }
 
 export function TwoFactorSettings() {
@@ -138,7 +175,20 @@ export function TwoFactorSettings() {
       return apiRequest(`/api/2fa/devices/${deviceId}`, 'DELETE');
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Device removed" });
+      toast({ title: "Device removed", description: "That device will need to verify again next login." });
+      queryClient.invalidateQueries({ queryKey: ['/api/2fa/devices'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeAllDevicesMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/2fa/devices', 'DELETE');
+    },
+    onSuccess: () => {
+      toast({ title: "All devices removed", description: "Every device will need to verify again on next login." });
       queryClient.invalidateQueries({ queryKey: ['/api/2fa/devices'] });
     },
     onError: (error: Error) => {
@@ -157,6 +207,7 @@ export function TwoFactorSettings() {
   }
 
   return (
+    <>
     <Card className="mt-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -239,37 +290,6 @@ export function TwoFactorSettings() {
           </div>
         </div>
 
-        {devices && devices.length > 0 && (
-          <>
-            <Separator />
-            <div>
-              <h4 className="font-medium mb-3">Trusted Devices</h4>
-              <p className="text-sm text-muted-foreground mb-4">
-                Devices that won't require 2FA verification
-              </p>
-              <div className="space-y-2">
-                {devices.map((device) => (
-                  <div key={device.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">{device.deviceName || 'Unknown Device'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {device.ipAddress} • Last used: {new Date(device.lastUsedAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => removeDeviceMutation.mutate(device.id)}
-                      disabled={removeDeviceMutation.isPending}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
 
         <Dialog open={showTotpSetup} onOpenChange={setShowTotpSetup}>
           <DialogContent>
@@ -380,5 +400,91 @@ export function TwoFactorSettings() {
         </Dialog>
       </CardContent>
     </Card>
+
+    {/* ── Trusted Devices Card ───────────────────────────────────────── */}
+    <Card className="mt-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Monitor className="h-5 w-5" />
+              Trusted Devices
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Devices that skip 2FA on sign-in. You only need to verify once per device.
+            </CardDescription>
+          </div>
+          {devices && devices.length > 1 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive border-destructive hover:bg-destructive hover:text-white shrink-0"
+              onClick={() => removeAllDevicesMutation.mutate()}
+              disabled={removeAllDevicesMutation.isPending}
+            >
+              <LogOut className="h-4 w-4 mr-1" />
+              {removeAllDevicesMutation.isPending ? "Removing…" : "Log out all"}
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {!devices || devices.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Monitor className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <p className="text-sm font-medium">No trusted devices yet</p>
+            <p className="text-xs mt-1">
+              After verifying with 2FA, check "Remember this device" to skip the code next time.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {devices.map((device) => {
+              const { label, Icon } = parseDevice(device.userAgent || '');
+              return (
+                <div
+                  key={device.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border ${
+                    device.isCurrent ? 'border-primary/50 bg-primary/5' : 'bg-muted/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="shrink-0 w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+                      <Icon className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate">
+                          {device.deviceName || label}
+                        </p>
+                        {device.isCurrent && (
+                          <Badge variant="outline" className="text-xs text-primary border-primary shrink-0">
+                            This device
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {device.ipAddress} · Last seen {relativeTime(device.lastUsedAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeDeviceMutation.mutate(device.id)}
+                    disabled={removeDeviceMutation.isPending}
+                    title="Remove device"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+    </>
   );
 }
