@@ -326,9 +326,9 @@
   padding: 0 12px;
 }
 
-/* Uniform card height in grid */
+/* Uniform card height in grid — 9:16 portrait aspect ratio matches phone screen */
 .feed-grid > * {
-  height: 200px;
+  aspect-ratio: 9 / 16;
   overflow: hidden;
 }
 
