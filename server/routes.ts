@@ -7286,6 +7286,15 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   const runFfmpeg = (args: string[]): Promise<void> =>
     execFileAsync(ffmpegBin, args, { maxBuffer: 50 * 1024 * 1024 }).then(() => {});
 
+  // Helper: get media duration in seconds via ffprobe
+  const getMediaDuration = async (filePath: string): Promise<number> => {
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1', filePath,
+    ], { maxBuffer: 1 * 1024 * 1024 });
+    return parseFloat(stdout.trim()) || 0;
+  };
+
   app.post("/api/mobile/signals/compose", (req, res, next) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     composeUpload.any()(req, res, (err) => {
@@ -7302,7 +7311,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         return res.status(429).json({ message: 'Rate limit: max 5 composes per hour.' });
       }
 
-      const files = (req as any).files as Express.Multer.File[] | undefined ?? [];
+      const files: Express.Multer.File[] = (req.files as Express.Multer.File[] | undefined) ?? [];
 
       // Enforce aggregate 500 MB total size
       const totalBytes = files.reduce((s, f) => s + f.size, 0);
@@ -7328,8 +7337,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const trimData: Record<string, { trimIn: number; trimOut: number }> = {};
       for (const [k, v] of Object.entries(rawTrimData)) {
         if (typeof v === 'object' && v !== null) {
-          const ti = parseFloat((v as any).trimIn) || 0;
-          const to = parseFloat((v as any).trimOut) || 0;
+          const vObj = v as Record<string, unknown>;
+          const ti = parseFloat(String(vObj.trimIn ?? '0')) || 0;
+          const to = parseFloat(String(vObj.trimOut ?? '0')) || 0;
           trimData[k] = { trimIn: Math.max(0, ti), trimOut: Math.max(0, to) };
         }
       }
@@ -7361,62 +7371,74 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       res.status(202).json({ jobId: job.id });
 
       // ── Async FFmpeg pipeline (no shell interpolation) ─────────────────────
+      // All intermediate segments are transcoded to H.264/AAC before concat,
+      // ensuring codec compatibility regardless of input format (WebM, MP4, JPEG, etc.)
       setImmediate(async () => {
         const tempFiles: string[] = [];
+        // Common normalized segment settings
+        const NORM_VF = 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2';
+        const NORM_VCODEC = ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-r', '30', '-pix_fmt', 'yuv420p'];
+        const NORM_ACODEC = ['-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2'];
+
         try {
           const outputPath = path.join(signalsUploadDir, `${randomUUID()}.mp4`);
           const concatListPath = path.join(composeTempDir, `${randomUUID()}.txt`);
           tempFiles.push(concatListPath);
           const concatLines: string[] = [];
 
-          // Clips — optional trim via separate ffmpeg pass
+          // ── Clips: transcode to normalized H.264/AAC, applying trim ──────────
+          // Client models trimIn as seconds from start, trimOut as seconds from end.
+          // We convert trimOut → absolute stop time using ffprobe duration.
           for (const clip of clipFiles) {
             tempFiles.push(clip.path);
             const trim = trimData[clip.fieldname];
-            if (trim && (trim.trimIn > 0 || trim.trimOut > 0)) {
-              const trimmed = path.join(composeTempDir, `${randomUUID()}.mp4`);
-              tempFiles.push(trimmed);
-              const args = ['-y'];
-              if (trim.trimIn > 0) { args.push('-ss', String(trim.trimIn)); }
-              args.push('-i', clip.path);
-              if (trim.trimOut > 0) { args.push('-to', String(trim.trimOut)); }
-              args.push('-c', 'copy', trimmed);
-              await runFfmpeg(args);
-              concatLines.push(`file '${trimmed}'`);
-            } else {
-              concatLines.push(`file '${clip.path}'`);
+            const normalizedPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
+            tempFiles.push(normalizedPath);
+
+            const args: string[] = ['-y'];
+            if (trim && trim.trimIn > 0) {
+              args.push('-ss', String(trim.trimIn));
             }
+            args.push('-i', clip.path);
+            if (trim && trim.trimOut > 0) {
+              // Convert "seconds from end" to absolute end time
+              const clipDuration = await getMediaDuration(clip.path);
+              const absoluteEnd = Math.max(0, clipDuration - trim.trimOut - (trim.trimIn || 0));
+              if (absoluteEnd > 0) {
+                args.push('-t', String(absoluteEnd));
+              }
+            }
+            // Always transcode to normalized codec/profile so concat works
+            args.push('-vf', NORM_VF, ...NORM_VCODEC, ...NORM_ACODEC, normalizedPath);
+            await runFfmpeg(args);
+            concatLines.push(`file '${normalizedPath}'`);
           }
 
-          // Photos — default 2s still, honor adjustable duration from trimData
+          // ── Photos: encode to normalized H.264 still at requested duration ──
           for (const photo of photoFiles) {
             tempFiles.push(photo.path);
-            const dur = Math.max(0.5, Math.min(30,
-              trimData[photo.fieldname]?.trimOut > 0
-                ? trimData[photo.fieldname].trimOut
-                : 2
-            ));
+            const photoTrim = trimData[photo.fieldname];
+            const dur = Math.max(0.5, Math.min(30, photoTrim?.trimOut > 0 ? photoTrim.trimOut : 2));
             const stillPath = path.join(composeTempDir, `${randomUUID()}.mp4`);
             tempFiles.push(stillPath);
             await runFfmpeg([
               '-y', '-loop', '1', '-i', photo.path,
               '-t', String(dur),
-              '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
-              '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p',
+              '-vf', NORM_VF,
+              ...NORM_VCODEC,
+              '-an',
               stillPath,
             ]);
             concatLines.push(`file '${stillPath}'`);
           }
 
-          // Write concat list
+          // Write concat list and concat (all segments now share same codec/params)
           fs.writeFileSync(concatListPath, concatLines.join('\n'));
-
-          // Concat all segments
           const concatOut = path.join(composeTempDir, `${randomUUID()}.mp4`);
           tempFiles.push(concatOut);
           await runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatListPath, '-c', 'copy', concatOut]);
 
-          // Final encode: optional drawtext + optional audio mix
+          // ── Final encode: drawtext overlays + optional audio mix ──────────────
           const vfFilters = textAnnotations.map(ann =>
             `drawtext=text='${ann.text}':fontsize=${ann.fontSize}:fontcolor=${ann.color.replace('#', '0x')}` +
             `:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${ann.startTime},${ann.endTime})'`
@@ -7428,18 +7450,26 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
           const finalArgs = ['-y', '-i', concatOut];
           if (hasAudio) {
-            finalArgs.push('-i', audioSrcPath,
-              '-filter_complex', `[1:a]volume=${audioVolume}[aout]`,
-              '-map', '0:v', '-map', '[aout]', '-shortest',
+            finalArgs.push(
+              '-i', audioSrcPath,
+              '-filter_complex', `[0:v]${vf}[vout];[1:a]volume=${audioVolume}[aout]`,
+              '-map', '[vout]', '-map', '[aout]', '-shortest',
+              '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+              '-c:a', 'aac', '-b:a', '128k',
+              outputPath,
             );
           } else {
-            finalArgs.push('-an');
+            finalArgs.push(
+              '-vf', vf,
+              '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+              '-an',
+              outputPath,
+            );
           }
-          finalArgs.push('-vf', vf, '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', outputPath);
           await runFfmpeg(finalArgs);
 
           // Cleanup temp files
-          for (const f of tempFiles) { try { fs.unlinkSync(f); } catch {} }
+          for (const f of tempFiles) { try { fs.unlinkSync(f); } catch { /* best-effort */ } }
 
           const videoUrl = `/uploads/signals/${path.basename(outputPath)}`;
           const signal = await storage.createSignal({
@@ -7448,10 +7478,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
             filter: 'none', overlays: null, tags: category ? [category] : [], isPublic: true,
           });
           await storage.updateComposeJob(job.id, { status: 'done', signalId: signal.id });
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'FFmpeg error';
           console.error('Compose job failed:', err);
-          for (const f of tempFiles) { try { fs.unlinkSync(f); } catch {} }
-          await storage.updateComposeJob(job.id, { status: 'error', errorMessage: err.message || 'FFmpeg error' });
+          for (const f of tempFiles) { try { fs.unlinkSync(f); } catch { /* best-effort */ } }
+          await storage.updateComposeJob(job.id, { status: 'error', errorMessage: message });
         }
       });
     } catch (error: any) {
