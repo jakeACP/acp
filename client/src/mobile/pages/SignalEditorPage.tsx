@@ -1,4 +1,4 @@
-import type { ReactNode, ChangeEvent } from "react";
+import type { ReactNode, ChangeEvent, PointerEvent as RPointerEvent } from "react";
 import { useLocation } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -27,6 +27,8 @@ interface TextAnnotation {
   fontSize: number;
   startTime: number;
   endTime: number;
+  x: number; // 0-100 percent from left
+  y: number; // 0-100 percent from top
 }
 
 interface AudioTrack {
@@ -226,6 +228,7 @@ export function SignalEditorPage() {
 
   // Text annotation state
   const [annotations, setAnnotations] = useState<TextAnnotation[]>([]);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [newText, setNewText] = useState("");
   const [newColor, setNewColor] = useState("#ffffff");
   const [newFontSize, setNewFontSize] = useState(24);
@@ -252,6 +255,49 @@ export function SignalEditorPage() {
   const [thumbnailBlob, setThumbnailBlob] = useState<Blob | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const thumbnailCameraRef = useRef<HTMLInputElement>(null);
+
+  // Preview container ref (for annotation drag calculations)
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Annotation drag state
+  const annDragRef = useRef<{ id: string; startX: number; startY: number; startPercX: number; startPercY: number } | null>(null);
+  const startAnnotationDrag = (e: RPointerEvent<HTMLDivElement>, ann: TextAnnotation) => {
+    if (ann.id !== selectedAnnotationId) return;
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    annDragRef.current = { id: ann.id, startX: e.clientX, startY: e.clientY, startPercX: ann.x, startPercY: ann.y };
+  };
+  const moveAnnotationDrag = (e: RPointerEvent<HTMLDivElement>) => {
+    const drag = annDragRef.current;
+    if (!drag || !previewRef.current) return;
+    const rect = previewRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - drag.startX) / rect.width) * 100;
+    const dy = ((e.clientY - drag.startY) / rect.height) * 100;
+    setAnnotations((prev) => prev.map((a) =>
+      a.id === drag.id
+        ? { ...a, x: Math.max(0, Math.min(100, drag.startPercX + dx)), y: Math.max(0, Math.min(100, drag.startPercY + dy)) }
+        : a
+    ));
+  };
+  const endAnnotationDrag = () => { annDragRef.current = null; };
+
+  // Annotation resize state (font-size drag)
+  const annResizeRef = useRef<{ id: string; startY: number; startSize: number } | null>(null);
+  const startAnnotationResize = (e: RPointerEvent<HTMLSpanElement>, ann: TextAnnotation) => {
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    annResizeRef.current = { id: ann.id, startY: e.clientY, startSize: ann.fontSize };
+  };
+  const moveAnnotationResize = (e: RPointerEvent<HTMLDivElement>) => {
+    const r = annResizeRef.current;
+    if (!r) return;
+    const dy = r.startY - e.clientY; // drag up = bigger
+    const newSize = Math.max(10, Math.min(72, r.startSize + dy * 0.3));
+    setAnnotations((prev) => prev.map((a) => a.id === r.id ? { ...a, fontSize: Math.round(newSize) } : a));
+  };
+  const endAnnotationResize = () => { annResizeRef.current = null; };
 
   // ── Load clips from IDB ───────────────────────────────────────────────────
 
@@ -310,9 +356,12 @@ export function SignalEditorPage() {
 
   // ── Blob URLs for preview player ─────────────────────────────────────────
 
+  const [blobUrlsVersion, setBlobUrlsVersion] = useState(0);
+
   useEffect(() => {
     blobUrlsRef.current.forEach(URL.revokeObjectURL);
     blobUrlsRef.current = entries.map((e) => URL.createObjectURL(e.blob));
+    setBlobUrlsVersion((v) => v + 1);
     return () => { blobUrlsRef.current.forEach(URL.revokeObjectURL); };
   }, [entries]);
 
@@ -358,9 +407,9 @@ export function SignalEditorPage() {
   }, [entries, playing, handleEnded]);
 
   useEffect(() => {
-    loadEntry(currentEntryIdx);
+    if (blobUrlsVersion > 0) loadEntry(currentEntryIdx);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEntryIdx, blobUrlsRef.current.length]);
+  }, [currentEntryIdx, blobUrlsVersion]);
 
   // Preload next clip (skip photos)
   useEffect(() => {
@@ -514,6 +563,8 @@ export function SignalEditorPage() {
       fontSize: newFontSize,
       startTime: newStartTime,
       endTime: newEndTime,
+      x: 50,
+      y: 50,
     }]);
     setNewText("");
     setSheet("none");
@@ -689,7 +740,13 @@ export function SignalEditorPage() {
       </div>
 
       {/* Preview player */}
-      <div className="relative bg-black shrink-0" style={{ aspectRatio: "9/16", maxHeight: "62vh" }}>
+      <div
+        ref={previewRef}
+        className="relative bg-black shrink-0"
+        style={{ aspectRatio: "9/16", maxHeight: "62vh" }}
+        onPointerMove={(e) => { moveAnnotationDrag(e); moveAnnotationResize(e); }}
+        onPointerUp={() => { endAnnotationDrag(); endAnnotationResize(); }}
+      >
         {/* Video element — visible only for clip entries */}
         <video
           ref={videoRef}
@@ -709,16 +766,48 @@ export function SignalEditorPage() {
         {/* Hidden preload video */}
         <video ref={nextVideoRef} className="hidden" playsInline muted />
 
-        {/* Active text overlays */}
-        {activeAnnotations.map((ann) => (
-          <div
-            key={ann.id}
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-center px-2 py-1 rounded"
-            style={{ color: ann.color, fontSize: ann.fontSize, fontWeight: 700, textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}
-          >
-            {ann.text}
-          </div>
-        ))}
+        {/* Thumbnail overlay — shown when paused */}
+        {thumbnailDataUrl && !playing && (
+          <img
+            src={thumbnailDataUrl}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+            alt="Thumbnail preview"
+          />
+        )}
+
+        {/* Active text overlays — draggable when selected */}
+        {activeAnnotations.map((ann) => {
+          const isSelected = ann.id === selectedAnnotationId;
+          return (
+            <div
+              key={ann.id}
+              className={`absolute select-none text-center px-2 py-1 rounded ${isSelected ? "cursor-grab ring-2 ring-white/60 ring-offset-1 ring-offset-transparent" : "pointer-events-none"}`}
+              style={{
+                left: `${ann.x}%`,
+                top: `${ann.y}%`,
+                transform: "translate(-50%, -50%)",
+                color: ann.color,
+                fontSize: ann.fontSize,
+                fontWeight: 700,
+                textShadow: "0 1px 4px rgba(0,0,0,0.8)",
+                touchAction: "none",
+              }}
+              onPointerDown={(e) => startAnnotationDrag(e, ann)}
+            >
+              {ann.text}
+              {/* Resize handle — bottom-right corner */}
+              {isSelected && (
+                <span
+                  className="absolute bottom-0 right-0 w-4 h-4 bg-white rounded-sm cursor-se-resize flex items-center justify-center"
+                  style={{ fontSize: 8, touchAction: "none" }}
+                  onPointerDown={(e) => startAnnotationResize(e, ann)}
+                >
+                  ↔
+                </span>
+              )}
+            </div>
+          );
+        })}
 
         {/* Play/Pause overlay */}
         <button
@@ -792,17 +881,29 @@ export function SignalEditorPage() {
           <div className="flex-1 overflow-x-auto">
             {annotations.length > 0 ? (
               <div className="flex gap-1.5" style={{ minWidth: "max-content" }}>
-                {annotations.map((ann) => (
-                  <div key={ann.id} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs shrink-0"
-                    style={{ background: ann.color + "25", color: ann.color, border: `1px solid ${ann.color}40` }}>
-                    <Type className="w-2.5 h-2.5 shrink-0" />
-                    <span className="truncate max-w-[60px]">{ann.text}</span>
-                    <span className="text-white/30">{ann.startTime.toFixed(0)}s</span>
-                    <button onClick={() => setAnnotations((p) => p.filter((a) => a.id !== ann.id))}>
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                ))}
+                {annotations.map((ann) => {
+                  const isSel = ann.id === selectedAnnotationId;
+                  return (
+                    <div
+                      key={ann.id}
+                      className="flex items-center gap-1 px-2 py-1 rounded-full text-xs shrink-0 cursor-pointer"
+                      style={{
+                        background: isSel ? ann.color + "50" : ann.color + "25",
+                        color: ann.color,
+                        border: `1px solid ${isSel ? ann.color : ann.color + "40"}`,
+                        boxShadow: isSel ? `0 0 0 1px ${ann.color}` : undefined,
+                      }}
+                      onClick={() => setSelectedAnnotationId(isSel ? null : ann.id)}
+                    >
+                      <Type className="w-2.5 h-2.5 shrink-0" />
+                      <span className="truncate max-w-[60px]">{ann.text}</span>
+                      <span className="text-white/30">{ann.startTime.toFixed(0)}s</span>
+                      <button onClick={(e) => { e.stopPropagation(); setAnnotations((p) => p.filter((a) => a.id !== ann.id)); if (isSel) setSelectedAnnotationId(null); }}>
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <span className="text-white/20 text-xs italic">No overlays</span>
@@ -831,7 +932,7 @@ export function SignalEditorPage() {
                 ? clipsContainerWidth / totalDuration
                 : 12;
               return (
-                <div className="flex gap-0.5 items-end w-full">
+                <div className="flex gap-px items-end w-full">
                   {entries.map((entry, idx) => (
                     <TimelineClip
                       key={entry.id}
@@ -1211,18 +1312,18 @@ function TimelineClip({ entry, isActive, pxPerSec, onClick, onTrimIn, onTrimOut,
 
   return (
     <div
-      className="relative flex-shrink-0 rounded-lg overflow-visible"
-      style={{ width: widthPx, height: THUMB_H + 24 }}
+      className="relative rounded-lg overflow-visible"
+      style={{ flex: clampedDuration, minWidth: THUMB_W + 20, height: THUMB_H + 24 }}
       onClick={onClick}
     >
       {/* Thumbnail strip */}
       <div
-        className={`flex rounded-lg overflow-hidden border-2 transition-all ${isActive ? "border-red-500" : "border-transparent"}`}
+        className={`flex rounded-lg overflow-hidden border-2 transition-all w-full ${isActive ? "border-red-500" : "border-transparent"}`}
         style={{ height: THUMB_H }}
       >
         {entry.thumbnails.length > 0
           ? entry.thumbnails.map((t, i) => (
-              <img key={i} src={t} className="h-full object-cover" style={{ width: widthPx / entry.thumbnails.length }} alt="" />
+              <img key={i} src={t} className="h-full object-cover flex-1" style={{ minWidth: 0 }} alt="" />
             ))
           : <div className="w-full h-full bg-white/10 flex items-center justify-center">
               <span className="text-white/30 text-[10px]">{entry.type === "photo" ? "Photo" : "Clip"}</span>
