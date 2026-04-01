@@ -9,7 +9,7 @@ import {
   type ClipEntry,
 } from "@/mobile/lib/clipSession";
 import {
-  X, RefreshCw, Timer, Sparkles, Type, Smile,
+  X, SwitchCamera, Timer, Sparkles, Type, Smile,
   Trash2, Check, Edit3, Upload, ChevronLeft,
 } from "lucide-react";
 
@@ -76,7 +76,10 @@ export function SignalRecorderPage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const recordButtonRef = useRef<HTMLButtonElement>(null);
+  const liveViewRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const overlayDragRef = useRef<{ id: string; startX: number; startY: number; startPercX: number; startPercY: number } | null>(null);
+  const overlayResizeRef = useRef<{ id: string; startY: number; startSize: number } | null>(null);
   const currentMRRef = useRef<MediaRecorder | null>(null);
   const currentChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -101,6 +104,7 @@ export function SignalRecorderPage() {
   const [showTextEditor, setShowTextEditor] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
   const [segments, setSegments] = useState<SegmentUI[]>([]);
   const [title, setTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -120,6 +124,48 @@ export function SignalRecorderPage() {
       setState('between');
     }
   }, []);
+
+  // ── Overlay drag / resize ─────────────────────────────────────────────────
+  const startOverlayDrag = useCallback((e: React.PointerEvent<HTMLDivElement>, overlay: TextOverlay) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    overlayDragRef.current = {
+      id: overlay.id,
+      startX: e.clientX, startY: e.clientY,
+      startPercX: overlay.x, startPercY: overlay.y,
+    };
+  }, []);
+
+  const moveOverlayDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = overlayDragRef.current;
+    if (!drag || !liveViewRef.current) return;
+    const rect = liveViewRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - drag.startX) / rect.width) * 100;
+    const dy = ((e.clientY - drag.startY) / rect.height) * 100;
+    setTextOverlays(prev => prev.map(o =>
+      o.id === drag.id
+        ? { ...o, x: Math.max(0, Math.min(95, drag.startPercX + dx)), y: Math.max(0, Math.min(95, drag.startPercY + dy)) }
+        : o
+    ));
+  }, []);
+
+  const endOverlayDrag = useCallback(() => { overlayDragRef.current = null; }, []);
+
+  const startOverlayResize = useCallback((e: React.PointerEvent<HTMLSpanElement>, overlay: TextOverlay) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    overlayResizeRef.current = { id: overlay.id, startY: e.clientY, startSize: overlay.fontSize };
+  }, []);
+
+  const moveOverlayResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const r = overlayResizeRef.current;
+    if (!r) return;
+    const dy = r.startY - e.clientY;
+    const newSize = Math.max(12, Math.min(72, r.startSize + dy * 0.4));
+    setTextOverlays(prev => prev.map(o => o.id === r.id ? { ...o, fontSize: Math.round(newSize) } : o));
+  }, []);
+
+  const endOverlayResize = useCallback(() => { overlayResizeRef.current = null; }, []);
 
   const initCamera = useCallback(async () => {
     if (streamRef.current) {
@@ -478,7 +524,13 @@ export function SignalRecorderPage() {
 
   return (
     <div className="mobile-root min-h-screen flex flex-col bg-black" data-testid="signal-recorder">
-      <div className="flex-1 relative overflow-hidden">
+      <div
+        ref={liveViewRef}
+        className="flex-1 relative overflow-hidden"
+        onPointerMove={(e) => { moveOverlayDrag(e); moveOverlayResize(e); }}
+        onPointerUp={() => { endOverlayDrag(); endOverlayResize(); }}
+        onClick={() => setSelectedOverlayId(null)}
+      >
 
         {/* Header */}
         <div className="absolute top-0 left-0 right-0 z-20 p-4 flex items-center justify-between">
@@ -537,26 +589,53 @@ export function SignalRecorderPage() {
           </div>
         )}
 
-        {/* Text overlays */}
-        {textOverlays.map((overlay) => (
-          <div
-            key={overlay.id}
-            className="absolute pointer-events-none font-bold drop-shadow-lg"
-            style={{
-              left: `${overlay.x}%`,
-              top: `${overlay.y}%`,
-              fontSize: overlay.fontSize,
-              color: overlay.color,
-            }}
-          >
-            {overlay.content}
-          </div>
-        ))}
+        {/* Text/emoji overlays — tap to select, drag to move, resize handle to resize */}
+        {textOverlays.map((overlay) => {
+          const isSel = overlay.id === selectedOverlayId;
+          return (
+            <div
+              key={overlay.id}
+              className={`absolute select-none font-bold drop-shadow-lg ${isSel ? "cursor-grab ring-2 ring-white/70 ring-offset-1 ring-offset-transparent rounded px-1" : "cursor-pointer"}`}
+              style={{
+                left: `${overlay.x}%`,
+                top: `${overlay.y}%`,
+                fontSize: overlay.fontSize,
+                color: overlay.color,
+                touchAction: "none",
+                zIndex: isSel ? 25 : 15,
+              }}
+              onClick={(e) => { e.stopPropagation(); setSelectedOverlayId(overlay.id); }}
+              onPointerDown={(e) => { if (isSel) startOverlayDrag(e, overlay); }}
+            >
+              {overlay.content}
+              {isSel && (
+                <>
+                  {/* Resize handle — drag up to grow, down to shrink */}
+                  <span
+                    className="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-sm cursor-se-resize flex items-center justify-center"
+                    style={{ fontSize: 8, touchAction: "none", zIndex: 26 }}
+                    onPointerDown={(e) => startOverlayResize(e, overlay)}
+                  >
+                    ↔
+                  </span>
+                  {/* Delete button */}
+                  <span
+                    className="absolute -top-3 -right-3 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center cursor-pointer"
+                    style={{ fontSize: 10, zIndex: 26 }}
+                    onClick={(e) => { e.stopPropagation(); setTextOverlays(t => t.filter(o => o.id !== overlay.id)); setSelectedOverlayId(null); }}
+                  >
+                    ✕
+                  </span>
+                </>
+              )}
+            </div>
+          );
+        })}
 
         {/* Side controls */}
         <div className="absolute right-3 top-24 z-20 flex flex-col gap-3">
           <button onClick={handleFlipCamera} className="side-control-button" title="Flip camera">
-            <RefreshCw className="w-5 h-5" />
+            <SwitchCamera className="w-5 h-5" />
           </button>
           <button
             onClick={() => setCountdownEnabled(v => !v)}

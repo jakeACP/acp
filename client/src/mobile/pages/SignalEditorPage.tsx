@@ -213,6 +213,9 @@ export function SignalEditorPage() {
   // Photo playback timer
   const photoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Ref that always mirrors `playing` — used in event listeners to avoid stale closure
+  const playingRef = useRef(false);
+
   // Active bottom sheet
   const [sheet, setSheet] = useState<"none" | "text" | "sound" | "category" | "processing" | "addMedia" | "thumbnail">("none");
 
@@ -399,11 +402,25 @@ export function SignalEditorPage() {
         photoTimerRef.current = setTimeout(handleEnded, displayDur);
       }
     } else {
-      // Clips: load into video element
+      // Clips: load blob URL then seek once data is available (avoids black frame on first load)
       if (!v || idx >= blobUrlsRef.current.length) return;
-      v.src = blobUrlsRef.current[idx];
-      v.currentTime = entry.trimIn;
-      if (playing) v.play().catch(() => {});
+      const url = blobUrlsRef.current[idx];
+      const trimIn = entry.trimIn;
+
+      // Only reload when the src actually changes
+      if (v.src !== url) {
+        v.pause();
+        v.src = url;
+        v.preload = "auto";
+        v.addEventListener("loadeddata", () => {
+          v.currentTime = trimIn;
+          if (playingRef.current) v.play().catch(() => {});
+        }, { once: true });
+        v.load();
+      } else {
+        v.currentTime = trimIn;
+        if (playingRef.current) v.play().catch(() => {});
+      }
     }
   }, [entries, playing, handleEnded]);
 
@@ -441,8 +458,10 @@ export function SignalEditorPage() {
     if (playing) {
       clearPhotoTimer();
       videoRef.current?.pause();
+      playingRef.current = false;
       setPlaying(false);
     } else {
+      playingRef.current = true;
       if (entry.type === "clip") {
         videoRef.current?.play().catch(() => {});
       } else {
@@ -760,6 +779,7 @@ export function SignalEditorPage() {
           ref={videoRef}
           className={`w-full h-full object-contain ${currentEntry?.type === "photo" ? "hidden" : "block"}`}
           playsInline
+          preload="auto"
           onEnded={handleEnded}
           onTimeUpdate={handleTimeUpdate}
         />
