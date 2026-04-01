@@ -448,6 +448,7 @@ export interface IStorage {
   verifySmsOtp(userId: string, codeHash: string): Promise<{ success: boolean; reason?: string }>;
   createTrustedDevice(userId: string, tokenHash: string, userAgent: string, ipAddress: string, expiresAt: Date): Promise<void>;
   verifyTrustedDevice(userId: string, tokenHash: string): Promise<boolean>;
+  getCurrentTrustedDeviceId(userId: string, tokenHash: string): Promise<string | null>;
   removeTrustedDevice(userId: string, deviceId: string): Promise<void>;
   removeAllTrustedDevices(userId: string): Promise<void>;
   getTrustedDevices(userId: string): Promise<any[]>;
@@ -7308,6 +7309,17 @@ export class DatabaseStorage implements IStorage {
       INSERT INTO trusted_devices (user_id, token_hash, user_agent, ip_address, expires_at)
       VALUES (${userId}, ${tokenHash}, ${userAgent}, ${ipAddress}, ${expiresAt})
     `);
+  }
+
+  async getCurrentTrustedDeviceId(userId: string, tokenHash: string): Promise<string | null> {
+    const result = await db.execute(sql`
+      SELECT id FROM trusted_devices
+      WHERE user_id = ${userId}
+        AND token_hash = ${tokenHash}
+        AND expires_at > NOW()
+      LIMIT 1
+    `);
+    return result.rows.length > 0 ? (result.rows[0] as any).id : null;
   }
 
   async verifyTrustedDevice(userId: string, tokenHash: string): Promise<boolean> {

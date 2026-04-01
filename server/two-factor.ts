@@ -180,7 +180,7 @@ export async function disableSms2FA(userId: string): Promise<void> {
 export async function createTrustedDevice(userId: string, userAgent: string, ipAddress: string): Promise<string> {
   const token = generateDeviceToken();
   const tokenHash = hashCode(token);
-  const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
   
   await storage.createTrustedDevice(userId, tokenHash, userAgent, ipAddress, expiresAt);
   

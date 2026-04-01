@@ -674,7 +674,7 @@ export function setupAuth(app: Express) {
         res.cookie('trusted_device', deviceToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
-          maxAge: 60 * 24 * 60 * 60 * 1000,
+          maxAge: 180 * 24 * 60 * 60 * 1000,
           sameSite: 'lax'
         });
       }
@@ -796,7 +796,7 @@ export function setupAuth(app: Express) {
         res.cookie('trusted_device', deviceToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
-          maxAge: 60 * 24 * 60 * 60 * 1000,
+          maxAge: 180 * 24 * 60 * 60 * 1000,
           sameSite: 'lax'
         });
       }
@@ -891,9 +891,12 @@ export function setupAuth(app: Express) {
       const devices = await storage.getTrustedDevices(req.user.id);
       const cookieToken = req.cookies?.trusted_device;
       const currentHash = cookieToken ? hashCode(cookieToken) : null;
+      const currentDeviceId = currentHash
+        ? await storage.getCurrentTrustedDeviceId(req.user.id, currentHash)
+        : null;
       const devicesWithCurrent = devices.map((d: any) => {
         const { tokenHash: _hash, ...rest } = d;
-        return { ...rest, isCurrent: currentHash ? d.tokenHash === currentHash : false };
+        return { ...rest, isCurrent: d.id === currentDeviceId };
       });
       res.json(devicesWithCurrent);
     } catch (error: any) {
