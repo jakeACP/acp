@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   ChevronLeft, Type, Music, Film, ImageIcon, Check,
-  Play, Pause, Plus, Trash2, X, Camera,
+  Play, Pause, Plus, Trash2, X, Camera, Layers,
 } from "lucide-react";
 import { getClips, clearSession, saveClip, type ClipEntry } from "@/mobile/lib/clipSession";
 import { useToast } from "@/hooks/use-toast";
@@ -211,7 +211,7 @@ export function SignalEditorPage() {
   const photoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Active bottom sheet
-  const [sheet, setSheet] = useState<"none" | "text" | "sound" | "category" | "processing">("none");
+  const [sheet, setSheet] = useState<"none" | "text" | "sound" | "category" | "processing" | "addMedia" | "thumbnail">("none");
 
   // Text annotation state
   const [annotations, setAnnotations] = useState<TextAnnotation[]>([]);
@@ -678,7 +678,7 @@ export function SignalEditorPage() {
       </div>
 
       {/* Preview player */}
-      <div className="relative bg-black shrink-0" style={{ aspectRatio: "9/16", maxHeight: "45vh" }}>
+      <div className="relative bg-black shrink-0" style={{ aspectRatio: "9/16", maxHeight: "55vh" }}>
         {/* Video element — visible only for clip entries */}
         <video
           ref={videoRef}
@@ -719,6 +719,15 @@ export function SignalEditorPage() {
           </div>
         </button>
 
+        {/* Thumbnail button — top-right corner of preview */}
+        <button
+          onClick={() => setSheet("thumbnail")}
+          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center"
+          title="Change thumbnail"
+        >
+          <Camera className="w-4 h-4 text-white" />
+        </button>
+
         {/* Scrubber bar with tap-to-pin for text annotations */}
         <div
           className="absolute bottom-0 left-0 right-0 h-6 flex items-center px-2 cursor-pointer"
@@ -741,94 +750,124 @@ export function SignalEditorPage() {
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex justify-around py-3 border-b border-white/10 shrink-0">
-        {[
-          { icon: Type, label: "Text", action: () => setSheet("text") },
-          { icon: Music, label: "Sound", action: () => setSheet("sound") },
-          {
-            icon: Film, label: "+ Footage", action: () => footageInputRef.current?.click()
-          },
-          {
-            icon: ImageIcon, label: "+ Photo", action: () => photoInputRef.current?.click()
-          },
-        ].map(({ icon: Icon, label, action }) => (
-          <button key={label} onClick={action} className="flex flex-col items-center gap-1">
-            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-              <Icon className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-white/60 text-[10px]">{label}</span>
-          </button>
-        ))}
-      </div>
-
       {/* Hidden file inputs */}
       <input ref={footageInputRef} type="file" accept="video/*" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) addFootage(f); e.target.value = ""; }} />
       <input ref={photoInputRef} type="file" accept="image/*" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) addPhoto(f); e.target.value = ""; }} />
-      {/* Hidden thumbnail inputs */}
       <input ref={thumbnailInputRef} type="file" accept="image/*" className="hidden"
         onChange={handleThumbnailPick} />
       <input ref={thumbnailCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
         onChange={handleThumbnailPick} />
 
-      {/* Timeline strip */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="px-3 py-2 shrink-0">
+      {/* ── 3-track Timeline ─────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden flex flex-col border-t border-white/10">
+
+        {/* Header */}
+        <div className="px-3 pt-2 pb-1 shrink-0">
           <p className="text-white/40 text-xs">Timeline · {totalDuration.toFixed(1)}s</p>
         </div>
-        <div className="flex-1 overflow-x-auto overflow-y-hidden">
-          <div className="flex gap-2 px-3 pb-3 items-end" style={{ minWidth: "max-content" }}>
-            {entries.map((entry, idx) => (
-              <TimelineClip
-                key={entry.id}
-                entry={entry}
-                isActive={idx === currentEntryIdx}
-                onClick={() => { setCurrentEntryIdx(idx); setPlaying(false); videoRef.current?.pause(); }}
-                onTrimIn={(delta) => handleTrimIn(entry.id, delta)}
-                onTrimOut={(delta) => handleTrimOut(entry.id, delta)}
-                onRemove={() => removeEntry(entry.id)}
-              />
-            ))}
-            {/* Add clip button */}
-            <button
-              onClick={() => footageInputRef.current?.click()}
-              className="w-10 h-10 rounded-lg bg-white/10 border border-white/20 border-dashed flex items-center justify-center shrink-0 self-center"
-            >
-              <Plus className="w-5 h-5 text-white/50" />
-            </button>
-          </div>
-        </div>
 
-        {/* Text annotation bars */}
-        {annotations.length > 0 && (
-          <div className="px-3 pb-2 shrink-0">
-            <div className="flex flex-wrap gap-1">
-              {annotations.map((ann) => (
-                <div key={ann.id} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs"
-                  style={{ background: ann.color + "30", color: ann.color, border: `1px solid ${ann.color}50` }}>
-                  <span className="truncate max-w-[80px]">{ann.text}</span>
-                  <span className="text-white/40">{ann.startTime.toFixed(0)}s–{ann.endTime.toFixed(0)}s</span>
-                  <button onClick={() => setAnnotations((p) => p.filter((a) => a.id !== ann.id))}>
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
+        {/* Track 1 — Clips */}
+        <div className="flex items-center gap-0 shrink-0 px-3 pb-2">
+          {/* Label */}
+          <div className="w-14 shrink-0 flex items-center gap-1">
+            <Film className="w-3 h-3 text-white/40" />
+            <span className="text-white/40 text-[10px]">Clips</span>
+          </div>
+          {/* Scrollable clips */}
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex gap-2 items-end" style={{ minWidth: "max-content" }}>
+              {entries.map((entry, idx) => (
+                <TimelineClip
+                  key={entry.id}
+                  entry={entry}
+                  isActive={idx === currentEntryIdx}
+                  onClick={() => { setCurrentEntryIdx(idx); setPlaying(false); videoRef.current?.pause(); }}
+                  onTrimIn={(delta) => handleTrimIn(entry.id, delta)}
+                  onTrimOut={(delta) => handleTrimOut(entry.id, delta)}
+                  onRemove={() => removeEntry(entry.id)}
+                />
               ))}
             </div>
           </div>
-        )}
+          {/* + add video or photo */}
+          <button
+            onClick={() => setSheet("addMedia")}
+            className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 border-dashed flex items-center justify-center shrink-0 ml-2"
+          >
+            <Plus className="w-4 h-4 text-white/50" />
+          </button>
+        </div>
 
-        {/* Selected audio bar */}
-        {selectedAudio && (
-          <div className="px-3 pb-2 shrink-0 flex items-center gap-2">
-            <Music className="w-3 h-3 text-green-400" />
-            <span className="text-green-400 text-xs">{AUDIO_TRACKS.find(t => t.filename === selectedAudio)?.label}</span>
-            <button onClick={() => setSelectedAudio(null)} className="ml-auto">
-              <X className="w-3 h-3 text-white/40" />
-            </button>
+        {/* Track 2 — Sound */}
+        <div className="flex items-center gap-0 shrink-0 px-3 pb-2">
+          {/* Label */}
+          <div className="w-14 shrink-0 flex items-center gap-1">
+            <Music className="w-3 h-3 text-white/40" />
+            <span className="text-white/40 text-[10px]">Sound</span>
           </div>
-        )}
+          {/* Content */}
+          <div className="flex-1 overflow-x-auto">
+            {selectedAudio ? (
+              <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30 w-fit">
+                <Music className="w-3 h-3 text-green-400 shrink-0" />
+                <span className="text-green-400 text-xs whitespace-nowrap">
+                  {AUDIO_TRACKS.find(t => t.filename === selectedAudio)?.label}
+                </span>
+                <button onClick={() => setSelectedAudio(null)} className="ml-1">
+                  <X className="w-3 h-3 text-green-400/60" />
+                </button>
+              </div>
+            ) : (
+              <span className="text-white/20 text-xs italic">No sound added</span>
+            )}
+          </div>
+          {/* + add sound */}
+          <button
+            onClick={() => setSheet("sound")}
+            className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 border-dashed flex items-center justify-center shrink-0 ml-2"
+          >
+            <Plus className="w-4 h-4 text-white/50" />
+          </button>
+        </div>
+
+        {/* Track 3 — Overlays */}
+        <div className="flex items-center gap-0 shrink-0 px-3 pb-2">
+          {/* Label */}
+          <div className="w-14 shrink-0 flex items-center gap-1">
+            <Layers className="w-3 h-3 text-white/40" />
+            <span className="text-white/40 text-[10px]">Overlays</span>
+          </div>
+          {/* Content — annotation pills */}
+          <div className="flex-1 overflow-x-auto">
+            {annotations.length > 0 ? (
+              <div className="flex gap-1.5" style={{ minWidth: "max-content" }}>
+                {annotations.map((ann) => (
+                  <div key={ann.id} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs shrink-0"
+                    style={{ background: ann.color + "25", color: ann.color, border: `1px solid ${ann.color}40` }}>
+                    <Type className="w-2.5 h-2.5 shrink-0" />
+                    <span className="truncate max-w-[60px]">{ann.text}</span>
+                    <span className="text-white/30">{ann.startTime.toFixed(0)}s</span>
+                    <button onClick={() => setAnnotations((p) => p.filter((a) => a.id !== ann.id))}>
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-white/20 text-xs italic">No overlays</span>
+            )}
+          </div>
+          {/* + add text overlay */}
+          <button
+            onClick={() => setSheet("text")}
+            className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 border-dashed flex items-center justify-center shrink-0 ml-2"
+          >
+            <Plus className="w-4 h-4 text-white/50" />
+          </button>
+        </div>
+
       </div>
 
       {/* ── Bottom sheets ──────────────────────────────────────────────────── */}
@@ -1024,6 +1063,65 @@ export function SignalEditorPage() {
               {posting ? "Uploading…" : "Post Signal"}
             </button>
           </div>
+        </BottomSheet>
+      )}
+
+      {/* Add Media sheet */}
+      {sheet === "addMedia" && (
+        <BottomSheet title="Add to Timeline" onClose={() => setSheet("none")}>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => { setSheet("none"); footageInputRef.current?.click(); }}
+              className="flex flex-col items-center gap-3 py-5 rounded-2xl bg-white/10 active:bg-white/20"
+            >
+              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+                <Film className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-white text-sm font-medium">Add Video</span>
+            </button>
+            <button
+              onClick={() => { setSheet("none"); photoInputRef.current?.click(); }}
+              className="flex flex-col items-center gap-3 py-5 rounded-2xl bg-white/10 active:bg-white/20"
+            >
+              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+                <ImageIcon className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-white text-sm font-medium">Add Photo</span>
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Thumbnail sheet */}
+      {sheet === "thumbnail" && (
+        <BottomSheet title="Change Thumbnail" onClose={() => setSheet("none")}>
+          <div className="flex gap-3 items-start mb-4">
+            <div className="shrink-0 rounded-xl overflow-hidden border border-white/20" style={{ width: 56, aspectRatio: "9/16" }}>
+              {thumbnailDataUrl
+                ? <img src={thumbnailDataUrl} className="w-full h-full object-cover" alt="Thumbnail" />
+                : <div className="w-full h-full bg-white/10 flex items-center justify-center">
+                    <ImageIcon className="w-5 h-5 text-white/30" />
+                  </div>
+              }
+            </div>
+            <div className="flex flex-col gap-2 flex-1">
+              <button
+                onClick={() => { setSheet("none"); thumbnailInputRef.current?.click(); }}
+                className="py-3 px-4 rounded-xl bg-white/10 text-white text-sm text-left flex items-center gap-2 active:bg-white/20"
+              >
+                <ImageIcon className="w-4 h-4 shrink-0" />
+                Upload from Library
+              </button>
+              <button
+                onClick={() => { setSheet("none"); thumbnailCameraRef.current?.click(); }}
+                className="py-3 px-4 rounded-xl bg-white/10 text-white text-sm text-left flex items-center gap-2 active:bg-white/20"
+              >
+                <Camera className="w-4 h-4 shrink-0" />
+                Take Photo
+              </button>
+            </div>
+          </div>
+          <p className="text-white/30 text-xs">Images are auto-cropped to 9:16 portrait.</p>
         </BottomSheet>
       )}
 
