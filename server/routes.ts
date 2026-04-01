@@ -8383,16 +8383,9 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const displayName = req.user.firstName
         ? `${req.user.firstName}${req.user.lastName ? " " + req.user.lastName : ""}`
         : req.user.username;
-      const { getTwilioClient, getTwilioFromPhoneNumber, normalizePhone } = await import("./twilio");
-      const client = await getTwilioClient();
-      const fromNumber = await getTwilioFromPhoneNumber();
-      const toPhone = normalizePhone(phone);
+      const { sendSmsOtp } = await import("./twilio");
       const inviteBody = `${displayName} invited you to join the Anti-Corruption Party! Create your account and connect as friends instantly: ${inviteUrl}`;
-      if (fromNumber && fromNumber.startsWith('MG')) {
-        await client.messages.create({ body: inviteBody, to: toPhone, messagingServiceSid: fromNumber });
-      } else {
-        await client.messages.create({ body: inviteBody, to: toPhone, from: fromNumber });
-      }
+      await sendSmsOtp(phone, inviteBody);
       res.json({ success: true });
     } catch (error: any) {
       console.error("SMS invite error:", error);

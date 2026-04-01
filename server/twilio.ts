@@ -54,9 +54,13 @@ export async function getTwilioFromPhoneNumber() {
  * - If 10 digits, assumes US and prepends +1.
  * - If 11 digits starting with 1, prepends +.
  * - Otherwise prepends + (for international numbers).
+ * - Throws early if the digit count is implausibly short (< 7).
  */
 export function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
+  if (digits.length < 7) {
+    throw new Error(`Phone number "${phone}" is too short to be valid.`);
+  }
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
   return `+${digits}`;
