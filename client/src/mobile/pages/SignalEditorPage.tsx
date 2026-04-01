@@ -817,14 +817,12 @@ export function SignalEditorPage() {
           );
         })}
 
-        {/* Play/Pause overlay */}
+        {/* Play/Pause button — bottom-left corner only */}
         <button
           onClick={togglePlay}
-          className="absolute inset-0 flex items-center justify-center"
+          className="absolute bottom-8 left-3 z-20 w-12 h-12 rounded-full bg-black/60 flex items-center justify-center shadow-lg"
         >
-          <div className={`w-14 h-14 rounded-full bg-black/40 flex items-center justify-center transition-opacity ${playing ? "opacity-0 hover:opacity-100" : "opacity-100"}`}>
-            {playing ? <Pause className="w-7 h-7 text-white" /> : <Play className="w-7 h-7 text-white ml-0.5" />}
-          </div>
+          {playing ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-0.5" />}
         </button>
 
         {/* Scrubber bar with tap-to-pin for text annotations */}
