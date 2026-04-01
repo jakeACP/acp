@@ -807,6 +807,8 @@ export function SignalEditorPage() {
           onTimeUpdate={handleTimeUpdate}
           onCanPlay={handleVideoReady}
           onLoadedMetadata={handleVideoReady}
+          onPlay={() => { setPlaying(true); playingRef.current = true; }}
+          onPause={() => { setPlaying(false); playingRef.current = false; }}
         />
         {/* Photo preview — visible only for photo entries */}
         {currentEntry?.type === "photo" && (
