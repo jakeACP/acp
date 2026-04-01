@@ -5,17 +5,6 @@ const DB_VERSION = 1;
 const STORE_CLIPS = 'clips';
 const STORE_META = 'meta';
 
-interface ClipDB {
-  [STORE_CLIPS]: {
-    key: string;
-    value: ClipEntry;
-  };
-  [STORE_META]: {
-    key: string;
-    value: SessionMetadata;
-  };
-}
-
 export interface ClipEntry {
   id: string;
   blob: Blob;
@@ -28,6 +17,8 @@ export interface SessionMetadata {
   totalDuration: number;
   durationLimit: number;
   category?: string;
+  clipIds: string[];
+  clipDurations: number[];
 }
 
 async function getDB(): Promise<IDBPDatabase> {

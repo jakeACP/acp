@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { clearSession, saveClip, getClips, deleteLastClip, saveMetadata, type ClipEntry } from "@/mobile/lib/clipSession";
+import {
+  clearSession, saveClip, getClips, deleteLastClip, saveMetadata,
+  type ClipEntry,
+} from "@/mobile/lib/clipSession";
 import {
   X, RefreshCw, Timer, Sparkles, Type, Smile,
   Trash2, Check, Edit3, Upload, ChevronLeft,
@@ -77,10 +80,11 @@ export function SignalRecorderPage() {
   const currentMRRef = useRef<MediaRecorder | null>(null);
   const currentChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const elapsedRef = useRef(0);
   const segmentStartRef = useRef(0);
   const isHoldingRef = useRef(false);
+  const isInitialized = useRef(false);
 
   const isPremium = user?.subscriptionStatus === 'premium';
   const durationOptions = isPremium ? DURATION_OPTIONS_PAID : DURATION_OPTIONS;
@@ -100,6 +104,17 @@ export function SignalRecorderPage() {
   const [title, setTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [newText, setNewText] = useState('');
+
+  const hydrateFromIDB = useCallback(async () => {
+    const clips = await getClips();
+    if (clips.length > 0) {
+      const totalElapsed = clips.reduce((s, c) => s + c.duration, 0);
+      elapsedRef.current = totalElapsed;
+      setElapsed(totalElapsed);
+      setSegments(clips.map(c => ({ clipId: c.id, duration: c.duration })));
+      setState('between');
+    }
+  }, []);
 
   const initCamera = useCallback(async () => {
     if (streamRef.current) {
@@ -133,10 +148,14 @@ export function SignalRecorderPage() {
 
   useEffect(() => {
     initCamera();
+    if (!isInitialized.current) {
+      isInitialized.current = true;
+      hydrateFromIDB();
+    }
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop());
       if (timerRef.current) clearInterval(timerRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     };
   }, [initCamera]);
 
@@ -150,6 +169,42 @@ export function SignalRecorderPage() {
       timerRef.current = null;
     }
   }, []);
+
+  const stopCurrentClip = useCallback(async (autoFinish = false) => {
+    if (!isHoldingRef.current && !autoFinish) return;
+    isHoldingRef.current = false;
+    stopTimer();
+
+    const mr = currentMRRef.current;
+    const clipDuration = parseFloat((elapsedRef.current - segmentStartRef.current).toFixed(1));
+
+    if (!mr || mr.state === 'inactive') {
+      if (autoFinish) setState('done');
+      else setState('between');
+      return;
+    }
+
+    await new Promise<void>(resolve => {
+      mr.onstop = async () => {
+        if (clipDuration > 0.2 && currentChunksRef.current.length > 0) {
+          const blob = new Blob(currentChunksRef.current, { type: 'video/webm' });
+          const clipId = `clip-${Date.now()}`;
+          await saveClip({ id: clipId, blob, duration: clipDuration, timestamp: Date.now() });
+          setSegments(prev => [...prev, { clipId, duration: clipDuration }]);
+        }
+        currentMRRef.current = null;
+        currentChunksRef.current = [];
+        resolve();
+      };
+      mr.stop();
+    });
+
+    if (autoFinish) {
+      setState('done');
+    } else {
+      setState('between');
+    }
+  }, [stopTimer]);
 
   const startActualRecording = useCallback(() => {
     if (!streamRef.current) return;
@@ -180,87 +235,21 @@ export function SignalRecorderPage() {
       elapsedRef.current = next;
       setElapsed(next);
     }, 100);
-  }, [duration, stopTimer]);
-
-  const stopCurrentClip = useCallback((autoFinish = false) => {
-    if (!isHoldingRef.current && !autoFinish) return;
-    isHoldingRef.current = false;
-    stopTimer();
-
-    const mr = currentMRRef.current;
-    if (!mr || mr.state === 'inactive') {
-      setState('between');
-      if (autoFinish) finishAfterStop();
-      return;
-    }
-
-    const clipDuration = parseFloat((elapsedRef.current - segmentStartRef.current).toFixed(1));
-
-    mr.onstop = async () => {
-      if (clipDuration > 0.2) {
-        const blob = new Blob(currentChunksRef.current, { type: 'video/webm' });
-        const clipId = `clip-${Date.now()}`;
-        await saveClip({ id: clipId, blob, duration: clipDuration, timestamp: Date.now() });
-        setSegments(prev => [...prev, { clipId, duration: clipDuration }]);
-      }
-      currentMRRef.current = null;
-      currentChunksRef.current = [];
-
-      if (autoFinish) {
-        finishAfterStop();
-      } else {
-        setState('between');
-      }
-    };
-    mr.stop();
-  }, [stopTimer]);
-
-  const finishAfterStop = useCallback(() => {
-    setState('done');
-  }, []);
-
-  const handleFinishPress = useCallback(() => {
-    if (state === 'recording') {
-      stopCurrentClip(false);
-      setTimeout(() => setState('done'), 200);
-    } else {
-      setState('done');
-    }
-  }, [state, stopCurrentClip]);
-
-  const deleteLastSegment = useCallback(async () => {
-    if (segments.length === 0) return;
-    await deleteLastClip();
-    const updatedClips = await getClips();
-    const newElapsed = updatedClips.reduce((sum, c) => sum + c.duration, 0);
-    elapsedRef.current = newElapsed;
-    setElapsed(newElapsed);
-    setSegments(updatedClips.map(c => ({ clipId: c.id, duration: c.duration })));
-    if (updatedClips.length === 0) setState('idle');
-    else setState('between');
-  }, [segments]);
-
-  const discardAll = useCallback(async () => {
-    stopTimer();
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    await clearSession();
-    setLocation('/mobile');
-  }, [stopTimer, setLocation]);
+  }, [duration, stopCurrentClip]);
 
   const handleHoldStart = useCallback(() => {
-    if (state === 'done' || state === 'category' || state === 'uploading') return;
-    if (state === 'countdown') return;
+    if (state === 'done' || state === 'category' || state === 'uploading' || state === 'countdown') return;
+    if (state !== 'idle' && state !== 'between') return;
 
-    if (countdownEnabled && segments.length === 0 && state === 'idle') {
+    if (countdownEnabled && segments.length === 0) {
       let count = 3;
       setCountdown(count);
       setState('countdown');
-      countdownRef.current = setInterval(() => {
+      countdownTimerRef.current = setInterval(() => {
         count -= 1;
         if (count <= 0) {
-          clearInterval(countdownRef.current!);
-          countdownRef.current = null;
+          clearInterval(countdownTimerRef.current!);
+          countdownTimerRef.current = null;
           startActualRecording();
         } else {
           setCountdown(count);
@@ -269,9 +258,7 @@ export function SignalRecorderPage() {
       return;
     }
 
-    if (state === 'idle' || state === 'between') {
-      startActualRecording();
-    }
+    startActualRecording();
   }, [state, countdownEnabled, segments.length, startActualRecording]);
 
   const handleHoldEnd = useCallback(() => {
@@ -279,6 +266,14 @@ export function SignalRecorderPage() {
       stopCurrentClip(false);
     }
   }, [state, stopCurrentClip]);
+
+  const handleFinishPress = useCallback(() => {
+    if (state === 'recording') {
+      stopCurrentClip(true);
+    } else if (segments.length > 0) {
+      setState('done');
+    }
+  }, [state, segments.length, stopCurrentClip]);
 
   useEffect(() => {
     const btn = recordButtonRef.current;
@@ -304,6 +299,43 @@ export function SignalRecorderPage() {
     };
   }, [handleHoldStart, handleHoldEnd]);
 
+  const deleteLastSegment = useCallback(async () => {
+    if (segments.length === 0) return;
+    await deleteLastClip();
+    const updatedClips = await getClips();
+    const newElapsed = updatedClips.reduce((sum, c) => sum + c.duration, 0);
+    elapsedRef.current = newElapsed;
+    setElapsed(newElapsed);
+    setSegments(updatedClips.map(c => ({ clipId: c.id, duration: c.duration })));
+    if (updatedClips.length === 0) {
+      setState('idle');
+    } else {
+      setState('between');
+    }
+  }, [segments]);
+
+  const discardAndReset = useCallback(async () => {
+    stopTimer();
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    if (currentMRRef.current && currentMRRef.current.state !== 'inactive') {
+      currentMRRef.current.stop();
+    }
+    currentMRRef.current = null;
+    currentChunksRef.current = [];
+    await clearSession();
+    elapsedRef.current = 0;
+    setElapsed(0);
+    setSegments([]);
+    setState('idle');
+  }, [stopTimer]);
+
+  const exitRecorder = useCallback(async () => {
+    stopTimer();
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    await clearSession();
+    setLocation('/mobile');
+  }, [stopTimer, setLocation]);
+
   const handleGoEdit = useCallback(async () => {
     const clips = await getClips();
     if (clips.length === 0) return;
@@ -313,6 +345,8 @@ export function SignalRecorderPage() {
       totalDuration: elapsedRef.current,
       durationLimit: duration,
       category: selectedCategory || undefined,
+      clipIds: clips.map(c => c.id),
+      clipDurations: clips.map(c => c.duration),
     });
 
     streamRef.current?.getTracks().forEach(t => t.stop());
@@ -324,22 +358,21 @@ export function SignalRecorderPage() {
       const clips = await getClips();
       if (clips.length === 0) throw new Error('No clips recorded');
 
-      const combinedBlob = clips.length === 1
-        ? clips[0].blob
-        : new Blob(clips.map(c => c.blob), { type: 'video/webm' });
-
       const { getCsrfToken } = await import('@/lib/queryClient');
       const token = getCsrfToken();
 
       const formData = new FormData();
-      formData.append('video', combinedBlob, 'signal.webm');
+      clips.forEach((clip, i) => {
+        formData.append(`clip_${i}`, clip.blob, `clip_${i}.webm`);
+      });
+      formData.append('clipCount', clips.length.toString());
       formData.append('title', title);
       formData.append('duration', Math.round(elapsedRef.current).toString());
       formData.append('filter', filter);
       formData.append('category', category);
-      formData.append('overlays', JSON.stringify({ texts: textOverlays, emojis: [], graphics: [] }));
+      formData.append('overlays', JSON.stringify({ texts: textOverlays }));
 
-      const response = await fetch('/api/mobile/signals', {
+      const response = await fetch('/api/mobile/signals/stitch', {
         method: 'POST',
         body: formData,
         credentials: 'include',
@@ -355,8 +388,8 @@ export function SignalRecorderPage() {
       clearSession();
       setLocation('/mobile/signals');
     },
-    onError: () => {
-      toast({ title: 'Upload Failed', description: 'Could not upload your Signal. Please try again.', variant: 'destructive' });
+    onError: (err: any) => {
+      toast({ title: 'Upload Failed', description: err.message || 'Could not upload your Signal.', variant: 'destructive' });
       setState('done');
     },
   });
@@ -382,10 +415,8 @@ export function SignalRecorderPage() {
           </button>
           <h1 className="text-white font-bold text-lg">Add a Category</h1>
         </div>
-
         <div className="flex-1 p-4 overflow-y-auto">
           <p className="text-white/60 text-sm mb-4">Help people discover your Signal</p>
-
           <input
             type="text"
             placeholder="Add a title (optional)..."
@@ -393,7 +424,6 @@ export function SignalRecorderPage() {
             onChange={(e) => setTitle(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 mb-4"
           />
-
           <div className="grid grid-cols-2 gap-3 mb-6">
             {SIGNAL_CATEGORIES.map(({ label, emoji }) => (
               <button
@@ -410,10 +440,9 @@ export function SignalRecorderPage() {
               </button>
             ))}
           </div>
-
           <div className="rounded-xl bg-white/5 border border-white/10 p-3">
             <p className="text-white/50 text-xs text-center">
-              🌐 This Signal will be visible to all ACP members and subject to community standards.
+              🌐 This Signal will be visible to all ACP members.
             </p>
           </div>
         </div>
@@ -439,11 +468,11 @@ export function SignalRecorderPage() {
 
         {/* Header */}
         <div className="absolute top-0 left-0 right-0 z-20 p-4 flex items-center justify-between">
-          <button onClick={discardAll} className="side-control-button">
+          <button onClick={exitRecorder} className="side-control-button">
             <X className="w-5 h-5" />
           </button>
 
-          {(state === 'recording' || state === 'between' || state === 'done') && (
+          {(state !== 'idle' && state !== 'countdown') && (
             <div className="flex items-center gap-2 bg-black/50 rounded-full px-3 py-1">
               {state === 'recording' && <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
               <span className="text-white text-sm font-mono">
@@ -457,16 +486,13 @@ export function SignalRecorderPage() {
 
         {/* Multi-segment progress bar */}
         <div className="absolute top-16 left-4 right-4 z-20 h-1.5 rounded-full bg-white/20 flex gap-0.5 overflow-hidden">
-          {segments.map((seg, i) => {
-            const pct = (seg.duration / duration) * 100;
-            return (
-              <div
-                key={seg.clipId}
-                className={`h-full rounded-full ${SEGMENT_COLORS[i % SEGMENT_COLORS.length]}`}
-                style={{ width: `${pct}%` }}
-              />
-            );
-          })}
+          {segments.map((seg, i) => (
+            <div
+              key={seg.clipId}
+              className={`h-full rounded-full ${SEGMENT_COLORS[i % SEGMENT_COLORS.length]}`}
+              style={{ width: `${(seg.duration / duration) * 100}%` }}
+            />
+          ))}
           {state === 'recording' && (
             <div
               className="h-full rounded-full bg-red-500"
@@ -491,7 +517,9 @@ export function SignalRecorderPage() {
         {/* Countdown overlay */}
         {state === 'countdown' && (
           <div className="absolute inset-0 z-30 flex items-center justify-center">
-            <div className="text-white font-black text-9xl opacity-90 animate-pulse">{countdown}</div>
+            <div className="text-white font-black text-9xl opacity-90 drop-shadow-2xl animate-pulse">
+              {countdown}
+            </div>
           </div>
         )}
 
@@ -499,8 +527,13 @@ export function SignalRecorderPage() {
         {textOverlays.map((overlay) => (
           <div
             key={overlay.id}
-            className="absolute pointer-events-none text-white font-bold text-xl drop-shadow-lg"
-            style={{ left: `${overlay.x}%`, top: `${overlay.y}%`, fontSize: overlay.fontSize, color: overlay.color }}
+            className="absolute pointer-events-none font-bold drop-shadow-lg"
+            style={{
+              left: `${overlay.x}%`,
+              top: `${overlay.y}%`,
+              fontSize: overlay.fontSize,
+              color: overlay.color,
+            }}
           >
             {overlay.content}
           </div>
@@ -514,7 +547,7 @@ export function SignalRecorderPage() {
           <button
             onClick={() => setCountdownEnabled(v => !v)}
             className={`side-control-button ${countdownEnabled ? 'bg-red-500 border-red-400' : ''}`}
-            title="Countdown timer"
+            title="Countdown"
           >
             <Timer className="w-5 h-5" />
           </button>
@@ -528,14 +561,14 @@ export function SignalRecorderPage() {
           <button
             onClick={() => { setShowTextEditor(v => !v); setShowFilters(false); setShowEmojiPicker(false); }}
             className={`side-control-button ${showTextEditor ? 'bg-blue-500' : ''}`}
-            title="Text overlay"
+            title="Text"
           >
             <Type className="w-5 h-5" />
           </button>
           <button
             onClick={() => { setShowEmojiPicker(v => !v); setShowFilters(false); setShowTextEditor(false); }}
             className={`side-control-button ${showEmojiPicker ? 'bg-yellow-500' : ''}`}
-            title="Emoji overlay"
+            title="Emoji"
           >
             <Smile className="w-5 h-5" />
           </button>
@@ -593,7 +626,7 @@ export function SignalRecorderPage() {
           </div>
         )}
 
-        {/* Emoji overlay picker */}
+        {/* Emoji picker */}
         {showEmojiPicker && (
           <div className="absolute bottom-44 left-4 right-4 z-20">
             <div className="flex gap-2 justify-center flex-wrap bg-black/70 rounded-2xl p-3 border border-white/10">
@@ -622,7 +655,7 @@ export function SignalRecorderPage() {
 
         {/* Bottom controls */}
         <div className="absolute bottom-8 left-0 right-0 z-20">
-          {/* Duration selector (only when no clips yet) */}
+          {/* Duration selector (only while no clips recorded) */}
           {segments.length === 0 && state === 'idle' && (
             <div className="flex justify-center mb-4">
               <div className="flex gap-1 bg-black/50 rounded-full p-1">
@@ -641,10 +674,10 @@ export function SignalRecorderPage() {
             </div>
           )}
 
-          {/* Done action sheet */}
+          {/* Done state action sheet */}
           {state === 'done' && (
             <div className="flex justify-center gap-6 mb-6 px-8">
-              <button onClick={discardAll} className="flex flex-col items-center gap-1">
+              <button onClick={discardAndReset} className="flex flex-col items-center gap-1">
                 <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
                   <Trash2 className="w-6 h-6 text-white" />
                 </div>
@@ -665,10 +698,9 @@ export function SignalRecorderPage() {
             </div>
           )}
 
-          {/* Recording controls */}
+          {/* Recording controls row */}
           {state !== 'done' && (
             <div className="flex items-center justify-center gap-8">
-              {/* Delete last segment */}
               <button
                 onClick={deleteLastSegment}
                 disabled={segments.length === 0}
@@ -680,7 +712,6 @@ export function SignalRecorderPage() {
                 <Trash2 className="w-4 h-4" />
               </button>
 
-              {/* Record button — touch events added via ref */}
               <button
                 ref={recordButtonRef}
                 onMouseDown={handleHoldStart}
@@ -688,18 +719,19 @@ export function SignalRecorderPage() {
                 onMouseLeave={handleHoldEnd}
                 className={`relative w-20 h-20 rounded-full border-4 flex items-center justify-center select-none transition-all ${
                   state === 'recording'
-                    ? 'border-red-500 bg-red-500/20 scale-95'
+                    ? 'border-red-500 bg-red-500/10 scale-95'
                     : 'border-white bg-white/10'
                 }`}
                 style={{ touchAction: 'none', userSelect: 'none' }}
                 data-testid="record-button"
               >
-                <div className={`rounded-full transition-all ${
-                  state === 'recording' ? 'w-8 h-8 bg-red-500 rounded-sm' : 'w-14 h-14 bg-red-500 rounded-full'
+                <div className={`transition-all ${
+                  state === 'recording'
+                    ? 'w-8 h-8 bg-red-500 rounded-sm'
+                    : 'w-14 h-14 bg-red-500 rounded-full'
                 }`} />
               </button>
 
-              {/* Finish button */}
               <button
                 onClick={handleFinishPress}
                 disabled={segments.length === 0 && state !== 'recording'}
@@ -715,7 +747,6 @@ export function SignalRecorderPage() {
             </div>
           )}
 
-          {/* Hint text */}
           {(state === 'idle' || state === 'between') && (
             <p className="text-white/40 text-xs text-center mt-3">
               {state === 'idle' ? 'Hold to record' : 'Hold to record next clip'}

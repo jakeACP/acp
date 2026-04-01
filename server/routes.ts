@@ -3,7 +3,12 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import fs from "fs";
 import path from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
+import os from "os";
 import { setupAuth } from "./auth";
+
+const execAsync = promisify(exec);
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
@@ -7059,6 +7064,80 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     } catch (error: any) {
       console.error("Get signal error:", error);
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Multi-clip stitch endpoint — accepts clip_0, clip_1, ... fields, stitches with FFmpeg
+  const signalMultiUpload = multer({ storage: signalVideoStorage, limits: { fileSize: 500 * 1024 * 1024 } });
+
+  app.post("/api/mobile/signals/stitch", (req, res, next) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    signalMultiUpload.any()(req, res, (err) => {
+      if (err) return res.status(400).json({ message: err.message || 'Upload error' });
+      next();
+    });
+  }, async (req, res) => {
+    const files = (req as any).files as Express.Multer.File[] | undefined;
+    if (!files || files.length === 0) return res.status(400).json({ message: 'No clips uploaded' });
+
+    const clipFiles = files
+      .filter(f => /^clip_\d+$/.test(f.fieldname))
+      .sort((a, b) => {
+        const ai = parseInt(a.fieldname.replace('clip_', ''));
+        const bi = parseInt(b.fieldname.replace('clip_', ''));
+        return ai - bi;
+      });
+
+    if (clipFiles.length === 0) return res.status(400).json({ message: 'No clip fields found' });
+
+    let outputPath: string | null = null;
+    let concatListPath: string | null = null;
+
+    try {
+      if (clipFiles.length === 1) {
+        outputPath = clipFiles[0].path;
+      } else {
+        concatListPath = path.join(signalsUploadDir, `concat-${randomUUID()}.txt`);
+        const lines = clipFiles.map(f => `file '${f.path}'`).join('\n');
+        fs.writeFileSync(concatListPath, lines);
+
+        outputPath = path.join(signalsUploadDir, `${randomUUID()}.webm`);
+        await execAsync(
+          `ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${outputPath}"`,
+        );
+        for (const f of clipFiles) fs.unlink(f.path, () => {});
+        fs.unlink(concatListPath, () => {});
+        concatListPath = null;
+      }
+
+      const videoUrl = `/uploads/signals/${path.basename(outputPath)}`;
+
+      let overlays: any = null;
+      if (req.body.overlays) { try { overlays = JSON.parse(req.body.overlays); } catch { overlays = null; } }
+
+      const category = req.body.category || '';
+      const signalData = {
+        authorId: req.user!.id,
+        title: req.body.title || '',
+        description: '',
+        videoUrl,
+        thumbnailUrl: undefined,
+        duration: parseInt(req.body.duration) || 0,
+        maxDuration: req.user!.subscriptionStatus === 'premium' ? 600 : 180,
+        filter: req.body.filter || 'none',
+        overlays,
+        tags: category ? [category] : [],
+        isPublic: true,
+      };
+
+      const signal = await storage.createSignal(signalData);
+      res.status(201).json(signal);
+    } catch (error: any) {
+      console.error("Signal stitch error:", error);
+      if (outputPath && outputPath !== clipFiles[0]?.path) fs.unlink(outputPath, () => {});
+      if (concatListPath) fs.unlink(concatListPath, () => {});
+      for (const f of clipFiles) fs.unlink(f.path, () => {});
+      res.status(500).json({ message: error.message || 'Stitching failed' });
     }
   });
 
