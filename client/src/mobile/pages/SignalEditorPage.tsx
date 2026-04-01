@@ -209,6 +209,8 @@ export function SignalEditorPage() {
   const [playing, setPlaying] = useState(false);
   const [currentEntryIdx, setCurrentEntryIdx] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  // Reactive video src — drives the <video key={videoSrc}> to force clean remount on clip change
+  const [videoSrc, setVideoSrc] = useState("");
   const blobUrlsRef = useRef<string[]>([]);
   // Photo playback timer
   const photoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -388,44 +390,23 @@ export function SignalEditorPage() {
     }
   }, [currentEntryIdx, entries.length]);
 
-  const loadEntry = useCallback((idx: number) => {
+  // Update the reactive video src whenever the active clip changes
+  useEffect(() => {
+    if (blobUrlsVersion === 0) return;
+    const entry = entries[currentEntryIdx];
     clearPhotoTimer();
-    const entry = entries[idx];
     if (!entry) return;
-    const v = videoRef.current;
-
     if (entry.type === "photo") {
-      // Photos: pause video, show image overlay; schedule advance after display duration
-      if (v) { v.pause(); v.src = ""; }
-      if (playing) {
+      // Clear video when showing a photo
+      setVideoSrc("");
+      if (playingRef.current) {
         const displayDur = Math.max(0.1, entry.duration - entry.trimIn - entry.trimOut) * 1000;
         photoTimerRef.current = setTimeout(handleEnded, displayDur);
       }
     } else {
-      // Clips: load blob URL then seek once data is available (avoids black frame on first load)
-      if (!v || idx >= blobUrlsRef.current.length) return;
-      const url = blobUrlsRef.current[idx];
-      const trimIn = entry.trimIn;
-
-      // Only reload when the src actually changes
-      if (v.src !== url) {
-        v.pause();
-        v.src = url;
-        v.preload = "auto";
-        v.addEventListener("loadeddata", () => {
-          v.currentTime = trimIn;
-          if (playingRef.current) v.play().catch(() => {});
-        }, { once: true });
-        v.load();
-      } else {
-        v.currentTime = trimIn;
-        if (playingRef.current) v.play().catch(() => {});
-      }
+      // Setting videoSrc causes the <video key={videoSrc}> to remount cleanly
+      setVideoSrc(blobUrlsRef.current[currentEntryIdx] ?? "");
     }
-  }, [entries, playing, handleEnded]);
-
-  useEffect(() => {
-    if (blobUrlsVersion > 0) loadEntry(currentEntryIdx);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEntryIdx, blobUrlsVersion]);
 
@@ -774,14 +755,24 @@ export function SignalEditorPage() {
         onPointerMove={(e) => { moveAnnotationDrag(e); moveAnnotationResize(e); }}
         onPointerUp={() => { endAnnotationDrag(); endAnnotationResize(); }}
       >
-        {/* Video element — visible only for clip entries */}
+        {/* Video element — key forces a clean DOM remount whenever the clip changes,
+            avoiding the WebM blob seeking deadlock that shows a black frame */}
         <video
+          key={videoSrc}
           ref={videoRef}
+          src={videoSrc || undefined}
           className={`w-full h-full object-contain ${currentEntry?.type === "photo" ? "hidden" : "block"}`}
           playsInline
           preload="auto"
           onEnded={handleEnded}
           onTimeUpdate={handleTimeUpdate}
+          onCanPlay={() => {
+            const v = videoRef.current;
+            if (!v) return;
+            const entry = entries[currentEntryIdx];
+            if (entry?.trimIn && entry.trimIn > 0) v.currentTime = entry.trimIn;
+            if (playingRef.current) v.play().catch(() => {});
+          }}
         />
         {/* Photo preview — visible only for photo entries */}
         {currentEntry?.type === "photo" && (
