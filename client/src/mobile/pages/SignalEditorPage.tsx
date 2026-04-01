@@ -404,8 +404,11 @@ export function SignalEditorPage() {
     blobUrlsRef.current = curBlobs.map((b) => URL.createObjectURL(b));
     prevBlobsRef.current = curBlobs;
     setBlobUrlsVersion((v) => v + 1);
-    return () => { blobUrlsRef.current.forEach(URL.revokeObjectURL); };
   }, [entries]);
+
+  useEffect(() => {
+    return () => { blobUrlsRef.current.forEach(URL.revokeObjectURL); };
+  }, []);
 
   // ── Preview player — sequential src-swap with photo support ─────────────
 
