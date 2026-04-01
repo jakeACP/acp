@@ -269,6 +269,10 @@ export function SignalEditorPage() {
   const [audioVolume, setAudioVolume] = useState(0.8);
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
   const [previewingTrack, setPreviewingTrack] = useState<string | null>(null);
+  // Uploaded audio
+  const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null);
+  const [uploadedAudioObjectUrl, setUploadedAudioObjectUrl] = useState<string | null>(null);
+  const audioUploadRef = useRef<HTMLInputElement>(null);
 
   // Category / posting
   const [category, setCategory] = useState("");
@@ -600,20 +604,38 @@ export function SignalEditorPage() {
 
   // ── Sound preview ─────────────────────────────────────────────────────────
 
-  const previewTrack = (filename: string) => {
+  const previewTrack = (id: string, objectUrl?: string) => {
     if (previewAudio) { previewAudio.pause(); previewAudio.src = ""; }
-    if (previewingTrack === filename) { setPreviewingTrack(null); setPreviewAudio(null); return; }
-    const audio = new Audio(`/public/audio/${filename}`);
+    if (previewingTrack === id) { setPreviewingTrack(null); setPreviewAudio(null); return; }
+    const src = objectUrl ?? `/public/audio/${id}`;
+    const audio = new Audio(src);
     audio.volume = audioVolume;
     audio.play().catch(() => {});
     setPreviewAudio(audio);
-    setPreviewingTrack(filename);
+    setPreviewingTrack(id);
     audio.addEventListener("ended", () => setPreviewingTrack(null));
   };
 
   useEffect(() => {
     return () => { if (previewAudio) { previewAudio.pause(); } };
   }, [previewAudio]);
+
+  // Revoke uploaded audio object URL on unmount to free memory
+  useEffect(() => {
+    return () => { if (uploadedAudioObjectUrl) URL.revokeObjectURL(uploadedAudioObjectUrl); };
+  }, [uploadedAudioObjectUrl]);
+
+  const handleAudioFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (uploadedAudioObjectUrl) URL.revokeObjectURL(uploadedAudioObjectUrl);
+    const url = URL.createObjectURL(file);
+    setUploadedAudioFile(file);
+    setUploadedAudioObjectUrl(url);
+    setSelectedAudio("__uploaded__");
+    // Reset the input so the same file can be re-selected
+    e.target.value = "";
+  };
 
   // ── Text annotation add ───────────────────────────────────────────────────
 
@@ -704,7 +726,10 @@ export function SignalEditorPage() {
       fd.append("timeline", JSON.stringify(timelineManifest));
       fd.append("trimData", JSON.stringify(trimData));
       fd.append("textAnnotations", JSON.stringify(annotations));
-      if (selectedAudio) {
+      if (selectedAudio === "__uploaded__" && uploadedAudioFile) {
+        fd.append("audioFile", uploadedAudioFile, uploadedAudioFile.name);
+        fd.append("audioVolume", String(audioVolume));
+      } else if (selectedAudio) {
         fd.append("audioTrack", selectedAudio);
         fd.append("audioVolume", String(audioVolume));
       }
@@ -1058,10 +1083,12 @@ export function SignalEditorPage() {
             {selectedAudio ? (
               <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30 w-fit">
                 <Music className="w-3 h-3 text-green-400 shrink-0" />
-                <span className="text-green-400 text-xs whitespace-nowrap">
-                  {AUDIO_TRACKS.find(t => t.filename === selectedAudio)?.label}
+                <span className="text-green-400 text-xs whitespace-nowrap max-w-[140px] truncate">
+                  {selectedAudio === "__uploaded__" && uploadedAudioFile
+                    ? uploadedAudioFile.name
+                    : AUDIO_TRACKS.find(t => t.filename === selectedAudio)?.label}
                 </span>
-                <button onClick={() => setSelectedAudio(null)} className="ml-1">
+                <button onClick={() => { setSelectedAudio(null); }} className="ml-1">
                   <X className="w-3 h-3 text-green-400/60" />
                 </button>
               </div>
@@ -1138,16 +1165,65 @@ export function SignalEditorPage() {
       )}
 
       {/* Sound sheet */}
+      {/* Hidden audio file input */}
+      <input
+        ref={audioUploadRef}
+        type="file"
+        accept="audio/*,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/m4a,audio/aac,audio/flac"
+        className="hidden"
+        onChange={handleAudioFileUpload}
+      />
+
       {sheet === "sound" && (
         <BottomSheet title="Background Music" onClose={() => setSheet("none")}>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div>
               <p className="text-white/50 text-xs mb-1">Volume: {Math.round(audioVolume * 100)}%</p>
               <input type="range" min={0} max={1} step={0.05} value={audioVolume}
                 onChange={(e) => setAudioVolume(Number(e.target.value))}
                 className="w-full accent-green-500" />
             </div>
-            <div className="space-y-1 max-h-64 overflow-y-auto">
+
+            {/* Upload your own */}
+            <button
+              onClick={() => audioUploadRef.current?.click()}
+              className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 border-dashed hover:bg-white/10 transition-all"
+            >
+              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                <Upload className="w-4 h-4 text-white/60" />
+              </div>
+              <div className="text-left">
+                <p className="text-white/80 text-sm font-medium">Upload your own</p>
+                <p className="text-white/40 text-xs">MP3, WAV, M4A, OGG, AAC…</p>
+              </div>
+            </button>
+
+            {/* Uploaded file entry */}
+            {uploadedAudioFile && (
+              <div
+                className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all
+                  ${selectedAudio === "__uploaded__" ? "bg-green-500/20 border border-green-500/40" : "bg-white/5 border border-white/10"}`}
+                onClick={() => setSelectedAudio(s => s === "__uploaded__" ? null : "__uploaded__")}
+              >
+                <button
+                  className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0"
+                  onClick={(e) => { e.stopPropagation(); previewTrack("__uploaded__", uploadedAudioObjectUrl ?? undefined); }}
+                >
+                  {previewingTrack === "__uploaded__"
+                    ? <Pause className="w-4 h-4 text-white" />
+                    : <Play className="w-4 h-4 text-white ml-0.5" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm truncate">{uploadedAudioFile.name}</p>
+                  <p className="text-white/40 text-xs">Uploaded file</p>
+                </div>
+                {selectedAudio === "__uploaded__" && <Check className="w-4 h-4 text-green-400 shrink-0" />}
+              </div>
+            )}
+
+            {/* Built-in tracks */}
+            <p className="text-white/40 text-[10px] uppercase tracking-wider pt-1">Built-in tracks</p>
+            <div className="space-y-1 max-h-52 overflow-y-auto">
               {AUDIO_TRACKS.map((track) => (
                 <div key={track.filename}
                   className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all

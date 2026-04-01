@@ -7331,10 +7331,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const isClipField = CLIP_FIELD_RE.test(file.fieldname);
       const isPhotoField = PHOTO_FIELD_RE.test(file.fieldname);
       const isThumbnailField = file.fieldname === 'thumbnail';
-      if (!isClipField && !isPhotoField && !isThumbnailField) return cb(new Error(`Unexpected field: ${file.fieldname}`));
+      const isAudioField = file.fieldname === 'audioFile';
+      if (!isClipField && !isPhotoField && !isThumbnailField && !isAudioField) return cb(new Error(`Unexpected field: ${file.fieldname}`));
       if (isClipField && !/^video\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for clip: ${file.mimetype}`));
       if (isPhotoField && !/^image\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for photo: ${file.mimetype}`));
       if (isThumbnailField && !/^image\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for thumbnail: ${file.mimetype}`));
+      if (isAudioField && !/^audio\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for audio: ${file.mimetype}`));
       cb(null, true);
     },
   });
@@ -7418,13 +7420,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         .map(t => ({ type: t.type === 'photo' ? 'photo' : 'clip', field: String(t.field || '') }))
         .filter(t => (CLIP_FIELD_RE.test(t.field) || PHOTO_FIELD_RE.test(t.field)));
 
-      // Validate audio track: must be a basename matching allowed filenames only
+      // Validate audio: either a preset track name or an uploaded audioFile
       const allowedAudioFiles = new Set([
         'Freedom_March.mp3','Pulse_of_Truth.mp3','Rising_Voice.mp3','Civic_Anthem.mp3',
         'Silent_Resolve.mp3','Power_To_The_People.mp3','New_Dawn.mp3','Stand_Together.mp3',
       ]);
       const rawAudio = path.basename(req.body.audioTrack || '');
       const audioTrack = allowedAudioFiles.has(rawAudio) ? rawAudio : '';
+      const uploadedAudioFile = files.find(f => f.fieldname === 'audioFile') ?? null;
       const audioVolume = Math.max(0, Math.min(1, parseFloat(req.body.audioVolume ?? '0.8') || 0.8));
       const category = String(req.body.category || '').slice(0, 80);
       const title = String(req.body.title || '').slice(0, 200);
@@ -7466,6 +7469,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
             fileByField.set(f.fieldname, f);
             tempFiles.push(f.path);
           }
+          // Track uploaded audio for cleanup
+          if (uploadedAudioFile) tempFiles.push(uploadedAudioFile.path);
 
           // ── Use timeline manifest to process segments in user-defined order ───
           // Falls back to clips-then-photos if no manifest provided.
@@ -7539,8 +7544,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           );
           const vf = vfFilters.length > 0 ? vfFilters.join(',') : 'null';
 
-          const audioSrcPath = audioTrack ? path.join(process.cwd(), 'public/audio', audioTrack) : '';
-          const hasAudio = audioTrack !== '' && fs.existsSync(audioSrcPath);
+          // Resolve audio source: uploaded file takes priority over preset track
+          let audioSrcPath = '';
+          if (uploadedAudioFile) {
+            audioSrcPath = uploadedAudioFile.path;
+          } else if (audioTrack) {
+            audioSrcPath = path.join(process.cwd(), 'public/audio', audioTrack);
+          }
+          const hasAudio = audioSrcPath !== '' && fs.existsSync(audioSrcPath);
 
           const finalArgs = ['-y', '-i', concatOut];
           if (hasAudio) {
