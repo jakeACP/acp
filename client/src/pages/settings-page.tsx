@@ -16,7 +16,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { ObjectUploader } from "@/components/ObjectUploader";
-import { ArrowLeft, Lock, User, Mail, Camera, Shield, Settings as SettingsIcon, CheckCircle2, AlertCircle, BadgeCheck } from "lucide-react";
+import { ArrowLeft, Lock, User, Mail, Camera, Shield, Settings as SettingsIcon, CheckCircle2, AlertCircle, BadgeCheck, Key, Plus, Trash2, Copy, Check, ExternalLink } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { TwoFactorSettings } from "@/components/two-factor-settings";
 import { Link } from "wouter";
 import type { UploadResult } from "@uppy/core";
@@ -286,6 +288,57 @@ export default function SettingsPage() {
 
   const isFormReady = stateIdUrl && selfieUrl && voterForm.formState.isValid;
 
+  // API Key Management
+  const [newKeyName, setNewKeyName] = useState("");
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const [revealedKey, setRevealedKey] = useState<{ rawKey: string; name: string } | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
+
+  const { data: apiKeyList, isLoading: apiKeysLoading } = useQuery<any[]>({
+    queryKey: ["/api/developer/keys"],
+    enabled: !!user && (user.subscriptionStatus === "premium" || user.role === "admin"),
+  });
+
+  const generateKeyMutation = useMutation({
+    mutationFn: async (name: string) => {
+      return apiRequest("/api/developer/keys", "POST", { name }) as unknown as Promise<{ rawKey: string; name: string; keyPrefix: string }>;
+    },
+    onSuccess: (data: any) => {
+      setRevealedKey({ rawKey: data.rawKey, name: data.name });
+      setShowGenerateDialog(false);
+      setNewKeyName("");
+      queryClient.invalidateQueries({ queryKey: ["/api/developer/keys"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate API key.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const revokeKeyMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/developer/keys/${id}`, "DELETE");
+    },
+    onSuccess: () => {
+      toast({ title: "API Key Revoked", description: "The key has been permanently revoked." });
+      queryClient.invalidateQueries({ queryKey: ["/api/developer/keys"] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to revoke the key.", variant: "destructive" });
+    },
+  });
+
+  const handleCopyKey = () => {
+    if (revealedKey) {
+      navigator.clipboard.writeText(revealedKey.rawKey);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
+    }
+  };
+
   return (
     <div className="bg-slate-50 min-h-screen">
       <Navigation />
@@ -547,6 +600,149 @@ export default function SettingsPage() {
             </Card>
 
             <TwoFactorSettings />
+
+            {/* API Keys Section */}
+            {(user?.subscriptionStatus === "premium" || user?.role === "admin") && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Key className="h-5 w-5" />
+                        API Keys
+                      </CardTitle>
+                      <CardDescription>
+                        Generate keys to build bots and automations on top of your ACP account.{" "}
+                        <Link href="/developer" className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
+                          View API docs <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      </CardDescription>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowGenerateDialog(true)}
+                      disabled={(apiKeyList?.length ?? 0) >= 10}
+                      className="flex items-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Generate Key
+                    </Button>
+                  </div>
+                  {(apiKeyList?.length ?? 0) >= 10 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      Maximum of 10 active keys reached. Revoke a key to generate a new one.
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {apiKeysLoading ? (
+                    <p className="text-sm text-slate-500">Loading keys...</p>
+                  ) : !apiKeyList || apiKeyList.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No API keys yet. Generate one to get started.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {apiKeyList.map((key: any) => (
+                        <div key={key.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{key.name}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                              {key.keyPrefix}… · Created {new Date(key.createdAt).toLocaleDateString()}
+                              {key.lastUsedAt && ` · Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950 ml-2 flex-shrink-0"
+                            onClick={() => revokeKeyMutation.mutate(key.id)}
+                            disabled={revokeKeyMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Generate Key Dialog */}
+            <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Key className="h-5 w-5" />
+                    Generate API Key
+                  </DialogTitle>
+                  <DialogDescription>
+                    Give your key a descriptive name so you remember what it's used for.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="key-name">Key Name</Label>
+                    <Input
+                      id="key-name"
+                      placeholder="e.g. Twitter cross-poster, Discord bot"
+                      value={newKeyName}
+                      onChange={(e) => setNewKeyName(e.target.value)}
+                      maxLength={64}
+                      onKeyDown={(e) => { if (e.key === "Enter" && newKeyName.trim()) generateKeyMutation.mutate(newKeyName.trim()); }}
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" onClick={() => setShowGenerateDialog(false)}>Cancel</Button>
+                    <Button
+                      onClick={() => generateKeyMutation.mutate(newKeyName.trim())}
+                      disabled={!newKeyName.trim() || generateKeyMutation.isPending}
+                    >
+                      {generateKeyMutation.isPending ? "Generating..." : "Generate"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* One-time Key Reveal Dialog */}
+            <Dialog open={!!revealedKey} onOpenChange={(open) => { if (!open) setRevealedKey(null); }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                    <CheckCircle2 className="h-5 w-5" />
+                    API Key Generated
+                  </DialogTitle>
+                  <DialogDescription>
+                    <span className="font-semibold text-red-600 dark:text-red-400">This key will not be shown again.</span> Copy it now and store it somewhere safe.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <Label>Key Name</Label>
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{revealedKey?.name}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Your API Key</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={revealedKey?.rawKey ?? ""}
+                        className="font-mono text-xs"
+                      />
+                      <Button variant="outline" size="sm" onClick={handleCopyKey} className="flex-shrink-0">
+                        {copiedKey ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-800 dark:text-amber-200">
+                    Use this key as a Bearer token: <code className="font-mono">Authorization: Bearer {revealedKey?.rawKey}</code>
+                  </div>
+                  <Button className="w-full" onClick={() => setRevealedKey(null)}>
+                    I've saved my key — Close
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="privacy">

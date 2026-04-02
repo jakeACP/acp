@@ -9044,6 +9044,181 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  // ── Developer API Key Management ──────────────────────────────────────────
+  // Session-authenticated routes for managing keys (premium users + admins)
+  app.get("/api/developer/keys", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    const user = req.user as any;
+    if (user.subscriptionStatus !== "premium" && user.role !== "admin") {
+      return res.status(403).json({ message: "ACP+ subscription required to use the developer API" });
+    }
+    try {
+      const keys = await storage.listApiKeys(user.id);
+      res.json(keys.map((k: any) => ({
+        id: k.id,
+        name: k.name,
+        keyPrefix: k.keyPrefix,
+        createdAt: k.createdAt,
+        lastUsedAt: k.lastUsedAt,
+      })));
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to list API keys" });
+    }
+  });
+
+  app.post("/api/developer/keys", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    const user = req.user as any;
+    if (user.subscriptionStatus !== "premium" && user.role !== "admin") {
+      return res.status(403).json({ message: "ACP+ subscription required to use the developer API" });
+    }
+    const name = (req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ message: "Key name is required" });
+    if (name.length > 64) return res.status(400).json({ message: "Key name must be 64 characters or fewer" });
+    try {
+      const activeCount = await storage.countActiveApiKeys(user.id);
+      if (activeCount >= 10) {
+        return res.status(400).json({ message: "Maximum of 10 active API keys reached. Revoke an existing key to generate a new one." });
+      }
+      const { generateRawApiKey, hashApiKey } = await import("./apiKeyAuth");
+      const rawKey = generateRawApiKey();
+      const keyHash = hashApiKey(rawKey);
+      const keyPrefix = rawKey.slice(0, 12);
+      await storage.createApiKey({ userId: user.id, name, keyHash, keyPrefix });
+      res.status(201).json({ rawKey, keyPrefix, name });
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to create API key" });
+    }
+  });
+
+  app.delete("/api/developer/keys/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    const user = req.user as any;
+    try {
+      await storage.revokeApiKey(req.params.id, user.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to revoke API key" });
+    }
+  });
+
+  // ── Public v1 API (Bearer token auth) ─────────────────────────────────────
+  const { apiKeyAuth, requirePremiumApiKey, requireAdminApiKey } = await import("./apiKeyAuth");
+
+  app.get("/api/v1/me", apiKeyAuth, requirePremiumApiKey, async (req, res) => {
+    const u = req.apiUser!;
+    res.json({
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      role: u.role,
+      subscriptionStatus: u.subscriptionStatus,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      avatar: u.avatar,
+      bio: u.bio,
+      location: u.location,
+    });
+  });
+
+  app.get("/api/v1/posts", apiKeyAuth, requirePremiumApiKey, async (req, res) => {
+    const user = req.apiUser!;
+    try {
+      const posts = await storage.getPostsByUser(user.id);
+      res.json(posts);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch posts" });
+    }
+  });
+
+  app.post("/api/v1/posts", apiKeyAuth, requirePremiumApiKey, async (req, res) => {
+    const user = req.apiUser!;
+    const bodySchema = z.object({
+      content: z.string().min(1).max(10000),
+      link: z.string().url().optional(),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    try {
+      const post = await storage.createPost({
+        userId: user.id,
+        content: parsed.data.content,
+        link: parsed.data.link ?? null,
+        postType: "standard",
+        privacy: user.defaultPostPrivacy || "public",
+      } as any);
+      res.status(201).json(post);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to create post" });
+    }
+  });
+
+  // ── Admin v1 API ──────────────────────────────────────────────────────────
+  app.post("/api/v1/admin/politicians", apiKeyAuth, requireAdminApiKey, async (req, res) => {
+    const parsed = insertPoliticianProfileSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    try {
+      const profile = await storage.createPoliticianProfile(parsed.data);
+      res.status(201).json(profile);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to create politician profile" });
+    }
+  });
+
+  app.patch("/api/v1/admin/politicians/:id", apiKeyAuth, requireAdminApiKey, async (req, res) => {
+    try {
+      const profile = await storage.updatePoliticianProfile(req.params.id, req.body);
+      res.json(profile);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to update politician profile" });
+    }
+  });
+
+  app.post("/api/v1/admin/positions", apiKeyAuth, requireAdminApiKey, async (req, res) => {
+    const parsed = insertPoliticalPositionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    try {
+      const position = await storage.createPoliticalPosition(parsed.data);
+      res.status(201).json(position);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to create political position" });
+    }
+  });
+
+  app.patch("/api/v1/admin/positions/:id", apiKeyAuth, requireAdminApiKey, async (req, res) => {
+    try {
+      const position = await storage.updatePoliticalPosition(req.params.id, req.body);
+      res.json(position);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to update political position" });
+    }
+  });
+
+  app.post("/api/v1/admin/candidates", apiKeyAuth, requireAdminApiKey, async (req, res) => {
+    const parsed = insertCandidateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    try {
+      const candidate = await storage.createCandidate(parsed.data);
+      res.status(201).json(candidate);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to create candidate" });
+    }
+  });
+
+  app.patch("/api/v1/admin/candidates/:id", apiKeyAuth, requireAdminApiKey, async (req, res) => {
+    try {
+      const [updated] = await (await import("./db")).db
+        .update((await import("@shared/schema")).candidates)
+        .set(req.body)
+        .where((await import("drizzle-orm")).eq((await import("@shared/schema")).candidates.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: "Candidate not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to update candidate" });
+    }
+  });
+
   return httpServer;
 }
 

@@ -2500,3 +2500,22 @@ export const scanFindings = pgTable('scan_findings', {
 export const insertScanFindingSchema = createInsertSchema(scanFindings).omit({ id: true, scannedAt: true, reviewedAt: true, reviewedBy: true, adminNotes: true, status: true });
 export type ScanFinding = typeof scanFindings.$inferSelect;
 export type InsertScanFinding = z.infer<typeof insertScanFindingSchema>;
+
+// API Keys - for paid users and admin programmatic access
+export const apiKeys = pgTable("api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull().unique(),
+  keyPrefix: text("key_prefix").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  lastUsedAt: timestamp("last_used_at"),
+  revokedAt: timestamp("revoked_at"),
+}, (table) => ({
+  userIdIndex: index("api_keys_user_id_idx").on(table.userId),
+  keyHashIndex: index("api_keys_key_hash_idx").on(table.keyHash),
+}));
+
+export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, createdAt: true, lastUsedAt: true, revokedAt: true });
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type InsertApiKey = z.infer<typeof insertApiKeySchema>;

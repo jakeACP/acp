@@ -69,6 +69,7 @@ import CreateArticlePage from "@/pages/create-article-page";
 import ArticlePage from "@/pages/article-page";
 import PublicLandingPage from "@/pages/public-landing-page";
 import PublicArticlePage from "@/pages/public-article-page";
+import DeveloperPage from "@/pages/developer-page";
 import NotFound from "@/pages/not-found";
 import { useScrollLight } from "./hooks/useScrollLight";
 import { useAuth } from "./hooks/use-auth";
@@ -193,6 +194,7 @@ function Router() {
       <ProtectedRoute path="/admin/acp-plus" component={AdminAcpPlusPage} />
       <ProtectedRoute path="/admin/voter-verification" component={AdminVoterVerificationPage} />
       <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />
+      <Route path="/developer" component={DeveloperPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />  
       <Route path="/reset-password" component={ResetPasswordPage} />
