@@ -137,6 +137,9 @@ function SignalPlayerModal({
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [editTitle, setEditTitle] = useState(signal.title ?? "");
   const [editTagInput, setEditTagInput] = useState((signal.tags ?? []).join(" "));
+  const [editThumbFile, setEditThumbFile] = useState<File | null>(null);
+  const [editThumbPreview, setEditThumbPreview] = useState<string | null>(null);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const isOwner = user?.id === signal.authorId;
 
@@ -230,6 +233,7 @@ function SignalPlayerModal({
       const fd = new FormData();
       fd.append("title", title);
       fd.append("tags", JSON.stringify(tags));
+      if (editThumbFile) fd.append("thumbnail", editThumbFile);
       const res = await fetch(`/api/mobile/signals/${signal.id}`, {
         method: "PATCH",
         credentials: "include",
@@ -242,6 +246,8 @@ function SignalPlayerModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/mobile/signals"] });
       setEditMode(false);
+      setEditThumbFile(null);
+      setEditThumbPreview(null);
       toast({ title: "Signal updated!" });
     },
     onError: (err: any) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
@@ -440,6 +446,45 @@ function SignalPlayerModal({
             {/* Edit form */}
             {editMode ? (
               <div className="space-y-2 mb-3">
+                {/* Thumbnail picker */}
+                <input
+                  ref={thumbInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setEditThumbFile(f);
+                    setEditThumbPreview(URL.createObjectURL(f));
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => thumbInputRef.current?.click()}
+                  className="w-full rounded-lg overflow-hidden relative group transition-all"
+                  style={{ height: "80px", background: "rgba(255,255,255,0.06)", border: "1px dashed rgba(255,255,255,0.25)" }}
+                >
+                  {editThumbPreview || signal.thumbnailUrl ? (
+                    <img
+                      src={editThumbPreview ?? signal.thumbnailUrl!}
+                      alt="Thumbnail"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                      <Upload className="w-5 h-5 text-white/30" />
+                      <span className="text-[10px] text-white/30">Click to add thumbnail</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: "rgba(0,0,0,0.5)" }}>
+                    <span className="text-xs text-white flex items-center gap-1.5">
+                      <Pencil className="w-3 h-3" /> Change thumbnail
+                    </span>
+                  </div>
+                </button>
+
                 <input
                   type="text"
                   value={editTitle}
@@ -471,7 +516,7 @@ function SignalPlayerModal({
                     Save
                   </button>
                   <button
-                    onClick={() => setEditMode(false)}
+                    onClick={() => { setEditMode(false); setEditThumbFile(null); setEditThumbPreview(null); }}
                     className="flex-1 text-xs py-1.5 rounded-lg text-white/50 transition-all"
                     style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}
                   >
