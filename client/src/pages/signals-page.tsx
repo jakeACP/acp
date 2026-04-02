@@ -6,7 +6,7 @@ import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import type { SignalWithAuthor } from "@shared/schema";
 import {
   Play, Heart, MessageCircle, Share2, X, Upload, Volume2, VolumeX,
-  ChevronUp, ChevronDown, Loader2, Video, Send, Trash2, Pencil, AlertTriangle, Check,
+  ChevronUp, ChevronDown, Loader2, Video, Send, Trash2, Pencil, AlertTriangle, Check, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -515,6 +515,20 @@ function SignalPlayerModal({
               >
                 <Share2 className="w-4 h-4" />
                 Share
+              </button>
+              <button
+                onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = signal.videoUrl;
+                  a.download = (signal.title ?? "signal").replace(/[^a-z0-9]/gi, "_") + ".mp4";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                }}
+                className="flex items-center gap-1.5 text-sm text-white/50 hover:text-white/90 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Download
               </button>
             </div>
           </div>
