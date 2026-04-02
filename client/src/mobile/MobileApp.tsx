@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { MobileFeedPage } from "./pages/MobileFeedPage";
 import { MobileSignalsPage } from "./pages/MobileSignalsPage";
 import { MobileGroupsPage } from "./pages/MobileGroupsPage";
@@ -12,9 +12,25 @@ import { SignalPlayerPage } from "./pages/SignalPlayerPage";
 import MobileEventsPage from "./pages/MobileEventsPage";
 import { MobileRepsPage } from "./pages/MobileRepsPage";
 import { MobileMessagesPage } from "./pages/MobileMessagesPage";
+import { useAuth } from "@/hooks/use-auth";
+import { Loader2 } from "lucide-react";
 import "../mobile/mobile-theme.css";
 
 export function MobileApp() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black">
+        <Loader2 className="h-8 w-8 animate-spin text-white/50" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/auth" />;
+  }
+
   return (
     <Switch>
       <Route path="/mobile" component={MobileSignalsPage} />
