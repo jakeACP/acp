@@ -32,6 +32,7 @@ export function Navigation() {
 
   const navItems = [
     { href: "/", label: "Feed" },
+    { href: "/signals", label: "Signals" },
     { href: "/live", label: "Live" },
     { href: "/friends", label: "Friends" },
     { href: "/messages", label: "Messages" },
