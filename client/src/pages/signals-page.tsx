@@ -538,9 +538,12 @@ function SignalPlayerModal({
             ) : (
               <>
                 {signal.title && (
-                  <h2 className="font-bold text-base text-white drop-shadow mb-2">{signal.title}</h2>
+                  <h2 className="font-bold text-base text-white drop-shadow mb-1">{signal.title}</h2>
                 )}
-                {signal.tags && signal.tags.length > 0 && (
+                {signal.description && (
+                  <p className="text-sm text-white/65 leading-relaxed mb-2 line-clamp-3">{signal.description}</p>
+                )}
+                {signal.tags && signal.tags.length > 0 ? (
                   <div className="flex flex-wrap gap-1 mb-3">
                     {signal.tags.map((t) => (
                       <span key={t} className="text-xs px-2 py-0.5 rounded-full text-white/80"
@@ -549,7 +552,14 @@ function SignalPlayerModal({
                       </span>
                     ))}
                   </div>
-                )}
+                ) : isOwner ? (
+                  <button
+                    onClick={() => setEditMode(true)}
+                    className="text-xs text-white/25 hover:text-white/50 transition-colors mb-2 italic"
+                  >
+                    + Add tags
+                  </button>
+                ) : null}
               </>
             )}
 
