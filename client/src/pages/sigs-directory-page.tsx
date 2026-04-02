@@ -45,32 +45,39 @@ function sentimentBadgeClass(s?: string) {
   return "bg-gray-400 text-white hover:bg-gray-500";
 }
 
+/** Resolve sentiment from the explicit field, falling back to influenceScore sign */
+function resolveSentiment(sig: SIG): "positive" | "negative" | "neutral" | null {
+  if (sig.isAce) return "positive";
+  if (sig.sentiment === "positive" || sig.sentiment === "negative" || sig.sentiment === "neutral") return sig.sentiment;
+  if (sig.influenceScore !== null && sig.influenceScore !== undefined) {
+    if (sig.influenceScore > 0) return "positive";
+    if (sig.influenceScore < 0) return "negative";
+    return "neutral";
+  }
+  return null;
+}
+
 function cardBgClass(sig: SIG): string {
+  const s = resolveSentiment(sig);
   if (sig.isAce) return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700";
-  if (sig.sentiment === "negative") return "bg-red-50 dark:bg-red-900/40 border-red-300 dark:border-red-700";
-  if (sig.sentiment === "positive") return "bg-green-50 dark:bg-green-900/40 border-green-300 dark:border-green-700";
+  if (s === "negative") return "bg-red-50 dark:bg-red-900/40 border-red-300 dark:border-red-700";
+  if (s === "positive") return "bg-green-50 dark:bg-green-900/40 border-green-300 dark:border-green-700";
   return "";
 }
 
 function patriotCardStyle(sig: SIG): Record<string, string> {
-  if (sig.isAce) {
-    return {
-      background: "linear-gradient(135deg, rgba(16,185,129,0.55) 0%, rgba(6,78,59,0.65) 100%)",
-      borderColor: "rgba(52,211,153,0.6)",
-      color: "#fff",
-    };
-  }
-  if (sig.sentiment === "negative") {
-    return {
-      background: "linear-gradient(135deg, rgba(220,38,38,0.60) 0%, rgba(127,29,29,0.70) 100%)",
-      borderColor: "rgba(248,113,113,0.6)",
-      color: "#fff",
-    };
-  }
-  if (sig.sentiment === "positive") {
+  const s = resolveSentiment(sig);
+  if (sig.isAce || s === "positive") {
     return {
       background: "linear-gradient(135deg, rgba(22,163,74,0.60) 0%, rgba(20,83,45,0.70) 100%)",
       borderColor: "rgba(74,222,128,0.6)",
+      color: "#fff",
+    };
+  }
+  if (s === "negative") {
+    return {
+      background: "linear-gradient(135deg, rgba(220,38,38,0.60) 0%, rgba(127,29,29,0.70) 100%)",
+      borderColor: "rgba(248,113,113,0.6)",
       color: "#fff",
     };
   }
