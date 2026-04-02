@@ -113,10 +113,14 @@ export default function SignalEditorPage() {
   const playingRef = useRef(false);
 
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [audioTrack, setAudioTrack] = useState("");
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
   const [annotations, setAnnotations] = useState<TextAnnotation[]>([]);
   const [newText, setNewText] = useState("");
@@ -251,6 +255,7 @@ export default function SignalEditorPage() {
       fd.append("trimData", JSON.stringify(trimData));
       fd.append("timeline", JSON.stringify([{ type: "clip", field: "clip_0" }]));
       fd.append("title", title);
+      if (description.trim()) fd.append("description", description.trim());
       fd.append("category", category);
       fd.append("tags", JSON.stringify([...(category ? [category] : []), ...tags]));
       fd.append("textAnnotations", JSON.stringify(annotations.map((a) => ({
@@ -261,6 +266,7 @@ export default function SignalEditorPage() {
         endTime: a.endTime,
       }))));
       if (audioTrack) fd.append("audioTrack", audioTrack);
+      if (thumbnailFile) fd.append("thumbnail", thumbnailFile);
 
       const res = await fetch("/api/mobile/signals/compose", {
         method: "POST",
@@ -490,6 +496,69 @@ export default function SignalEditorPage() {
                 maxLength={200}
                 className="w-full bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
               />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1.5">Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What's your signal about?"
+                maxLength={2000}
+                rows={3}
+                className="w-full bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all resize-none"
+              />
+              <p className="text-xs text-muted-foreground mt-1">{description.length}/2000</p>
+            </div>
+
+            {/* Thumbnail */}
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1.5">Thumbnail</label>
+              <input
+                ref={thumbnailInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f && f.type.startsWith("image/")) {
+                    setThumbnailFile(f);
+                    const url = URL.createObjectURL(f);
+                    if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
+                    setThumbnailPreview(url);
+                  }
+                  e.target.value = "";
+                }}
+              />
+              {thumbnailPreview ? (
+                <div className="relative group">
+                  <img
+                    src={thumbnailPreview}
+                    alt="Custom thumbnail"
+                    className="w-full aspect-[9/16] object-cover rounded-lg cursor-pointer"
+                    onClick={() => thumbnailInputRef.current?.click()}
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                    <span className="text-white text-xs font-medium">Click to change</span>
+                  </div>
+                  <button
+                    onClick={() => { setThumbnailFile(null); if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview); setThumbnailPreview(null); }}
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => thumbnailInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 hover:bg-muted/30 transition-all"
+                >
+                  <Upload className="w-5 h-5 text-muted-foreground/50 mx-auto mb-1" />
+                  <p className="text-xs text-muted-foreground">Upload custom thumbnail</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Auto-generated if skipped</p>
+                </button>
+              )}
             </div>
 
             {/* Category */}

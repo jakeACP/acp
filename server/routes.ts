@@ -7525,6 +7525,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const audioVolume = Math.max(0, Math.min(1, parseFloat(req.body.audioVolume ?? '0.8') || 0.8));
       const category = String(req.body.category || '').slice(0, 80);
       const title = String(req.body.title || '').slice(0, 200);
+      const description = String(req.body.description || '').slice(0, 2000);
       // Parse user tags (JSON array of strings, up to 5, each up to 50 chars)
       let rawTagsArr: unknown[] = [];
       try { rawTagsArr = JSON.parse(req.body.tags || '[]'); } catch { rawTagsArr = []; }
@@ -7707,7 +7708,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           const videoUrl = `/uploads/signals/${path.basename(outputPath)}`;
           const composedDuration = await getVideoDuration(outputPath);
           const signal = await storage.createSignal({
-            authorId: user.id, title, description: '', videoUrl, thumbnailUrl,
+            authorId: user.id, title, description, videoUrl, thumbnailUrl,
             duration: composedDuration, maxDuration: user.subscriptionStatus === 'premium' ? 600 : 180,
             filter: 'none', overlays: null, tags: signalTags, isPublic: true,
           });
