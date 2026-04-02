@@ -7195,13 +7195,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (req.body.overlays) { try { overlays = JSON.parse(req.body.overlays); } catch { overlays = null; } }
 
       const category = req.body.category || '';
+      let stitchDuration = parseInt(req.body.duration) || 0;
+      if (stitchDuration <= 0 && outputPath) {
+        stitchDuration = await getVideoDuration(outputPath);
+      }
       const signalData = {
         authorId: req.user!.id,
         title: req.body.title || '',
         description: '',
         videoUrl,
         thumbnailUrl: undefined,
-        duration: parseInt(req.body.duration) || 0,
+        duration: stitchDuration,
         maxDuration: req.user!.subscriptionStatus === 'premium' ? 600 : 180,
         filter: req.body.filter || 'none',
         overlays,
@@ -7245,13 +7249,18 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const category = req.body.category || '';
       const tags = category ? [category] : (req.body.tags || []);
 
+      let uploadDuration = parseInt(req.body.duration) || 0;
+      if (uploadDuration <= 0 && (req as any).file) {
+        uploadDuration = await getVideoDuration((req as any).file.path);
+      }
+
       const signalData = {
         authorId: req.user!.id,
         title: req.body.title || '',
         description: req.body.description || '',
         videoUrl,
         thumbnailUrl: req.body.thumbnailUrl,
-        duration: parseInt(req.body.duration) || 0,
+        duration: uploadDuration,
         maxDuration: req.user!.subscriptionStatus === 'premium' ? 600 : 180,
         filter: req.body.filter || 'none',
         overlays,
@@ -7343,6 +7352,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Helper: run ffmpeg via execFile (no shell interpolation, safe from injection)
   const runFfmpeg = (args: string[]): Promise<void> =>
     execFileAsync(ffmpegBin, args, { maxBuffer: 50 * 1024 * 1024 }).then(() => {});
+
+  const getVideoDuration = async (filePath: string): Promise<number> => {
+    try {
+      const { stdout } = await execFileAsync('ffprobe', [
+        '-v', 'error', '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1', filePath,
+      ], { maxBuffer: 5 * 1024 * 1024 });
+      const secs = parseFloat(stdout.trim());
+      return isFinite(secs) && secs > 0 ? Math.round(secs) : 0;
+    } catch { return 0; }
+  };
 
 
   app.post("/api/mobile/signals/compose", (req, res, next) => {
@@ -7610,9 +7630,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           for (const f of tempFiles) { try { fs.unlinkSync(f); } catch { /* best-effort */ } }
 
           const videoUrl = `/uploads/signals/${path.basename(outputPath)}`;
+          const composedDuration = await getVideoDuration(outputPath);
           const signal = await storage.createSignal({
             authorId: user.id, title, description: '', videoUrl, thumbnailUrl,
-            duration: 0, maxDuration: user.subscriptionStatus === 'premium' ? 600 : 180,
+            duration: composedDuration, maxDuration: user.subscriptionStatus === 'premium' ? 600 : 180,
             filter: 'none', overlays: null, tags: signalTags, isPublic: true,
           });
           await storage.updateComposeJob(job.id, { status: 'done', signalId: signal.id });

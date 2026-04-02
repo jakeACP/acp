@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Play, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -14,11 +14,32 @@ export function SignalCard({ signal }: SignalCardProps) {
   const [editOpen, setEditOpen] = useState(false);
   const isOwner = !!user && user.id === signal.authorId;
 
+  const [resolvedDuration, setResolvedDuration] = useState(signal.duration);
+  const probeRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (signal.duration > 0 || !signal.videoUrl) return;
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.src = signal.videoUrl;
+    v.onloadedmetadata = () => {
+      if (isFinite(v.duration) && v.duration > 0) {
+        setResolvedDuration(Math.round(v.duration));
+      }
+      v.src = '';
+    };
+    probeRef.current = v;
+    return () => { v.onloadedmetadata = null; v.src = ''; };
+  }, [signal.duration, signal.videoUrl]);
+
   const formatDuration = (seconds: number) => {
+    if (seconds <= 0) return '';
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const durationStr = formatDuration(resolvedDuration);
 
   return (
     <>
@@ -43,7 +64,6 @@ export function SignalCard({ signal }: SignalCardProps) {
             <span className="type-tag signal">Signal</span>
           </div>
 
-          {/* Edit button — only shown to the owner */}
           {isOwner && (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditOpen(true); }}
@@ -60,8 +80,12 @@ export function SignalCard({ signal }: SignalCardProps) {
             </h3>
             <div className="flex items-center gap-2 text-white/70 text-xs">
               <span>{signal.author?.username || 'Anonymous'}</span>
-              <span>•</span>
-              <span>{formatDuration(signal.duration)}</span>
+              {durationStr && (
+                <>
+                  <span>•</span>
+                  <span>{durationStr}</span>
+                </>
+              )}
             </div>
           </div>
         </article>
