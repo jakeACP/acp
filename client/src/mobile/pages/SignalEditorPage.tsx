@@ -240,6 +240,7 @@ export function SignalEditorPage() {
   // Dedup ref: reset to false whenever videoSrc changes; set to true when the first of
   // onCanPlay / onLoadedMetadata fires so both don't attempt play simultaneously
   const videoReadyRef = useRef(false);
+  const pendingSeekRef = useRef<number | null>(null);
 
   // Active bottom sheet
   const [sheet, setSheet] = useState<"none" | "text" | "sound" | "category" | "processing" | "addMedia" | "thumbnail">("none");
@@ -459,14 +460,20 @@ export function SignalEditorPage() {
   // (WebM blobs without metadata report duration === Infinity, making seeks deadlock).
   const handleVideoReady = useCallback(() => {
     if (videoReadyRef.current) return;
-    if (!playingRef.current) return;
     videoReadyRef.current = true;
     const v = videoRef.current;
     if (!v) return;
+
+    if (pendingSeekRef.current !== null && isFinite(v.duration)) {
+      v.currentTime = pendingSeekRef.current;
+      pendingSeekRef.current = null;
+    }
+
+    if (!playingRef.current) return;
     v.play()
       .then(() => {
         const entry = entries[currentEntryIdx];
-        if (entry?.trimIn && entry.trimIn > 0 && isFinite(v.duration)) {
+        if (entry?.trimIn && entry.trimIn > 0 && isFinite(v.duration) && pendingSeekRef.current === null) {
           v.currentTime = entry.trimIn;
         }
       })
@@ -693,6 +700,43 @@ export function SignalEditorPage() {
     }
     e.target.value = "";
   };
+
+  // ── Seek to global time ──────────────────────────────────────────────────
+
+  const seekToTime = useCallback((globalTime: number) => {
+    let acc = 0;
+    for (let i = 0; i < entries.length; i++) {
+      const seg = entries[i];
+      const segDur = Math.max(0, seg.duration - seg.trimIn - seg.trimOut);
+      if (globalTime <= acc + segDur || i === entries.length - 1) {
+        const localOffset = Math.max(0, globalTime - acc);
+        const seekTarget = seg.trimIn + Math.min(localOffset, segDur);
+        if (i !== currentEntryIdx) {
+          pendingSeekRef.current = seekTarget;
+          setCurrentEntryIdx(i);
+        } else if (seg.type === "clip") {
+          const v = videoRef.current;
+          if (v && isFinite(v.duration)) {
+            v.currentTime = seekTarget;
+          }
+        }
+        setCurrentTime(globalTime);
+        return;
+      }
+      acc += segDur;
+    }
+  }, [entries, currentEntryIdx]);
+
+  const scrubberDragging = useRef(false);
+
+  const handleScrubberInteraction = useCallback((clientX: number, bar: HTMLElement) => {
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const total = entries.reduce((s, e) => s + Math.max(0, e.duration - e.trimIn - e.trimOut), 0);
+    if (total <= 0) return;
+    const t = ratio * total;
+    seekToTime(t);
+  }, [entries, seekToTime]);
 
   // ── Compose / Post ────────────────────────────────────────────────────────
 
@@ -942,23 +986,30 @@ export function SignalEditorPage() {
           {playing ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-0.5" />}
         </button>
 
-        {/* Scrubber bar with tap-to-pin for text annotations */}
+        {/* Scrubber bar — tap or drag to seek */}
         <div
-          className="absolute bottom-0 left-0 right-0 h-6 flex items-center px-2 cursor-pointer"
-          title="Tap to set text pin time"
-          onClick={(e) => {
-            if (totalDuration <= 0) return;
-            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-            const t = ratio * totalDuration;
-            setNewStartTime(parseFloat(t.toFixed(1)));
-            setNewEndTime(parseFloat(Math.min(t + 3, totalDuration).toFixed(1)));
+          className="absolute bottom-0 left-0 right-0 h-8 flex items-center px-2 cursor-pointer touch-none"
+          onPointerDown={(e) => {
+            scrubberDragging.current = true;
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            if (playing) { videoRef.current?.pause(); playingRef.current = false; setPlaying(false); }
+            handleScrubberInteraction(e.clientX, e.currentTarget as HTMLElement);
           }}
+          onPointerMove={(e) => {
+            if (!scrubberDragging.current) return;
+            handleScrubberInteraction(e.clientX, e.currentTarget as HTMLElement);
+          }}
+          onPointerUp={() => { scrubberDragging.current = false; }}
+          onPointerCancel={() => { scrubberDragging.current = false; }}
         >
-          <div className="w-full h-1 bg-white/20 rounded-full relative">
+          <div className="w-full h-1.5 bg-white/20 rounded-full relative">
             <div
               className="absolute left-0 top-0 h-full bg-red-500 rounded-full"
               style={{ width: totalDuration > 0 ? `${(currentTime / totalDuration) * 100}%` : "0%" }}
+            />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-md border-2 border-red-500"
+              style={{ left: totalDuration > 0 ? `calc(${(currentTime / totalDuration) * 100}% - 7px)` : "0" }}
             />
           </div>
         </div>
