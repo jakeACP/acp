@@ -9094,6 +9094,9 @@ Only include people you are confident about. Return empty arrays/null if unknown
   app.delete("/api/developer/keys/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
     const user = req.user as any;
+    if (user.subscriptionStatus !== "premium" && user.role !== "admin") {
+      return res.status(403).json({ message: "ACP+ subscription required to use the developer API" });
+    }
     try {
       await storage.revokeApiKey(req.params.id, user.id);
       res.json({ success: true });
@@ -9141,12 +9144,11 @@ Only include people you are confident about. Return empty arrays/null if unknown
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     try {
       const post = await storage.createPost({
-        userId: user.id,
+        authorId: user.id,
         content: parsed.data.content,
-        link: parsed.data.link ?? null,
-        postType: "standard",
-        privacy: user.defaultPostPrivacy || "public",
-      } as any);
+        url: parsed.data.link ?? null,
+        privacy: "public",
+      });
       res.status(201).json(post);
     } catch (err: any) {
       res.status(500).json({ error: "Failed to create post" });

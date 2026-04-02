@@ -300,10 +300,15 @@ export default function SettingsPage() {
   });
 
   const generateKeyMutation = useMutation({
-    mutationFn: async (name: string) => {
-      return apiRequest("/api/developer/keys", "POST", { name }) as unknown as Promise<{ rawKey: string; name: string; keyPrefix: string }>;
+    mutationFn: async (name: string): Promise<{ rawKey: string; name: string; keyPrefix: string }> => {
+      const res = await apiRequest("/api/developer/keys", "POST", { name });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).message || "Failed to generate API key");
+      }
+      return res.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       setRevealedKey({ rawKey: data.rawKey, name: data.name });
       setShowGenerateDialog(false);
       setNewKeyName("");
