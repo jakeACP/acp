@@ -44,7 +44,7 @@ Preferred communication style: Simple, everyday language.
 - **Content Systems**: WYSIWYG editor for articles.
 - **Real-time Features**: Live trending topics, inline event details.
 - **Admin Tools**: IP tracking, user management, State Admin system with data import templates, Missing Info tab for politician profiles, and dedicated review pages for trading flags and ACE pledges.
-- **Signal Video Features**: Multi-clip hold-to-record camera with filters and editing capabilities (trim, text annotations, audio, photos/footage, FFmpeg stitching) for short video content, stored via IDB session and uploaded to `uploads/signals/`.
+- **Signal Video Features**: Multi-clip hold-to-record camera with filters and editing capabilities (trim, text annotations, audio, photos/footage, FFmpeg stitching) for short video content, stored via IDB session and uploaded to `uploads/signals/`. Desktop timeline editor at `/signals/edit` with video preview, trim controls, text overlays, background music, and server-side compose via FFmpeg.
 - **Trading & Demerit System**: User-submitted insider trading flags, admin-assigned demerits, integration with politician profiles.
 - **ACE Badges Module**: Candidates can apply for Anti-Corruption Endorsement (ACE) badges via video pledges, which, upon admin approval, positively impact their corruption grade.
 

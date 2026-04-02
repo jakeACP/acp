@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Navigation } from "@/components/navigation";
 import { useAuth } from "@/hooks/use-auth";
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { setPendingSignalFile } from "@/lib/signalFileStore";
 
 interface CommentWithAuthor {
   id: string;
@@ -691,23 +693,19 @@ function SignalPlayerModal({
 }
 
 function UploadSignalModal({ onClose }: { onClose: () => void }) {
-  const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("");
-  const [tagInput, setTagInput] = useState("");
-  const [preview, setPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [, setLocation] = useLocation();
 
-  const CATEGORIES = [
-    "Politicians", "Corruption", "Current Events", "Legislation",
-    "Voting & Elections", "Justice", "Economy", "Community",
-  ];
+  const { toast } = useToast();
 
   const handleFile = (f: File) => {
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
+    if (!f.type.startsWith("video/")) {
+      toast({ title: "Invalid file", description: "Please select a video file (MP4, MOV, WebM).", variant: "destructive" });
+      return;
+    }
+    setPendingSignalFile(f);
+    onClose();
+    setLocation("/signals/edit");
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -716,40 +714,10 @@ function UploadSignalModal({ onClose }: { onClose: () => void }) {
     if (f && f.type.startsWith("video/")) handleFile(f);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) return;
-    setUploading(true);
-    try {
-      const token = await fetchCsrfToken();
-      const extraTags = tagInput.split(/[\s,]+/).map((t) => t.replace(/^#/, "").trim()).filter(Boolean);
-      const allTags = [...(category ? [category] : []), ...extraTags];
-      const fd = new FormData();
-      fd.append("video", file);
-      fd.append("title", title);
-      fd.append("category", category);
-      fd.append("tags", JSON.stringify(allTags));
-      const res = await fetch("/api/mobile/signals", {
-        method: "POST",
-        credentials: "include",
-        headers: { "x-csrf-token": token },
-        body: fd,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      await queryClient.invalidateQueries({ queryKey: ["/api/mobile/signals"] });
-      toast({ title: "Signal uploaded!", description: "Your video is now live." });
-      onClose();
-    } catch (err: any) {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-    } finally {
-      setUploading(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
+        className="bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -759,9 +727,9 @@ function UploadSignalModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <div className="p-6">
           <div
-            className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-all"
+            className="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-all"
             onClick={() => fileRef.current?.click()}
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
@@ -773,77 +741,11 @@ function UploadSignalModal({ onClose }: { onClose: () => void }) {
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
             />
-            {preview ? (
-              <div className="space-y-2">
-                <video src={preview} className="max-h-32 mx-auto rounded-lg object-contain" muted />
-                <p className="text-sm text-muted-foreground">{file?.name}</p>
-                <p className="text-xs text-primary">Click to change</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Video className="w-10 h-10 text-muted-foreground/50 mx-auto" />
-                <p className="text-sm font-medium text-foreground">Drop a video here</p>
-                <p className="text-xs text-muted-foreground">or click to browse · MP4, MOV, WebM</p>
-              </div>
-            )}
+            <Video className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
+            <p className="text-sm font-medium text-foreground">Drop a video here or click to browse</p>
+            <p className="text-xs text-muted-foreground mt-1">MP4, MOV, WebM — opens in timeline editor</p>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-foreground block mb-1.5">Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Give your signal a title..."
-              maxLength={200}
-              className="w-full bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-foreground block mb-1.5">Category</label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCategory(c === category ? "" : c)}
-                  className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                    category === c
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                  }`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-foreground block mb-1.5">Tags <span className="text-muted-foreground font-normal">(optional)</span></label>
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              placeholder="e.g. corruption parliament reform"
-              className="w-full bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Separate tags with spaces or commas. # is optional.</p>
-          </div>
-
-          <Button
-            type="submit"
-            disabled={!file || uploading}
-            className="w-full"
-          >
-            {uploading ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading...</>
-            ) : (
-              <><Upload className="w-4 h-4 mr-2" /> Post Signal</>
-            )}
-          </Button>
-        </form>
+        </div>
       </div>
     </div>
   );

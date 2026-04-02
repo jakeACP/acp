@@ -39,6 +39,7 @@ import InitiativeDetailPage from "@/pages/InitiativeDetailPage";
 import SubscriptionPage from "@/pages/subscription-page";
 import { LivePage } from "@/pages/LivePage";
 import SignalsPage from "@/pages/signals-page";
+import SignalEditorPage from "@/pages/signal-editor-page";
 import MyStreamsPage from "@/pages/MyStreamsPage";
 import AdminInvitationsPage from "@/pages/admin-invitations-page";
 import AdminRepresentativesPage from "@/pages/admin-representatives-page";
@@ -145,6 +146,7 @@ function Router() {
       <ProtectedRoute path="/politicians/:id" component={PoliticianProfilePage} />
       <ProtectedRoute path="/representatives" component={RepresentativesPage} />
       <ProtectedRoute path="/events" component={EventsPage} />
+      <ProtectedRoute path="/signals/edit" component={SignalEditorPage} />
       <ProtectedRoute path="/signals" component={SignalsPage} />
       <ProtectedRoute path="/live" component={LivePage} />
       <ProtectedRoute path="/my-streams" component={MyStreamsPage} />
