@@ -7247,7 +7247,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       }
 
       const category = req.body.category || '';
-      const tags = category ? [category] : (req.body.tags || []);
+      let parsedTags: string[] = [];
+      if (req.body.tags) {
+        try { parsedTags = JSON.parse(req.body.tags); } catch { parsedTags = []; }
+      }
+      const tags = [...(category ? [category] : []), ...parsedTags.filter((t: string) => t !== category)];
 
       let uploadDuration = parseInt(req.body.duration) || 0;
       if (uploadDuration <= 0 && (req as any).file) {

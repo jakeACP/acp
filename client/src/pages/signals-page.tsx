@@ -279,7 +279,7 @@ function SignalPlayerModal({
         )}
 
         {/* Video panel */}
-        <div className="relative bg-black/60 flex-shrink-0 rounded-l-3xl overflow-hidden" style={{ width: "340px" }}>
+        <div className="relative bg-black flex-shrink-0 overflow-hidden" style={{ width: "340px" }}>
           <video
             key={signal.id}
             ref={videoRef}
@@ -473,6 +473,7 @@ function UploadSignalModal({ onClose }: { onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
+  const [tagInput, setTagInput] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -498,10 +499,13 @@ function UploadSignalModal({ onClose }: { onClose: () => void }) {
     setUploading(true);
     try {
       const token = await fetchCsrfToken();
+      const extraTags = tagInput.split(/[\s,]+/).map((t) => t.replace(/^#/, "").trim()).filter(Boolean);
+      const allTags = [...(category ? [category] : []), ...extraTags];
       const fd = new FormData();
       fd.append("video", file);
       fd.append("title", title);
       fd.append("category", category);
+      fd.append("tags", JSON.stringify(allTags));
       const res = await fetch("/api/mobile/signals", {
         method: "POST",
         credentials: "include",
@@ -591,6 +595,18 @@ function UploadSignalModal({ onClose }: { onClose: () => void }) {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-foreground block mb-1.5">Tags <span className="text-muted-foreground font-normal">(optional)</span></label>
+            <input
+              type="text"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              placeholder="e.g. corruption parliament reform"
+              className="w-full bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Separate tags with spaces or commas. # is optional.</p>
           </div>
 
           <Button
