@@ -380,6 +380,35 @@
   z-index: 2;
 }
 
+/* Sentiment-specific overrides for SIG cards in patriot theme */
+.patriot [class*="Card"].bg-red-50,
+.patriot [class*="Card"].dark\:bg-red-950\/20 {
+  background: linear-gradient(
+    135deg,
+    rgba(220, 38, 38, 0.15) 0%,
+    rgba(127, 29, 29, 0.2) 50%,
+    rgba(220, 38, 38, 0.1) 100%
+  ) !important;
+  border-top-color: rgba(255, 255, 255, 0.3) !important;
+  border-left-color: rgba(255, 255, 255, 0.2) !important;
+  border-bottom-color: rgba(220, 38, 38, 0.3) !important;
+  border-right-color: rgba(220, 38, 38, 0.2) !important;
+}
+
+.patriot [class*="Card"].bg-green-50,
+.patriot [class*="Card"].dark\:bg-green-950\/20 {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.15) 0%,
+    rgba(20, 83, 31, 0.2) 50%,
+    rgba(34, 197, 94, 0.1) 100%
+  ) !important;
+  border-top-color: rgba(255, 255, 255, 0.3) !important;
+  border-left-color: rgba(255, 255, 255, 0.2) !important;
+  border-bottom-color: rgba(34, 197, 94, 0.3) !important;
+  border-right-color: rgba(34, 197, 94, 0.2) !important;
+}
+
 /* Liquid Glass Navigation */
 .patriot .floating-nav {
   background: rgba(7, 16, 40, 0.65);
