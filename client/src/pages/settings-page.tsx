@@ -315,7 +315,7 @@ export default function SettingsPage() {
       setNewKeyName("");
       queryClient.invalidateQueries({ queryKey: ["/api/developer/keys"] });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
         description: error.message || "Failed to generate API key.",

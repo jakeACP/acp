@@ -9047,28 +9047,28 @@ Only include people you are confident about. Return empty arrays/null if unknown
   // ── Developer API Key Management ──────────────────────────────────────────
   // Session-authenticated routes for managing keys (premium users + admins)
   app.get("/api/developer/keys", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    const user = req.user as any;
+    if (!req.isAuthenticated() || !req.user) return res.status(401).json({ message: "Not authenticated" });
+    const user = req.user;
     if (user.subscriptionStatus !== "premium" && user.role !== "admin") {
       return res.status(403).json({ message: "ACP+ subscription required to use the developer API" });
     }
     try {
       const keys = await storage.listApiKeys(user.id);
-      res.json(keys.map((k: any) => ({
+      res.json(keys.map((k) => ({
         id: k.id,
         name: k.name,
         keyPrefix: k.keyPrefix,
         createdAt: k.createdAt,
         lastUsedAt: k.lastUsedAt,
       })));
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ message: "Failed to list API keys" });
     }
   });
 
   app.post("/api/developer/keys", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    const user = req.user as any;
+    if (!req.isAuthenticated() || !req.user) return res.status(401).json({ message: "Not authenticated" });
+    const user = req.user;
     if (user.subscriptionStatus !== "premium" && user.role !== "admin") {
       return res.status(403).json({ message: "ACP+ subscription required to use the developer API" });
     }
@@ -9086,21 +9086,21 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const keyPrefix = rawKey.slice(0, 8);
       await storage.createApiKey({ userId: user.id, name, keyHash, keyPrefix });
       res.status(201).json({ rawKey, keyPrefix, name });
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ message: "Failed to create API key" });
     }
   });
 
   app.delete("/api/developer/keys/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    const user = req.user as any;
+    if (!req.isAuthenticated() || !req.user) return res.status(401).json({ message: "Not authenticated" });
+    const user = req.user;
     if (user.subscriptionStatus !== "premium" && user.role !== "admin") {
       return res.status(403).json({ message: "ACP+ subscription required to use the developer API" });
     }
     try {
       await storage.revokeApiKey(req.params.id, user.id);
       res.json({ success: true });
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ message: "Failed to revoke API key" });
     }
   });
@@ -9129,7 +9129,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     try {
       const posts = await storage.getPostsByUser(user.id);
       res.json(posts);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch posts" });
     }
   });
@@ -9150,7 +9150,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
         privacy: "public",
       });
       res.status(201).json(post);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: "Failed to create post" });
     }
   });
@@ -9162,7 +9162,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     try {
       const profile = await storage.createPoliticianProfile(parsed.data);
       res.status(201).json(profile);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: "Failed to create politician profile" });
     }
   });
@@ -9174,7 +9174,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     try {
       const profile = await storage.updatePoliticianProfile(req.params.id, parsed.data);
       res.json(profile);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: "Failed to update politician profile" });
     }
   });
@@ -9185,7 +9185,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     try {
       const position = await storage.createPoliticalPosition(parsed.data);
       res.status(201).json(position);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: "Failed to create political position" });
     }
   });
@@ -9197,7 +9197,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     try {
       const position = await storage.updatePoliticalPosition(req.params.id, parsed.data);
       res.json(position);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: "Failed to update political position" });
     }
   });
@@ -9208,7 +9208,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     try {
       const candidate = await storage.createCandidate(parsed.data);
       res.status(201).json(candidate);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: "Failed to create candidate" });
     }
   });
@@ -9220,8 +9220,10 @@ Only include people you are confident about. Return empty arrays/null if unknown
     try {
       const updated = await storage.updateCandidate(req.params.id, parsed.data);
       res.json(updated);
-    } catch (err: any) {
-      if (err.message === "Candidate not found") return res.status(404).json({ error: "Candidate not found" });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message === "Candidate not found") {
+        return res.status(404).json({ error: "Candidate not found" });
+      }
       res.status(500).json({ error: "Failed to update candidate" });
     }
   });
