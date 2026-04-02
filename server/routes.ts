@@ -3,12 +3,26 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import fs from "fs";
 import path from "path";
-import { exec, execFile } from "child_process";
+import { exec, execFile, execFileSync } from "child_process";
 import { promisify } from "util";
 import os from "os";
 import { setupAuth } from "./auth";
 
 const execAsync = promisify(exec);
+
+// Resolve full binary paths at startup so the Node.js process
+// (which may have a narrower PATH than an interactive shell) can
+// find Nix-installed ffmpeg/ffprobe. Using execFileSync with the
+// shell so PATH is sourced correctly on NixOS/Replit.
+const FFMPEG_BIN = (() => {
+  try { return execFileSync('/bin/sh', ['-c', 'which ffmpeg'], { encoding: 'utf8' }).trim() || 'ffmpeg'; }
+  catch { return 'ffmpeg'; }
+})();
+const FFPROBE_BIN = (() => {
+  try { return execFileSync('/bin/sh', ['-c', 'which ffprobe'], { encoding: 'utf8' }).trim() || 'ffprobe'; }
+  catch { return 'ffprobe'; }
+})();
+
 import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
@@ -7197,7 +7211,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
         outputPath = path.join(signalsUploadDir, `${randomUUID()}.webm`);
         await execAsync(
-          `ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${outputPath}"`,
+          `"${FFMPEG_BIN}" -y -f concat -safe 0 -i "${concatListPath}" -c copy "${outputPath}"`,
         );
         for (const f of clipFiles) fs.unlink(f.path, () => {});
         fs.unlink(concatListPath, () => {});
@@ -7376,8 +7390,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // ── Compose endpoint (editor → async FFmpeg job) ──────────────────────────
-  // Prefer the system ffmpeg (has drawtext/libfreetype) over the npm static build which lacks it.
-  const ffmpegBin: string = 'ffmpeg';
+  const ffmpegBin: string = FFMPEG_BIN;
+  const ffprobeBin: string = FFPROBE_BIN;
   const execFileAsync = promisify(execFile);
 
   const composeTempDir = path.join(os.tmpdir(), 'acp-compose');
@@ -7416,7 +7430,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   const getVideoDuration = async (filePath: string): Promise<number> => {
     try {
-      const { stdout } = await execFileAsync('ffprobe', [
+      const { stdout } = await execFileAsync(ffprobeBin, [
         '-v', 'error', '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1', filePath,
       ], { maxBuffer: 5 * 1024 * 1024 });
