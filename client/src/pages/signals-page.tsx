@@ -6,7 +6,7 @@ import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import type { SignalWithAuthor } from "@shared/schema";
 import {
   Play, Heart, MessageCircle, Share2, X, Upload, Volume2, VolumeX,
-  ChevronUp, ChevronDown, Loader2, Video, Send, Trash2,
+  ChevronUp, ChevronDown, Loader2, Video, Send, Trash2, Pencil, AlertTriangle, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -133,6 +133,12 @@ function SignalPlayerModal({
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(signal.likesCount ?? 0);
   const [commentText, setCommentText] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [editTitle, setEditTitle] = useState(signal.title ?? "");
+  const [editTagInput, setEditTagInput] = useState((signal.tags ?? []).join(" "));
+  const { toast } = useToast();
+  const isOwner = user?.id === signal.authorId;
 
   const idx = allSignals.findIndex((s) => s.id === signal.id);
   const prevSignal = idx > 0 ? allSignals[idx - 1] : null;
@@ -216,6 +222,47 @@ function SignalPlayerModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/mobile/signals", signal.id, "comments"] });
     },
+  });
+
+  const editSignalMutation = useMutation({
+    mutationFn: async ({ title, tags }: { title: string; tags: string[] }) => {
+      const token = await fetchCsrfToken();
+      const fd = new FormData();
+      fd.append("title", title);
+      fd.append("tags", JSON.stringify(tags));
+      const res = await fetch(`/api/mobile/signals/${signal.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "x-csrf-token": token },
+        body: fd,
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/mobile/signals"] });
+      setEditMode(false);
+      toast({ title: "Signal updated!" });
+    },
+    onError: (err: any) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteSignalMutation = useMutation({
+    mutationFn: async () => {
+      const token = await fetchCsrfToken();
+      const res = await fetch(`/api/mobile/signals/${signal.id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "x-csrf-token": token },
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/mobile/signals"] });
+      toast({ title: "Signal deleted" });
+      onClose();
+    },
+    onError: (err: any) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
   });
 
   useEffect(() => {
@@ -340,18 +387,114 @@ function SignalPlayerModal({
               </div>
             </div>
 
-            {signal.title && (
-              <h2 className="font-bold text-base text-white drop-shadow mb-2">{signal.title}</h2>
-            )}
-            {signal.tags && signal.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-3">
-                {signal.tags.map((t) => (
-                  <span key={t} className="text-xs px-2 py-0.5 rounded-full text-white/80"
-                    style={{ background: "rgba(239,68,68,0.3)", border: "1px solid rgba(239,68,68,0.4)" }}>
-                    #{t}
-                  </span>
-                ))}
+            {/* Owner actions */}
+            {isOwner && !editMode && !deleteConfirm && (
+              <div className="flex items-center gap-2 mb-3">
+                <button
+                  onClick={() => { setEditTitle(signal.title ?? ""); setEditTagInput((signal.tags ?? []).join(" ")); setEditMode(true); }}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all hover:scale-105"
+                  style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.8)" }}
+                >
+                  <Pencil className="w-3 h-3" /> Edit
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm(true)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all hover:scale-105"
+                  style={{ background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.35)", color: "rgba(252,165,165,0.9)" }}
+                >
+                  <Trash2 className="w-3 h-3" /> Delete
+                </button>
               </div>
+            )}
+
+            {/* Delete confirmation */}
+            {deleteConfirm && (
+              <div className="mb-3 p-3 rounded-xl"
+                style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <p className="text-sm text-white/90 font-medium">Delete this signal?</p>
+                </div>
+                <p className="text-xs text-white/50 mb-3">This can't be undone.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => deleteSignalMutation.mutate()}
+                    disabled={deleteSignalMutation.isPending}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg transition-all"
+                    style={{ background: "rgba(239,68,68,0.6)", border: "1px solid rgba(239,68,68,0.5)", color: "white" }}
+                  >
+                    {deleteSignalMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    Yes, delete
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm(false)}
+                    className="flex-1 text-xs py-1.5 rounded-lg text-white/60 transition-all"
+                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Edit form */}
+            {editMode ? (
+              <div className="space-y-2 mb-3">
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Title..."
+                  maxLength={200}
+                  className="w-full rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/30 outline-none transition-all"
+                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)" }}
+                />
+                <input
+                  type="text"
+                  value={editTagInput}
+                  onChange={(e) => setEditTagInput(e.target.value)}
+                  placeholder="Tags (space or comma separated)"
+                  className="w-full rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/30 outline-none transition-all"
+                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)" }}
+                />
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      const tags = editTagInput.split(/[\s,]+/).map((t) => t.replace(/^#/, "").trim()).filter(Boolean);
+                      editSignalMutation.mutate({ title: editTitle, tags });
+                    }}
+                    disabled={editSignalMutation.isPending}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg transition-all"
+                    style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: "white" }}
+                  >
+                    {editSignalMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditMode(false)}
+                    className="flex-1 text-xs py-1.5 rounded-lg text-white/50 transition-all"
+                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {signal.title && (
+                  <h2 className="font-bold text-base text-white drop-shadow mb-2">{signal.title}</h2>
+                )}
+                {signal.tags && signal.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {signal.tags.map((t) => (
+                      <span key={t} className="text-xs px-2 py-0.5 rounded-full text-white/80"
+                        style={{ background: "rgba(239,68,68,0.3)", border: "1px solid rgba(239,68,68,0.4)" }}>
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             <div className="flex items-center gap-5">

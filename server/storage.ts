@@ -553,6 +553,7 @@ export interface IStorage {
   getSignalsByUser(userId: string): Promise<SignalWithAuthor[]>;
   createSignal(signal: InsertSignal): Promise<Signal>;
   updateSignal(id: string, data: { title?: string; description?: string; tags?: string[]; thumbnailUrl?: string }): Promise<Signal>;
+  deleteSignal(id: string): Promise<void>;
   likeSignal(signalId: string, userId: string): Promise<void>;
   unlikeSignal(signalId: string, userId: string): Promise<void>;
   incrementSignalViewCount(signalId: string): Promise<void>;
@@ -8781,6 +8782,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(signals.id, id))
       .returning();
     return signal;
+  }
+
+  async deleteSignal(id: string): Promise<void> {
+    await db.update(signals).set({ isDeleted: true }).where(eq(signals.id, id));
   }
 
   async likeSignal(signalId: string, userId: string): Promise<void> {

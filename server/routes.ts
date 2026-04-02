@@ -7137,6 +7137,21 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // DELETE /api/mobile/signals/:id — owner-only soft delete
+  app.delete("/api/mobile/signals/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const signal = await storage.getSignalById(req.params.id);
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      if (signal.authorId !== req.user!.id) return res.sendStatus(403);
+      await storage.deleteSignal(signal.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Signal delete error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   const MAX_CLIPS = 50;
   const ALLOWED_CLIP_MIMETYPES = new Set(['video/webm', 'video/mp4', 'video/quicktime']);
   const signalMultiUpload = multer({
