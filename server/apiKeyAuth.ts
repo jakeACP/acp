@@ -74,7 +74,9 @@ export async function apiKeyAuth(req: Request, res: Response, next: NextFunction
     return res.status(401).json({ error: "Associated user account not found" });
   }
 
-  db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, apiKey.id)).catch(() => {});
+  db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, apiKey.id)).catch((err: unknown) => {
+    console.warn("[apiKeyAuth] Failed to update lastUsedAt for key", apiKey.id, err);
+  });
 
   req.apiUser = user;
   next();
