@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, ExternalLink, AlertTriangle, TrendingUp, ShieldCheck, TrendingDown, ChevronDown, ChevronUp, DollarSign } from "lucide-react";
 import { Navigation } from "@/components/navigation";
+import { useTheme } from "@/hooks/use-theme";
 
 type SIG = {
   id: string;
@@ -46,9 +47,34 @@ function sentimentBadgeClass(s?: string) {
 
 function cardBgClass(sig: SIG): string {
   if (sig.isAce) return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700";
-  if (sig.sentiment === "negative") return "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900";
-  if (sig.sentiment === "positive") return "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900";
+  if (sig.sentiment === "negative") return "bg-red-50 dark:bg-red-900/40 border-red-300 dark:border-red-700";
+  if (sig.sentiment === "positive") return "bg-green-50 dark:bg-green-900/40 border-green-300 dark:border-green-700";
   return "";
+}
+
+function patriotCardStyle(sig: SIG): Record<string, string> {
+  if (sig.isAce) {
+    return {
+      background: "linear-gradient(135deg, rgba(16,185,129,0.55) 0%, rgba(6,78,59,0.65) 100%)",
+      borderColor: "rgba(52,211,153,0.6)",
+      color: "#fff",
+    };
+  }
+  if (sig.sentiment === "negative") {
+    return {
+      background: "linear-gradient(135deg, rgba(220,38,38,0.60) 0%, rgba(127,29,29,0.70) 100%)",
+      borderColor: "rgba(248,113,113,0.6)",
+      color: "#fff",
+    };
+  }
+  if (sig.sentiment === "positive") {
+    return {
+      background: "linear-gradient(135deg, rgba(22,163,74,0.60) 0%, rgba(20,83,45,0.70) 100%)",
+      borderColor: "rgba(74,222,128,0.6)",
+      color: "#fff",
+    };
+  }
+  return {};
 }
 
 function categoryBadgeClass(cat: string) {
@@ -94,12 +120,18 @@ function isPacCategory(cat: string): boolean {
 }
 
 function SigCard({ sig }: { sig: SIG }) {
+  const { actualTheme } = useTheme();
   const effectiveGrade = sig.letterGrade || (sig.influenceScore !== null && sig.influenceScore !== undefined ? influenceGrade(sig.influenceScore) : null);
   const hasInfluence = sig.influenceScore !== null && sig.influenceScore !== undefined;
   const scorePct = hasInfluence ? ((sig.influenceScore! + 50) / 100) * 100 : null;
+  const isPatriot = actualTheme === "patriot";
+  const cardStyle = isPatriot ? patriotCardStyle(sig) : undefined;
 
   return (
-    <Card className={`flex flex-col hover:shadow-md transition-shadow ${cardBgClass(sig)}`}>
+    <Card
+      className={`flex flex-col hover:shadow-md transition-shadow ${isPatriot ? "" : cardBgClass(sig)}`}
+      style={cardStyle}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base leading-tight flex items-center gap-2">
