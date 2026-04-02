@@ -4506,7 +4506,7 @@ export class DatabaseStorage implements IStorage {
                COUNT(DISTINCT pss.politician_id) AS shared_count
         FROM politician_sig_sponsorships pss
         JOIN special_interest_groups s ON s.id = pss.sig_id
-        WHERE pss.politician_id = ANY(${politicianIds}::varchar[])
+        WHERE pss.politician_id = ANY(ARRAY[${sql.join(politicianIds, sql`, `)}]::varchar[])
           AND pss.sig_id != ${sig.id}
         GROUP BY s.id, s.name, s.tag, s.category, s.sentiment, s.is_ace
         ORDER BY shared_count DESC
