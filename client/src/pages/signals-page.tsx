@@ -136,6 +136,7 @@ function SignalPlayerModal({
   const [editMode, setEditMode] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [editTitle, setEditTitle] = useState(signal.title ?? "");
+  const [editDescription, setEditDescription] = useState(signal.description ?? "");
   const [editTagInput, setEditTagInput] = useState((signal.tags ?? []).join(" "));
   const [editThumbFile, setEditThumbFile] = useState<File | null>(null);
   const [editThumbPreview, setEditThumbPreview] = useState<string | null>(null);
@@ -228,10 +229,11 @@ function SignalPlayerModal({
   });
 
   const editSignalMutation = useMutation({
-    mutationFn: async ({ title, tags }: { title: string; tags: string[] }) => {
+    mutationFn: async ({ title, description, tags }: { title: string; description: string; tags: string[] }) => {
       const token = await fetchCsrfToken();
       const fd = new FormData();
       fd.append("title", title);
+      fd.append("description", description);
       fd.append("tags", JSON.stringify(tags));
       if (editThumbFile) fd.append("thumbnail", editThumbFile);
       const res = await fetch(`/api/mobile/signals/${signal.id}`, {
@@ -494,6 +496,15 @@ function SignalPlayerModal({
                   className="w-full rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/30 outline-none transition-all"
                   style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)" }}
                 />
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Description..."
+                  maxLength={2000}
+                  rows={3}
+                  className="w-full rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/30 outline-none transition-all resize-none"
+                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)" }}
+                />
                 <input
                   type="text"
                   value={editTagInput}
@@ -506,7 +517,7 @@ function SignalPlayerModal({
                   <button
                     onClick={() => {
                       const tags = editTagInput.split(/[\s,]+/).map((t) => t.replace(/^#/, "").trim()).filter(Boolean);
-                      editSignalMutation.mutate({ title: editTitle, tags });
+                      editSignalMutation.mutate({ title: editTitle, description: editDescription, tags });
                     }}
                     disabled={editSignalMutation.isPending}
                     className="flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg transition-all"
