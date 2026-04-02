@@ -5,6 +5,7 @@ import { ArrowLeft, Heart, MessageCircle, Share2, Play, Volume2, VolumeX } from 
 import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { SignalWithAuthor } from "@shared/schema";
+import { SignalCommentsOverlay } from "../components/SignalCommentsOverlay";
 
 const SWIPE_THRESHOLD = 72;   // px of travel before committing
 const SWIPE_EXIT_PX   = 340;  // how far to animate the screen off before navigating
@@ -22,6 +23,7 @@ export function SignalPlayerPage() {
   const [progress,       setProgress]       = useState(0);
   const [liked,          setLiked]          = useState(false);
   const [localLikeCount, setLocalLikeCount] = useState(0);
+  const [showComments,   setShowComments]   = useState(false);
 
   // Swipe drag state
   const touchStartY  = useRef<number | null>(null);
@@ -334,7 +336,11 @@ export function SignalPlayerPage() {
           <span className="text-white text-xs font-semibold drop-shadow">{fmt(localLikeCount)}</span>
         </button>
 
-        <button className="flex flex-col items-center gap-1 active:scale-90 transition-transform" aria-label="Comments">
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowComments(true); }}
+          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+          aria-label="Comments"
+        >
           <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
             <MessageCircle className="w-6 h-6 text-white" />
           </div>
@@ -395,6 +401,13 @@ export function SignalPlayerPage() {
           <div className="h-full bg-white rounded-full" style={{ width: `${progress * 100}%` }} />
         </div>
       </div>
+
+      {showComments && (
+        <SignalCommentsOverlay
+          signalId={signal.id}
+          onClose={() => setShowComments(false)}
+        />
+      )}
     </div>
   );
 }

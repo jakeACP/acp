@@ -7314,6 +7314,48 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // ── Signal Comments ──────────────────────────────────────────────────────
+  app.get("/api/mobile/signals/:id/comments", async (req, res) => {
+    try {
+      const comments = await storage.getSignalComments(req.params.id);
+      res.json(comments);
+    } catch (error: any) {
+      console.error("Get signal comments error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/mobile/signals/:id/comments", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const content = String(req.body.content || '').trim();
+      if (!content || content.length > 2000) {
+        return res.status(400).json({ message: "Comment must be 1-2000 characters" });
+      }
+      const comment = await storage.createSignalComment({
+        signalId: req.params.id,
+        authorId: req.user!.id,
+        content,
+        parentId: req.body.parentId || null,
+      });
+      res.status(201).json(comment);
+    } catch (error: any) {
+      console.error("Create signal comment error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/mobile/signals/:signalId/comments/:commentId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      await storage.deleteSignalComment(req.params.commentId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete signal comment error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // ── Compose endpoint (editor → async FFmpeg job) ──────────────────────────
   // Prefer the system ffmpeg (has drawtext/libfreetype) over the npm static build which lacks it.
   const ffmpegBin: string = 'ffmpeg';
