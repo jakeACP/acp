@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { TwoFactorSettings } from "@/components/two-factor-settings";
 import { Link } from "wouter";
 import type { UploadResult } from "@uppy/core";
+import type { ApiKey } from "@shared/schema";
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -294,7 +295,7 @@ export default function SettingsPage() {
   const [revealedKey, setRevealedKey] = useState<{ rawKey: string; name: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
 
-  const { data: apiKeyList, isLoading: apiKeysLoading } = useQuery<any[]>({
+  const { data: apiKeyList, isLoading: apiKeysLoading } = useQuery<ApiKey[]>({
     queryKey: ["/api/developer/keys"],
     enabled: !!user && (user.subscriptionStatus === "premium" || user.role === "admin"),
   });
@@ -303,8 +304,8 @@ export default function SettingsPage() {
     mutationFn: async (name: string): Promise<{ rawKey: string; name: string; keyPrefix: string }> => {
       const res = await apiRequest("/api/developer/keys", "POST", { name });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).message || "Failed to generate API key");
+        const body: { message?: string; error?: string } = await res.json().catch(() => ({}));
+        throw new Error(body.message ?? body.error ?? "Failed to generate API key");
       }
       return res.json();
     },
@@ -646,7 +647,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-slate-500 dark:text-slate-400">No API keys yet. Generate one to get started.</p>
                   ) : (
                     <div className="space-y-2">
-                      {apiKeyList.map((key: any) => (
+                      {apiKeyList.map((key) => (
                         <div key={key.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{key.name}</p>

@@ -59,11 +59,13 @@ export async function apiKeyAuth(req: Request, res: Response, next: NextFunction
   const limiter = getLimiterForKey(apiKey.id);
   try {
     await limiter.consume(apiKey.id);
-  } catch {
-    res.setHeader("Retry-After", "300");
+  } catch (rlRes: unknown) {
+    const msBeforeNext = (rlRes as { msBeforeNext?: number }).msBeforeNext ?? 3600000;
+    const retryAfterSeconds = Math.ceil(msBeforeNext / 1000);
+    res.setHeader("Retry-After", String(retryAfterSeconds));
     return res.status(429).json({
-      error: "Rate limit exceeded. API keys allow 12 requests per hour (approx. 1 per 5 minutes).",
-      retryAfterSeconds: 300,
+      error: "Rate limit exceeded. API keys allow 12 requests per hour.",
+      retryAfterSeconds,
     });
   }
 

@@ -9083,7 +9083,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const { generateRawApiKey, hashApiKey } = await import("./apiKeyAuth");
       const rawKey = generateRawApiKey();
       const keyHash = hashApiKey(rawKey);
-      const keyPrefix = rawKey.slice(0, 12);
+      const keyPrefix = rawKey.slice(0, 8);
       await storage.createApiKey({ userId: user.id, name, keyHash, keyPrefix });
       res.status(201).json({ rawKey, keyPrefix, name });
     } catch (err: any) {
