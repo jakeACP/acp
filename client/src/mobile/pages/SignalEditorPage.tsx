@@ -458,9 +458,9 @@ export function SignalEditorPage() {
   // Seeks to trimIn only AFTER play() resolves and only when duration is finite
   // (WebM blobs without metadata report duration === Infinity, making seeks deadlock).
   const handleVideoReady = useCallback(() => {
-    if (videoReadyRef.current) return;  // Already handled
-    if (!playingRef.current) return;    // Not playing yet — leave gate open for togglePlay
-    videoReadyRef.current = true;       // Consume gate only when we're going to play
+    if (videoReadyRef.current) return;
+    if (!playingRef.current) return;
+    videoReadyRef.current = true;
     const v = videoRef.current;
     if (!v) return;
     v.play()
@@ -470,7 +470,9 @@ export function SignalEditorPage() {
           v.currentTime = entry.trimIn;
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        videoReadyRef.current = false;
+      });
   }, [entries, currentEntryIdx]);
 
   // Preload next clip (skip photos)
@@ -508,20 +510,21 @@ export function SignalEditorPage() {
       playingRef.current = true;
       if (entry.type === "clip") {
         const v = videoRef.current;
-        // needsInitialSeek: true only when handleVideoReady hasn't fired yet for this clip
-        // (gate is still open), meaning the user tapped play after canplay/loadedmetadata
-        // already fired but while paused.  False on subsequent pause→resume (gate consumed).
         const needsInitialSeek = !videoReadyRef.current;
-        videoReadyRef.current = true;  // Consume gate so handleVideoReady won't double-seek
+        videoReadyRef.current = true;
         v?.play()
           .then(() => {
             if (needsInitialSeek && v && entry.trimIn > 0 && isFinite(v.duration)) {
               v.currentTime = entry.trimIn;
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            videoReadyRef.current = false;
+            if (v && v.readyState >= 3) {
+              v.play().catch(() => {});
+            }
+          });
       } else {
-        // For photo entry: start a timer to advance
         const displayDur = Math.max(0.1, entry.duration - entry.trimIn - entry.trimOut) * 1000;
         photoTimerRef.current = setTimeout(handleEnded, displayDur);
       }
