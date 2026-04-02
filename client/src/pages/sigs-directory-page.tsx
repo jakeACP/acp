@@ -139,13 +139,10 @@ function SigCard({ sig }: { sig: SIG }) {
       className={`flex flex-col hover:shadow-md transition-shadow ${isPatriot ? "" : cardBgClass(sig)}`}
       style={cardStyle}
     >
-      <CardHeader
-        className="pb-3 rounded-t-[22px]"
-        style={isPatriot ? { background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" } : undefined}
-      >
+      <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className={`text-base leading-tight flex items-center gap-2 ${isPatriot ? "text-white" : ""}`}>
-            {sig.isAce && <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />}
+          <CardTitle className="text-base leading-tight flex items-center gap-2">
+            {sig.isAce && <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
             {sig.name}
           </CardTitle>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -160,10 +157,7 @@ function SigCard({ sig }: { sig: SIG }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <Badge
-            variant="outline"
-            className={`text-xs w-fit ${isPatriot ? "border-white/40 text-white/90 bg-white/10" : categoryBadgeClass(sig.category)}`}
-          >
+          <Badge variant="outline" className={`text-xs w-fit ${categoryBadgeClass(sig.category)}`}>
             {sig.isAce ? "Anti-Corruption Endorsement" : sig.category === "pac" ? "PAC / Committee" : sig.category}
           </Badge>
         </div>
