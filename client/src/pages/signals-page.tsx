@@ -228,24 +228,40 @@ function SignalPlayerModal({
     return () => window.removeEventListener("keydown", handler);
   }, [nextSignal, prevSignal, onClose, onNavigate]);
 
+  const glassPanel: React.CSSProperties = {
+    background: "linear-gradient(135deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 100%)",
+    backdropFilter: "blur(40px) saturate(180%)",
+    WebkitBackdropFilter: "blur(40px) saturate(180%)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    boxShadow: "0 8px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2)",
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", background: "rgba(0,0,0,0.65)" }}
+      onClick={onClose}
+    >
       <div
-        className="relative flex bg-card rounded-2xl overflow-hidden shadow-2xl"
-        style={{ width: "min(900px, 95vw)", height: "min(90vh, 700px)" }}
+        className="relative flex rounded-3xl overflow-hidden"
+        style={{ ...glassPanel, width: "min(920px, 95vw)", height: "min(90vh, 700px)" }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Close */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/70 transition-colors"
+          className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full flex items-center justify-center transition-all"
+          style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.15)" }}
         >
           <X className="w-4 h-4 text-white" />
         </button>
 
+        {/* Prev / Next */}
         {prevSignal && (
           <button
             onClick={() => onNavigate(prevSignal.id)}
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/70 transition-colors"
+            className="absolute left-[322px] top-1/2 -translate-y-8 z-20 w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-110"
+            style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.2)" }}
             title="Previous (←)"
           >
             <ChevronUp className="w-4 h-4 text-white" />
@@ -254,14 +270,16 @@ function SignalPlayerModal({
         {nextSignal && (
           <button
             onClick={() => onNavigate(nextSignal.id)}
-            className="absolute left-3 bottom-1/4 z-10 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/70 transition-colors"
+            className="absolute left-[322px] top-1/2 translate-y-1 z-20 w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-110"
+            style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.2)" }}
             title="Next (→)"
           >
             <ChevronDown className="w-4 h-4 text-white" />
           </button>
         )}
 
-        <div className="relative bg-black flex-shrink-0" style={{ width: "340px" }}>
+        {/* Video panel */}
+        <div className="relative bg-black/60 flex-shrink-0 rounded-l-3xl overflow-hidden" style={{ width: "340px" }}>
           <video
             key={signal.id}
             ref={videoRef}
@@ -282,7 +300,8 @@ function SignalPlayerModal({
 
           {!playing && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.3)" }}>
                 <Play className="w-8 h-8 text-white ml-1" fill="white" />
               </div>
             </div>
@@ -290,64 +309,66 @@ function SignalPlayerModal({
 
           <button
             onClick={() => { const v = videoRef.current; if (v) { v.muted = !v.muted; setMuted(v.muted); } }}
-            className="absolute bottom-14 right-3 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/70 transition-colors"
+            className="absolute bottom-14 right-3 w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-110"
+            style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.15)" }}
           >
             {muted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
           </button>
 
-          <div
-            className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 cursor-pointer"
-            onClick={handleSeek}
-          >
-            <div className="h-full bg-white transition-all" style={{ width: `${progress * 100}%` }} />
+          <div className="absolute bottom-0 left-0 right-0 h-1 cursor-pointer" style={{ background: "rgba(255,255,255,0.15)" }} onClick={handleSeek}>
+            <div className="h-full bg-white/90 transition-all" style={{ width: `${progress * 100}%` }} />
           </div>
         </div>
 
+        {/* Info + Comments panel */}
         <div className="flex flex-col flex-1 min-w-0">
-          <div className="p-5 border-b border-border">
+          {/* Header */}
+          <div className="p-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.10)" }}>
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 rounded-full bg-muted overflow-hidden flex-shrink-0">
+              <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0" style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)" }}>
                 {signal.author?.avatar ? (
                   <img src={signal.author.avatar} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm font-bold">
+                  <div className="w-full h-full flex items-center justify-center text-white/70 text-sm font-bold">
                     {signal.author?.username?.[0]?.toUpperCase()}
                   </div>
                 )}
               </div>
               <div>
-                <p className="font-semibold text-sm text-foreground">@{signal.author?.username}</p>
-                <p className="text-xs text-muted-foreground">{timeAgo(signal.createdAt as unknown as string)}</p>
+                <p className="font-semibold text-sm text-white drop-shadow">@{signal.author?.username}</p>
+                <p className="text-xs text-white/50">{timeAgo(signal.createdAt as unknown as string)}</p>
               </div>
             </div>
+
             {signal.title && (
-              <h2 className="font-bold text-base text-foreground mb-2">{signal.title}</h2>
+              <h2 className="font-bold text-base text-white drop-shadow mb-2">{signal.title}</h2>
             )}
             {signal.tags && signal.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1 mb-3">
                 {signal.tags.map((t) => (
-                  <span key={t} className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs px-2 py-0.5 rounded-full">
+                  <span key={t} className="text-xs px-2 py-0.5 rounded-full text-white/80"
+                    style={{ background: "rgba(239,68,68,0.3)", border: "1px solid rgba(239,68,68,0.4)" }}>
                     #{t}
                   </span>
                 ))}
               </div>
             )}
 
-            <div className="flex items-center gap-4 mt-4">
+            <div className="flex items-center gap-5">
               <button
                 onClick={() => user && likeMutation.mutate()}
-                className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"}`}
+                className={`flex items-center gap-1.5 text-sm font-medium transition-all ${liked ? "text-red-400" : "text-white/60 hover:text-red-400"}`}
               >
-                <Heart className={`w-4 h-4 ${liked ? "fill-red-500" : ""}`} />
+                <Heart className={`w-4 h-4 ${liked ? "fill-red-400" : ""}`} />
                 {fmt(likeCount)}
               </button>
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-sm text-white/50">
                 <MessageCircle className="w-4 h-4" />
                 {fmt(comments.length)}
               </div>
               <button
                 onClick={() => navigator.share?.({ url: window.location.href + `?signal=${signal.id}`, title: signal.title ?? "Signal" }).catch(() => {})}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 text-sm text-white/50 hover:text-white/90 transition-colors"
               >
                 <Share2 className="w-4 h-4" />
                 Share
@@ -355,39 +376,42 @@ function SignalPlayerModal({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Comments list */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4"
+            style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.15) transparent" }}>
             {commentsLoading ? (
               <div className="flex justify-center py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                <Loader2 className="w-5 h-5 animate-spin text-white/40" />
               </div>
             ) : comments.length === 0 ? (
               <div className="text-center py-8">
-                <MessageCircle className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">No comments yet. Be first!</p>
+                <MessageCircle className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                <p className="text-sm text-white/40">No comments yet. Be first!</p>
               </div>
             ) : (
               comments.map((c) => (
                 <div key={c.id} className="flex gap-2.5 group">
-                  <div className="w-7 h-7 rounded-full bg-muted overflow-hidden flex-shrink-0 mt-0.5">
+                  <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 mt-0.5"
+                    style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }}>
                     {c.author.avatar ? (
                       <img src={c.author.avatar} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[10px] font-bold">
+                      <div className="w-full h-full flex items-center justify-center text-white/60 text-[10px] font-bold">
                         {c.author.username[0]?.toUpperCase()}
                       </div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-xs font-semibold text-foreground">{c.author.username}</span>
-                      <span className="text-[10px] text-muted-foreground">{timeAgo(c.createdAt)}</span>
+                      <span className="text-xs font-semibold text-white/90">{c.author.username}</span>
+                      <span className="text-[10px] text-white/35">{timeAgo(c.createdAt)}</span>
                     </div>
-                    <p className="text-sm text-foreground/90 mt-0.5 break-words leading-relaxed">{c.content}</p>
+                    <p className="text-sm text-white/80 mt-0.5 break-words leading-relaxed">{c.content}</p>
                   </div>
                   {user?.id === c.authorId && (
                     <button
                       onClick={() => deleteMutation.mutate(c.id)}
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all w-6 h-6 flex items-center justify-center rounded flex-shrink-0"
+                      className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-red-400 transition-all w-6 h-6 flex items-center justify-center rounded flex-shrink-0"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -397,10 +421,12 @@ function SignalPlayerModal({
             )}
           </div>
 
+          {/* Comment input */}
           {user ? (
             <form
               onSubmit={(e) => { e.preventDefault(); const t = commentText.trim(); if (t) commentMutation.mutate(t); }}
-              className="p-3 border-t border-border flex gap-2 items-center"
+              className="p-3 flex gap-2 items-center"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.10)" }}
             >
               <input
                 type="text"
@@ -408,24 +434,31 @@ function SignalPlayerModal({
                 onChange={(e) => setCommentText(e.target.value)}
                 placeholder="Add a comment..."
                 maxLength={2000}
-                className="flex-1 bg-muted rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                className="flex-1 rounded-full px-4 py-2 text-sm text-white placeholder-white/30 outline-none transition-all"
+                style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.15)" }}
+                onFocus={(e) => (e.currentTarget.style.border = "1px solid rgba(255,255,255,0.35)")}
+                onBlur={(e) => (e.currentTarget.style.border = "1px solid rgba(255,255,255,0.15)")}
               />
-              <Button
+              <button
                 type="submit"
-                size="sm"
                 disabled={!commentText.trim() || commentMutation.isPending}
-                className="rounded-full w-9 h-9 p-0"
+                className="w-9 h-9 rounded-full flex items-center justify-center transition-all disabled:opacity-30 hover:scale-105"
+                style={{
+                  background: commentText.trim() ? "rgba(239,68,68,0.75)" : "rgba(255,255,255,0.10)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  backdropFilter: "blur(8px)",
+                }}
               >
                 {commentMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
                 ) : (
-                  <Send className="w-4 h-4" />
+                  <Send className="w-4 h-4 text-white" />
                 )}
-              </Button>
+              </button>
             </form>
           ) : (
-            <div className="p-4 border-t border-border text-center">
-              <p className="text-sm text-muted-foreground">Log in to comment</p>
+            <div className="p-4 text-center" style={{ borderTop: "1px solid rgba(255,255,255,0.10)" }}>
+              <p className="text-sm text-white/40">Log in to comment</p>
             </div>
           )}
         </div>
