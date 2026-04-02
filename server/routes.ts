@@ -9165,9 +9165,12 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  const patchPoliticianSchema = insertPoliticianProfileSchema.partial();
   app.patch("/api/v1/admin/politicians/:id", apiKeyAuth, requireAdminApiKey, async (req, res) => {
+    const parsed = patchPoliticianSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     try {
-      const profile = await storage.updatePoliticianProfile(req.params.id, req.body);
+      const profile = await storage.updatePoliticianProfile(req.params.id, parsed.data);
       res.json(profile);
     } catch (err: any) {
       res.status(500).json({ error: "Failed to update politician profile" });
@@ -9185,9 +9188,12 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  const patchPositionSchema = insertPoliticalPositionSchema.partial();
   app.patch("/api/v1/admin/positions/:id", apiKeyAuth, requireAdminApiKey, async (req, res) => {
+    const parsed = patchPositionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     try {
-      const position = await storage.updatePoliticalPosition(req.params.id, req.body);
+      const position = await storage.updatePoliticalPosition(req.params.id, parsed.data);
       res.json(position);
     } catch (err: any) {
       res.status(500).json({ error: "Failed to update political position" });
@@ -9205,16 +9211,15 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  const patchCandidateSchema = insertCandidateSchema.partial();
   app.patch("/api/v1/admin/candidates/:id", apiKeyAuth, requireAdminApiKey, async (req, res) => {
+    const parsed = patchCandidateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     try {
-      const [updated] = await (await import("./db")).db
-        .update((await import("@shared/schema")).candidates)
-        .set(req.body)
-        .where((await import("drizzle-orm")).eq((await import("@shared/schema")).candidates.id, req.params.id))
-        .returning();
-      if (!updated) return res.status(404).json({ error: "Candidate not found" });
+      const updated = await storage.updateCandidate(req.params.id, parsed.data);
       res.json(updated);
     } catch (err: any) {
+      if (err.message === "Candidate not found") return res.status(404).json({ error: "Candidate not found" });
       res.status(500).json({ error: "Failed to update candidate" });
     }
   });
