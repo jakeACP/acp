@@ -9127,7 +9127,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
   app.get("/api/v1/posts", apiKeyAuth, requirePremiumApiKey, async (req, res) => {
     const user = req.apiUser!;
     try {
-      const posts = await storage.getPostsByUser(user.id);
+      const posts = await storage.getPostsByUser(user.id, user.id);
       res.json(posts);
     } catch {
       res.status(500).json({ error: "Failed to fetch posts" });
