@@ -393,6 +393,7 @@ export interface IStorage {
   createAgentApp(data: InsertAgentApp): Promise<AgentApp>;
   updateAgentApp(id: string, data: Partial<InsertAgentApp>): Promise<AgentApp>;
   deleteAgentApp(id: string): Promise<void>;
+  ensureCodexApp(): Promise<AgentApp>;
   ensurePaperclipApp(): Promise<AgentApp>;
 
   // ACP Cryptocurrency System
@@ -9061,6 +9062,19 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAgentApp(id: string): Promise<void> {
     await db.delete(agentApps).where(eq(agentApps.id, id));
+  }
+
+  async ensureCodexApp(): Promise<AgentApp> {
+    const existing = await this.getAgentAppBySlug("codex");
+    if (existing) return existing;
+
+    return this.createAgentApp({
+      slug: "codex",
+      name: "Codex",
+      description: "OpenAI's autonomous coding agent. Paperclip uses Codex as a local adapter to execute AI-driven development tasks. Requires an OpenAI API key.",
+      githubUrl: "https://github.com/openai/codex",
+      status: "not_installed",
+    });
   }
 
   async ensurePaperclipApp(): Promise<AgentApp> {

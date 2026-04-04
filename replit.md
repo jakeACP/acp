@@ -94,11 +94,20 @@ Create ACP user accounts for agents via `/admin/users`. Assign roles based on th
 
 ### API Endpoints
 - `GET /api/admin/is-global-admin` — returns `{ isGlobalAdmin: boolean }` for any authenticated user
-- `GET /api/admin/agent-apps` — list all registered apps (requires Global Admin)
-- `PATCH /api/admin/agent-apps/:id` — update app metadata (requires Global Admin)
-- `GET /api/admin/agent-apps/:id/status` — live ping status check (requires Global Admin)
-- `POST /api/admin/agent-apps/:id/backup` — download zip backup (requires Global Admin)
-- `POST /api/admin/agent-apps/:id/restore` — restore from zip upload (requires Global Admin)
+- `GET /api/admin/agent-apps` — list all registered apps (requires admin role)
+- `PATCH /api/admin/agent-apps/:id` — update app metadata (requires admin role)
+- `GET /api/admin/agent-apps/:id/status` — live ping status check (requires admin role)
+- `POST /api/admin/agent-apps/:id/backup` — download zip backup (requires admin role)
+- `POST /api/admin/agent-apps/:id/restore` — restore from zip upload (requires admin role)
+- `POST /api/admin/agent-apps/:id/run` — start app process (requires admin role)
+- `POST /api/admin/agent-apps/:id/stop` — stop app process (requires admin role)
+- `POST /api/admin/agent-apps/:id/install` — git clone app from GitHub URL (requires admin role)
+- `POST /api/admin/agent-apps/:id/update` — git pull latest code (requires admin role)
+- `POST /api/admin/agent-apps/:id/config` — set app-specific env var (e.g. API keys) (requires admin role)
+
+### Registered Agent Apps
+- **Paperclip** — AI company orchestration platform; port 3001, slug `paperclip`, own `paperclipdb` database
+- **Codex** — OpenAI coding agent; slug `codex`, requires `OPENAI_API_KEY` config
 
 ## External Dependencies
 

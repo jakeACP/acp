@@ -9242,6 +9242,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
 
   // Seed the Paperclip app entry on startup
   storage.ensurePaperclipApp().catch(err => console.error("Failed to seed Paperclip app:", err));
+  storage.ensureCodexApp().catch(err => console.error("Failed to seed Codex app:", err));
 
   // GET /api/admin/is-global-admin — no auth middleware, just returns a bool
   app.get("/api/admin/is-global-admin", async (req: any, res: any) => {
@@ -9483,6 +9484,187 @@ Only include people you are confident about. Return empty arrays/null if unknown
       res.json({ success: true, message });
     } catch (err) {
       if (!res.headersSent) res.status(500).json({ error: "Restore failed" });
+    }
+  });
+
+  // ─── Agent App Process Manager ─────────────────────────────────────────────
+  const runningProcesses = new Map<string, { pid: number; kill: () => void }>();
+
+  const APP_RUN_COMMANDS: Record<string, { cmd: string; args: string[]; cwd?: string; env?: Record<string, string> }> = {
+    paperclip: {
+      cmd: "pnpm",
+      args: ["run", "dev:once"],
+      cwd: path.resolve(process.cwd(), "apps/paperclip"),
+      env: {
+        DATABASE_URL: `postgresql://postgres:${process.env.PGPASSWORD || ""}@helium:5432/paperclipdb`,
+        PORT: "3001",
+        SERVE_UI: "true",
+      },
+    },
+    codex: {
+      cmd: "codex",
+      args: [],
+    },
+  };
+
+  // POST /api/admin/agent-apps/:id/run
+  app.post("/api/admin/agent-apps/:id/run", ensureAdminOnly, async (req: any, res: any) => {
+    try {
+      const agentApp = await storage.getAgentAppById(req.params.id);
+      if (!agentApp) return res.status(404).json({ error: "App not found" });
+      if (agentApp.status === "not_installed") return res.status(400).json({ error: "App is not installed yet" });
+      if (runningProcesses.has(agentApp.id)) return res.status(400).json({ error: "App is already running" });
+
+      const config = APP_RUN_COMMANDS[agentApp.slug];
+      if (!config) return res.status(400).json({ error: `No run configuration for ${agentApp.slug}` });
+
+      const { spawn } = await import("child_process");
+      const proc = spawn(config.cmd, config.args, {
+        cwd: config.cwd || process.cwd(),
+        env: { ...process.env, ...config.env },
+        stdio: "pipe",
+        detached: false,
+      });
+
+      proc.stdout?.on("data", (d: Buffer) => console.log(`[${agentApp.slug}] ${d.toString().trim()}`));
+      proc.stderr?.on("data", (d: Buffer) => console.error(`[${agentApp.slug}] ${d.toString().trim()}`));
+
+      proc.on("error", (err: Error) => {
+        console.error(`[${agentApp.slug}] spawn error:`, err.message);
+        runningProcesses.delete(agentApp.id);
+        storage.updateAgentApp(agentApp.id, { status: "stopped" }).catch(() => {});
+      });
+
+      runningProcesses.set(agentApp.id, {
+        pid: proc.pid || 0,
+        kill: () => { try { proc.kill("SIGTERM"); } catch {} },
+      });
+
+      proc.on("exit", () => {
+        runningProcesses.delete(agentApp.id);
+        storage.updateAgentApp(agentApp.id, { status: "stopped" }).catch(() => {});
+      });
+
+      if (!proc.pid) {
+        runningProcesses.delete(agentApp.id);
+        return res.status(500).json({ error: `Failed to spawn ${agentApp.slug} — binary not found or not executable` });
+      }
+
+      await storage.updateAgentApp(agentApp.id, { status: "running" });
+      res.json({ success: true, message: `${agentApp.name} started (PID ${proc.pid})` });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to start app" });
+    }
+  });
+
+  // POST /api/admin/agent-apps/:id/stop
+  app.post("/api/admin/agent-apps/:id/stop", ensureAdminOnly, async (req: any, res: any) => {
+    try {
+      const agentApp = await storage.getAgentAppById(req.params.id);
+      if (!agentApp) return res.status(404).json({ error: "App not found" });
+
+      const proc = runningProcesses.get(agentApp.id);
+      if (proc) {
+        proc.kill();
+        runningProcesses.delete(agentApp.id);
+      }
+      await storage.updateAgentApp(agentApp.id, { status: "stopped" });
+      res.json({ success: true, message: `${agentApp.name} stopped` });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to stop app" });
+    }
+  });
+
+  const APPS_BASE_DIR = path.resolve(process.cwd(), "apps");
+  const GITHUB_URL_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?$/;
+
+  function resolveAppPath(installPath: string): string | null {
+    const resolved = path.resolve(process.cwd(), installPath);
+    if (!resolved.startsWith(APPS_BASE_DIR + path.sep) && resolved !== APPS_BASE_DIR) return null;
+    return resolved;
+  }
+
+  // POST /api/admin/agent-apps/:id/install
+  app.post("/api/admin/agent-apps/:id/install", ensureAdminOnly, async (req: any, res: any) => {
+    try {
+      const agentApp = await storage.getAgentAppById(req.params.id);
+      if (!agentApp) return res.status(404).json({ error: "App not found" });
+      if (!agentApp.githubUrl) return res.status(400).json({ error: "No GitHub URL configured for this app" });
+      if (!GITHUB_URL_RE.test(agentApp.githubUrl)) return res.status(400).json({ error: "Invalid GitHub URL format" });
+
+      const installPath = agentApp.installPath || `apps/${agentApp.slug}`;
+      const fullPath = resolveAppPath(installPath);
+      if (!fullPath) return res.status(400).json({ error: "Install path must be within the apps/ directory" });
+
+      if (fs.existsSync(fullPath)) {
+        return res.status(400).json({ error: "App directory already exists. Use Update instead." });
+      }
+
+      execFile("git", ["clone", agentApp.githubUrl, fullPath], { timeout: 120000 }, async (error) => {
+        if (error) {
+          if (!res.headersSent) return res.status(500).json({ error: `Clone failed: ${error.message}` });
+          return;
+        }
+        await storage.updateAgentApp(agentApp.id, { status: "stopped", installPath });
+        res.json({ success: true, message: `${agentApp.name} cloned to ${installPath}. You may need to install dependencies.` });
+      });
+    } catch (err: any) {
+      if (!res.headersSent) res.status(500).json({ error: err.message || "Install failed" });
+    }
+  });
+
+  // POST /api/admin/agent-apps/:id/update
+  app.post("/api/admin/agent-apps/:id/update", ensureAdminOnly, async (req: any, res: any) => {
+    try {
+      const agentApp = await storage.getAgentAppById(req.params.id);
+      if (!agentApp) return res.status(404).json({ error: "App not found" });
+
+      const installPath = agentApp.installPath || `apps/${agentApp.slug}`;
+      const fullPath = resolveAppPath(installPath);
+      if (!fullPath) return res.status(400).json({ error: "Install path must be within the apps/ directory" });
+
+      if (!fs.existsSync(fullPath)) {
+        return res.status(400).json({ error: "App is not installed. Use Install first." });
+      }
+
+      execFile("git", ["pull"], { cwd: fullPath, timeout: 60000 }, async (error, stdout) => {
+        if (error) {
+          if (!res.headersSent) return res.status(500).json({ error: `Update failed: ${error.message}` });
+          return;
+        }
+        res.json({ success: true, message: stdout.trim() || "Already up to date." });
+      });
+    } catch (err: any) {
+      if (!res.headersSent) res.status(500).json({ error: err.message || "Update failed" });
+    }
+  });
+
+  // POST /api/admin/agent-apps/:id/config — save app-specific configuration (API keys via env vars)
+  app.post("/api/admin/agent-apps/:id/config", ensureAdminOnly, async (req: any, res: any) => {
+    try {
+      const agentApp = await storage.getAgentAppById(req.params.id);
+      if (!agentApp) return res.status(404).json({ error: "App not found" });
+
+      const { key, value } = req.body;
+      if (!key || typeof key !== "string" || typeof value !== "string") {
+        return res.status(400).json({ error: "key and value are required" });
+      }
+
+      const allowedKeys: Record<string, string[]> = {
+        codex: ["OPENAI_API_KEY"],
+        paperclip: ["PAPERCLIP_DATABASE_URL"],
+      };
+
+      const allowed = allowedKeys[agentApp.slug] || [];
+      if (!allowed.includes(key)) {
+        return res.status(400).json({ error: `${key} is not a configurable key for ${agentApp.name}` });
+      }
+
+      process.env[key] = value;
+
+      res.json({ success: true, message: `${key} configured for ${agentApp.name}` });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to save config" });
     }
   });
 

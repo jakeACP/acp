@@ -5,12 +5,14 @@ import { AdminNavigation } from "@/components/admin-navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, fetchCsrfToken, getCsrfToken } from "@/lib/queryClient";
 import {
   Bot, ExternalLink, Download, Upload, RefreshCw, ShieldAlert,
-  Loader2, Circle, Github, Info, HardDrive, Users, Database
+  Loader2, Circle, Github, Info, HardDrive, Users, Database,
+  Play, Square, PackagePlus, ArrowUpCircle, Key, Settings2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +37,15 @@ type LiveStatus = {
   status: "running" | "stopped" | "not_installed";
   reachable: boolean;
   httpStatus?: number;
+};
+
+const APP_CONFIG_FIELDS: Record<string, { key: string; label: string; placeholder: string; type?: string }[]> = {
+  codex: [
+    { key: "OPENAI_API_KEY", label: "OpenAI API Key", placeholder: "sk-...", type: "password" },
+  ],
+  paperclip: [
+    { key: "PAPERCLIP_DATABASE_URL", label: "Database URL (production)", placeholder: "postgresql://...", type: "password" },
+  ],
 };
 
 function StatusBadge({ status, live }: { status: string; live?: LiveStatus }) {
@@ -71,6 +82,19 @@ function AppCard({ app }: { app: AgentApp }) {
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [configValues, setConfigValues] = useState<Record<string, string>>({});
+  const [showConfig, setShowConfig] = useState(false);
+
+  const effectiveStatus = liveStatus?.status ?? app.status;
+  const isInstalled = effectiveStatus !== "not_installed";
+  const isRunning = effectiveStatus === "running";
+
+  const getCsrf = async () => {
+    let token = getCsrfToken();
+    if (!token) token = await fetchCsrfToken();
+    return token;
+  };
 
   const checkStatus = async () => {
     setCheckingStatus(true);
@@ -85,10 +109,57 @@ function AppCard({ app }: { app: AgentApp }) {
     }
   };
 
-  const getCsrf = async () => {
-    let token = getCsrfToken();
-    if (!token) token = await fetchCsrfToken();
-    return token;
+  const doAction = async (action: string, label: string) => {
+    setActionLoading(action);
+    try {
+      const csrfToken = await getCsrf();
+      const res = await fetch(`/api/admin/agent-apps/${app.id}/${action}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: `${label} failed`, description: data.error || "Unknown error", variant: "destructive" });
+      } else {
+        toast({ title: label, description: data.message });
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/agent-apps"] });
+        if (action === "run") setLiveStatus({ status: "running", reachable: true });
+        if (action === "stop") setLiveStatus({ status: "stopped", reachable: false });
+      }
+    } catch {
+      toast({ title: `${label} failed`, description: "Network error", variant: "destructive" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const saveConfig = async (key: string, value: string) => {
+    if (!value.trim()) {
+      toast({ title: "Empty value", description: `Please enter a value for ${key}`, variant: "destructive" });
+      return;
+    }
+    setActionLoading(`config-${key}`);
+    try {
+      const csrfToken = await getCsrf();
+      const res = await fetch(`/api/admin/agent-apps/${app.id}/config`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify({ key, value }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: "Config failed", description: data.error || "Unknown error", variant: "destructive" });
+      } else {
+        toast({ title: "Saved", description: data.message });
+        setConfigValues(prev => ({ ...prev, [key]: "" }));
+      }
+    } catch {
+      toast({ title: "Config failed", description: "Network error", variant: "destructive" });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleBackup = async () => {
@@ -114,7 +185,7 @@ function AppCard({ app }: { app: AgentApp }) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast({ title: "Backup downloaded", description: `${app.name} backup zip saved to your downloads.` });
+      toast({ title: "Backup downloaded", description: `${app.name} backup zip saved.` });
     } catch {
       toast({ title: "Backup failed", description: "Network error", variant: "destructive" });
     } finally {
@@ -123,10 +194,7 @@ function AppCard({ app }: { app: AgentApp }) {
   };
 
   const handleRestore = async () => {
-    if (!restoreFile) {
-      toast({ title: "No file selected", description: "Choose a backup .zip file first.", variant: "destructive" });
-      return;
-    }
+    if (!restoreFile) return;
     setRestoring(true);
     try {
       const csrfToken = await getCsrf();
@@ -153,13 +221,21 @@ function AppCard({ app }: { app: AgentApp }) {
     }
   };
 
+  const configFields = APP_CONFIG_FIELDS[app.slug] || [];
+
   return (
     <Card className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-              <Bot className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <div className={cn(
+              "h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0",
+              app.slug === "codex" ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-blue-100 dark:bg-blue-900/30"
+            )}>
+              <Bot className={cn(
+                "h-5 w-5",
+                app.slug === "codex" ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400"
+              )} />
             </div>
             <div>
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -196,6 +272,64 @@ function AppCard({ app }: { app: AgentApp }) {
           </p>
         )}
 
+        {/* Operations row */}
+        <div>
+          <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+            <Settings2 className="h-3.5 w-3.5" />
+            Operations
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {!isInstalled ? (
+              <Button
+                size="sm"
+                variant="default"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => doAction("install", "Install")}
+                disabled={!!actionLoading}
+              >
+                {actionLoading === "install" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PackagePlus className="h-3.5 w-3.5" />}
+                Install
+              </Button>
+            ) : (
+              <>
+                {isRunning ? (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-8 gap-1.5 text-xs"
+                    onClick={() => doAction("stop", "Stop")}
+                    disabled={!!actionLoading}
+                  >
+                    {actionLoading === "stop" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+                    Stop
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-8 gap-1.5 text-xs bg-green-600 hover:bg-green-700"
+                    onClick={() => doAction("run", "Run")}
+                    disabled={!!actionLoading}
+                  >
+                    {actionLoading === "run" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                    Run
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={() => doAction("update", "Update")}
+                  disabled={!!actionLoading}
+                >
+                  {actionLoading === "update" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUpCircle className="h-3.5 w-3.5" />}
+                  Update
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
         {/* Links row */}
         <div className="flex flex-wrap gap-2">
           {app.externalUrl ? (
@@ -222,6 +356,51 @@ function AppCard({ app }: { app: AgentApp }) {
           )}
         </div>
 
+        {/* API Key / Config section */}
+        {configFields.length > 0 && (
+          <>
+            <Separator />
+            <div>
+              <button
+                onClick={() => setShowConfig(!showConfig)}
+                className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+              >
+                <Key className="h-3.5 w-3.5" />
+                Configuration
+                <span className="text-slate-400 text-[10px]">{showConfig ? "▾" : "▸"}</span>
+              </button>
+              {showConfig && (
+                <div className="space-y-2">
+                  {configFields.map((field) => (
+                    <div key={field.key} className="flex gap-2">
+                      <Input
+                        type={field.type || "text"}
+                        placeholder={field.placeholder}
+                        value={configValues[field.key] || ""}
+                        onChange={(e) => setConfigValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+                        className="h-8 text-xs flex-1"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5 text-xs"
+                        onClick={() => saveConfig(field.key, configValues[field.key] || "")}
+                        disabled={actionLoading === `config-${field.key}`}
+                      >
+                        {actionLoading === `config-${field.key}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Key className="h-3.5 w-3.5" />}
+                        Set {field.label}
+                      </Button>
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Keys are set as environment variables for this session.
+                  </p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         <Separator />
 
         {/* Backup & Restore */}
@@ -236,15 +415,11 @@ function AppCard({ app }: { app: AgentApp }) {
               variant="outline"
               className="h-8 gap-1.5 text-xs"
               onClick={handleBackup}
-              disabled={downloading || app.status === "not_installed"}
-              title={app.status === "not_installed" ? "App not installed — nothing to backup" : "Download app config + database snapshot as zip"}
+              disabled={downloading || !isInstalled}
+              title={!isInstalled ? "Install the app first" : "Download backup zip"}
             >
-              {downloading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Download className="h-3.5 w-3.5" />
-              )}
-              {downloading ? "Backing up…" : "Backup"}
+              {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              {downloading ? "Backing up..." : "Backup"}
             </Button>
 
             <div className="flex items-center gap-1.5">
@@ -255,15 +430,10 @@ function AppCard({ app }: { app: AgentApp }) {
                   className="hidden"
                   onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)}
                 />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs pointer-events-none"
-                  asChild
-                >
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs pointer-events-none" asChild>
                   <span>
                     <Upload className="h-3.5 w-3.5" />
-                    {restoreFile ? restoreFile.name.slice(0, 18) + (restoreFile.name.length > 18 ? "…" : "") : "Choose backup…"}
+                    {restoreFile ? restoreFile.name.slice(0, 18) + (restoreFile.name.length > 18 ? "..." : "") : "Choose backup..."}
                   </span>
                 </Button>
               </label>
@@ -276,12 +446,12 @@ function AppCard({ app }: { app: AgentApp }) {
                   disabled={restoring}
                 >
                   {restoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  {restoring ? "Restoring…" : "Restore"}
+                  {restoring ? "Restoring..." : "Restore"}
                 </Button>
               )}
             </div>
           </div>
-          {app.status === "not_installed" && (
+          {!isInstalled && (
             <p className="text-xs text-slate-400 mt-1.5">Install the app first to enable backup/restore.</p>
           )}
         </div>
@@ -401,12 +571,12 @@ export default function AdminAgenticAiPage() {
               <Bot className="h-12 w-12 text-slate-300 dark:text-slate-600 mb-4" />
               <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-1">No apps registered</h3>
               <p className="text-sm text-slate-500 max-w-sm">
-                Sideloaded apps will appear here once registered. Paperclip should be seeded automatically.
+                Sideloaded apps will appear here once registered.
               </p>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2">
             {apps.map((app) => (
               <AppCard key={app.id} app={app} />
             ))}
