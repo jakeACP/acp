@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, fetchCsrfToken, getCsrfToken } from "@/lib/queryClient";
 import {
   Bot, ExternalLink, Download, Upload, RefreshCw, ShieldAlert,
   Loader2, Circle, Github, Info, HardDrive, Users, Database
@@ -84,12 +84,20 @@ function AppCard({ app }: { app: AgentApp }) {
     }
   };
 
+  const getCsrf = async () => {
+    let token = getCsrfToken();
+    if (!token) token = await fetchCsrfToken();
+    return token;
+  };
+
   const handleBackup = async () => {
     setDownloading(true);
     try {
+      const csrfToken = await getCsrf();
       const res = await fetch(`/api/admin/agent-apps/${app.id}/backup`, {
         method: "POST",
         credentials: "include",
+        headers: { "x-csrf-token": csrfToken },
       });
       if (!res.ok) {
         const err = await res.json();
@@ -120,11 +128,13 @@ function AppCard({ app }: { app: AgentApp }) {
     }
     setRestoring(true);
     try {
+      const csrfToken = await getCsrf();
       const formData = new FormData();
       formData.append("backup", restoreFile);
       const res = await fetch(`/api/admin/agent-apps/${app.id}/restore`, {
         method: "POST",
         credentials: "include",
+        headers: { "x-csrf-token": csrfToken },
         body: formData,
       });
       const data = await res.json();

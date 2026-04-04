@@ -31,7 +31,6 @@ import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSch
 import archiver from "archiver";
 import multer from "multer";
 import unzipper from "unzipper";
-import { Readable } from "stream";
 import { eq, inArray, or, sql, asc } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
@@ -9294,33 +9293,38 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
-  // POST /api/admin/agent-apps/:id/backup — zip app's install dir and return for download
+  // POST /api/admin/agent-apps/:id/backup — zip app's install dir + ACP config snapshot for download
   app.post("/api/admin/agent-apps/:id/backup", ensureOwnerAdmin, async (req: any, res: any) => {
     try {
       const agentApp = await storage.getAgentAppById(req.params.id);
       if (!agentApp) return res.status(404).json({ error: "App not found" });
-      if (!agentApp.installPath || agentApp.status === "not_installed") {
-        return res.status(400).json({ error: "App is not installed — nothing to backup" });
-      }
-
-      const appPath = path.resolve(process.cwd(), agentApp.installPath);
-      if (!fs.existsSync(appPath)) {
-        return res.status(400).json({ error: "Install path does not exist on disk" });
-      }
 
       const filename = `${agentApp.slug}-backup-${Date.now()}.zip`;
       res.setHeader("Content-Type", "application/zip");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
       const archive = archiver("zip", { zlib: { level: 6 } });
-      archive.on("error", (err: Error) => { if (!res.headersSent) res.status(500).end(); });
+      archive.on("error", (_err: Error) => { if (!res.headersSent) res.status(500).end(); });
       archive.pipe(res);
 
-      // Add app directory but skip node_modules and .git to keep it manageable
-      archive.glob("**/*", {
-        cwd: appPath,
-        ignore: ["node_modules/**", ".git/**", "dist/**", ".next/**"],
-      });
+      // Always include the ACP config snapshot (metadata from agent_apps table)
+      const configSnapshot = {
+        version: 1,
+        backedUpAt: new Date().toISOString(),
+        app: agentApp,
+      };
+      archive.append(JSON.stringify(configSnapshot, null, 2), { name: "acp-config.json" });
+
+      // If the app is installed, also include its filesystem files
+      if (agentApp.installPath && agentApp.status !== "not_installed") {
+        const appPath = path.resolve(process.cwd(), agentApp.installPath);
+        if (fs.existsSync(appPath)) {
+          archive.glob("**/*", {
+            cwd: appPath,
+            ignore: ["node_modules/**", ".git/**", "dist/**", ".next/**", ".cache/**"],
+          });
+        }
+      }
 
       await archive.finalize();
     } catch (err) {
@@ -9328,7 +9332,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
-  // POST /api/admin/agent-apps/:id/restore — upload zip and extract to install dir
+  // POST /api/admin/agent-apps/:id/restore — upload zip, validate entries, extract, restore ACP config
   const agentRestoreUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 512 * 1024 * 1024 } });
   app.post("/api/admin/agent-apps/:id/restore", ensureOwnerAdmin, agentRestoreUpload.single("backup"), async (req: any, res: any) => {
     try {
@@ -9340,26 +9344,57 @@ Only include people you are confident about. Return empty arrays/null if unknown
         ? path.resolve(process.cwd(), agentApp.installPath)
         : path.resolve(process.cwd(), "apps", agentApp.slug);
 
-      // Ensure directory exists
-      fs.mkdirSync(appPath, { recursive: true });
+      const resolvedAppPath = path.resolve(appPath);
 
-      // Write buffer to temp file then extract
+      // Write buffer to temp file
       const tmpZip = path.join(os.tmpdir(), `agent-restore-${Date.now()}.zip`);
       fs.writeFileSync(tmpZip, req.file!.buffer);
+
+      let restoredConfig: any = null;
+
+      // Parse and validate zip entries to prevent zip-slip path traversal
+      const directory = await unzipper.Open.file(tmpZip);
+      for (const entry of directory.files) {
+        const entryName = entry.path;
+        // Resolve the target path and verify it stays within appPath
+        const entryTarget = path.resolve(resolvedAppPath, entryName);
+        if (!entryTarget.startsWith(resolvedAppPath + path.sep) && entryTarget !== resolvedAppPath) {
+          fs.unlinkSync(tmpZip);
+          return res.status(400).json({ error: `Unsafe path in archive: ${entryName}` });
+        }
+        // Read ACP config if present
+        if (entryName === "acp-config.json" && entry.type === "File") {
+          const buf = await entry.buffer();
+          try { restoredConfig = JSON.parse(buf.toString("utf8")); } catch {}
+        }
+      }
+
+      // Ensure install directory exists
+      fs.mkdirSync(resolvedAppPath, { recursive: true });
+
+      // Extract (safe — already validated above)
       await new Promise<void>((resolve, reject) => {
         fs.createReadStream(tmpZip)
-          .pipe(unzipper.Extract({ path: appPath }))
-          .on("close", () => { fs.unlinkSync(tmpZip); resolve(); })
+          .pipe(unzipper.Extract({ path: resolvedAppPath }))
+          .on("close", () => { try { fs.unlinkSync(tmpZip); } catch {} resolve(); })
           .on("error", (err: Error) => { try { fs.unlinkSync(tmpZip); } catch {} reject(err); });
       });
 
-      // Update status and path
-      await storage.updateAgentApp(agentApp.id, {
-        installPath: path.relative(process.cwd(), appPath),
+      // Restore ACP-side config if the snapshot includes it
+      const configApp = restoredConfig?.app;
+      const updatePayload: Record<string, unknown> = {
+        installPath: path.relative(process.cwd(), resolvedAppPath),
         status: "stopped",
-      });
+      };
+      if (configApp) {
+        if (configApp.externalUrl) updatePayload.externalUrl = configApp.externalUrl;
+        if (configApp.port) updatePayload.port = configApp.port;
+        if (configApp.version) updatePayload.version = configApp.version;
+        if (configApp.notes) updatePayload.notes = configApp.notes;
+      }
+      await storage.updateAgentApp(agentApp.id, updatePayload as any);
 
-      res.json({ success: true, message: "Backup restored. Restart the app to apply." });
+      res.json({ success: true, message: "Backup restored successfully. Restart the app to apply." });
     } catch (err) {
       if (!res.headersSent) res.status(500).json({ error: "Restore failed" });
     }

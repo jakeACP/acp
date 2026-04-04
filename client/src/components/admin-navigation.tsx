@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -36,6 +37,7 @@ interface SubItem {
   icon: React.ElementType;
   disabled?: boolean;
   badge?: string;
+  globalAdminOnly?: boolean;
 }
 
 interface NavCategory {
@@ -76,7 +78,7 @@ const navCategories: NavCategory[] = [
       { name: "Algorithm", href: "/admin/algorithm", icon: Cpu },
       { name: "AI Writer", href: "/admin/ai-parameters", icon: Cpu },
       { name: "News Scanner", href: "/admin/scanner", icon: Radar },
-      { name: "Agentic AI", href: "/admin/agentic-ai", icon: Bot },
+      { name: "Agentic AI", href: "/admin/agentic-ai", icon: Bot, globalAdminOnly: true },
     ],
   },
   {
@@ -157,23 +159,23 @@ function TemplateSelector() {
 function DropdownMenu({
   category,
   location,
+  isGlobalAdmin,
 }: {
   category: NavCategory;
   location: string;
+  isGlobalAdmin: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const CategoryIcon = category.icon;
 
-  const isActiveCategory = category.items.some(
-    (item) => !item.disabled && location === item.href
+  // Filter out items the user cannot see
+  const visibleItems = category.items.filter(
+    (item) => !item.globalAdminOnly || isGlobalAdmin
   );
 
-  const handleClickOutside = (e: React.MouseEvent) => {
-    // Don't close if clicking inside the dropdown
-    if ((e.target as HTMLElement).closest('[data-dropdown-menu]')) {
-      return;
-    }
-  };
+  const isActiveCategory = visibleItems.some(
+    (item) => !item.disabled && location === item.href
+  );
 
   return (
     <div className="relative" data-dropdown-menu>
@@ -207,7 +209,7 @@ function DropdownMenu({
           onMouseEnter={() => setOpen(true)}
           onMouseLeave={() => setOpen(false)}
         >
-          {category.items.map((item) => {
+          {visibleItems.map((item) => {
             const Icon = item.icon;
             const isActive = location === item.href;
             if (item.disabled) {
@@ -256,6 +258,11 @@ export function AdminNavigation() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
 
+  const { data: globalAdminData } = useQuery<{ isGlobalAdmin: boolean }>({
+    queryKey: ["/api/admin/is-global-admin"],
+  });
+  const isGlobalAdmin = globalAdminData?.isGlobalAdmin ?? false;
+
   const isDashboard = location === "/admin/dashboard";
 
   return (
@@ -294,7 +301,7 @@ export function AdminNavigation() {
                   {i > 0 && (
                     <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-0.5" />
                   )}
-                  <DropdownMenu category={category} location={location} />
+                  <DropdownMenu category={category} location={location} isGlobalAdmin={isGlobalAdmin} />
                 </div>
               ))}
             </nav>
@@ -344,7 +351,10 @@ export function AdminNavigation() {
           {navCategories.map((category) => {
             const CategoryIcon = category.icon;
             const isExpanded = mobileExpanded === category.id;
-            const isActiveCategory = category.items.some(
+            const mobileItems = category.items.filter(
+              (item) => !item.globalAdminOnly || isGlobalAdmin
+            );
+            const isActiveCategory = mobileItems.some(
               (item) => !item.disabled && location === item.href
             );
 
@@ -375,7 +385,7 @@ export function AdminNavigation() {
 
                 {isExpanded && (
                   <div className="bg-slate-50 dark:bg-slate-950">
-                    {category.items.map((item) => {
+                    {mobileItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location === item.href;
                       if (item.disabled) {
