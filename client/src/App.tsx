@@ -59,6 +59,7 @@ import AdminSettingsPage from "@/pages/admin-settings-page";
 import AdminVoterVerificationPage from "@/pages/admin-voter-verification-page";
 import AdminSigsPage from "@/pages/admin-sigs-page";
 import AdminStateDataPage from "@/pages/admin-state-data-page";
+import AdminImportExportPage from "@/pages/admin-import-export-page";
 import AdminTradingFlagsPage from "@/pages/admin-trading-flags-page";
 import AdminAcePledgesPage from "@/pages/admin-ace-pledges-page";
 import AdminScannerPage from "@/pages/admin-scanner-page";
@@ -183,6 +184,7 @@ function Router() {
       <Route path="/sigs/:tag" component={SigProfilePage} />
       <ProtectedRoute path="/admin/sigs" component={AdminSigsPage} />
       <ProtectedRoute path="/admin/state-data" component={AdminStateDataPage} />
+      <ProtectedRoute path="/admin/import-export" component={AdminImportExportPage} />
       <ProtectedRoute path="/admin/trading-flags" component={AdminTradingFlagsPage} />
       <ProtectedRoute path="/admin/ace-pledges" component={AdminAcePledgesPage} />
       <ProtectedRoute path="/admin/scanner" component={AdminScannerPage} />

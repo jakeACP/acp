@@ -64,6 +64,7 @@ const navCategories: NavCategory[] = [
       { name: "SIGs", href: "/admin/sigs", icon: Building2 },
       { name: "ACEs", href: "/admin/ace-pledges", icon: BadgeCheck },
       { name: "Trading Flags", href: "/admin/trading-flags", icon: Flag },
+      { name: "State Data", href: "/admin/state-data", icon: MapPin },
     ],
   },
   {
@@ -83,8 +84,8 @@ const navCategories: NavCategory[] = [
     icon: Settings,
     items: [
       { name: "Defaults", href: "/admin/settings", icon: SlidersHorizontal },
-      { name: "Import / Export", href: "/admin/state-data", icon: FileDown },
-      { name: "Backup System", href: "/admin/database", icon: HardDrive },
+      { name: "Import / Export", href: "/admin/import-export", icon: FileDown },
+      { name: "Backup System", href: "#", icon: HardDrive, disabled: true, badge: "Soon" },
     ],
   },
   {
