@@ -27,7 +27,7 @@ import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, type InsertAgentApp } from "@shared/schema";
 import archiver from "archiver";
 import multer from "multer";
 import unzipper from "unzipper";
@@ -37,7 +37,6 @@ import { db } from "./db";
 import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle } from "./openai";
 import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
-import multer from "multer";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
 import { randomUUID } from "crypto";
 
@@ -9382,17 +9381,17 @@ Only include people you are confident about. Return empty arrays/null if unknown
 
       // Restore ACP-side config if the snapshot includes it
       const configApp = restoredConfig?.app;
-      const updatePayload: Record<string, unknown> = {
+      const updatePayload: Partial<InsertAgentApp> = {
         installPath: path.relative(process.cwd(), resolvedAppPath),
         status: "stopped",
       };
       if (configApp) {
-        if (configApp.externalUrl) updatePayload.externalUrl = configApp.externalUrl;
-        if (configApp.port) updatePayload.port = configApp.port;
-        if (configApp.version) updatePayload.version = configApp.version;
-        if (configApp.notes) updatePayload.notes = configApp.notes;
+        if (typeof configApp.externalUrl === "string") updatePayload.externalUrl = configApp.externalUrl;
+        if (typeof configApp.port === "number") updatePayload.port = configApp.port;
+        if (typeof configApp.version === "string") updatePayload.version = configApp.version;
+        if (typeof configApp.notes === "string") updatePayload.notes = configApp.notes;
       }
-      await storage.updateAgentApp(agentApp.id, updatePayload as any);
+      await storage.updateAgentApp(agentApp.id, updatePayload);
 
       res.json({ success: true, message: "Backup restored successfully. Restart the app to apply." });
     } catch (err) {
