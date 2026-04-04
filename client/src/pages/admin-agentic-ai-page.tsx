@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -297,16 +298,15 @@ function AppCard({ app }: { app: AgentApp }) {
 }
 
 export default function AdminAgenticAiPage() {
-  const { data: globalAdminData, isLoading: checkingAdmin } = useQuery<{ isGlobalAdmin: boolean }>({
-    queryKey: ["/api/admin/is-global-admin"],
-  });
+  const { user, isLoading: checkingAuth } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const { data: apps, isLoading: loadingApps } = useQuery<AgentApp[]>({
     queryKey: ["/api/admin/agent-apps"],
-    enabled: !!globalAdminData?.isGlobalAdmin,
+    enabled: isAdmin,
   });
 
-  if (checkingAdmin) {
+  if (checkingAuth) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <AdminNavigation />
@@ -317,7 +317,7 @@ export default function AdminAgenticAiPage() {
     );
   }
 
-  if (!globalAdminData?.isGlobalAdmin) {
+  if (!isAdmin) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <AdminNavigation />
@@ -329,7 +329,7 @@ export default function AdminAgenticAiPage() {
             Access Denied
           </h1>
           <p className="text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
-            The Agentic AI management page is restricted to the Global Administrator only. Contact your platform owner for access.
+            The Agentic AI management page is restricted to administrators only.
           </p>
         </div>
       </div>

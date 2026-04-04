@@ -3834,6 +3834,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   }
 
   // Owner Admin Security Middleware - only for the original admin user
+  function ensureAdminOnly(req: any, res: any, next: any) {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    next();
+  }
+
   function ensureOwnerAdmin(req: any, res: any, next: any) {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
@@ -9244,7 +9252,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
   });
 
   // GET /api/admin/agent-apps — list all installed apps
-  app.get("/api/admin/agent-apps", ensureOwnerAdmin, async (_req: any, res: any) => {
+  app.get("/api/admin/agent-apps", ensureAdminOnly, async (_req: any, res: any) => {
     try {
       const apps = await storage.listAgentApps();
       res.json(apps);
@@ -9254,7 +9262,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
   });
 
   // PATCH /api/admin/agent-apps/:id — update app metadata
-  app.patch("/api/admin/agent-apps/:id", ensureOwnerAdmin, async (req: any, res: any) => {
+  app.patch("/api/admin/agent-apps/:id", ensureAdminOnly, async (req: any, res: any) => {
     try {
       const parsed = insertAgentAppSchema.partial().safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
@@ -9266,7 +9274,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
   });
 
   // GET /api/admin/agent-apps/:id/status — live ping to see if app is reachable
-  app.get("/api/admin/agent-apps/:id/status", ensureOwnerAdmin, async (req: any, res: any) => {
+  app.get("/api/admin/agent-apps/:id/status", ensureAdminOnly, async (req: any, res: any) => {
     try {
       const app = await storage.getAgentAppById(req.params.id);
       if (!app) return res.status(404).json({ error: "App not found" });
@@ -9293,7 +9301,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
   });
 
   // POST /api/admin/agent-apps/:id/backup — zip app files + ACP config + optional DB snapshot
-  app.post("/api/admin/agent-apps/:id/backup", ensureOwnerAdmin, async (req: any, res: any) => {
+  app.post("/api/admin/agent-apps/:id/backup", ensureAdminOnly, async (req: any, res: any) => {
     let tmpDbDump: string | null = null;
     try {
       const agentApp = await storage.getAgentAppById(req.params.id);
@@ -9360,7 +9368,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
 
   // POST /api/admin/agent-apps/:id/restore — upload zip, validate entries, extract, restore ACP config
   const agentRestoreUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 512 * 1024 * 1024 } });
-  app.post("/api/admin/agent-apps/:id/restore", ensureOwnerAdmin, agentRestoreUpload.single("backup"), async (req: any, res: any) => {
+  app.post("/api/admin/agent-apps/:id/restore", ensureAdminOnly, agentRestoreUpload.single("backup"), async (req: any, res: any) => {
     try {
       const agentApp = await storage.getAgentAppById(req.params.id);
       if (!agentApp) return res.status(404).json({ error: "App not found" });
