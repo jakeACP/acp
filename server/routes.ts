@@ -9406,13 +9406,28 @@ Only include people you are confident about. Return empty arrays/null if unknown
       // Ensure install directory exists
       fs.mkdirSync(resolvedAppPath, { recursive: true });
 
-      // Extract filesystem files (safe — already validated above)
-      await new Promise<void>((resolve, reject) => {
-        fs.createReadStream(tmpZip)
-          .pipe(unzipper.Extract({ path: resolvedAppPath }))
-          .on("close", () => { try { fs.unlinkSync(tmpZip); } catch {} resolve(); })
-          .on("error", (err: Error) => { try { fs.unlinkSync(tmpZip); } catch {} reject(err); });
-      });
+      const METADATA_FILES = new Set(["acp-config.json", "app-db-snapshot.sql", "app-db-snapshot-error.json"]);
+
+      // Extract filesystem files, skipping top-level metadata files (safe — paths already validated above)
+      await Promise.all(
+        directory.files.map((entry) => new Promise<void>((resolve, reject) => {
+          if (METADATA_FILES.has(entry.path)) { resolve(); return; }
+          const targetPath = path.resolve(resolvedAppPath, entry.path);
+          if (entry.type === "Directory") {
+            fs.mkdirSync(targetPath, { recursive: true });
+            resolve();
+          } else {
+            fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+            entry.stream()
+              .pipe(fs.createWriteStream(targetPath))
+              .on("finish", resolve)
+              .on("error", reject);
+          }
+        }))
+      );
+
+      // Clean up temp zip
+      try { fs.unlinkSync(tmpZip); } catch {}
 
       // Restore ACP-side config if the snapshot includes it
       const configApp = restoredConfig?.app;

@@ -326,7 +326,7 @@ export default function AdminAgenticAiPage() {
             <ShieldAlert className="h-8 w-8 text-red-600 dark:text-red-400" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-            Access Restricted
+            Access Denied
           </h1>
           <p className="text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
             The Agentic AI management page is restricted to the Global Administrator only. Contact your platform owner for access.
