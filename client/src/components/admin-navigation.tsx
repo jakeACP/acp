@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/use-theme";
 import {
   LayoutDashboard,
   Shield,
@@ -25,6 +26,7 @@ import {
   Menu,
   X,
   SlidersHorizontal,
+  Palette,
 } from "lucide-react";
 
 interface SubItem {
@@ -95,6 +97,60 @@ const navCategories: NavCategory[] = [
     ],
   },
 ];
+
+function TemplateSelector() {
+  const { theme, setTheme } = useTheme();
+  const [open, setOpen] = useState(false);
+
+  const templates: Array<{ id: string; label: string; theme: "light" | "dark" | "patriot" | "system" }> = [
+    { id: "system", label: "System", theme: "system" },
+    { id: "light", label: "Light", theme: "light" },
+    { id: "dark", label: "Dark", theme: "dark" },
+    { id: "patriot", label: "Patriot", theme: "patriot" },
+  ];
+
+  return (
+    <div className="relative" onMouseLeave={() => setOpen(false)}>
+      <button
+        onMouseEnter={() => setOpen(true)}
+        onClick={() => setOpen((v) => !v)}
+        className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+      >
+        <Palette className="h-3.5 w-3.5" />
+        <span>Template</span>
+        <ChevronDown className={cn("h-3 w-3 transition-transform duration-150", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute top-full right-0 mt-1 min-w-[140px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 z-50"
+          onMouseEnter={() => setOpen(true)}
+        >
+          {templates.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => {
+                setTheme(t.theme);
+                setOpen(false);
+              }}
+              className={cn(
+                "w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors text-left",
+                theme === t.theme
+                  ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+              )}
+            >
+              <div className="flex items-center justify-center h-3 w-3 rounded-full border border-current">
+                {theme === t.theme && <div className="h-1.5 w-1.5 rounded-full bg-current" />}
+              </div>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DropdownMenu({
   category,
@@ -231,6 +287,9 @@ export function AdminNavigation() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Template Selector */}
+            <TemplateSelector />
+
             <Link
               href="/"
               className="hidden lg:flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors flex-shrink-0"
