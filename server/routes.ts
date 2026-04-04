@@ -9315,21 +9315,23 @@ Only include people you are confident about. Return empty arrays/null if unknown
       };
       archive.append(JSON.stringify(configSnapshot, null, 2), { name: "acp-config.json" });
 
-      // If the app has a separate PostgreSQL DB configured, dump it
+      // If the app has a separate PostgreSQL DB configured, dump it using argument arrays (no shell injection)
       if (agentApp.externalDbUrl) {
         tmpDbDump = path.join(os.tmpdir(), `agent-dbdump-${agentApp.slug}-${Date.now()}.sql`);
         try {
           await new Promise<void>((resolve, reject) => {
-            execFile(
-              "/bin/sh",
-              ["-c", `pg_dump --no-password --format=plain "${agentApp.externalDbUrl}" > "${tmpDbDump}"`],
-              { env: { ...process.env, PGPASSFILE: "/dev/null" } },
-              (err) => err ? reject(err) : resolve()
+            const out = fs.createWriteStream(tmpDbDump!);
+            const child = execFile(
+              "/nix/store/bgwr5i8jf8jpg75rr53rz3fqv5k8yrwp-postgresql-16.10/bin/pg_dump",
+              ["--no-password", "--format=plain", agentApp.externalDbUrl!],
+              { env: { ...process.env } }
             );
+            child.stdout?.pipe(out);
+            child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`pg_dump exited ${code}`)));
+            child.on("error", reject);
           });
           archive.file(tmpDbDump!, { name: "app-db-snapshot.sql" });
         } catch (dumpErr: any) {
-          // Include a manifest noting the dump failed so restore can warn
           archive.append(
             JSON.stringify({ error: "pg_dump failed", detail: String(dumpErr?.message ?? dumpErr) }),
             { name: "app-db-snapshot-error.json" }
@@ -9427,25 +9429,26 @@ Only include people you are confident about. Return empty arrays/null if unknown
       }
       await storage.updateAgentApp(agentApp.id, updatePayload);
 
-      // Restore app database from snapshot if present and DB URL is available
+      // Restore app database from snapshot if present.
+      // SECURITY: We use only the server-side DB URL from agentApp (never from the uploaded archive),
+      // and call psql directly with argument arrays (no shell interpolation / injection risk).
       let dbRestoreWarning: string | null = null;
-      const targetDbUrl = updatePayload.externalDbUrl ?? agentApp.externalDbUrl;
+      const targetDbUrl = agentApp.externalDbUrl; // Server-side only — never trust archive-supplied URLs
       if (dbSqlContent && targetDbUrl) {
-        const tmpSql = path.join(os.tmpdir(), `agent-dbsql-${Date.now()}.sql`);
-        fs.writeFileSync(tmpSql, dbSqlContent);
         try {
           await new Promise<void>((resolve, reject) => {
-            execFile(
-              "/bin/sh",
-              ["-c", `psql --no-password "${targetDbUrl}" < "${tmpSql}"`],
-              { env: { ...process.env } },
-              (err) => err ? reject(err) : resolve()
+            const child = execFile(
+              "/nix/store/bgwr5i8jf8jpg75rr53rz3fqv5k8yrwp-postgresql-16.10/bin/psql",
+              ["--no-password", targetDbUrl],
+              { env: { ...process.env } }
             );
+            child.stdin?.write(dbSqlContent!);
+            child.stdin?.end();
+            child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`psql exited ${code}`)));
+            child.on("error", reject);
           });
         } catch (dbErr: any) {
           dbRestoreWarning = `DB restore ran but reported: ${String(dbErr?.message ?? dbErr)}`;
-        } finally {
-          try { fs.unlinkSync(tmpSql); } catch {}
         }
       } else if (dbSqlContent && !targetDbUrl) {
         dbRestoreWarning = "DB snapshot found in archive but no externalDbUrl configured — skipped DB restore.";
