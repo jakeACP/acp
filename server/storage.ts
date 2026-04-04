@@ -9056,10 +9056,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async ensurePaperclipApp(): Promise<AgentApp> {
-    const existing = await this.getAgentAppBySlug("paperclip");
-    if (existing) return existing;
     const domains = process.env.REPLIT_DOMAINS?.split(" ")[0] ?? "";
     const externalUrl = domains ? `https://${domains}:3002` : null;
+
+    const existing = await this.getAgentAppBySlug("paperclip");
+    if (existing) {
+      const needsPatch =
+        existing.port !== 3001 ||
+        existing.installPath !== "apps/paperclip" ||
+        (externalUrl && existing.externalUrl !== externalUrl);
+      if (needsPatch) {
+        return this.updateAgentApp(existing.id, {
+          port: 3001,
+          installPath: "apps/paperclip",
+          ...(externalUrl ? { externalUrl } : {}),
+        });
+      }
+      return existing;
+    }
+
     return this.createAgentApp({
       slug: "paperclip",
       name: "Paperclip",
