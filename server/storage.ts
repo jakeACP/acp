@@ -6935,6 +6935,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAdminUserId(): Promise<string | undefined> {
+    const globalAdminUsername = process.env.GLOBAL_ADMIN_USERNAME;
+    if (globalAdminUsername) {
+      const [pinned] = await db.select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.username, globalAdminUsername), eq(users.role, 'admin')))
+        .limit(1);
+      if (pinned) return pinned.id;
+    }
     const [adminUser] = await db.select({ id: users.id })
       .from(users)
       .where(eq(users.role, 'admin'))

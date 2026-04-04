@@ -14,7 +14,7 @@ export async function seedDatabase() {
     // Create sample users with different roles
     const adminUser = await storage.createUser({
       username: "admin",
-      email: "admin@acp.org",
+      email: "admin@anticorruptionparty.us",
       password: hashedPassword,
       role: "admin",
       firstName: "ACP",

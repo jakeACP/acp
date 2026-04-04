@@ -133,6 +133,37 @@ async function setupRoutes() {
       }
     }
 
+    // One-time data migration: fix legacy emails and ensure consistent accounts
+    try {
+      const { db } = await import("./db");
+      const { users } = await import("@shared/schema");
+      const { eq, and, ne } = await import("drizzle-orm");
+
+      // 1. Update seeded admin email from old domain to official domain
+      await db.update(users)
+        .set({ email: "admin@anticorruptionparty.us" })
+        .where(and(eq(users.username, "admin"), eq(users.email, "admin@acp.org")));
+
+      // 2. Clear jakeoxendalemn@gmail.com from ANY non-jox account so jox can own it
+      await db.update(users)
+        .set({ email: "legacy-owner@anticorruptionparty.us" })
+        .where(and(eq(users.email, "jakeoxendalemn@gmail.com"), ne(users.username, "jox")));
+
+      // 3. Set jox's canonical email
+      const [joxUser] = await db.select({ id: users.id, email: users.email })
+        .from(users)
+        .where(eq(users.username, "jox"))
+        .limit(1);
+      if (joxUser && joxUser.email !== "jakeoxendalemn@gmail.com") {
+        await db.update(users)
+          .set({ email: "jakeoxendalemn@gmail.com" })
+          .where(eq(users.username, "jox"));
+      }
+      log("Account email migration completed");
+    } catch (e: any) {
+      log(`Account email migration skipped: ${e.message}`);
+    }
+
     // Mark server ready — the 503 startup guard will now pass all requests through
     serverReady = true;
     log("Server fully ready");
