@@ -27,6 +27,7 @@ import {
   X,
   SlidersHorizontal,
   Palette,
+  MapPin,
 } from "lucide-react";
 
 interface SubItem {
