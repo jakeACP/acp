@@ -168,11 +168,22 @@ function DropdownMenu({
     (item) => !item.disabled && location === item.href
   );
 
+  const handleClickOutside = (e: React.MouseEvent) => {
+    // Don't close if clicking inside the dropdown
+    if ((e.target as HTMLElement).closest('[data-dropdown-menu]')) {
+      return;
+    }
+  };
+
   return (
-    <div className="relative" onMouseLeave={() => setOpen(false)}>
+    <div className="relative" data-dropdown-menu>
       <button
         onMouseEnter={() => setOpen(true)}
-        onClick={() => setOpen((v) => !v)}
+        onMouseLeave={() => setOpen(false)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
         className={cn(
           "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap select-none",
           isActiveCategory
@@ -194,6 +205,7 @@ function DropdownMenu({
         <div
           className="absolute top-full left-0 mt-1 min-w-[160px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 z-50"
           onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
         >
           {category.items.map((item) => {
             const Icon = item.icon;
