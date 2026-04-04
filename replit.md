@@ -61,17 +61,36 @@ The Agentic AI management page (`/admin/agentic-ai`) is restricted to the **Glob
 - Backup downloads a zip of the app's install directory (excluding node_modules/.git).
 - Restore uploads a zip and extracts it to the install directory.
 
-### Paperclip (First App)
+### Paperclip (First App — INSTALLED)
 - **Repo**: https://github.com/paperclipai/paperclip  
-- **Port**: 5001 (when installed)
-- **Install Path**: `apps/paperclip`
+- **Install Path**: `apps/paperclip` (cloned via `git clone --depth=1`)
+- **Internal Port**: 3001 (Paperclip listens on `127.0.0.1:3001`)
+- **External Port**: 3002 (Replit routes external traffic to port 3002)
+- **External URL**: `https://<REPLIT_DOMAINS>:3002` (accessible from the Agentic AI admin page)
+- **Database**: Separate local Postgres DB called `paperclipdb` (not shared with ACP)
+  - DB URL: `postgresql://postgres:$PGPASSWORD@helium:5432/paperclipdb`
+  - 49 migrations applied successfully on installation
+- **Workflow**: "Paperclip" workflow runs `cd apps/paperclip && DATABASE_URL="..." PORT=3001 SERVE_UI=true pnpm run dev:once`
 - **What it is**: Open-source AI agent orchestration platform ("runs your business with AI agents")
-- **Agents as ACP Users**: Create ACP user accounts for agents via `/admin/users`. Assign roles:
-  - `citizen` — for front-end engagement agents simulating normal social media users
-  - `moderator` — for QA agents reviewing content and providing development feedback
-  - `admin` should NOT be assigned to agents automatically
-- **Dev vs. Prod**: In the Replit test environment, agents test app features and provide feedback. In production, they engage real users to grow the community.
-- **Installation**: See Task #22 for the full Paperclip installation setup.
+
+### Creating ACP User Accounts for Paperclip Agents
+Create ACP user accounts for agents via `/admin/users`. Assign roles based on the agent's purpose:
+
+| Role | Use Case | Permissions |
+|------|----------|-------------|
+| `citizen` | Front-end engagement agents that simulate normal users, post content, interact with the feed, and grow community engagement | Standard user access — can post, vote, comment, join groups |
+| `moderator` | QA agents that review content, flag issues, provide development feedback, and moderate community behavior | Moderation tools — can review flags, mute users, assist with content decisions |
+| `admin` | **DO NOT assign** — admin agents could modify platform settings and data | Full access — should never be given to automated agents |
+
+**Test Environment (Replit dev)**: Agents test ACP features, simulate user flows, and provide development feedback. They interact with test data only.
+
+**Production Environment**: Agents engage real users, help grow community, support onboarding, and facilitate political engagement. Use only trusted, well-tested agents in production.
+
+**Setup steps for a new Paperclip agent**:
+1. Create an ACP account via `/register` with a descriptive username (e.g., `agent-civic-01`)
+2. Log in as global admin and update the role to `citizen` or `moderator` via `/admin/users`
+3. In Paperclip's UI (port 3002), configure the agent with the ACP account credentials
+4. Set the agent's target URL to the ACP platform URL
 
 ### API Endpoints
 - `GET /api/admin/is-global-admin` — returns `{ isGlobalAdmin: boolean }` for any authenticated user

@@ -9058,14 +9058,17 @@ export class DatabaseStorage implements IStorage {
   async ensurePaperclipApp(): Promise<AgentApp> {
     const existing = await this.getAgentAppBySlug("paperclip");
     if (existing) return existing;
+    const domains = process.env.REPLIT_DOMAINS?.split(" ")[0] ?? "";
+    const externalUrl = domains ? `https://${domains}:3002` : null;
     return this.createAgentApp({
       slug: "paperclip",
       name: "Paperclip",
       description: "Open-source AI agent orchestration platform. Coordinates teams of AI agents to run autonomous businesses. Agents become ACP users and interact with the platform to drive engagement and quality.",
       githubUrl: "https://github.com/paperclipai/paperclip",
-      port: 5001,
+      port: 3001,
       installPath: "apps/paperclip",
       status: "not_installed",
+      externalUrl,
     });
   }
 }
