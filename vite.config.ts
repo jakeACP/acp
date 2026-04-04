@@ -33,5 +33,8 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    allowedHosts: [
+      process.env.REPLIT_DOMAINS?.split(" ")[0] || "888678e3-7e74-47f8-80ca-e096b7841909-00-1zddd18z56jgm.worf.replit.dev",
+    ],
   },
 });
