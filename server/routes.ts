@@ -9292,8 +9292,9 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
-  // POST /api/admin/agent-apps/:id/backup — zip app's install dir + ACP config snapshot for download
+  // POST /api/admin/agent-apps/:id/backup — zip app files + ACP config + optional DB snapshot
   app.post("/api/admin/agent-apps/:id/backup", ensureOwnerAdmin, async (req: any, res: any) => {
+    let tmpDbDump: string | null = null;
     try {
       const agentApp = await storage.getAgentAppById(req.params.id);
       if (!agentApp) return res.status(404).json({ error: "App not found" });
@@ -9308,11 +9309,33 @@ Only include people you are confident about. Return empty arrays/null if unknown
 
       // Always include the ACP config snapshot (metadata from agent_apps table)
       const configSnapshot = {
-        version: 1,
+        version: 2,
         backedUpAt: new Date().toISOString(),
         app: agentApp,
       };
       archive.append(JSON.stringify(configSnapshot, null, 2), { name: "acp-config.json" });
+
+      // If the app has a separate PostgreSQL DB configured, dump it
+      if (agentApp.externalDbUrl) {
+        tmpDbDump = path.join(os.tmpdir(), `agent-dbdump-${agentApp.slug}-${Date.now()}.sql`);
+        try {
+          await new Promise<void>((resolve, reject) => {
+            execFile(
+              "/bin/sh",
+              ["-c", `pg_dump --no-password --format=plain "${agentApp.externalDbUrl}" > "${tmpDbDump}"`],
+              { env: { ...process.env, PGPASSFILE: "/dev/null" } },
+              (err) => err ? reject(err) : resolve()
+            );
+          });
+          archive.file(tmpDbDump!, { name: "app-db-snapshot.sql" });
+        } catch (dumpErr: any) {
+          // Include a manifest noting the dump failed so restore can warn
+          archive.append(
+            JSON.stringify({ error: "pg_dump failed", detail: String(dumpErr?.message ?? dumpErr) }),
+            { name: "app-db-snapshot-error.json" }
+          );
+        }
+      }
 
       // If the app is installed, also include its filesystem files
       if (agentApp.installPath && agentApp.status !== "not_installed") {
@@ -9328,6 +9351,8 @@ Only include people you are confident about. Return empty arrays/null if unknown
       await archive.finalize();
     } catch (err) {
       if (!res.headersSent) res.status(500).json({ error: "Backup failed" });
+    } finally {
+      if (tmpDbDump) try { fs.unlinkSync(tmpDbDump); } catch {}
     }
   });
 
@@ -9350,28 +9375,36 @@ Only include people you are confident about. Return empty arrays/null if unknown
       fs.writeFileSync(tmpZip, req.file!.buffer);
 
       let restoredConfig: any = null;
+      let dbSqlContent: Buffer | null = null;
 
       // Parse and validate zip entries to prevent zip-slip path traversal
       const directory = await unzipper.Open.file(tmpZip);
       for (const entry of directory.files) {
         const entryName = entry.path;
-        // Resolve the target path and verify it stays within appPath
+        // Top-level metadata files are not extracted to appPath; skip traversal check for them
+        if (entryName === "acp-config.json" || entryName === "app-db-snapshot.sql" || entryName === "app-db-snapshot-error.json") {
+          if (entry.type === "File") {
+            const buf = await entry.buffer();
+            if (entryName === "acp-config.json") {
+              try { restoredConfig = JSON.parse(buf.toString("utf8")); } catch {}
+            } else if (entryName === "app-db-snapshot.sql") {
+              dbSqlContent = buf;
+            }
+          }
+          continue;
+        }
+        // For all other entries, resolve and verify they stay within appPath
         const entryTarget = path.resolve(resolvedAppPath, entryName);
         if (!entryTarget.startsWith(resolvedAppPath + path.sep) && entryTarget !== resolvedAppPath) {
           fs.unlinkSync(tmpZip);
           return res.status(400).json({ error: `Unsafe path in archive: ${entryName}` });
-        }
-        // Read ACP config if present
-        if (entryName === "acp-config.json" && entry.type === "File") {
-          const buf = await entry.buffer();
-          try { restoredConfig = JSON.parse(buf.toString("utf8")); } catch {}
         }
       }
 
       // Ensure install directory exists
       fs.mkdirSync(resolvedAppPath, { recursive: true });
 
-      // Extract (safe — already validated above)
+      // Extract filesystem files (safe — already validated above)
       await new Promise<void>((resolve, reject) => {
         fs.createReadStream(tmpZip)
           .pipe(unzipper.Extract({ path: resolvedAppPath }))
@@ -9387,13 +9420,41 @@ Only include people you are confident about. Return empty arrays/null if unknown
       };
       if (configApp) {
         if (typeof configApp.externalUrl === "string") updatePayload.externalUrl = configApp.externalUrl;
+        if (typeof configApp.externalDbUrl === "string") updatePayload.externalDbUrl = configApp.externalDbUrl;
         if (typeof configApp.port === "number") updatePayload.port = configApp.port;
         if (typeof configApp.version === "string") updatePayload.version = configApp.version;
         if (typeof configApp.notes === "string") updatePayload.notes = configApp.notes;
       }
       await storage.updateAgentApp(agentApp.id, updatePayload);
 
-      res.json({ success: true, message: "Backup restored successfully. Restart the app to apply." });
+      // Restore app database from snapshot if present and DB URL is available
+      let dbRestoreWarning: string | null = null;
+      const targetDbUrl = updatePayload.externalDbUrl ?? agentApp.externalDbUrl;
+      if (dbSqlContent && targetDbUrl) {
+        const tmpSql = path.join(os.tmpdir(), `agent-dbsql-${Date.now()}.sql`);
+        fs.writeFileSync(tmpSql, dbSqlContent);
+        try {
+          await new Promise<void>((resolve, reject) => {
+            execFile(
+              "/bin/sh",
+              ["-c", `psql --no-password "${targetDbUrl}" < "${tmpSql}"`],
+              { env: { ...process.env } },
+              (err) => err ? reject(err) : resolve()
+            );
+          });
+        } catch (dbErr: any) {
+          dbRestoreWarning = `DB restore ran but reported: ${String(dbErr?.message ?? dbErr)}`;
+        } finally {
+          try { fs.unlinkSync(tmpSql); } catch {}
+        }
+      } else if (dbSqlContent && !targetDbUrl) {
+        dbRestoreWarning = "DB snapshot found in archive but no externalDbUrl configured — skipped DB restore.";
+      }
+
+      const message = dbRestoreWarning
+        ? `Files restored. DB note: ${dbRestoreWarning} Restart the app to apply.`
+        : "Backup restored successfully. Restart the app to apply.";
+      res.json({ success: true, message });
     } catch (err) {
       if (!res.headersSent) res.status(500).json({ error: "Restore failed" });
     }

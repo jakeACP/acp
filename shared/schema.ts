@@ -2530,6 +2530,7 @@ export const agentApps = pgTable("agent_apps", {
   port: integer("port"), // Port the app listens on (e.g. 5001)
   installPath: text("install_path"), // Filesystem path, e.g., "apps/paperclip"
   externalUrl: text("external_url"), // Full URL to reach the app in a browser
+  externalDbUrl: text("external_db_url"), // PostgreSQL connection string for the app's own DB (optional)
   status: text("status").notNull().default("not_installed"), // not_installed | running | stopped | error
   logoUrl: text("logo_url"), // Optional app logo
   githubUrl: text("github_url"), // Source repo
