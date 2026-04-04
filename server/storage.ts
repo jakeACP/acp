@@ -9056,22 +9056,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async ensurePaperclipApp(): Promise<AgentApp> {
-    const domains = process.env.REPLIT_DOMAINS?.split(" ")[0] ?? "";
+    const { existsSync } = await import("fs");
+    const domains = (process.env.REPLIT_DOMAINS ?? "").split(/[\s,]+/).filter(Boolean)[0] ?? "";
     const externalUrl = domains ? `https://${domains}:3002` : null;
+    const isInstalled = existsSync("apps/paperclip/package.json");
 
     const existing = await this.getAgentAppBySlug("paperclip");
     if (existing) {
-      const needsPatch =
-        existing.port !== 3001 ||
-        existing.installPath !== "apps/paperclip" ||
-        (externalUrl && existing.externalUrl !== externalUrl);
-      if (needsPatch) {
-        return this.updateAgentApp(existing.id, {
-          port: 3001,
-          installPath: "apps/paperclip",
-          ...(externalUrl ? { externalUrl } : {}),
-        });
-      }
+      const patch: Partial<InsertAgentApp> = {};
+      if (existing.port !== 3001) patch.port = 3001;
+      if (existing.installPath !== "apps/paperclip") patch.installPath = "apps/paperclip";
+      if (externalUrl && existing.externalUrl !== externalUrl) patch.externalUrl = externalUrl;
+      if (isInstalled && existing.status === "not_installed") patch.status = "stopped";
+      if (Object.keys(patch).length > 0) return this.updateAgentApp(existing.id, patch);
       return existing;
     }
 
@@ -9082,7 +9079,7 @@ export class DatabaseStorage implements IStorage {
       githubUrl: "https://github.com/paperclipai/paperclip",
       port: 3001,
       installPath: "apps/paperclip",
-      status: "not_installed",
+      status: isInstalled ? "stopped" : "not_installed",
       externalUrl,
     });
   }
