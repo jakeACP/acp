@@ -48,6 +48,39 @@ Preferred communication style: Simple, everyday language.
 - **Trading & Demerit System**: User-submitted insider trading flags, admin-assigned demerits, integration with politician profiles.
 - **ACE Badges Module**: Candidates can apply for Anti-Corruption Endorsement (ACE) badges via video pledges, which, upon admin approval, positively impact their corruption grade.
 
+## Agentic AI System
+
+### Overview
+The Agentic AI management page (`/admin/agentic-ai`) is restricted to the **Global Administrator** (the primary/first admin user, identified by `ensureOwnerAdmin` middleware). It allows managing sideloaded AI applications that run alongside ACP.
+
+### How It Works
+- Sideloaded apps are tracked in the `agent_apps` database table.
+- Each app has: name, slug, description, port, installPath, externalUrl, status, githubUrl.
+- The status field tracks: `not_installed` | `running` | `stopped` | `error`.
+- The "Refresh" button live-pings the `externalUrl` to determine if the app is reachable.
+- Backup downloads a zip of the app's install directory (excluding node_modules/.git).
+- Restore uploads a zip and extracts it to the install directory.
+
+### Paperclip (First App)
+- **Repo**: https://github.com/paperclipai/paperclip  
+- **Port**: 5001 (when installed)
+- **Install Path**: `apps/paperclip`
+- **What it is**: Open-source AI agent orchestration platform ("runs your business with AI agents")
+- **Agents as ACP Users**: Create ACP user accounts for agents via `/admin/users`. Assign roles:
+  - `citizen` — for front-end engagement agents simulating normal social media users
+  - `moderator` — for QA agents reviewing content and providing development feedback
+  - `admin` should NOT be assigned to agents automatically
+- **Dev vs. Prod**: In the Replit test environment, agents test app features and provide feedback. In production, they engage real users to grow the community.
+- **Installation**: See Task #22 for the full Paperclip installation setup.
+
+### API Endpoints
+- `GET /api/admin/is-global-admin` — returns `{ isGlobalAdmin: boolean }` for any authenticated user
+- `GET /api/admin/agent-apps` — list all registered apps (requires Global Admin)
+- `PATCH /api/admin/agent-apps/:id` — update app metadata (requires Global Admin)
+- `GET /api/admin/agent-apps/:id/status` — live ping status check (requires Global Admin)
+- `POST /api/admin/agent-apps/:id/backup` — download zip backup (requires Global Admin)
+- `POST /api/admin/agent-apps/:id/restore` — restore from zip upload (requires Global Admin)
+
 ## External Dependencies
 
 ### Database Infrastructure

@@ -27,7 +27,11 @@ import { storage } from "./storage";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema } from "@shared/schema";
+import archiver from "archiver";
+import multer from "multer";
+import unzipper from "unzipper";
+import { Readable } from "stream";
 import { eq, inArray, or, sql, asc } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
@@ -9227,6 +9231,141 @@ Only include people you are confident about. Return empty arrays/null if unknown
       res.status(500).json({ error: "Failed to update candidate" });
     }
   });
+
+  // ─── Agentic AI Routes ──────────────────────────────────────────────────────
+
+  // Seed the Paperclip app entry on startup
+  storage.ensurePaperclipApp().catch(err => console.error("Failed to seed Paperclip app:", err));
+
+  // GET /api/admin/is-global-admin — no auth middleware, just returns a bool
+  app.get("/api/admin/is-global-admin", async (req: any, res: any) => {
+    if (!req.isAuthenticated()) return res.json({ isGlobalAdmin: false });
+    if (req.user.role !== "admin") return res.json({ isGlobalAdmin: false });
+    const adminUserId = await storage.getAdminUserId();
+    res.json({ isGlobalAdmin: !!adminUserId && req.user.id === adminUserId });
+  });
+
+  // GET /api/admin/agent-apps — list all installed apps
+  app.get("/api/admin/agent-apps", ensureOwnerAdmin, async (_req: any, res: any) => {
+    try {
+      const apps = await storage.listAgentApps();
+      res.json(apps);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to list agent apps" });
+    }
+  });
+
+  // PATCH /api/admin/agent-apps/:id — update app metadata
+  app.patch("/api/admin/agent-apps/:id", ensureOwnerAdmin, async (req: any, res: any) => {
+    try {
+      const parsed = insertAgentAppSchema.partial().safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+      const updated = await storage.updateAgentApp(req.params.id, parsed.data);
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update agent app" });
+    }
+  });
+
+  // GET /api/admin/agent-apps/:id/status — live ping to see if app is reachable
+  app.get("/api/admin/agent-apps/:id/status", ensureOwnerAdmin, async (req: any, res: any) => {
+    try {
+      const app = await storage.getAgentAppById(req.params.id);
+      if (!app) return res.status(404).json({ error: "App not found" });
+
+      if (!app.externalUrl || app.status === "not_installed") {
+        return res.json({ status: "not_installed", reachable: false });
+      }
+
+      // Attempt a quick HEAD/GET ping
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      try {
+        const pingRes = await fetch(app.externalUrl, { method: "HEAD", signal: controller.signal });
+        clearTimeout(timeout);
+        const status = pingRes.ok || pingRes.status < 500 ? "running" : "stopped";
+        res.json({ status, reachable: true, httpStatus: pingRes.status });
+      } catch {
+        clearTimeout(timeout);
+        res.json({ status: "stopped", reachable: false });
+      }
+    } catch (err) {
+      res.status(500).json({ error: "Failed to check app status" });
+    }
+  });
+
+  // POST /api/admin/agent-apps/:id/backup — zip app's install dir and return for download
+  app.post("/api/admin/agent-apps/:id/backup", ensureOwnerAdmin, async (req: any, res: any) => {
+    try {
+      const agentApp = await storage.getAgentAppById(req.params.id);
+      if (!agentApp) return res.status(404).json({ error: "App not found" });
+      if (!agentApp.installPath || agentApp.status === "not_installed") {
+        return res.status(400).json({ error: "App is not installed — nothing to backup" });
+      }
+
+      const appPath = path.resolve(process.cwd(), agentApp.installPath);
+      if (!fs.existsSync(appPath)) {
+        return res.status(400).json({ error: "Install path does not exist on disk" });
+      }
+
+      const filename = `${agentApp.slug}-backup-${Date.now()}.zip`;
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+      const archive = archiver("zip", { zlib: { level: 6 } });
+      archive.on("error", (err: Error) => { if (!res.headersSent) res.status(500).end(); });
+      archive.pipe(res);
+
+      // Add app directory but skip node_modules and .git to keep it manageable
+      archive.glob("**/*", {
+        cwd: appPath,
+        ignore: ["node_modules/**", ".git/**", "dist/**", ".next/**"],
+      });
+
+      await archive.finalize();
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: "Backup failed" });
+    }
+  });
+
+  // POST /api/admin/agent-apps/:id/restore — upload zip and extract to install dir
+  const agentRestoreUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 512 * 1024 * 1024 } });
+  app.post("/api/admin/agent-apps/:id/restore", ensureOwnerAdmin, agentRestoreUpload.single("backup"), async (req: any, res: any) => {
+    try {
+      const agentApp = await storage.getAgentAppById(req.params.id);
+      if (!agentApp) return res.status(404).json({ error: "App not found" });
+      if (!req.file) return res.status(400).json({ error: "No backup file uploaded" });
+
+      const appPath = agentApp.installPath
+        ? path.resolve(process.cwd(), agentApp.installPath)
+        : path.resolve(process.cwd(), "apps", agentApp.slug);
+
+      // Ensure directory exists
+      fs.mkdirSync(appPath, { recursive: true });
+
+      // Write buffer to temp file then extract
+      const tmpZip = path.join(os.tmpdir(), `agent-restore-${Date.now()}.zip`);
+      fs.writeFileSync(tmpZip, req.file!.buffer);
+      await new Promise<void>((resolve, reject) => {
+        fs.createReadStream(tmpZip)
+          .pipe(unzipper.Extract({ path: appPath }))
+          .on("close", () => { fs.unlinkSync(tmpZip); resolve(); })
+          .on("error", (err: Error) => { try { fs.unlinkSync(tmpZip); } catch {} reject(err); });
+      });
+
+      // Update status and path
+      await storage.updateAgentApp(agentApp.id, {
+        installPath: path.relative(process.cwd(), appPath),
+        status: "stopped",
+      });
+
+      res.json({ success: true, message: "Backup restored. Restart the app to apply." });
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: "Restore failed" });
+    }
+  });
+
+  // ─── End Agentic AI Routes ───────────────────────────────────────────────────
 
   return httpServer;
 }

@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey } from "@shared/schema";
+import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApps, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApp, type InsertAgentApp } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, composeJobs, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest, type ComposeJob, type SignalComment, type InsertSignalComment } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
@@ -385,6 +385,15 @@ export interface IStorage {
   countActiveApiKeys(userId: string): Promise<number>;
   revokeApiKey(id: string, userId: string): Promise<void>;
   findApiKeyByHash(keyHash: string): Promise<ApiKey | undefined>;
+
+  // Agent Apps
+  listAgentApps(): Promise<AgentApp[]>;
+  getAgentAppBySlug(slug: string): Promise<AgentApp | undefined>;
+  getAgentAppById(id: string): Promise<AgentApp | undefined>;
+  createAgentApp(data: InsertAgentApp): Promise<AgentApp>;
+  updateAgentApp(id: string, data: Partial<InsertAgentApp>): Promise<AgentApp>;
+  deleteAgentApp(id: string): Promise<void>;
+  ensurePaperclipApp(): Promise<AgentApp>;
 
   // ACP Cryptocurrency System
   getUserBalance(userId: string): Promise<string>;
@@ -9012,6 +9021,52 @@ export class DatabaseStorage implements IStorage {
     const [key] = await db.select().from(apiKeys)
       .where(and(eq(apiKeys.keyHash, keyHash), sql`${apiKeys.revokedAt} IS NULL`));
     return key;
+  }
+
+  // Agent Apps
+  async listAgentApps(): Promise<AgentApp[]> {
+    return db.select().from(agentApps).orderBy(agentApps.createdAt);
+  }
+
+  async getAgentAppBySlug(slug: string): Promise<AgentApp | undefined> {
+    const [app] = await db.select().from(agentApps).where(eq(agentApps.slug, slug));
+    return app;
+  }
+
+  async getAgentAppById(id: string): Promise<AgentApp | undefined> {
+    const [app] = await db.select().from(agentApps).where(eq(agentApps.id, id));
+    return app;
+  }
+
+  async createAgentApp(data: InsertAgentApp): Promise<AgentApp> {
+    const [app] = await db.insert(agentApps).values(data).returning();
+    return app;
+  }
+
+  async updateAgentApp(id: string, data: Partial<InsertAgentApp>): Promise<AgentApp> {
+    const [app] = await db.update(agentApps)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(agentApps.id, id))
+      .returning();
+    return app;
+  }
+
+  async deleteAgentApp(id: string): Promise<void> {
+    await db.delete(agentApps).where(eq(agentApps.id, id));
+  }
+
+  async ensurePaperclipApp(): Promise<AgentApp> {
+    const existing = await this.getAgentAppBySlug("paperclip");
+    if (existing) return existing;
+    return this.createAgentApp({
+      slug: "paperclip",
+      name: "Paperclip",
+      description: "Open-source AI agent orchestration platform. Coordinates teams of AI agents to run autonomous businesses. Agents become ACP users and interact with the platform to drive engagement and quality.",
+      githubUrl: "https://github.com/paperclipai/paperclip",
+      port: 5001,
+      installPath: "apps/paperclip",
+      status: "not_installed",
+    });
   }
 }
 

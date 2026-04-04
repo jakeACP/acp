@@ -76,7 +76,7 @@ const navCategories: NavCategory[] = [
       { name: "Algorithm", href: "/admin/algorithm", icon: Cpu },
       { name: "AI Writer", href: "/admin/ai-parameters", icon: Cpu },
       { name: "News Scanner", href: "/admin/scanner", icon: Radar },
-      { name: "Agentic AI", href: "#", icon: Bot, disabled: true, badge: "Soon" },
+      { name: "Agentic AI", href: "/admin/agentic-ai", icon: Bot },
     ],
   },
   {

@@ -63,6 +63,7 @@ import AdminImportExportPage from "@/pages/admin-import-export-page";
 import AdminTradingFlagsPage from "@/pages/admin-trading-flags-page";
 import AdminAcePledgesPage from "@/pages/admin-ace-pledges-page";
 import AdminScannerPage from "@/pages/admin-scanner-page";
+import AdminAgenticAiPage from "@/pages/admin-agentic-ai-page";
 import SigsDirectoryPage from "@/pages/sigs-directory-page";
 import SigProfilePage from "@/pages/sig-profile-page";
 import WhistleblowingPage from "@/pages/whistleblowing-page";
@@ -188,6 +189,7 @@ function Router() {
       <ProtectedRoute path="/admin/trading-flags" component={AdminTradingFlagsPage} />
       <ProtectedRoute path="/admin/ace-pledges" component={AdminAcePledgesPage} />
       <ProtectedRoute path="/admin/scanner" component={AdminScannerPage} />
+      <ProtectedRoute path="/admin/agentic-ai" component={AdminAgenticAiPage} />
       <ProtectedRoute path="/admin/polls" component={AdminPollsPage} />
       <ProtectedRoute path="/admin/security" component={AdminSecurityPage} />
       <ProtectedRoute path="/admin/database" component={AdminDatabasePage} />

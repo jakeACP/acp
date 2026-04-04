@@ -2519,3 +2519,25 @@ export const apiKeys = pgTable("api_keys", {
 export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, createdAt: true, lastUsedAt: true, revokedAt: true });
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
+
+// Agent Apps - sideloaded AI applications managed by the Global Administrator
+export const agentApps = pgTable("agent_apps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  slug: text("slug").notNull().unique(), // e.g., "paperclip"
+  name: text("name").notNull(), // Display name, e.g., "Paperclip"
+  description: text("description"), // What the app does
+  version: text("version"), // Installed version string
+  port: integer("port"), // Port the app listens on (e.g. 5001)
+  installPath: text("install_path"), // Filesystem path, e.g., "apps/paperclip"
+  externalUrl: text("external_url"), // Full URL to reach the app in a browser
+  status: text("status").notNull().default("not_installed"), // not_installed | running | stopped | error
+  logoUrl: text("logo_url"), // Optional app logo
+  githubUrl: text("github_url"), // Source repo
+  notes: text("notes"), // Admin notes about the app
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertAgentAppSchema = createInsertSchema(agentApps).omit({ id: true, createdAt: true, updatedAt: true });
+export type AgentApp = typeof agentApps.$inferSelect;
+export type InsertAgentApp = z.infer<typeof insertAgentAppSchema>;
