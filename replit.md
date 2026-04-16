@@ -109,6 +109,16 @@ Create ACP user accounts for agents via `/admin/users`. Assign roles based on th
 - **Paperclip** — AI company orchestration platform; port 3001, slug `paperclip`, own `paperclipdb` database
 - **Codex** — OpenAI coding agent; slug `codex`, requires `OPENAI_API_KEY` config
 
+### Google SSO
+- **Strategy**: `passport-google-oauth20` added as a Passport.js strategy
+- **Schema**: `google_id TEXT UNIQUE` column added to `users` table
+- **Flows**: Login, register, and account linking (existing email → links Google ID)
+- **Routes**: `GET /auth/google` (initiates) → `GET /auth/google/callback` (completes)
+- **Callback URL**: Dynamic per-request — works in both dev (`http://localhost:5000`) and production (`https://`)
+- **New accounts**: Username derived from Google email prefix (unique collision handling); random unusable password set
+- **Secrets required**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (Replit Secrets)
+- **Google Cloud Console**: Authorized redirect URIs must include your dev URL + `/auth/google/callback` and production domain + `/auth/google/callback`
+
 ## External Dependencies
 
 ### Database Infrastructure

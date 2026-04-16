@@ -1,5 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import cookieParser from "cookie-parser";
@@ -952,4 +953,121 @@ export function setupAuth(app: Express) {
       res.json({ trusted: false });
     }
   });
+
+  // ─── Google OAuth ─────────────────────────────────────────────────────────
+
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    // Build the callback URL dynamically based on the request host in production.
+    // In dev we use localhost; in production we use the primary Replit/custom domain.
+    const getCallbackUrl = (req: Request) => {
+      const host = req.headers.host || "localhost:5000";
+      const protocol = isProduction ? "https" : req.protocol;
+      return `${protocol}://${host}/auth/google/callback`;
+    };
+
+    passport.use(
+      "google",
+      new GoogleStrategy(
+        {
+          clientID: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          // callbackURL is overridden per-request via passReqToCallback
+          callbackURL: "http://localhost:5000/auth/google/callback",
+          passReqToCallback: true,
+        },
+        async (req: Request, _accessToken: string, _refreshToken: string, profile: any, done: any) => {
+          try {
+            const googleId = profile.id;
+            const email = profile.emails?.[0]?.value;
+            const firstName = profile.name?.givenName || "";
+            const lastName = profile.name?.familyName || "";
+            const avatar = profile.photos?.[0]?.value || null;
+
+            // 1. Already linked account
+            let user = await storage.getUserByGoogleId(googleId);
+            if (user) return done(null, user);
+
+            // 2. Existing account with same email — link it
+            if (email) {
+              user = await storage.getUserByEmail(email);
+              if (user) {
+                user = await storage.updateUser(user.id, { googleId });
+                return done(null, user);
+              }
+            }
+
+            // 3. Create a brand-new account
+            const registrationIp = getClientIp(req as any);
+            const registrationCountry = await getCountryFromIp(registrationIp);
+            const userCount = await storage.getUserCount();
+            const isFirstUser = userCount === 0;
+
+            // Derive a unique username from the Google profile
+            const baseUsername = (email?.split("@")[0] || `user${Date.now()}`)
+              .replace(/[^a-zA-Z0-9_]/g, "")
+              .slice(0, 20);
+            let username = baseUsername;
+            let suffix = 1;
+            while (await storage.getUserByUsername(username)) {
+              username = `${baseUsername}${suffix++}`;
+            }
+
+            const newUser = await storage.createUser({
+              username,
+              email: email || `${googleId}@google-oauth.invalid`,
+              password: await hashPassword(randomBytes(32).toString("hex")), // random, unusable password
+              firstName,
+              lastName,
+              avatar,
+              googleId,
+              role: isFirstUser ? "admin" : "citizen",
+              registrationIp,
+              registrationCountry,
+              lastLoginIp: registrationIp,
+              lastLoginCountry: registrationCountry,
+            });
+
+            // Auto-friend with jox
+            try {
+              const joxUserId = await storage.getDefaultFriendUserId();
+              if (joxUserId && joxUserId !== newUser.id) {
+                await storage.createFriendship(joxUserId, newUser.id);
+              }
+            } catch {}
+
+            return done(null, newUser);
+          } catch (err) {
+            return done(err);
+          }
+        }
+      )
+    );
+
+    // GET /auth/google — initiates OAuth flow
+    app.get("/auth/google", (req: any, res: any, next: any) => {
+      const host = req.headers.host || "localhost:5000";
+      const protocol = isProduction ? "https" : req.protocol;
+      const callbackURL = `${protocol}://${host}/auth/google/callback`;
+      passport.authenticate("google", {
+        scope: ["profile", "email"],
+        callbackURL,
+      } as any)(req, res, next);
+    });
+
+    // GET /auth/google/callback — handles the OAuth callback
+    app.get("/auth/google/callback", (req: any, res: any, next: any) => {
+      const host = req.headers.host || "localhost:5000";
+      const protocol = isProduction ? "https" : req.protocol;
+      const callbackURL = `${protocol}://${host}/auth/google/callback`;
+      passport.authenticate("google", {
+        callbackURL,
+        failureRedirect: "/auth?error=google_failed",
+      } as any)(req, res, (err: any) => {
+        if (err) return next(err);
+        res.redirect("/");
+      });
+    });
+  } else {
+    console.warn("[auth] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set — Google SSO disabled");
+  }
 }

@@ -17,6 +17,31 @@ import { ErrorMessage } from "@/components/error-message";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
+import { SiGoogle } from "react-icons/si";
+
+function GoogleSignInButton({ label = "Continue with Google" }: { label?: string }) {
+  return (
+    <a href="/auth/google" className="block w-full">
+      <Button type="button" variant="outline" className="w-full gap-2 border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
+        <SiGoogle className="h-4 w-4 text-[#4285F4]" />
+        {label}
+      </Button>
+    </a>
+  );
+}
+
+function OrDivider() {
+  return (
+    <div className="relative my-4">
+      <div className="absolute inset-0 flex items-center">
+        <span className="w-full border-t border-slate-200 dark:border-slate-700" />
+      </div>
+      <div className="relative flex justify-center text-xs uppercase">
+        <span className="bg-white dark:bg-slate-950 px-2 text-slate-400">or</span>
+      </div>
+    </div>
+  );
+}
 
 const loginSchema = insertUserSchema.pick({ username: true, password: true });
 
@@ -328,6 +353,9 @@ export default function AuthPage() {
                           )}
                         </Button>
                       </form>
+
+                      <OrDivider />
+                      <GoogleSignInButton label="Sign in with Google" />
                       
                       <div className="mt-4 text-center">
                         <Link href="/forgot-password">
@@ -485,6 +513,9 @@ export default function AuthPage() {
                       {registerMutation.isPending ? "Creating Account..." : "Create Account"}
                     </Button>
                   </form>
+
+                  <OrDivider />
+                  <GoogleSignInButton label="Sign up with Google" />
                 </CardContent>
               </Card>
             </TabsContent>
