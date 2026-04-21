@@ -9358,8 +9358,8 @@ Only include people you are confident about. Return empty arrays/null if unknown
         endpoint: req.path,
         method: req.method,
         action,
-        payload: redactAgentPayload(req.body ?? req.query ?? null),
-        response: redactAgentPayload(responseBody),
+        payload: redactAgentPayload(req.body ?? req.query ?? null) as Record<string, unknown> | null,
+        response: redactAgentPayload(responseBody) as Record<string, unknown> | null,
         responseStatus,
         ip: req.ip ?? null,
         sandbox: req.agentSandbox === true,
@@ -9378,13 +9378,6 @@ Only include people you are confident about. Return empty arrays/null if unknown
     const body = { success, action, data, errors, meta: { timestamp: new Date().toISOString(), rate_limit_remaining: req.agentRateLimitRemaining ?? null, sandbox: req.agentSandbox === true } };
     await writeAgentLog(req, action, status, success, body, success ? undefined : "Request failed");
     return res.status(status).json(body);
-  }
-
-  async function ensureGlobalAgentAdmin(req: AgentAdminRequest, res: Response, next: NextFunction) {
-    if (!req.isAuthenticated() || req.user?.role !== "admin") return res.status(403).json({ error: "Admin access required" });
-    const adminUserId = await storage.getAdminUserId();
-    if (!adminUserId || req.user.id !== adminUserId) return res.status(403).json({ error: "Global administrator access required" });
-    next();
   }
 
   app.get("/api/admin/is-global-admin", async (req: Request, res: Response) => {
