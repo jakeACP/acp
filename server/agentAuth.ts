@@ -22,7 +22,7 @@ export function generateRawAgentKey(): string {
 const rateLimiters = new Map<string, RateLimiterMemory>();
 
 function getLimiterForKey(key: AgentApiKey): RateLimiterMemory {
-  const points = Math.max(key.rateLimit ?? 120, 1);
+  const points = Math.max(key.rateLimit ?? 100, 1);
   const limiterKey = `${key.id}:${points}`;
   if (!rateLimiters.has(limiterKey)) {
     rateLimiters.set(limiterKey, new RateLimiterMemory({ points, duration: 3600 }));

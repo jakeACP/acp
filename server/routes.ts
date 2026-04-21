@@ -9249,7 +9249,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     news_agent: { label: "News Agent", permissions: { "articles:create": true, "articles:edit": true, "logs:read": true } },
     qa_agent: { label: "QA / Testing Agent", permissions: { "articles:create": true, "articles:edit": true, "moderation:flag": true, "users:ban": true, "politicians:write": true, "elections:write": true, "testing:run": true, "security:scan": true, "sandbox:use": true, "logs:read": true }, sandboxMode: true },
     cybersecurity_agent: { label: "Cybersecurity Agent", permissions: { "security:scan": true, "sandbox:use": true, "logs:read": true }, sandboxMode: true },
-    data_agent: { label: "Data Ingestion Agent", permissions: { "politicians:write": true, "elections:write": true } },
+    data_agent: { label: "Data Ingestion Agent", permissions: { "politicians:write": true, "elections:write": true, "logs:read": true } },
     analyst_agent: { label: "Candidate Analysis Agent", permissions: { "logs:read": true } },
     campaign_manager: { label: "Campaign Manager", permissions: { "articles:create": true, "articles:edit": true, "elections:write": true } },
     field_organizer: { label: "Field Organizer", permissions: { "articles:create": true, "testing:run": true } },
@@ -9455,7 +9455,8 @@ Only include people you are confident about. Return empty arrays/null if unknown
     try {
       const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
       const offset = Math.max(Number(req.query.offset) || 0, 0);
-      const apiKeyId = typeof req.query.apiKeyId === "string" && req.query.apiKeyId.trim() ? req.query.apiKeyId.trim() : undefined;
+      const requestedKeyId = typeof req.query.keyId === "string" && req.query.keyId.trim() ? req.query.keyId.trim() : req.query.apiKeyId;
+      const apiKeyId = typeof requestedKeyId === "string" && requestedKeyId.trim() ? requestedKeyId.trim() : undefined;
       const logs = await storage.listAgentLogs({ limit, offset, apiKeyId });
       res.json({ logs, pagination: { limit, offset, hasMore: logs.length === limit } });
     } catch {
