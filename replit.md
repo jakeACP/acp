@@ -51,7 +51,7 @@ Preferred communication style: Simple, everyday language.
 ## ACP Agent API Gateway
 
 ### Overview
-The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway control panel. It is restricted to the global administrator and manages scoped `X-Agent-Key` API keys for external AI agents such as Claw Machine / OpenClaw instead of managing sideloaded Paperclip/Codex app processes.
+The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway control panel. It is restricted to administrators and manages scoped `X-Agent-Key` API keys for external AI agents such as Claw Machine / OpenClaw instead of managing sideloaded Paperclip/Codex app processes.
 
 ### How It Works
 - Agent keys are stored in `agent_api_keys` with a one-time raw key display, SHA-256 key hash, visible prefix, role, JSON permission map, hourly rate limit, sandbox mode, status, creator, and last-used timestamp.

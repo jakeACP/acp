@@ -9383,14 +9383,14 @@ Only include people you are confident about. Return empty arrays/null if unknown
     next();
   }
 
-  app.get("/api/admin/agent-keys/meta", ensureGlobalAgentAdmin, async (_req, res) => {
+  app.get("/api/admin/agent-keys/meta", ensureAdminOnly, async (_req, res) => {
     res.json({
       roles: agentRoles.map((value) => ({ value, label: AGENT_ROLE_DEFAULTS[value].label, defaults: AGENT_ROLE_DEFAULTS[value].permissions, sandboxMode: AGENT_ROLE_DEFAULTS[value].sandboxMode === true })),
       permissions: agentPermissions.map((value) => ({ value, label: agentPermissionLabels[value] })),
     });
   });
 
-  app.get("/api/admin/agent-keys", ensureGlobalAgentAdmin, async (_req, res) => {
+  app.get("/api/admin/agent-keys", ensureAdminOnly, async (_req, res) => {
     try {
       const keys = await storage.listAgentApiKeys();
       res.json(keys.map(serializeAgentKey));
@@ -9399,7 +9399,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
-  app.post("/api/admin/agent-keys", ensureGlobalAgentAdmin, async (req: AgentAdminRequest, res) => {
+  app.post("/api/admin/agent-keys", ensureAdminOnly, async (req: AgentAdminRequest, res) => {
     const parsed = agentKeyAdminSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     if (!req.user?.id) return res.status(401).json({ error: "Not authenticated" });
@@ -9424,7 +9424,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
-  app.patch("/api/admin/agent-keys/:id", ensureGlobalAgentAdmin, async (req, res) => {
+  app.patch("/api/admin/agent-keys/:id", ensureAdminOnly, async (req, res) => {
     const parsed = agentKeyPatchSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     try {
@@ -9442,7 +9442,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
-  app.delete("/api/admin/agent-keys/:id", ensureGlobalAgentAdmin, async (req, res) => {
+  app.delete("/api/admin/agent-keys/:id", ensureAdminOnly, async (req, res) => {
     try {
       await storage.revokeAgentApiKey(req.params.id);
       res.json({ success: true });
@@ -9451,7 +9451,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
-  app.get("/api/admin/agent-logs", ensureGlobalAgentAdmin, async (req, res) => {
+  app.get("/api/admin/agent-logs", ensureAdminOnly, async (req, res) => {
     try {
       const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
       const offset = Math.max(Number(req.query.offset) || 0, 0);
@@ -9617,6 +9617,13 @@ Only include people you are confident about. Return empty arrays/null if unknown
     return agentResponse(agentReq, res, "articles:edit:sandbox", 200, { sandbox: true, wouldUpdate: parsed.data });
   });
 
+  app.put("/api/agent/sandbox/articles/:id", agentApiAuth, requireAgentPermission("articles:edit"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = articleUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "articles:edit:sandbox", 400, null, [{ message: "Invalid article update payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "articles:edit:sandbox", 200, { sandbox: true, wouldUpdate: { postId: req.params.id, ...parsed.data } });
+  });
+
   app.post("/api/agent/sandbox/moderation/flag", agentApiAuth, requireAgentPermission("moderation:flag"), async (req: Request, res) => {
     const agentReq = forceSandbox(req);
     const bodySchema = z.object({ targetId: z.string().min(1), targetType: z.enum(["post", "comment"]), reason: z.string().min(1).max(500) });
@@ -9645,6 +9652,13 @@ Only include people you are confident about. Return empty arrays/null if unknown
     const parsed = politicianUpdateSchema.safeParse(req.body);
     if (!parsed.success || !parsed.data.politicianId) return agentResponse(agentReq, res, "politicians:write:sandbox", 400, null, [{ message: "Invalid politician update payload", details: parsed.success ? undefined : parsed.error.flatten() }]);
     return agentResponse(agentReq, res, "politicians:write:sandbox", 200, { sandbox: true, wouldUpdate: parsed.data });
+  });
+
+  app.put("/api/agent/sandbox/politicians/:id", agentApiAuth, requireAgentPermission("politicians:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = politicianUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "politicians:write:sandbox", 400, null, [{ message: "Invalid politician update payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "politicians:write:sandbox", 200, { sandbox: true, wouldUpdate: { politicianId: req.params.id, ...parsed.data } });
   });
 
   app.post("/api/agent/sandbox/elections/sync", agentApiAuth, requireAgentPermission("elections:write"), async (req: Request, res) => {

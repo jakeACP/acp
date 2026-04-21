@@ -66,7 +66,7 @@ function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString() : "Never";
 }
 
-function AccessDenied({ globalOnly = false }: { globalOnly?: boolean }) {
+function AccessDenied() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <AdminNavigation />
@@ -76,7 +76,7 @@ function AccessDenied({ globalOnly = false }: { globalOnly?: boolean }) {
         </div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Access Denied</h1>
         <p className="text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
-          {globalOnly ? "Only the global administrator can manage external agent keys." : "The ACP Agent API Gateway is restricted to administrators only."}
+          The ACP Agent API Gateway is restricted to administrators only.
         </p>
       </div>
     </div>
@@ -98,16 +98,10 @@ export default function AdminAgenticAiPage() {
   const [selectedLogKey, setSelectedLogKey] = useState("all");
   const [logOffset, setLogOffset] = useState(0);
 
-  const { data: adminScope, isLoading: checkingAdminScope } = useQuery<{ isGlobalAdmin: boolean }>({
-    queryKey: ["/api/admin/is-global-admin"],
-    enabled: isAdmin,
-  });
-  const isGlobalAdmin = !!adminScope?.isGlobalAdmin;
-
-  const { data: meta } = useQuery<AgentMeta>({ queryKey: ["/api/admin/agent-keys/meta"], enabled: isGlobalAdmin });
-  const { data: keys, isLoading: loadingKeys } = useQuery<AgentKey[]>({ queryKey: ["/api/admin/agent-keys"], enabled: isGlobalAdmin });
+  const { data: meta } = useQuery<AgentMeta>({ queryKey: ["/api/admin/agent-keys/meta"], enabled: isAdmin });
+  const { data: keys, isLoading: loadingKeys } = useQuery<AgentKey[]>({ queryKey: ["/api/admin/agent-keys"], enabled: isAdmin });
   const logQueryPath = selectedLogKey === "all" ? `/api/admin/agent-logs?limit=50&offset=${logOffset}` : `/api/admin/agent-logs?limit=50&offset=${logOffset}&apiKeyId=${selectedLogKey}`;
-  const { data: logsResponse, isLoading: loadingLogs } = useQuery<LogsResponse>({ queryKey: [logQueryPath], enabled: isGlobalAdmin });
+  const { data: logsResponse, isLoading: loadingLogs } = useQuery<LogsResponse>({ queryKey: [logQueryPath], enabled: isAdmin });
 
   const activeCount = useMemo(() => keys?.filter((key) => key.status === "active").length ?? 0, [keys]);
   const selectedRole = meta?.roles.find((item) => item.value === role);
@@ -156,7 +150,7 @@ export default function AdminAgenticAiPage() {
 
   const togglePermission = (value: string) => setPermissions((current) => ({ ...current, [value]: !current[value] }));
 
-  if (checkingAuth || (isAdmin && checkingAdminScope)) {
+  if (checkingAuth) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <AdminNavigation />
@@ -166,7 +160,6 @@ export default function AdminAgenticAiPage() {
   }
 
   if (!isAdmin) return <AccessDenied />;
-  if (!isGlobalAdmin) return <AccessDenied globalOnly />;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
