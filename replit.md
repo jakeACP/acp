@@ -51,26 +51,31 @@ Preferred communication style: Simple, everyday language.
 ## ACP Agent API Gateway
 
 ### Overview
-The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway control panel. It is restricted to admin users and manages scoped bearer API keys for external AI agents such as Claw Machine / OpenClaw instead of managing sideloaded Paperclip/Codex app processes.
+The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway control panel. It is restricted to the global administrator and manages scoped `X-Agent-Key` API keys for external AI agents such as Claw Machine / OpenClaw instead of managing sideloaded Paperclip/Codex app processes.
 
 ### How It Works
-- Agent keys are stored in `agent_api_keys` with a one-time raw key display, SHA-256 key hash, visible prefix, role, permission list, status, creator, and last-used timestamp.
-- Agent activity is stored in `agent_logs` with agent name, role, endpoint, method, action, status code, success flag, message, metadata, and timestamp.
-- `/api/agent/*` routes bypass CSRF and require `Authorization: Bearer <agent_key>`.
+- Agent keys are stored in `agent_api_keys` with a one-time raw key display, SHA-256 key hash, visible prefix, role, JSON permission map, hourly rate limit, sandbox mode, status, creator, and last-used timestamp.
+- Agent activity is stored in `agent_logs` with API key id, agent name, role, endpoint, method, action, payload/response summaries, response status, IP, sandbox flag, success flag, message, metadata, and timestamp.
+- `/api/agent/*` routes bypass CSRF and require `X-Agent-Key: acp_agent_...`.
+- Agent responses use the standard envelope `{ success, action, data, errors, meta }`.
 - The existing premium/admin developer API under `/api/v1/*` remains separate and unchanged.
 - Startup ensures the two gateway tables exist if the deployed database has not been synced yet.
 
 ### Supported Agent Roles
-`moderator_agent`, `news_agent`, `qa_agent`, `data_agent`, `analyst_agent`, `campaign_manager`, `journalist`, `field_organizer`, `compliance_observer`, and `policy_researcher`.
+Includes `moderator_agent`, `news_agent`, `qa_agent`, `cybersecurity_agent`, `data_agent`, `analyst_agent`, campaign roles, compliance/legal/auditor roles, journalist/researcher/activist roles, vendor roles, and general voter/sandbox roles. Role defaults are surfaced in the Roles Reference tab.
 
 ### Agent Permissions
 - `articles:create` — create public posts/articles
+- `articles:edit` — edit existing posts/articles
 - `moderation:flag` — flag posts/comments for review
 - `users:ban` — ban user accounts
-- `politicians:import` — import politician profiles
-- `elections:sync` — submit election sync reports for admin review
+- `politicians:write` — import or update politician profiles
+- `elections:write` — submit election sync reports for admin review
+- `testing:run` — submit QA/testing reports
+- `security:scan` — submit security scan reports
 - `sandbox:use` — call safe test endpoints
-- `logs:read` — read agent activity logs
+- `logs:read` — read activity logs scoped to the current key
+- `system:admin` — bypass individual permission checks
 
 ### Admin Endpoints
 - `GET /api/admin/agent-keys/meta`
@@ -82,12 +87,18 @@ The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway
 - `GET /api/admin/is-global-admin`
 
 ### Agent Endpoints
-- `GET /api/agent/auth/verify`
+- `POST /api/agent/auth/verify`
 - `POST /api/agent/articles/create`
+- `PUT /api/agent/articles/update`
+- `PUT /api/agent/articles/:id`
 - `POST /api/agent/moderation/flag`
 - `POST /api/agent/users/ban`
 - `POST /api/agent/politicians/import`
+- `PUT /api/agent/politicians/update`
+- `PUT /api/agent/politicians/:id`
 - `POST /api/agent/elections/sync`
+- `POST /api/agent/testing/run`
+- `POST /api/agent/security/scan`
 - `ANY /api/agent/sandbox/*`
 - `GET /api/agent/logs`
 

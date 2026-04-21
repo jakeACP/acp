@@ -394,7 +394,7 @@ export interface IStorage {
   revokeAgentApiKey(id: string): Promise<void>;
   touchAgentApiKey(id: string): Promise<void>;
   createAgentLog(data: InsertAgentLog): Promise<AgentLog>;
-  listAgentLogs(limit?: number): Promise<AgentLog[]>;
+  listAgentLogs(options?: { limit?: number; offset?: number; apiKeyId?: string }): Promise<AgentLog[]>;
 
   // Agent Apps
   listAgentApps(): Promise<AgentApp[]>;
@@ -9085,8 +9085,17 @@ export class DatabaseStorage implements IStorage {
     return log;
   }
 
-  async listAgentLogs(limit = 100): Promise<AgentLog[]> {
-    return db.select().from(agentLogs).orderBy(desc(agentLogs.createdAt)).limit(limit);
+  async listAgentLogs(options: { limit?: number; offset?: number; apiKeyId?: string } = {}): Promise<AgentLog[]> {
+    const limit = options.limit ?? 100;
+    const offset = options.offset ?? 0;
+    if (options.apiKeyId) {
+      return db.select().from(agentLogs)
+        .where(eq(agentLogs.apiKeyId, options.apiKeyId))
+        .orderBy(desc(agentLogs.createdAt))
+        .limit(limit)
+        .offset(offset);
+    }
+    return db.select().from(agentLogs).orderBy(desc(agentLogs.createdAt)).limit(limit).offset(offset);
   }
 
   // Agent Apps
