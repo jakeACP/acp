@@ -1,0 +1,201 @@
+REPLIT PROMPT — ACP Agent API System (No Paperclip)
+
+Objective:
+Remove Paperclip (port 3001) and replace it with a secure, scalable API layer that allows external AI agents (Claw Machine / OpenClaw) to interact with ACP using role-based API keys.
+
+🧹 1. Remove Paperclip بالكامل
+Delete all Paperclip-related code, services, dependencies, and environment variables
+Remove any references to:
+Port 3001
+Paperclip UI / routes
+Agent orchestration logic tied to Paperclip
+Clean up package.json and backend services
+Confirm ACP runs cleanly on primary port only
+🧠 2. Build “ACP Agent API Gateway”
+
+Create a new backend module:
+
+/server/api/agent/
+
+Core responsibilities:
+
+Authenticate agents via API keys
+Enforce role-based permissions
+Log all agent activity
+Rate-limit and sandbox behavior
+Return structured JSON responses optimized for AI agents
+🔐 3. API Key + Role System
+
+Create database tables:
+
+api_keys
+
+id
+key
+role
+permissions (JSON)
+rate_limit
+created_by
+last_used
+status (active/revoked)
+
+agent_logs
+
+id
+api_key_id
+action
+endpoint
+payload
+response
+timestamp
+status
+🧩 4. Define Agent Roles + Permissions
+
+Create a modular permission system.
+
+Core Internal Roles (AI Agents)
+Moderator Agent
+remove posts
+flag users
+review reports
+News Agent
+create articles
+edit articles
+tag content
+attach sources
+QA / Testing Agent
+simulate users
+run flows
+submit bug reports
+Cybersecurity Agent
+scan endpoints
+test auth vulnerabilities
+monitor suspicious behavior
+Data Ingestion Agent
+import politicians
+update candidate profiles
+sync elections
+Candidate Analysis Agent
+generate summaries
+assign corruption scores
+attach financial + voting data
+🏛️ 5. Real-World Political Org Roles
+Internal Party Roles
+Campaign Manager
+Field Organizer
+Volunteer Coordinator
+Fundraising Director
+Communications Director
+Social Media Manager
+Data Analyst
+Policy Advisor
+Treasurer
+Compliance Officer
+Government / Civic Roles
+Candidate
+Elected Official
+Campaign Staffer
+Election Official
+Ethics Board Member
+Media + Public Roles
+Journalist
+Researcher
+Activist
+General User / Voter
+External Contractors
+Lawyer (compliance, election law)
+Accountant / Auditor
+Cybersecurity Firm
+PR Agency
+Lobbyist
+Data Provider (Ballotpedia-style)
+AI Vendor / Integrator
+🔑 6. Permission Structure Example
+
+Each API key gets scoped permissions:
+
+{
+  "articles:create": true,
+  "articles:edit": true,
+  "users:ban": false,
+  "elections:write": true,
+  "politicians:update": true,
+  "system:admin": false
+}
+🚀 7. Build Core Agent Endpoints
+
+Create REST endpoints:
+
+POST   /api/agent/auth/verify
+POST   /api/agent/articles/create
+PUT    /api/agent/articles/update
+POST   /api/agent/moderation/flag
+POST   /api/agent/users/ban
+POST   /api/agent/politicians/import
+PUT    /api/agent/politicians/update
+POST   /api/agent/elections/sync
+POST   /api/agent/testing/run
+POST   /api/agent/security/scan
+GET    /api/agent/logs
+
+All endpoints must:
+
+Require API key header
+Validate permissions
+Log request + response
+Return structured JSON (agent-friendly)
+🧱 8. Agent-Safe Response Format
+
+Standardize all responses:
+
+{
+  "success": true,
+  "action": "articles:create",
+  "data": {},
+  "errors": [],
+  "meta": {
+    "timestamp": "",
+    "rate_limit_remaining": 95
+  }
+}
+🛡️ 9. Security + Isolation
+Rate limit per API key
+IP allowlist (optional)
+Action throttling (e.g., no mass bans)
+Audit logs visible in Admin Panel
+Soft-delete system for critical data
+Sandbox mode for testing agents
+🔌 10. Claw Machine Integration Ready
+
+Design system so:
+
+Claw Machine assigns API keys per agent
+Each agent operates independently
+OpenClaw acts as execution layer (optional)
+No backend AI processing required on ACP
+🧪 11. Testing Mode
+
+Add:
+
+/api/agent/sandbox/*
+Allows safe testing without affecting production data
+QA agents use this by default
+📊 12. Admin UI Additions
+
+Add dashboard:
+
+Admin → Agent Control Panel
+
+View all API keys
+Assign roles + permissions
+View logs per agent
+Revoke keys instantly
+Monitor activity heatmap
+🎯 End Goal
+
+ACP becomes:
+
+A clean, API-driven platform
+Fully controllable by external AI systems
+Scalable without backend AI costs
+Secure with strict role enforcement
