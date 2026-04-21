@@ -60,7 +60,7 @@ The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway
 - Agent responses use the standard envelope `{ success, action, data, errors, meta }`.
 - The existing premium/admin developer API under `/api/v1/*` remains separate and unchanged.
 - Legacy sideloaded `/api/admin/agent-apps/*` management routes were removed from the active server route set.
-- Startup ensures the two gateway tables exist if the deployed database has not been synced yet.
+- The gateway schema lives in `shared/schema.ts`; database synchronization should be handled through the project’s standard schema workflow once unrelated database drift is resolved.
 
 ### Supported Agent Roles
 Includes `moderator_agent`, `news_agent`, `qa_agent`, `cybersecurity_agent`, `data_agent`, `analyst_agent`, campaign roles, compliance/legal/auditor roles, journalist/researcher/activist roles, vendor roles, general voter/sandbox roles, and arbitrary custom roles. Role defaults are surfaced in the Roles Reference tab; custom roles start with an empty permission map until explicitly configured.

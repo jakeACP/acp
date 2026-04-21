@@ -39,7 +39,6 @@ import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
 import { randomUUID } from "crypto";
-import { ensureAgentGatewayTables } from "./agentTables";
 
 function extractYouTubeVideoId(url: string): string | null {
   const patterns = [
@@ -92,7 +91,6 @@ const objectStorageService = new ObjectStorageService();
 
 export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   setupAuth(app);
-  await ensureAgentGatewayTables();
 
   // Serve uploaded signal videos and built-in audio tracks
   const express = await import("express");
