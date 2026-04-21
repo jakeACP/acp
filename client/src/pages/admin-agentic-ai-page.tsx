@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { AdminNavigation } from "@/components/admin-navigation";
@@ -105,6 +105,14 @@ export default function AdminAgenticAiPage() {
 
   const activeCount = useMemo(() => keys?.filter((key) => key.status === "active").length ?? 0, [keys]);
   const selectedRole = meta?.roles.find((item) => item.value === role);
+
+  useEffect(() => {
+    const initialRole = meta?.roles.find((item) => item.value === role);
+    if (initialRole && Object.keys(permissions).length === 0) {
+      setPermissions(initialRole.defaults);
+      setSandboxMode(initialRole.sandboxMode);
+    }
+  }, [meta, permissions, role]);
 
   const applyRoleDefaults = (roleValue: string) => {
     if (roleValue === "__custom") {

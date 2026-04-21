@@ -59,6 +59,7 @@ The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway
 - `/api/agent/*` routes bypass CSRF and require `X-Agent-Key: acp_agent_...`.
 - Agent responses use the standard envelope `{ success, action, data, errors, meta }`.
 - The existing premium/admin developer API under `/api/v1/*` remains separate and unchanged.
+- Legacy sideloaded `/api/admin/agent-apps/*` management routes were removed from the active server route set.
 - Startup ensures the two gateway tables exist if the deployed database has not been synced yet.
 
 ### Supported Agent Roles
