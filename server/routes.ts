@@ -9608,6 +9608,23 @@ Only include people you are confident about. Return empty arrays/null if unknown
     return agentReq;
   }
 
+  app.post("/api/agent/sandbox/auth/verify", agentApiAuth, async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    return agentResponse(agentReq, res, "auth:verify:sandbox", 200, { key: serializeAgentKey(agentReq.agentKey) });
+  });
+
+  app.get("/api/agent/sandbox/logs", agentApiAuth, requireAgentPermission("logs:read"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    try {
+      const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+      const offset = Math.max(Number(req.query.offset) || 0, 0);
+      const logs = await storage.listAgentLogs({ limit, offset, apiKeyId: agentReq.agentKey.id });
+      return agentResponse(agentReq, res, "logs:read:sandbox", 200, { logs, pagination: { limit, offset, hasMore: logs.length === limit } });
+    } catch {
+      return agentResponse(agentReq, res, "logs:read:sandbox", 500, null, [{ message: "Failed to read logs" }]);
+    }
+  });
+
   app.post("/api/agent/sandbox/articles/create", agentApiAuth, requireAgentPermission("articles:create"), async (req: Request, res) => {
     const agentReq = forceSandbox(req);
     const parsed = articleSchema.safeParse(req.body);
