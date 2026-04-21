@@ -9591,7 +9591,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     const bodySchema = z.object({ flow: z.string().min(1).max(120), result: z.string().min(1).max(2000), payload: z.unknown().optional() });
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) return agentResponse(agentReq, res, "testing:run", 400, null, [{ message: "Invalid testing payload", details: parsed.error.flatten() }]);
-    return agentResponse(agentReq, res, "testing:run", 202, { accepted: true, sandbox: true, report: parsed.data });
+    return agentResponse(agentReq, res, "testing:run", 202, { accepted: true, sandbox: agentReq.agentSandbox === true, report: parsed.data });
   });
 
   app.post("/api/agent/security/scan", agentApiAuth, requireAgentPermission("security:scan"), async (req: Request, res) => {
