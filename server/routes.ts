@@ -9245,12 +9245,12 @@ Only include people you are confident about. Return empty arrays/null if unknown
   type AgentRequest = Request & { agentKey: AgentApiKey; agentRateLimitRemaining?: number; agentSandbox?: boolean };
 
   const AGENT_ROLE_DEFAULTS: Record<string, { label: string; permissions: AgentPermissionMap; sandboxMode?: boolean }> = {
-    moderator_agent: { label: "Moderator Agent", permissions: { "moderation:flag": true, "users:ban": false, "logs:read": true } },
-    news_agent: { label: "News Agent", permissions: { "articles:create": true, "articles:edit": true } },
-    qa_agent: { label: "QA / Testing Agent", permissions: { "testing:run": true, "sandbox:use": true, "logs:read": true }, sandboxMode: true },
+    moderator_agent: { label: "Moderator Agent", permissions: { "moderation:flag": true, "users:ban": true, "logs:read": true } },
+    news_agent: { label: "News Agent", permissions: { "articles:create": true, "articles:edit": true, "logs:read": true } },
+    qa_agent: { label: "QA / Testing Agent", permissions: { "articles:create": true, "articles:edit": true, "moderation:flag": true, "users:ban": true, "politicians:write": true, "elections:write": true, "testing:run": true, "security:scan": true, "sandbox:use": true, "logs:read": true }, sandboxMode: true },
     cybersecurity_agent: { label: "Cybersecurity Agent", permissions: { "security:scan": true, "sandbox:use": true, "logs:read": true }, sandboxMode: true },
     data_agent: { label: "Data Ingestion Agent", permissions: { "politicians:write": true, "elections:write": true } },
-    analyst_agent: { label: "Candidate Analysis Agent", permissions: { "politicians:write": true, "articles:create": true } },
+    analyst_agent: { label: "Candidate Analysis Agent", permissions: { "logs:read": true } },
     campaign_manager: { label: "Campaign Manager", permissions: { "articles:create": true, "articles:edit": true, "elections:write": true } },
     field_organizer: { label: "Field Organizer", permissions: { "articles:create": true, "testing:run": true } },
     volunteer_coordinator: { label: "Volunteer Coordinator", permissions: { "articles:create": true } },
@@ -9296,7 +9296,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
   const permissionMapSchema = z.record(z.boolean()).default({});
   const agentKeyAdminSchema = z.object({
     name: z.string().min(1).max(80),
-    role: z.enum(agentRoles as [string, ...string[]]),
+    role: z.string().min(1).max(80),
     permissions: permissionMapSchema.optional(),
     rateLimit: z.number().int().min(1).max(5000).default(120),
     sandboxMode: z.boolean().optional(),
@@ -9597,8 +9597,82 @@ Only include people you are confident about. Return empty arrays/null if unknown
     return agentResponse(agentReq, res, "security:scan", 202, { accepted: true, sandbox: agentReq.agentSandbox === true, report: parsed.data });
   });
 
-  app.all("/api/agent/sandbox/*", agentApiAuth, requireAgentPermission("sandbox:use"), async (req: Request, res) => {
+  function forceSandbox(req: Request): AgentRequest {
     const agentReq = req as AgentRequest;
+    agentReq.agentSandbox = true;
+    return agentReq;
+  }
+
+  app.post("/api/agent/sandbox/articles/create", agentApiAuth, requireAgentPermission("articles:create"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = articleSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "articles:create:sandbox", 400, null, [{ message: "Invalid article payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "articles:create:sandbox", 200, { sandbox: true, wouldCreate: parsed.data });
+  });
+
+  app.put("/api/agent/sandbox/articles/update", agentApiAuth, requireAgentPermission("articles:edit"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = articleUpdateSchema.safeParse(req.body);
+    if (!parsed.success || !parsed.data.postId) return agentResponse(agentReq, res, "articles:edit:sandbox", 400, null, [{ message: "Invalid article update payload", details: parsed.success ? undefined : parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "articles:edit:sandbox", 200, { sandbox: true, wouldUpdate: parsed.data });
+  });
+
+  app.post("/api/agent/sandbox/moderation/flag", agentApiAuth, requireAgentPermission("moderation:flag"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const bodySchema = z.object({ targetId: z.string().min(1), targetType: z.enum(["post", "comment"]), reason: z.string().min(1).max(500) });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "moderation:flag:sandbox", 400, null, [{ message: "Invalid flag payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "moderation:flag:sandbox", 200, { sandbox: true, wouldFlag: parsed.data });
+  });
+
+  app.post("/api/agent/sandbox/users/ban", agentApiAuth, requireAgentPermission("users:ban"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const bodySchema = z.object({ userId: z.string().min(1), reason: z.string().min(1).max(500), duration: z.string().max(80).optional() });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "users:ban:sandbox", 400, null, [{ message: "Invalid ban payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "users:ban:sandbox", 200, { sandbox: true, wouldBan: parsed.data });
+  });
+
+  app.post("/api/agent/sandbox/politicians/import", agentApiAuth, requireAgentPermission("politicians:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = insertPoliticianProfileSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "politicians:write:sandbox", 400, null, [{ message: "Invalid politician payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "politicians:write:sandbox", 200, { sandbox: true, wouldImport: parsed.data });
+  });
+
+  app.put("/api/agent/sandbox/politicians/update", agentApiAuth, requireAgentPermission("politicians:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = politicianUpdateSchema.safeParse(req.body);
+    if (!parsed.success || !parsed.data.politicianId) return agentResponse(agentReq, res, "politicians:write:sandbox", 400, null, [{ message: "Invalid politician update payload", details: parsed.success ? undefined : parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "politicians:write:sandbox", 200, { sandbox: true, wouldUpdate: parsed.data });
+  });
+
+  app.post("/api/agent/sandbox/elections/sync", agentApiAuth, requireAgentPermission("elections:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const bodySchema = z.object({ source: z.string().min(1).max(120), summary: z.string().min(1).max(2000), payload: z.unknown().optional() });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "elections:write:sandbox", 400, null, [{ message: "Invalid election sync payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "elections:write:sandbox", 202, { accepted: true, sandbox: true, report: parsed.data });
+  });
+
+  app.post("/api/agent/sandbox/testing/run", agentApiAuth, requireAgentPermission("testing:run"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const bodySchema = z.object({ flow: z.string().min(1).max(120), result: z.string().min(1).max(2000), payload: z.unknown().optional() });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "testing:run:sandbox", 400, null, [{ message: "Invalid testing payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "testing:run:sandbox", 202, { accepted: true, sandbox: true, report: parsed.data });
+  });
+
+  app.post("/api/agent/sandbox/security/scan", agentApiAuth, requireAgentPermission("security:scan"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const bodySchema = z.object({ target: z.string().min(1).max(240), summary: z.string().min(1).max(2000), severity: z.enum(["info", "low", "medium", "high", "critical"]).default("info"), payload: z.unknown().optional() });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "security:scan:sandbox", 400, null, [{ message: "Invalid security scan payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "security:scan:sandbox", 202, { accepted: true, sandbox: true, report: parsed.data });
+  });
+
+  app.all("/api/agent/sandbox/*", agentApiAuth, requireAgentPermission("sandbox:use"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
     return agentResponse(agentReq, res, "sandbox:use", 200, { ok: true, path: req.path, method: req.method, payload: redactAgentPayload(req.body ?? null) });
   });
 

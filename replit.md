@@ -62,7 +62,7 @@ The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway
 - Startup ensures the two gateway tables exist if the deployed database has not been synced yet.
 
 ### Supported Agent Roles
-Includes `moderator_agent`, `news_agent`, `qa_agent`, `cybersecurity_agent`, `data_agent`, `analyst_agent`, campaign roles, compliance/legal/auditor roles, journalist/researcher/activist roles, vendor roles, and general voter/sandbox roles. Role defaults are surfaced in the Roles Reference tab.
+Includes `moderator_agent`, `news_agent`, `qa_agent`, `cybersecurity_agent`, `data_agent`, `analyst_agent`, campaign roles, compliance/legal/auditor roles, journalist/researcher/activist roles, vendor roles, general voter/sandbox roles, and arbitrary custom roles. Role defaults are surfaced in the Roles Reference tab; custom roles start with an empty permission map until explicitly configured.
 
 ### Agent Permissions
 - `articles:create` — create public posts/articles
@@ -99,7 +99,7 @@ Includes `moderator_agent`, `news_agent`, `qa_agent`, `cybersecurity_agent`, `da
 - `POST /api/agent/elections/sync`
 - `POST /api/agent/testing/run`
 - `POST /api/agent/security/scan`
-- `ANY /api/agent/sandbox/*`
+- Mirrored sandbox endpoints under `/api/agent/sandbox/*` validate and authorize the same operations without writing production data
 - `GET /api/agent/logs`
 
 ### Google SSO

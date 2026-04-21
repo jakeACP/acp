@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -91,13 +90,13 @@ export default function AdminAgenticAiPage() {
   const [tab, setTab] = useState<"keys" | "logs" | "roles">("keys");
   const [name, setName] = useState("");
   const [role, setRole] = useState("moderator_agent");
+  const [customRole, setCustomRole] = useState("");
   const [permissions, setPermissions] = useState<PermissionMap>({});
   const [rateLimit, setRateLimit] = useState(120);
   const [sandboxMode, setSandboxMode] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [selectedLogKey, setSelectedLogKey] = useState("all");
   const [logOffset, setLogOffset] = useState(0);
-  const [sandboxPayload, setSandboxPayload] = useState('{"flow":"homepage-smoke-test","result":"passed"}');
 
   const { data: adminScope, isLoading: checkingAdminScope } = useQuery<{ isGlobalAdmin: boolean }>({
     queryKey: ["/api/admin/is-global-admin"],
@@ -114,6 +113,12 @@ export default function AdminAgenticAiPage() {
   const selectedRole = meta?.roles.find((item) => item.value === role);
 
   const applyRoleDefaults = (roleValue: string) => {
+    if (roleValue === "__custom") {
+      setRole(roleValue);
+      setPermissions({});
+      setSandboxMode(false);
+      return;
+    }
     const nextRole = meta?.roles.find((item) => item.value === roleValue);
     setRole(roleValue);
     setPermissions(nextRole?.defaults ?? {});
@@ -122,7 +127,8 @@ export default function AdminAgenticAiPage() {
 
   const createKey = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("/api/admin/agent-keys", "POST", { name, role, permissions, rateLimit, sandboxMode });
+      const submittedRole = role === "__custom" ? customRole.trim() : role;
+      const res = await apiRequest("/api/admin/agent-keys", "POST", { name, role: submittedRole, permissions, rateLimit, sandboxMode });
       return res.json() as Promise<{ rawKey: string; key: AgentKey }>;
     },
     onSuccess: (data) => {
@@ -212,11 +218,10 @@ export default function AdminAgenticAiPage() {
               <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Key className="h-5 w-5" /> Create API key</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2"><label className="text-sm font-medium">Agent name</label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="OpenClaw News Agent" /></div>
-                <div className="space-y-2"><label className="text-sm font-medium">Role</label><select value={role} onChange={(e) => applyRoleDefaults(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">{(meta?.roles ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>{selectedRole && <p className="text-xs text-muted-foreground">Defaults loaded from {selectedRole.label}.</p>}</div>
+                <div className="space-y-2"><label className="text-sm font-medium">Role</label><select value={role} onChange={(e) => applyRoleDefaults(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">{(meta?.roles ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}<option value="__custom">Custom role</option></select>{role === "__custom" ? <Input value={customRole} onChange={(e) => setCustomRole(e.target.value)} placeholder="custom_partner_agent" /> : selectedRole && <p className="text-xs text-muted-foreground">Defaults loaded from {selectedRole.label}.</p>}</div>
                 <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><label className="text-sm font-medium">Hourly rate limit</label><Input type="number" min={1} max={5000} value={rateLimit} onChange={(e) => setRateLimit(Number(e.target.value) || 1)} /></div><label className="flex items-center gap-2 text-sm mt-7"><input type="checkbox" checked={sandboxMode} onChange={(e) => setSandboxMode(e.target.checked)} />Sandbox mode</label></div>
                 <div className="space-y-2"><label className="text-sm font-medium">Permissions</label><div className="space-y-2 rounded-lg border p-3 max-h-[300px] overflow-y-auto bg-white dark:bg-slate-900">{(meta?.permissions ?? []).map((permission) => <label key={permission.value} className="flex items-start gap-2 text-sm cursor-pointer"><input type="checkbox" checked={permissions[permission.value] === true} onChange={() => togglePermission(permission.value)} className="mt-1" /><span><span className="font-medium block">{permission.label}</span><span className="text-xs text-muted-foreground font-mono">{permission.value}</span></span></label>)}</div></div>
-                <Button className="w-full" onClick={() => createKey.mutate()} disabled={createKey.isPending || !name.trim()}>{createKey.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Key className="h-4 w-4 mr-2" />}Generate key</Button>
-                <Textarea value={sandboxPayload} onChange={(e) => setSandboxPayload(e.target.value)} rows={4} className="font-mono text-xs" />
+                <Button className="w-full" onClick={() => createKey.mutate()} disabled={createKey.isPending || !name.trim() || (role === "__custom" && !customRole.trim())}>{createKey.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Key className="h-4 w-4 mr-2" />}Generate key</Button>
               </CardContent>
             </Card>
 
