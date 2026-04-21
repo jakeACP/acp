@@ -9387,6 +9387,14 @@ Only include people you are confident about. Return empty arrays/null if unknown
     next();
   }
 
+  app.get("/api/admin/is-global-admin", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) return res.json({ isGlobalAdmin: false });
+    const currentUser = req.user as { id: string; role: string } | undefined;
+    if (currentUser?.role !== "admin") return res.json({ isGlobalAdmin: false });
+    const adminUserId = await storage.getAdminUserId();
+    res.json({ isGlobalAdmin: !!adminUserId && currentUser.id === adminUserId });
+  });
+
   app.get("/api/admin/agent-keys/meta", ensureAdminOnly, async (_req, res) => {
     res.json({
       roles: agentRoles.map((value) => ({ value, label: AGENT_ROLE_DEFAULTS[value].label, defaults: AGENT_ROLE_DEFAULTS[value].permissions, sandboxMode: AGENT_ROLE_DEFAULTS[value].sandboxMode === true })),
