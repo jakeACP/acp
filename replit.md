@@ -58,12 +58,13 @@ The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway
 - Agent activity is stored in `agent_logs` with API key id, agent name, role, endpoint, method, action, payload/response summaries, response status, IP, sandbox flag, success flag, message, metadata, and timestamp.
 - `/api/agent/*` routes bypass CSRF and require `X-Agent-Key: acp_agent_...`.
 - Agent responses use the standard envelope `{ success, action, data, errors, meta }`.
+- Domain writes that require an existing user id use the key creator as the database actor for foreign-key compatibility; `agent_logs` is the authoritative attribution trail for the external agent name, role, key id, endpoint, and payload/response audit record.
 - The existing premium/admin developer API under `/api/v1/*` remains separate and unchanged.
 - Legacy sideloaded `/api/admin/agent-apps/*` management routes were removed from the active server route set.
 - The gateway schema lives in `shared/schema.ts`; database synchronization should be handled through the project’s standard schema workflow once unrelated database drift is resolved.
 
 ### Supported Agent Roles
-Includes `moderator_agent`, `news_agent`, `qa_agent`, `cybersecurity_agent`, `data_agent`, `analyst_agent`, campaign roles, compliance/legal/auditor roles, journalist/researcher/activist roles, vendor roles, general voter/sandbox roles, and arbitrary custom roles. Role defaults are surfaced in the Roles Reference tab; custom roles start with an empty permission map until explicitly configured.
+Includes `moderator_agent`, `news_agent`, `qa_agent`, `cybersecurity_agent`, `data_agent`, `analyst_agent`, campaign roles, compliance/legal/auditor roles, journalist/researcher/activist roles, vendor roles, general voter/sandbox roles, and arbitrary custom roles. This expanded role catalog intentionally maps the full political organization role list from the Agent API spec, not only the minimum internal-agent subset. Role defaults are surfaced in the Roles Reference tab; custom roles start with an empty permission map until explicitly configured.
 
 ### Agent Permissions
 - `articles:create` — create public posts/articles
