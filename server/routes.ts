@@ -9315,6 +9315,10 @@ Only include people you are confident about. Return empty arrays/null if unknown
     return normalized;
   }
 
+  function requiresSandbox(role: string): boolean {
+    return role === "qa_agent" || AGENT_ROLE_DEFAULTS[role]?.sandboxMode === true;
+  }
+
   function serializeAgentKey(key: AgentApiKey) {
     return {
       id: key.id,
@@ -9406,7 +9410,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     try {
       const { hashApiKey } = await import("./apiKeyAuth");
       const rawKey = generateRawAgentKey();
-      const sandboxMode = parsed.data.sandboxMode ?? (AGENT_ROLE_DEFAULTS[parsed.data.role]?.sandboxMode === true);
+      const sandboxMode = requiresSandbox(parsed.data.role) ? true : (parsed.data.sandboxMode ?? false);
       const key = await storage.createAgentApiKey({
         name: parsed.data.name,
         keyHash: hashApiKey(rawKey),
@@ -9432,7 +9436,8 @@ Only include people you are confident about. Return empty arrays/null if unknown
       if (!existing) return res.status(404).json({ error: "Agent key not found" });
       const role = parsed.data.role ?? existing.role;
       const patch: Partial<AgentApiKey> = { ...parsed.data, role, permissions: parsed.data.permissions ? normalizePermissions(role, parsed.data.permissions) : existing.permissions };
-      if (parsed.data.sandboxMode === undefined && parsed.data.role) patch.sandboxMode = AGENT_ROLE_DEFAULTS[role]?.sandboxMode === true;
+      if (requiresSandbox(role)) patch.sandboxMode = true;
+      else if (parsed.data.sandboxMode === undefined && parsed.data.role) patch.sandboxMode = false;
       if (patch.status === "revoked") patch.revokedAt = new Date();
       if (patch.status === "active") patch.revokedAt = null;
       const key = await storage.updateAgentApiKey(req.params.id, patch);

@@ -105,6 +105,7 @@ export default function AdminAgenticAiPage() {
 
   const activeCount = useMemo(() => keys?.filter((key) => key.status === "active").length ?? 0, [keys]);
   const selectedRole = meta?.roles.find((item) => item.value === role);
+  const sandboxRequired = role === "qa_agent" || selectedRole?.sandboxMode === true;
 
   useEffect(() => {
     const initialRole = meta?.roles.find((item) => item.value === role);
@@ -220,7 +221,8 @@ export default function AdminAgenticAiPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2"><label className="text-sm font-medium">Agent name</label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="OpenClaw News Agent" /></div>
                 <div className="space-y-2"><label className="text-sm font-medium">Role</label><select value={role} onChange={(e) => applyRoleDefaults(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">{(meta?.roles ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}<option value="__custom">Custom role</option></select>{role === "__custom" ? <Input value={customRole} onChange={(e) => setCustomRole(e.target.value)} placeholder="custom_partner_agent" /> : selectedRole && <p className="text-xs text-muted-foreground">Defaults loaded from {selectedRole.label}.</p>}</div>
-                <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><label className="text-sm font-medium">Hourly rate limit</label><Input type="number" min={1} max={5000} value={rateLimit} onChange={(e) => setRateLimit(Number(e.target.value) || 1)} /></div><label className="flex items-center gap-2 text-sm mt-7"><input type="checkbox" checked={sandboxMode} onChange={(e) => setSandboxMode(e.target.checked)} />Sandbox mode</label></div>
+                <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><label className="text-sm font-medium">Hourly rate limit</label><Input type="number" min={1} max={5000} value={rateLimit} onChange={(e) => setRateLimit(Number(e.target.value) || 1)} /></div><label className="flex items-center gap-2 text-sm mt-7"><input type="checkbox" checked={sandboxRequired || sandboxMode} disabled={sandboxRequired} onChange={(e) => setSandboxMode(e.target.checked)} />Sandbox mode</label></div>
+                {sandboxRequired && <p className="text-xs text-muted-foreground">Sandbox is required for this role and cannot be disabled.</p>}
                 <div className="space-y-2"><label className="text-sm font-medium">Permissions</label><div className="space-y-2 rounded-lg border p-3 max-h-[300px] overflow-y-auto bg-white dark:bg-slate-900">{(meta?.permissions ?? []).map((permission) => <label key={permission.value} className="flex items-start gap-2 text-sm cursor-pointer"><input type="checkbox" checked={permissions[permission.value] === true} onChange={() => togglePermission(permission.value)} className="mt-1" /><span><span className="font-medium block">{permission.label}</span><span className="text-xs text-muted-foreground font-mono">{permission.value}</span></span></label>)}</div></div>
                 <Button className="w-full" onClick={() => createKey.mutate()} disabled={createKey.isPending || !name.trim() || (role === "__custom" && !customRole.trim())}>{createKey.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Key className="h-4 w-4 mr-2" />}Generate key</Button>
               </CardContent>
