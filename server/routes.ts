@@ -9479,9 +9479,9 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
       const offset = Math.max(Number(req.query.offset) || 0, 0);
       const logs = await storage.listAgentLogs({ limit, offset, apiKeyId: agentReq.agentKey.id });
-      return agentResponse(agentReq, res, "logs:read", 200, { logs, pagination: { limit, offset, hasMore: logs.length === limit } });
+      return res.status(200).json({ success: true, action: "logs:read", data: { logs, pagination: { limit, offset, hasMore: logs.length === limit } }, errors: [], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: agentReq.agentSandbox === true } });
     } catch {
-      return agentResponse(agentReq, res, "logs:read", 500, null, [{ message: "Failed to read logs" }]);
+      return res.status(500).json({ success: false, action: "logs:read", data: null, errors: [{ message: "Failed to read logs" }], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: agentReq.agentSandbox === true } });
     }
   });
 
@@ -9619,9 +9619,9 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
       const offset = Math.max(Number(req.query.offset) || 0, 0);
       const logs = await storage.listAgentLogs({ limit, offset, apiKeyId: agentReq.agentKey.id });
-      return agentResponse(agentReq, res, "logs:read:sandbox", 200, { logs, pagination: { limit, offset, hasMore: logs.length === limit } });
+      return res.status(200).json({ success: true, action: "logs:read:sandbox", data: { logs, pagination: { limit, offset, hasMore: logs.length === limit } }, errors: [], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: true } });
     } catch {
-      return agentResponse(agentReq, res, "logs:read:sandbox", 500, null, [{ message: "Failed to read logs" }]);
+      return res.status(500).json({ success: false, action: "logs:read:sandbox", data: null, errors: [{ message: "Failed to read logs" }], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: true } });
     }
   });
 
