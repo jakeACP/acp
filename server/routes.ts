@@ -9298,7 +9298,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
     name: z.string().min(1).max(80),
     role: z.string().min(1).max(80),
     permissions: permissionMapSchema.optional(),
-    rateLimit: z.number().int().min(1).max(5000).default(120),
+    rateLimit: z.number().int().min(1).max(5000).default(100),
     sandboxMode: z.boolean().optional(),
   });
   const agentKeyPatchSchema = agentKeyAdminSchema.partial().extend({ status: z.enum(["active", "revoked"]).optional() });

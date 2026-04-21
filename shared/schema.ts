@@ -2529,7 +2529,7 @@ export const agentApiKeys = pgTable("agent_api_keys", {
   keyPrefix: text("key_prefix").notNull(),
   role: text("role").notNull(),
   permissions: json("permissions").$type<Record<string, boolean>>().notNull().default({}),
-  rateLimit: integer("rate_limit").notNull().default(120),
+  rateLimit: integer("rate_limit").notNull().default(100),
   sandboxMode: boolean("sandbox_mode").notNull().default(false),
   status: text("status").notNull().default("active"),
   createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),

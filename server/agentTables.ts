@@ -10,7 +10,7 @@ export async function ensureAgentGatewayTables() {
       key_prefix text NOT NULL,
       role text NOT NULL,
       permissions json NOT NULL DEFAULT '{}'::json,
-      rate_limit integer NOT NULL DEFAULT 120,
+      rate_limit integer NOT NULL DEFAULT 100,
       sandbox_mode boolean NOT NULL DEFAULT false,
       status text NOT NULL DEFAULT 'active',
       created_by varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -42,7 +42,8 @@ export async function ensureAgentGatewayTables() {
     )
   `);
 
-  await db.execute(sql`ALTER TABLE agent_api_keys ADD COLUMN IF NOT EXISTS rate_limit integer NOT NULL DEFAULT 120`);
+  await db.execute(sql`ALTER TABLE agent_api_keys ADD COLUMN IF NOT EXISTS rate_limit integer NOT NULL DEFAULT 100`);
+  await db.execute(sql`ALTER TABLE agent_api_keys ALTER COLUMN rate_limit SET DEFAULT 100`);
   await db.execute(sql`ALTER TABLE agent_api_keys ADD COLUMN IF NOT EXISTS sandbox_mode boolean NOT NULL DEFAULT false`);
   await db.execute(sql`ALTER TABLE agent_api_keys ALTER COLUMN permissions DROP DEFAULT`);
   await db.execute(sql`ALTER TABLE agent_api_keys ALTER COLUMN permissions TYPE json USING CASE WHEN json_typeof(to_json(permissions)) = 'array' THEN '{}'::json ELSE to_json(permissions) END`);

@@ -92,7 +92,7 @@ export default function AdminAgenticAiPage() {
   const [role, setRole] = useState("moderator_agent");
   const [customRole, setCustomRole] = useState("");
   const [permissions, setPermissions] = useState<PermissionMap>({});
-  const [rateLimit, setRateLimit] = useState(120);
+  const [rateLimit, setRateLimit] = useState(100);
   const [sandboxMode, setSandboxMode] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [selectedLogKey, setSelectedLogKey] = useState("all");
