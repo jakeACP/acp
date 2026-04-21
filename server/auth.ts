@@ -164,6 +164,9 @@ export function setupAuth(app: Express) {
     if (req.path.startsWith("/api/v1/")) {
       return next();
     }
+    if (req.path.startsWith("/api/agent/")) {
+      return next();
+    }
     doubleCsrfProtection(req, res, next);
   });
 

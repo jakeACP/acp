@@ -48,66 +48,48 @@ Preferred communication style: Simple, everyday language.
 - **Trading & Demerit System**: User-submitted insider trading flags, admin-assigned demerits, integration with politician profiles.
 - **ACE Badges Module**: Candidates can apply for Anti-Corruption Endorsement (ACE) badges via video pledges, which, upon admin approval, positively impact their corruption grade.
 
-## Agentic AI System
+## ACP Agent API Gateway
 
 ### Overview
-The Agentic AI management page (`/admin/agentic-ai`) is restricted to the **Global Administrator** (the primary/first admin user, identified by `ensureOwnerAdmin` middleware). It allows managing sideloaded AI applications that run alongside ACP.
+The Agentic AI admin page (`/admin/agentic-ai`) is now the ACP Agent API Gateway control panel. It is restricted to admin users and manages scoped bearer API keys for external AI agents such as Claw Machine / OpenClaw instead of managing sideloaded Paperclip/Codex app processes.
 
 ### How It Works
-- Sideloaded apps are tracked in the `agent_apps` database table.
-- Each app has: name, slug, description, port, installPath, externalUrl, status, githubUrl.
-- The status field tracks: `not_installed` | `running` | `stopped` | `error`.
-- The "Refresh" button live-pings the `externalUrl` to determine if the app is reachable.
-- Backup downloads a zip of the app's install directory (excluding node_modules/.git).
-- Restore uploads a zip and extracts it to the install directory.
+- Agent keys are stored in `agent_api_keys` with a one-time raw key display, SHA-256 key hash, visible prefix, role, permission list, status, creator, and last-used timestamp.
+- Agent activity is stored in `agent_logs` with agent name, role, endpoint, method, action, status code, success flag, message, metadata, and timestamp.
+- `/api/agent/*` routes bypass CSRF and require `Authorization: Bearer <agent_key>`.
+- The existing premium/admin developer API under `/api/v1/*` remains separate and unchanged.
+- Startup ensures the two gateway tables exist if the deployed database has not been synced yet.
 
-### Paperclip (First App — INSTALLED)
-- **Repo**: https://github.com/paperclipai/paperclip  
-- **Install Path**: `apps/paperclip` (cloned via `git clone --depth=1`)
-- **Internal Port**: 3001 (Paperclip listens on `127.0.0.1:3001`)
-- **External Port**: 3002 (Replit routes external traffic to port 3002)
-- **External URL**: `https://<REPLIT_DOMAINS>:3002` (accessible from the Agentic AI admin page)
-- **Database**: Separate local Postgres DB called `paperclipdb` (not shared with ACP)
-  - DB URL: `postgresql://postgres:$PGPASSWORD@helium:5432/paperclipdb`
-  - 49 migrations applied successfully on installation
-- **Workflow**: "Paperclip" workflow runs `cd apps/paperclip && DATABASE_URL="..." PORT=3001 SERVE_UI=true pnpm run dev:once`
-- **What it is**: Open-source AI agent orchestration platform ("runs your business with AI agents")
+### Supported Agent Roles
+`moderator_agent`, `news_agent`, `qa_agent`, `data_agent`, `analyst_agent`, `campaign_manager`, `journalist`, `field_organizer`, `compliance_observer`, and `policy_researcher`.
 
-### Creating ACP User Accounts for Paperclip Agents
-Create ACP user accounts for agents via `/admin/users`. Assign roles based on the agent's purpose:
+### Agent Permissions
+- `articles:create` — create public posts/articles
+- `moderation:flag` — flag posts/comments for review
+- `users:ban` — ban user accounts
+- `politicians:import` — import politician profiles
+- `elections:sync` — submit election sync reports for admin review
+- `sandbox:use` — call safe test endpoints
+- `logs:read` — read agent activity logs
 
-| Role | Use Case | Permissions |
-|------|----------|-------------|
-| `citizen` | Front-end engagement agents that simulate normal users, post content, interact with the feed, and grow community engagement | Standard user access — can post, vote, comment, join groups |
-| `moderator` | QA agents that review content, flag issues, provide development feedback, and moderate community behavior | Moderation tools — can review flags, mute users, assist with content decisions |
-| `admin` | **DO NOT assign** — admin agents could modify platform settings and data | Full access — should never be given to automated agents |
+### Admin Endpoints
+- `GET /api/admin/agent-keys/meta`
+- `GET /api/admin/agent-keys`
+- `POST /api/admin/agent-keys`
+- `PATCH /api/admin/agent-keys/:id`
+- `DELETE /api/admin/agent-keys/:id`
+- `GET /api/admin/agent-logs`
+- `GET /api/admin/is-global-admin`
 
-**Test Environment (Replit dev)**: Agents test ACP features, simulate user flows, and provide development feedback. They interact with test data only.
-
-**Production Environment**: Agents engage real users, help grow community, support onboarding, and facilitate political engagement. Use only trusted, well-tested agents in production.
-
-**Setup steps for a new Paperclip agent**:
-1. Create an ACP account via `/register` with a descriptive username (e.g., `agent-civic-01`)
-2. Log in as global admin and update the role to `citizen` or `moderator` via `/admin/users`
-3. In Paperclip's UI (port 3002), configure the agent with the ACP account credentials
-4. Set the agent's target URL to the ACP platform URL
-
-### API Endpoints
-- `GET /api/admin/is-global-admin` — returns `{ isGlobalAdmin: boolean }` for any authenticated user
-- `GET /api/admin/agent-apps` — list all registered apps (requires admin role)
-- `PATCH /api/admin/agent-apps/:id` — update app metadata (requires admin role)
-- `GET /api/admin/agent-apps/:id/status` — live ping status check (requires admin role)
-- `POST /api/admin/agent-apps/:id/backup` — download zip backup (requires admin role)
-- `POST /api/admin/agent-apps/:id/restore` — restore from zip upload (requires admin role)
-- `POST /api/admin/agent-apps/:id/run` — start app process (requires admin role)
-- `POST /api/admin/agent-apps/:id/stop` — stop app process (requires admin role)
-- `POST /api/admin/agent-apps/:id/install` — git clone app from GitHub URL (requires admin role)
-- `POST /api/admin/agent-apps/:id/update` — git pull latest code (requires admin role)
-- `POST /api/admin/agent-apps/:id/config` — set app-specific env var (e.g. API keys) (requires admin role)
-
-### Registered Agent Apps
-- **Paperclip** — AI company orchestration platform; port 3001, slug `paperclip`, own `paperclipdb` database
-- **Codex** — OpenAI coding agent; slug `codex`, requires `OPENAI_API_KEY` config
+### Agent Endpoints
+- `GET /api/agent/auth/verify`
+- `POST /api/agent/articles/create`
+- `POST /api/agent/moderation/flag`
+- `POST /api/agent/users/ban`
+- `POST /api/agent/politicians/import`
+- `POST /api/agent/elections/sync`
+- `ANY /api/agent/sandbox/*`
+- `GET /api/agent/logs`
 
 ### Google SSO
 - **Strategy**: `passport-google-oauth20` added as a Passport.js strategy

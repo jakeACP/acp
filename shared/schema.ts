@@ -2522,6 +2522,51 @@ export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, c
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 
+export const agentApiKeys = pgTable("agent_api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull().unique(),
+  keyPrefix: text("key_prefix").notNull(),
+  role: text("role").notNull(),
+  permissions: text("permissions").array().notNull().default([]),
+  status: text("status").notNull().default("active"),
+  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  lastUsedAt: timestamp("last_used_at"),
+  revokedAt: timestamp("revoked_at"),
+}, (table) => ({
+  keyHashIndex: index("agent_api_keys_key_hash_idx").on(table.keyHash),
+  statusIndex: index("agent_api_keys_status_idx").on(table.status),
+  roleIndex: index("agent_api_keys_role_idx").on(table.role),
+}));
+
+export const insertAgentApiKeySchema = createInsertSchema(agentApiKeys).omit({ id: true, createdAt: true, lastUsedAt: true, revokedAt: true });
+export type AgentApiKey = typeof agentApiKeys.$inferSelect;
+export type InsertAgentApiKey = z.infer<typeof insertAgentApiKeySchema>;
+
+export const agentLogs = pgTable("agent_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agentKeyId: varchar("agent_key_id").references(() => agentApiKeys.id, { onDelete: "set null" }),
+  agentName: text("agent_name"),
+  role: text("role"),
+  endpoint: text("endpoint").notNull(),
+  method: text("method").notNull(),
+  action: text("action").notNull(),
+  statusCode: integer("status_code").notNull(),
+  success: boolean("success").notNull().default(false),
+  message: text("message"),
+  metadata: json("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  agentKeyIndex: index("agent_logs_agent_key_idx").on(table.agentKeyId),
+  createdAtIndex: index("agent_logs_created_at_idx").on(table.createdAt),
+  actionIndex: index("agent_logs_action_idx").on(table.action),
+}));
+
+export const insertAgentLogSchema = createInsertSchema(agentLogs).omit({ id: true, createdAt: true });
+export type AgentLog = typeof agentLogs.$inferSelect;
+export type InsertAgentLog = z.infer<typeof insertAgentLogSchema>;
+
 // Agent Apps - sideloaded AI applications managed by the Global Administrator
 export const agentApps = pgTable("agent_apps", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

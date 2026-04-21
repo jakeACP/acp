@@ -39,6 +39,7 @@ import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
 import { randomUUID } from "crypto";
+import { ensureAgentGatewayTables } from "./agentTables";
 
 function extractYouTubeVideoId(url: string): string | null {
   const patterns = [
@@ -91,6 +92,7 @@ const objectStorageService = new ObjectStorageService();
 
 export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   setupAuth(app);
+  await ensureAgentGatewayTables();
 
   // Serve uploaded signal videos and built-in audio tracks
   const express = await import("express");
@@ -9238,11 +9240,293 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
-  // ─── Agentic AI Routes ──────────────────────────────────────────────────────
+  const agentRoles = [
+    "moderator_agent",
+    "news_agent",
+    "qa_agent",
+    "data_agent",
+    "analyst_agent",
+    "campaign_manager",
+    "journalist",
+    "field_organizer",
+    "compliance_observer",
+    "policy_researcher",
+  ];
+  const agentPermissions = [
+    "articles:create",
+    "moderation:flag",
+    "users:ban",
+    "politicians:import",
+    "elections:sync",
+    "sandbox:use",
+    "logs:read",
+  ];
+  const agentPermissionLabels: Record<string, string> = {
+    "articles:create": "Create public posts/articles",
+    "moderation:flag": "Flag posts/comments for review",
+    "users:ban": "Ban user accounts",
+    "politicians:import": "Import politician profiles",
+    "elections:sync": "Submit election sync reports",
+    "sandbox:use": "Use sandbox test endpoints",
+    "logs:read": "Read agent activity logs",
+  };
+  const agentKeyAdminSchema = z.object({
+    name: z.string().min(1).max(80),
+    role: z.enum(agentRoles as [string, ...string[]]),
+    permissions: z.array(z.enum(agentPermissions as [string, ...string[]])).default([]),
+  });
+  const agentKeyPatchSchema = agentKeyAdminSchema.partial().extend({
+    status: z.enum(["active", "revoked"]).optional(),
+  });
+  const { agentApiAuth, requireAgentPermission, generateRawAgentKey } = await import("./agentAuth");
 
-  // Seed the Paperclip app entry on startup
-  storage.ensurePaperclipApp().catch(err => console.error("Failed to seed Paperclip app:", err));
-  storage.ensureCodexApp().catch(err => console.error("Failed to seed Codex app:", err));
+  function serializeAgentKey(key: any) {
+    return {
+      id: key.id,
+      name: key.name,
+      keyPrefix: key.keyPrefix,
+      role: key.role,
+      permissions: key.permissions ?? [],
+      status: key.status,
+      createdBy: key.createdBy,
+      createdAt: key.createdAt,
+      lastUsedAt: key.lastUsedAt,
+      revokedAt: key.revokedAt,
+    };
+  }
+
+  async function writeAgentLog(req: any, action: string, statusCode: number, success: boolean, message?: string, metadata?: unknown) {
+    try {
+      await storage.createAgentLog({
+        agentKeyId: req.agentKey?.id ?? null,
+        agentName: req.agentKey?.name ?? null,
+        role: req.agentKey?.role ?? null,
+        endpoint: req.path,
+        method: req.method,
+        action,
+        statusCode,
+        success,
+        message: message ?? null,
+        metadata: metadata ?? null,
+      });
+    } catch (err) {
+      console.warn("Failed to write agent log", err);
+    }
+  }
+
+  async function ensureGlobalAgentAdmin(req: any, res: any, next: any) {
+    if (!req.isAuthenticated() || req.user?.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    const adminUserId = await storage.getAdminUserId();
+    if (!adminUserId || req.user.id !== adminUserId) {
+      return res.status(403).json({ error: "Global administrator access required" });
+    }
+    next();
+  }
+
+  app.get("/api/admin/agent-keys/meta", ensureGlobalAgentAdmin, async (_req, res) => {
+    res.json({ roles: agentRoles, permissions: agentPermissions.map((value) => ({ value, label: agentPermissionLabels[value] })) });
+  });
+
+  app.get("/api/admin/agent-keys", ensureGlobalAgentAdmin, async (_req, res) => {
+    try {
+      const keys = await storage.listAgentApiKeys();
+      res.json(keys.map(serializeAgentKey));
+    } catch {
+      res.status(500).json({ error: "Failed to list agent keys" });
+    }
+  });
+
+  app.post("/api/admin/agent-keys", ensureGlobalAgentAdmin, async (req: any, res) => {
+    const parsed = agentKeyAdminSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    try {
+      const { hashApiKey } = await import("./apiKeyAuth");
+      const rawKey = generateRawAgentKey();
+      const key = await storage.createAgentApiKey({
+        name: parsed.data.name,
+        keyHash: hashApiKey(rawKey),
+        keyPrefix: rawKey.slice(0, 14),
+        role: parsed.data.role,
+        permissions: parsed.data.permissions,
+        status: "active",
+        createdBy: req.user.id,
+      });
+      res.status(201).json({ key: serializeAgentKey(key), rawKey });
+    } catch {
+      res.status(500).json({ error: "Failed to create agent key" });
+    }
+  });
+
+  app.patch("/api/admin/agent-keys/:id", ensureGlobalAgentAdmin, async (req, res) => {
+    const parsed = agentKeyPatchSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    try {
+      const patch: any = { ...parsed.data };
+      if (patch.status === "revoked") patch.revokedAt = new Date();
+      if (patch.status === "active") patch.revokedAt = null;
+      const key = await storage.updateAgentApiKey(req.params.id, patch);
+      if (!key) return res.status(404).json({ error: "Agent key not found" });
+      res.json(serializeAgentKey(key));
+    } catch {
+      res.status(500).json({ error: "Failed to update agent key" });
+    }
+  });
+
+  app.delete("/api/admin/agent-keys/:id", ensureGlobalAgentAdmin, async (req, res) => {
+    try {
+      await storage.revokeAgentApiKey(req.params.id);
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ error: "Failed to revoke agent key" });
+    }
+  });
+
+  app.get("/api/admin/agent-logs", ensureGlobalAgentAdmin, async (req, res) => {
+    try {
+      const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+      const logs = await storage.listAgentLogs(limit);
+      res.json(logs);
+    } catch {
+      res.status(500).json({ error: "Failed to list agent logs" });
+    }
+  });
+
+  app.get("/api/agent/logs", agentApiAuth, requireAgentPermission("logs:read"), async (req: any, res) => {
+    try {
+      const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+      const logs = await storage.listAgentLogs(limit);
+      await writeAgentLog(req, "logs:read", 200, true);
+      res.json(logs);
+    } catch {
+      await writeAgentLog(req, "logs:read", 500, false, "Failed to read logs");
+      res.status(500).json({ error: "Failed to read logs" });
+    }
+  });
+
+  app.get("/api/agent/auth/verify", agentApiAuth, async (req: any, res) => {
+    await writeAgentLog(req, "auth:verify", 200, true);
+    res.json({ valid: true, key: serializeAgentKey(req.agentKey) });
+  });
+
+  app.post("/api/agent/articles/create", agentApiAuth, requireAgentPermission("articles:create"), async (req: any, res) => {
+    const bodySchema = z.object({
+      title: z.string().min(1).max(180),
+      body: z.string().min(1).max(10000),
+      sourceUrl: z.string().url().optional(),
+      tags: z.array(z.string().max(40)).max(10).optional(),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      await writeAgentLog(req, "articles:create", 400, false, "Invalid article payload");
+      return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    try {
+      const post = await storage.createPost({
+        authorId: req.agentKey.createdBy,
+        content: `# ${parsed.data.title}\n\n${parsed.data.body}`,
+        url: parsed.data.sourceUrl ?? null,
+        privacy: "public",
+        tags: parsed.data.tags ?? [],
+      } as any);
+      await writeAgentLog(req, "articles:create", 201, true, "Article created", { postId: post.id, title: parsed.data.title });
+      res.status(201).json({ post });
+    } catch {
+      await writeAgentLog(req, "articles:create", 500, false, "Failed to create article");
+      res.status(500).json({ error: "Failed to create article" });
+    }
+  });
+
+  app.post("/api/agent/moderation/flag", agentApiAuth, requireAgentPermission("moderation:flag"), async (req: any, res) => {
+    const bodySchema = z.object({
+      targetId: z.string().min(1),
+      targetType: z.enum(["post", "comment"]),
+      reason: z.string().min(1).max(500),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      await writeAgentLog(req, "moderation:flag", 400, false, "Invalid flag payload");
+      return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    try {
+      const flag = await storage.createFlag({
+        userId: req.agentKey.createdBy,
+        targetId: parsed.data.targetId,
+        targetType: parsed.data.targetType,
+        reason: parsed.data.reason,
+      });
+      await writeAgentLog(req, "moderation:flag", 201, true, "Content flagged", { flagId: flag.id });
+      res.status(201).json({ flag });
+    } catch {
+      await writeAgentLog(req, "moderation:flag", 500, false, "Failed to flag content");
+      res.status(500).json({ error: "Failed to flag content" });
+    }
+  });
+
+  app.post("/api/agent/users/ban", agentApiAuth, requireAgentPermission("users:ban"), async (req: any, res) => {
+    const bodySchema = z.object({
+      userId: z.string().min(1),
+      reason: z.string().min(1).max(500),
+      duration: z.string().max(80).optional(),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      await writeAgentLog(req, "users:ban", 400, false, "Invalid ban payload");
+      return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    try {
+      const user = await storage.getUser(parsed.data.userId);
+      if (!user) {
+        await writeAgentLog(req, "users:ban", 404, false, "User not found", { userId: parsed.data.userId });
+        return res.status(404).json({ error: "User not found" });
+      }
+      await storage.banUser(parsed.data.userId, req.agentKey.createdBy, parsed.data.reason, parsed.data.duration);
+      await writeAgentLog(req, "users:ban", 200, true, "User banned", { userId: parsed.data.userId });
+      res.json({ success: true });
+    } catch {
+      await writeAgentLog(req, "users:ban", 500, false, "Failed to ban user");
+      res.status(500).json({ error: "Failed to ban user" });
+    }
+  });
+
+  app.post("/api/agent/politicians/import", agentApiAuth, requireAgentPermission("politicians:import"), async (req: any, res) => {
+    const parsed = insertPoliticianProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      await writeAgentLog(req, "politicians:import", 400, false, "Invalid politician payload");
+      return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    try {
+      const profile = await storage.createPoliticianProfile(parsed.data);
+      await writeAgentLog(req, "politicians:import", 201, true, "Politician imported", { politicianId: profile.id });
+      res.status(201).json({ profile });
+    } catch {
+      await writeAgentLog(req, "politicians:import", 500, false, "Failed to import politician");
+      res.status(500).json({ error: "Failed to import politician" });
+    }
+  });
+
+  app.post("/api/agent/elections/sync", agentApiAuth, requireAgentPermission("elections:sync"), async (req: any, res) => {
+    const bodySchema = z.object({
+      source: z.string().min(1).max(120),
+      summary: z.string().min(1).max(2000),
+      payload: z.unknown().optional(),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      await writeAgentLog(req, "elections:sync", 400, false, "Invalid election sync payload");
+      return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    await writeAgentLog(req, "elections:sync", 202, true, parsed.data.summary, { source: parsed.data.source, payload: parsed.data.payload ?? null });
+    res.status(202).json({ accepted: true, message: "Election sync report logged for admin review" });
+  });
+
+  app.all("/api/agent/sandbox/*", agentApiAuth, requireAgentPermission("sandbox:use"), async (req: any, res) => {
+    await writeAgentLog(req, "sandbox:use", 200, true, "Sandbox request accepted", { body: req.body ?? null, query: req.query ?? null });
+    res.json({ ok: true, path: req.path, method: req.method, receivedAt: new Date().toISOString() });
+  });
+
+  // ─── Agentic AI Routes ──────────────────────────────────────────────────────
 
   // GET /api/admin/is-global-admin — no auth middleware, just returns a bool
   app.get("/api/admin/is-global-admin", async (req: any, res: any) => {
@@ -9490,22 +9774,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
   // ─── Agent App Process Manager ─────────────────────────────────────────────
   const runningProcesses = new Map<string, { pid: number; kill: () => void }>();
 
-  const APP_RUN_COMMANDS: Record<string, { cmd: string; args: string[]; cwd?: string; env?: Record<string, string> }> = {
-    paperclip: {
-      cmd: "pnpm",
-      args: ["run", "dev:once"],
-      cwd: path.resolve(process.cwd(), "apps/paperclip"),
-      env: {
-        DATABASE_URL: `postgresql://postgres:${process.env.PGPASSWORD || ""}@helium:5432/paperclipdb`,
-        PORT: "3001",
-        SERVE_UI: "true",
-      },
-    },
-    codex: {
-      cmd: "codex",
-      args: [],
-    },
-  };
+  const APP_RUN_COMMANDS: Record<string, { cmd: string; args: string[]; cwd?: string; env?: Record<string, string> }> = {};
 
   // POST /api/admin/agent-apps/:id/run
   app.post("/api/admin/agent-apps/:id/run", ensureAdminOnly, async (req: any, res: any) => {

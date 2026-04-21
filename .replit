@@ -39,10 +39,6 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Paperclip"
-
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -51,18 +47,6 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
-
-[[workflows.workflow]]
-name = "Paperclip"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd apps/paperclip && DATABASE_URL=\"postgresql://postgres:$PGPASSWORD@helium:5432/paperclipdb\" PORT=3001 SERVE_UI=true pnpm run dev:once"
-waitForPort = 3001
-
-[workflows.workflow.metadata]
-outputType = "console"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:1.0.0", "javascript_database:1.0.0", "javascript_stripe:1.0.0", "javascript_object_storage:1.0.0", "javascript_websocket:1.0.0", "javascript_openai:1.0.0", "twilio:1.0.0"]

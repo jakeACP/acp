@@ -1,482 +1,143 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, fetchCsrfToken, getCsrfToken } from "@/lib/queryClient";
-import {
-  Bot, ExternalLink, Download, Upload, RefreshCw, ShieldAlert,
-  Loader2, Circle, Github, Info, HardDrive, Users, Database,
-  Play, Square, PackagePlus, ArrowUpCircle, Key, Settings2
-} from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Bot, CheckCircle2, Copy, FileText, Key, Loader2, Lock, ScrollText, ShieldAlert, ShieldCheck, Trash2, Users, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type AgentApp = {
+type AgentKey = {
   id: string;
-  slug: string;
   name: string;
-  description: string | null;
-  version: string | null;
-  port: number | null;
-  installPath: string | null;
-  externalUrl: string | null;
-  status: string;
-  logoUrl: string | null;
-  githubUrl: string | null;
-  notes: string | null;
+  keyPrefix: string;
+  role: string;
+  permissions: string[];
+  status: "active" | "revoked";
   createdAt: string;
-  updatedAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
 };
 
-type LiveStatus = {
-  status: "running" | "stopped" | "not_installed";
-  reachable: boolean;
-  httpStatus?: number;
+type AgentLog = {
+  id: string;
+  agentName: string | null;
+  role: string | null;
+  endpoint: string;
+  method: string;
+  action: string;
+  statusCode: number;
+  success: boolean;
+  message: string | null;
+  createdAt: string;
 };
 
-const APP_CONFIG_FIELDS: Record<string, { key: string; label: string; placeholder: string; type?: string }[]> = {
-  codex: [
-    { key: "OPENAI_API_KEY", label: "OpenAI API Key", placeholder: "sk-...", type: "password" },
-  ],
-  paperclip: [
-    { key: "PAPERCLIP_DATABASE_URL", label: "Database URL (production)", placeholder: "postgresql://...", type: "password" },
-  ],
+type AgentMeta = {
+  roles: string[];
+  permissions: { value: string; label: string }[];
 };
 
-function StatusBadge({ status, live }: { status: string; live?: LiveStatus }) {
-  const effective = live?.status ?? status;
+const defaultPermissions = ["articles:create", "moderation:flag", "sandbox:use"];
 
-  if (effective === "running") {
-    return (
-      <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 flex items-center gap-1.5">
-        <Circle className="h-2 w-2 fill-current" />
-        Running
-      </Badge>
-    );
-  }
-  if (effective === "stopped") {
-    return (
-      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 flex items-center gap-1.5">
-        <Circle className="h-2 w-2 fill-current" />
-        Stopped
-      </Badge>
-    );
-  }
-  return (
-    <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
-      <Circle className="h-2 w-2 fill-current opacity-50" />
-      Not Installed
-    </Badge>
-  );
+function formatRole(role: string) {
+  return role.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-function AppCard({ app }: { app: AgentApp }) {
-  const { toast } = useToast();
-  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
-  const [checkingStatus, setCheckingStatus] = useState(false);
-  const [restoreFile, setRestoreFile] = useState<File | null>(null);
-  const [restoring, setRestoring] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [configValues, setConfigValues] = useState<Record<string, string>>({});
-  const [showConfig, setShowConfig] = useState(false);
+function statusTone(status: string) {
+  return status === "active"
+    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800"
+    : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700";
+}
 
-  const effectiveStatus = liveStatus?.status ?? app.status;
-  const isInstalled = effectiveStatus !== "not_installed";
-  const isRunning = effectiveStatus === "running";
-
-  const getCsrf = async () => {
-    let token = getCsrfToken();
-    if (!token) token = await fetchCsrfToken();
-    return token;
-  };
-
-  const checkStatus = async () => {
-    setCheckingStatus(true);
-    try {
-      const res = await fetch(`/api/admin/agent-apps/${app.id}/status`, { credentials: "include" });
-      const data: LiveStatus = await res.json();
-      setLiveStatus(data);
-    } catch {
-      setLiveStatus({ status: "stopped", reachable: false });
-    } finally {
-      setCheckingStatus(false);
-    }
-  };
-
-  const doAction = async (action: string, label: string) => {
-    setActionLoading(action);
-    try {
-      const csrfToken = await getCsrf();
-      const res = await fetch(`/api/admin/agent-apps/${app.id}/${action}`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast({ title: `${label} failed`, description: data.error || "Unknown error", variant: "destructive" });
-      } else {
-        toast({ title: label, description: data.message });
-        queryClient.invalidateQueries({ queryKey: ["/api/admin/agent-apps"] });
-        if (action === "run") setLiveStatus({ status: "running", reachable: true });
-        if (action === "stop") setLiveStatus({ status: "stopped", reachable: false });
-      }
-    } catch {
-      toast({ title: `${label} failed`, description: "Network error", variant: "destructive" });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const saveConfig = async (key: string, value: string) => {
-    if (!value.trim()) {
-      toast({ title: "Empty value", description: `Please enter a value for ${key}`, variant: "destructive" });
-      return;
-    }
-    setActionLoading(`config-${key}`);
-    try {
-      const csrfToken = await getCsrf();
-      const res = await fetch(`/api/admin/agent-apps/${app.id}/config`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify({ key, value }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast({ title: "Config failed", description: data.error || "Unknown error", variant: "destructive" });
-      } else {
-        toast({ title: "Saved", description: data.message });
-        setConfigValues(prev => ({ ...prev, [key]: "" }));
-      }
-    } catch {
-      toast({ title: "Config failed", description: "Network error", variant: "destructive" });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleBackup = async () => {
-    setDownloading(true);
-    try {
-      const csrfToken = await getCsrf();
-      const res = await fetch(`/api/admin/agent-apps/${app.id}/backup`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "x-csrf-token": csrfToken },
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        toast({ title: "Backup failed", description: err.error || "Unknown error", variant: "destructive" });
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${app.slug}-backup-${Date.now()}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast({ title: "Backup downloaded", description: `${app.name} backup zip saved.` });
-    } catch {
-      toast({ title: "Backup failed", description: "Network error", variant: "destructive" });
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const handleRestore = async () => {
-    if (!restoreFile) return;
-    setRestoring(true);
-    try {
-      const csrfToken = await getCsrf();
-      const formData = new FormData();
-      formData.append("backup", restoreFile);
-      const res = await fetch(`/api/admin/agent-apps/${app.id}/restore`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "x-csrf-token": csrfToken },
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast({ title: "Restore failed", description: data.error || "Unknown error", variant: "destructive" });
-        return;
-      }
-      toast({ title: "Restore complete", description: data.message });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/agent-apps"] });
-      setRestoreFile(null);
-    } catch {
-      toast({ title: "Restore failed", description: "Network error", variant: "destructive" });
-    } finally {
-      setRestoring(false);
-    }
-  };
-
-  const configFields = APP_CONFIG_FIELDS[app.slug] || [];
-
+function ErrorScreen() {
   return (
-    <Card className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className={cn(
-              "h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0",
-              app.slug === "codex" ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-blue-100 dark:bg-blue-900/30"
-            )}>
-              <Bot className={cn(
-                "h-5 w-5",
-                app.slug === "codex" ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400"
-              )} />
-            </div>
-            <div>
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                {app.name}
-                {app.version && (
-                  <span className="text-xs font-normal text-slate-500">v{app.version}</span>
-                )}
-              </CardTitle>
-              {app.port && (
-                <p className="text-xs text-slate-500 mt-0.5">Port {app.port}</p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusBadge status={app.status} live={liveStatus ?? undefined} />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0"
-              onClick={checkStatus}
-              disabled={checkingStatus}
-              title="Refresh live status"
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5", checkingStatus && "animate-spin")} />
-            </Button>
-          </div>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <AdminNavigation />
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16 text-center">
+        <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
+          <ShieldAlert className="h-8 w-8 text-red-600 dark:text-red-400" />
         </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        {app.description && (
-          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-            {app.description}
-          </p>
-        )}
-
-        {/* Operations row */}
-        <div>
-          <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
-            <Settings2 className="h-3.5 w-3.5" />
-            Operations
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {!isInstalled ? (
-              <Button
-                size="sm"
-                variant="default"
-                className="h-8 gap-1.5 text-xs"
-                onClick={() => doAction("install", "Install")}
-                disabled={!!actionLoading}
-              >
-                {actionLoading === "install" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PackagePlus className="h-3.5 w-3.5" />}
-                Install
-              </Button>
-            ) : (
-              <>
-                {isRunning ? (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="h-8 gap-1.5 text-xs"
-                    onClick={() => doAction("stop", "Stop")}
-                    disabled={!!actionLoading}
-                  >
-                    {actionLoading === "stop" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
-                    Stop
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="h-8 gap-1.5 text-xs bg-green-600 hover:bg-green-700"
-                    onClick={() => doAction("run", "Run")}
-                    disabled={!!actionLoading}
-                  >
-                    {actionLoading === "run" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                    Run
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs"
-                  onClick={() => doAction("update", "Update")}
-                  disabled={!!actionLoading}
-                >
-                  {actionLoading === "update" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUpCircle className="h-3.5 w-3.5" />}
-                  Update
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Links row */}
-        <div className="flex flex-wrap gap-2">
-          {app.externalUrl ? (
-            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" asChild>
-              <a href={app.externalUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-3.5 w-3.5" />
-                Open App
-              </a>
-            </Button>
-          ) : (
-            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" disabled>
-              <ExternalLink className="h-3.5 w-3.5" />
-              Not Running
-            </Button>
-          )}
-
-          {app.githubUrl && (
-            <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" asChild>
-              <a href={app.githubUrl} target="_blank" rel="noopener noreferrer">
-                <Github className="h-3.5 w-3.5" />
-                GitHub
-              </a>
-            </Button>
-          )}
-        </div>
-
-        {/* API Key / Config section */}
-        {configFields.length > 0 && (
-          <>
-            <Separator />
-            <div>
-              <button
-                onClick={() => setShowConfig(!showConfig)}
-                className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
-              >
-                <Key className="h-3.5 w-3.5" />
-                Configuration
-                <span className="text-slate-400 text-[10px]">{showConfig ? "▾" : "▸"}</span>
-              </button>
-              {showConfig && (
-                <div className="space-y-2">
-                  {configFields.map((field) => (
-                    <div key={field.key} className="flex gap-2">
-                      <Input
-                        type={field.type || "text"}
-                        placeholder={field.placeholder}
-                        value={configValues[field.key] || ""}
-                        onChange={(e) => setConfigValues(prev => ({ ...prev, [field.key]: e.target.value }))}
-                        className="h-8 text-xs flex-1"
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 gap-1.5 text-xs"
-                        onClick={() => saveConfig(field.key, configValues[field.key] || "")}
-                        disabled={actionLoading === `config-${field.key}`}
-                      >
-                        {actionLoading === `config-${field.key}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Key className="h-3.5 w-3.5" />}
-                        Set {field.label}
-                      </Button>
-                    </div>
-                  ))}
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Keys are set as environment variables for this session.
-                  </p>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        <Separator />
-
-        {/* Backup & Restore */}
-        <div>
-          <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
-            <HardDrive className="h-3.5 w-3.5" />
-            Backup & Restore
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5 text-xs"
-              onClick={handleBackup}
-              disabled={downloading || !isInstalled}
-              title={!isInstalled ? "Install the app first" : "Download backup zip"}
-            >
-              {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              {downloading ? "Backing up..." : "Backup"}
-            </Button>
-
-            <div className="flex items-center gap-1.5">
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept=".zip"
-                  className="hidden"
-                  onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)}
-                />
-                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs pointer-events-none" asChild>
-                  <span>
-                    <Upload className="h-3.5 w-3.5" />
-                    {restoreFile ? restoreFile.name.slice(0, 18) + (restoreFile.name.length > 18 ? "..." : "") : "Choose backup..."}
-                  </span>
-                </Button>
-              </label>
-              {restoreFile && (
-                <Button
-                  size="sm"
-                  variant="default"
-                  className="h-8 gap-1.5 text-xs"
-                  onClick={handleRestore}
-                  disabled={restoring}
-                >
-                  {restoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  {restoring ? "Restoring..." : "Restore"}
-                </Button>
-              )}
-            </div>
-          </div>
-          {!isInstalled && (
-            <p className="text-xs text-slate-400 mt-1.5">Install the app first to enable backup/restore.</p>
-          )}
-        </div>
-
-        {/* Install path info */}
-        {app.installPath && (
-          <div className="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
-            <p className="text-xs text-slate-500 font-mono">{app.installPath}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Access Denied</h1>
+        <p className="text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
+          The ACP Agent API Gateway is restricted to administrators only.
+        </p>
+      </div>
+    </div>
   );
 }
 
 export default function AdminAgenticAiPage() {
   const { user, isLoading: checkingAuth } = useAuth();
+  const { toast } = useToast();
   const isAdmin = user?.role === "admin";
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("moderator_agent");
+  const [permissions, setPermissions] = useState<string[]>(defaultPermissions);
+  const [newKey, setNewKey] = useState<string | null>(null);
+  const [sandboxPayload, setSandboxPayload] = useState('{"ping":"hello from OpenClaw"}');
 
-  const { data: apps, isLoading: loadingApps } = useQuery<AgentApp[]>({
-    queryKey: ["/api/admin/agent-apps"],
+  const { data: adminScope, isLoading: checkingAdminScope } = useQuery<{ isGlobalAdmin: boolean }>({
+    queryKey: ["/api/admin/is-global-admin"],
     enabled: isAdmin,
   });
+  const isGlobalAdmin = !!adminScope?.isGlobalAdmin;
 
-  if (checkingAuth) {
+  const { data: meta } = useQuery<AgentMeta>({
+    queryKey: ["/api/admin/agent-keys/meta"],
+    enabled: isGlobalAdmin,
+  });
+
+  const { data: keys, isLoading: loadingKeys } = useQuery<AgentKey[]>({
+    queryKey: ["/api/admin/agent-keys"],
+    enabled: isGlobalAdmin,
+  });
+
+  const { data: logs, isLoading: loadingLogs } = useQuery<AgentLog[]>({
+    queryKey: ["/api/admin/agent-logs"],
+    enabled: isGlobalAdmin,
+  });
+
+  const activeCount = useMemo(() => keys?.filter((key) => key.status === "active").length ?? 0, [keys]);
+
+  const createKey = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/agent-keys", "POST", { name, role, permissions });
+      return res.json() as Promise<{ rawKey: string; key: AgentKey }>;
+    },
+    onSuccess: (data) => {
+      setNewKey(data.rawKey);
+      setName("");
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/agent-keys"] });
+      toast({ title: "Agent key created", description: "Copy the key now. It will not be shown again." });
+    },
+    onError: (err: Error) => toast({ title: "Could not create key", description: err.message, variant: "destructive" }),
+  });
+
+  const revokeKey = useMutation({
+    mutationFn: async (id: string) => apiRequest(`/api/admin/agent-keys/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/agent-keys"] });
+      toast({ title: "Agent key revoked" });
+    },
+    onError: (err: Error) => toast({ title: "Could not revoke key", description: err.message, variant: "destructive" }),
+  });
+
+  const copyText = async (value: string, label: string) => {
+    await navigator.clipboard.writeText(value);
+    toast({ title: "Copied", description: label });
+  };
+
+  const togglePermission = (value: string) => {
+    setPermissions((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+  };
+
+  if (checkingAuth || (isAdmin && checkingAdminScope)) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <AdminNavigation />
@@ -487,101 +148,266 @@ export default function AdminAgenticAiPage() {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-        <AdminNavigation />
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16 text-center">
-          <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
-            <ShieldAlert className="h-8 w-8 text-red-600 dark:text-red-400" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-            Access Denied
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
-            The Agentic AI management page is restricted to administrators only.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (!isAdmin || !isGlobalAdmin) return <ErrorScreen />;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <AdminNavigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8 flex items-start justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-1">
-              <div className="h-9 w-9 rounded-lg bg-blue-600 flex items-center justify-center">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm">
                 <Bot className="h-5 w-5 text-white" />
               </div>
-              <h1 className="text-3xl font-bold text-foreground">Agentic AI</h1>
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">ACP Agent API Gateway</h1>
+                <p className="text-muted-foreground mt-1">
+                  Issue scoped API keys for external AI agents such as Claw Machine and OpenClaw.
+                </p>
+              </div>
             </div>
-            <p className="text-muted-foreground mt-1">
-              Manage sideloaded AI applications. Agents operate as ACP users and drive platform engagement.
-            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 min-w-[320px]">
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground">Active keys</p>
+                <p className="text-2xl font-bold">{activeCount}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground">Roles</p>
+                <p className="text-2xl font-bold">{meta?.roles.length ?? 0}</p>
+              </CardContent>
+            </Card>
+            <Card className="col-span-2 sm:col-span-1">
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground">Logged calls</p>
+                <p className="text-2xl font-bold">{logs?.length ?? 0}</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
-        {/* Info card */}
-        <Card className="mb-6 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
-          <CardContent className="pt-4 pb-4">
+        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+          <CardContent className="p-5 grid gap-4 md:grid-cols-3 text-sm text-blue-900 dark:text-blue-200">
             <div className="flex gap-3">
-              <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-              <div className="space-y-2 text-sm text-blue-800 dark:text-blue-300">
-                <p className="font-medium">How Agentic AI works with ACP</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
-                  <div className="flex gap-2">
-                    <Users className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-xs">Agents as Users</p>
-                      <p className="text-xs opacity-80">Create ACP user accounts for each agent. Assign roles (citizen, moderator) from the Users admin page.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Database className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-xs">Isolated Databases</p>
-                      <p className="text-xs opacity-80">Each sideloaded app has its own database. Apps can also access the ACP database via the developer API.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Bot className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-xs">Environment Roles</p>
-                      <p className="text-xs opacity-80">Dev agents test features &amp; give feedback. Prod agents engage real users to grow the community.</p>
-                    </div>
-                  </div>
-                </div>
+              <ShieldCheck className="h-5 w-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-semibold">Scoped access</p>
+                <p className="text-xs opacity-80">Each key receives only the permissions selected below.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <ScrollText className="h-5 w-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-semibold">Audited calls</p>
+                <p className="text-xs opacity-80">Agent actions are logged with role, endpoint, status, and result.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Zap className="h-5 w-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-semibold">External agent ready</p>
+                <p className="text-xs opacity-80">Use bearer tokens against /api/agent endpoints from OpenClaw.</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* App cards */}
-        {loadingApps ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-          </div>
-        ) : !apps || apps.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <Bot className="h-12 w-12 text-slate-300 dark:text-slate-600 mb-4" />
-              <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-1">No apps registered</h3>
-              <p className="text-sm text-slate-500 max-w-sm">
-                Sideloaded apps will appear here once registered.
+        {newKey && (
+          <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2 text-green-800 dark:text-green-200">
+                <CheckCircle2 className="h-4 w-4" /> New agent key
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-green-800 dark:text-green-200">Copy this key now. For security, only the prefix is stored after this moment.</p>
+              <div className="flex gap-2">
+                <Input value={newKey} readOnly className="font-mono text-xs bg-white dark:bg-slate-950" />
+                <Button variant="outline" onClick={() => copyText(newKey, "Agent API key copied")}>Copy</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid gap-6 lg:grid-cols-[420px_1fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Key className="h-5 w-5" /> Create API key</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Agent name</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="OpenClaw Moderation Agent" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Role</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {(meta?.roles ?? [role]).map((item) => <option key={item} value={item}>{formatRole(item)}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Permissions</label>
+                <div className="space-y-2 rounded-lg border p-3 max-h-[300px] overflow-y-auto bg-white dark:bg-slate-900">
+                  {(meta?.permissions ?? []).map((permission) => (
+                    <label key={permission.value} className="flex items-start gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={permissions.includes(permission.value)}
+                        onChange={() => togglePermission(permission.value)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="font-medium block">{permission.label}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{permission.value}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <Button className="w-full" onClick={() => createKey.mutate()} disabled={createKey.isPending || !name.trim() || permissions.length === 0}>
+                {createKey.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Key className="h-4 w-4 mr-2" />}
+                Generate key
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Users className="h-5 w-5" /> Agent keys</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingKeys ? (
+                <div className="py-12 flex justify-center"><Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /></div>
+              ) : !keys || keys.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  <Lock className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                  <p>No agent keys created yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {keys.map((key) => (
+                    <div key={key.id} className="rounded-lg border bg-white dark:bg-slate-900 p-4">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold">{key.name}</h3>
+                            <Badge className={cn("border", statusTone(key.status))}>{key.status}</Badge>
+                            <Badge variant="outline">{formatRole(key.role)}</Badge>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground font-mono">
+                            <span>{key.keyPrefix}…</span>
+                            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copyText(key.keyPrefix, "Key prefix copied")}>
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">Last used: {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : "Never"}</p>
+                        </div>
+                        <Button size="sm" variant="destructive" disabled={key.status === "revoked" || revokeKey.isPending} onClick={() => revokeKey.mutate(key.id)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Revoke
+                        </Button>
+                      </div>
+                      <Separator className="my-3" />
+                      <div className="flex flex-wrap gap-1.5">
+                        {key.permissions.map((permission) => <Badge key={permission} variant="secondary" className="text-[10px] font-mono">{permission}</Badge>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><FileText className="h-5 w-5" /> Agent endpoint reference</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              {[
+                ["GET", "/api/agent/auth/verify", "Validate bearer token and return role/permissions"],
+                ["POST", "/api/agent/articles/create", "Create a public ACP post/article"],
+                ["POST", "/api/agent/moderation/flag", "Flag content for moderator review"],
+                ["POST", "/api/agent/users/ban", "Ban a user account"],
+                ["POST", "/api/agent/politicians/import", "Import a politician profile"],
+                ["POST", "/api/agent/elections/sync", "Log election sync output for review"],
+                ["ANY", "/api/agent/sandbox/*", "Safe test endpoint for external agents"],
+                ["GET", "/api/agent/logs", "Read activity logs with logs:read permission"],
+              ].map(([method, path, description]) => (
+                <div key={path} className="rounded-md border p-3 bg-white dark:bg-slate-900">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="font-mono">{method}</Badge>
+                    <code className="text-xs font-mono break-all">{path}</code>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{description}</p>
+                </div>
+              ))}
+              <div className="rounded-md bg-slate-100 dark:bg-slate-900 p-3 text-xs font-mono overflow-x-auto">
+                Authorization: Bearer acp_agent_...
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Zap className="h-5 w-5" /> Sandbox payload example</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea value={sandboxPayload} onChange={(e) => setSandboxPayload(e.target.value)} rows={8} className="font-mono text-xs" />
+              <p className="text-xs text-muted-foreground">
+                External agents can POST this JSON to <code>/api/agent/sandbox/test</code> while using a key with <code>sandbox:use</code>.
               </p>
             </CardContent>
           </Card>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2">
-            {apps.map((app) => (
-              <AppCard key={app.id} app={app} />
-            ))}
-          </div>
-        )}
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2"><ScrollText className="h-5 w-5" /> Activity logs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loadingLogs ? (
+              <div className="py-12 flex justify-center"><Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /></div>
+            ) : !logs || logs.length === 0 ? (
+              <div className="py-10 text-center text-muted-foreground">No agent activity has been logged yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-muted-foreground border-b">
+                    <tr>
+                      <th className="text-left py-2 pr-3">Time</th>
+                      <th className="text-left py-2 pr-3">Agent</th>
+                      <th className="text-left py-2 pr-3">Action</th>
+                      <th className="text-left py-2 pr-3">Endpoint</th>
+                      <th className="text-left py-2 pr-3">Status</th>
+                      <th className="text-left py-2">Message</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log) => (
+                      <tr key={log.id} className="border-b last:border-0">
+                        <td className="py-2 pr-3 text-xs whitespace-nowrap text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</td>
+                        <td className="py-2 pr-3">{log.agentName ?? "Unknown"}<div className="text-xs text-muted-foreground">{log.role ? formatRole(log.role) : "No role"}</div></td>
+                        <td className="py-2 pr-3 font-mono text-xs">{log.action}</td>
+                        <td className="py-2 pr-3 font-mono text-xs">{log.method} {log.endpoint}</td>
+                        <td className="py-2 pr-3"><Badge className={cn("border", log.success ? statusTone("active") : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-800")}>{log.statusCode}</Badge></td>
+                        <td className="py-2 text-xs text-muted-foreground max-w-[260px] truncate">{log.message ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
