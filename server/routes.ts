@@ -1008,6 +1008,48 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.get("/api/users/:userId/top8", async (req, res) => {
+    try {
+      const friends = await storage.getTop8Friends(req.params.userId);
+      res.json(friends);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/profile/top8", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const { friendIds } = req.body;
+      if (!Array.isArray(friendIds)) {
+        return res.status(400).json({ message: "friendIds must be an array" });
+      }
+      if (friendIds.length > 8) {
+        return res.status(400).json({ message: "You can select at most 8 friends" });
+      }
+
+      const uniqueIds = [...new Set(friendIds as string[])];
+      if (uniqueIds.length !== friendIds.length) {
+        return res.status(400).json({ message: "Duplicate friend IDs are not allowed" });
+      }
+
+      const acceptedFriends = await storage.getFriends(req.user.id);
+      const acceptedIds = new Set(acceptedFriends.map((f: any) => f.userId));
+      const invalid = uniqueIds.filter((id: string) => !acceptedIds.has(id));
+      if (invalid.length > 0) {
+        return res.status(400).json({ message: "Some selected users are not accepted friends" });
+      }
+
+      await storage.setTop8Friends(req.user.id, friendIds);
+      res.json({ message: "Top 8 updated" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/friends/requests", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);

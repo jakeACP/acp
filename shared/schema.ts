@@ -65,6 +65,8 @@ export const users = pgTable("users", {
   credits: integer("credits").default(0), // User credits for referrals
   // OAuth
   googleId: text("google_id").unique(), // Google OAuth sub ID
+  // Top 8 Friends (ordered list of up to 8 friend user IDs)
+  top8FriendIds: text("top8_friend_ids").array(),
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,

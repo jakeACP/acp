@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   User, 
   Camera, 
@@ -154,6 +155,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   const [currentQuizStep, setCurrentQuizStep] = useState(0);
   const [editingModule, setEditingModule] = useState<string | null>(null);
   const [bioText, setBioText] = useState("");
+  const [top8Selection, setTop8Selection] = useState<string[]>([]);
 
   // Political Compass Quiz Questions
   const politicalQuizQuestions = [
@@ -238,6 +240,50 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
 
   const { data: user, isLoading: userLoading } = useQuery<UserProfile>({
     queryKey: userId ? [`/api/user/${userId}`] : ["/api/user"],
+  });
+
+  const profileUserId = userId || user?.id;
+
+  const { data: top8Friends = [] } = useQuery<any[]>({
+    queryKey: ["/api/users", profileUserId, "top8"],
+    queryFn: async () => {
+      if (!profileUserId) return [];
+      const res = await fetch(`/api/users/${profileUserId}/top8`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  const { data: allFriends = [] } = useQuery<any[]>({
+    queryKey: ["/api/friends"],
+    enabled: isOwner,
+  });
+
+  const saveTop8Mutation = useMutation({
+    mutationFn: async (friendIds: string[]) => {
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const csrfToken = getCsrfToken();
+      const response = await fetch("/api/profile/top8", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...(csrfToken ? { "x-csrf-token": csrfToken } : {}) },
+        credentials: "include",
+        body: JSON.stringify({ friendIds }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || "Failed to save Top 8");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Top 8 Saved!", description: "Your Top 8 friends have been updated." });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", profileUserId, "top8"] });
+      setEditingModule(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Save Failed", description: error.message, variant: "destructive" });
+    },
   });
 
   const [profileModules, setProfileModules] = useState<ProfileModule[]>([]);
@@ -695,13 +741,28 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
           ) : null;
         case "friends":
           return (
-            <div className="grid grid-cols-4 gap-2">
-              {Array.from({ length: module.itemCount }, (_, i) => (
-                <div key={i + 1} className="text-center">
-                  <div className="w-12 h-12 bg-gray-300 rounded-full mx-auto mb-1"></div>
-                  <span className="text-xs">Friend {i + 1}</span>
+            <div className="space-y-2">
+              {top8Friends.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  {isOwner ? "No Top 8 selected yet. Click the edit icon to choose friends." : "No Top 8 friends selected."}
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {top8Friends.map((friend: any) => (
+                    <a key={friend.userId} href={`/profile/${friend.userId}`} className="text-center group">
+                      <Avatar className="w-12 h-12 mx-auto mb-1">
+                        <AvatarImage src={friend.avatar} alt={friend.username} />
+                        <AvatarFallback className="text-xs">
+                          {friend.firstName?.[0] || friend.username?.[0] || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs truncate block group-hover:text-blue-600 transition-colors">
+                        {friend.firstName || friend.username}
+                      </span>
+                    </a>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           );
         case "following":
@@ -1064,7 +1125,12 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
             </span>
             <div className="flex items-center gap-2">
               {isOwner && (
-                <Dialog open={editingModule === module.id} onOpenChange={(open) => setEditingModule(open ? module.id : null)}>
+                <Dialog open={editingModule === module.id} onOpenChange={(open) => {
+                    setEditingModule(open ? module.id : null);
+                    if (open && module.type === "friends") {
+                      setTop8Selection(top8Friends.map((f: any) => f.userId));
+                    }
+                  }}>
                   <DialogTrigger asChild>
                     <Button 
                       variant="ghost" 
@@ -1106,6 +1172,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                       
                       {module.isEnabled && (
                         <>
+                          {module.type !== "friends" && (
                           <div className="space-y-2">
                             <Label className="text-sm font-medium">Number of items to display</Label>
                             <Select 
@@ -1128,7 +1195,72 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                               </SelectContent>
                             </Select>
                           </div>
+                          )}
                           
+                          {/* Friends (Top 8) specific configuration */}
+                          {module.type === "friends" && isOwner && (
+                            <div className="space-y-3">
+                              <Label className="text-sm font-medium">Choose Top 8 Friends</Label>
+                              {allFriends.length === 0 ? (
+                                <p className="text-sm text-gray-500">You have no accepted friends yet.</p>
+                              ) : (
+                                <>
+                                  <p className="text-xs text-gray-500">
+                                    Select up to 8 friends to feature on your profile. ({top8Selection.length}/8 selected)
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                                    {allFriends.map((friend: any) => {
+                                      const isSelected = top8Selection.includes(friend.userId);
+                                      return (
+                                        <button
+                                          key={friend.userId}
+                                          type="button"
+                                          onClick={() => {
+                                            setTop8Selection(prev => {
+                                              if (prev.includes(friend.userId)) {
+                                                return prev.filter(id => id !== friend.userId);
+                                              }
+                                              if (prev.length >= 8) return prev;
+                                              return [...prev, friend.userId];
+                                            });
+                                          }}
+                                          className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-colors ${
+                                            isSelected
+                                              ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
+                                              : "border-gray-200 hover:border-gray-300"
+                                          }`}
+                                        >
+                                          <Avatar className="w-8 h-8 shrink-0">
+                                            <AvatarImage src={friend.avatar} alt={friend.username} />
+                                            <AvatarFallback className="text-xs">
+                                              {friend.firstName?.[0] || friend.username?.[0] || "?"}
+                                            </AvatarFallback>
+                                          </Avatar>
+                                          <span className="text-xs font-medium truncate">
+                                            {friend.firstName ? `${friend.firstName} ${friend.lastName || ""}`.trim() : friend.username}
+                                          </span>
+                                          {isSelected && (
+                                            <span className="ml-auto text-white bg-blue-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0">
+                                              {top8Selection.indexOf(friend.userId) + 1}
+                                            </span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <Button
+                                    onClick={() => saveTop8Mutation.mutate(top8Selection)}
+                                    disabled={saveTop8Mutation.isPending}
+                                    size="sm"
+                                    className="w-full"
+                                  >
+                                    {saveTop8Mutation.isPending ? "Saving..." : "Save Top 8"}
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          )}
+
                           {/* YouTube-specific configuration */}
                           {module.type === "youtube" && (
                           <div className="space-y-3">

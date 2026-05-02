@@ -453,6 +453,8 @@ export interface IStorage {
   getFriendRequests(userId: string): Promise<any[]>;
   getSentFriendRequests(userId: string): Promise<any[]>;
   getFriendshipStatus(userId1: string, userId2: string): Promise<{ status: string; friendshipId?: string; isRequester?: boolean } | null>;
+  getTop8Friends(userId: string): Promise<any[]>;
+  setTop8Friends(userId: string, friendIds: string[]): Promise<void>;
   getFriendGroups(userId: string): Promise<any[]>;
   createFriendGroup(userId: string, name: string, color: string, description?: string): Promise<any>;
   addFriendToGroup(groupId: string, friendshipId: string): Promise<void>;
@@ -6912,6 +6914,30 @@ export class DatabaseStorage implements IStorage {
           )
         )
       );
+  }
+
+  async getTop8Friends(userId: string): Promise<any[]> {
+    const [userRecord] = await db.select({ top8FriendIds: users.top8FriendIds })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const ids = userRecord?.top8FriendIds ?? [];
+    if (!ids.length) return [];
+
+    const acceptedFriends = await this.getFriends(userId);
+    const friendMap = new Map(acceptedFriends.map((f: any) => [f.userId, f]));
+
+    return ids
+      .filter((id: string) => friendMap.has(id))
+      .map((id: string) => friendMap.get(id)!);
+  }
+
+  async setTop8Friends(userId: string, friendIds: string[]): Promise<void> {
+    const limited = friendIds.slice(0, 8);
+    await db.update(users)
+      .set({ top8FriendIds: limited })
+      .where(eq(users.id, userId));
   }
 
   async getFriendGroups(userId: string): Promise<any[]> {
