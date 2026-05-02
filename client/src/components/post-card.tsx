@@ -477,6 +477,9 @@ export function PostCard({ post }: PostCardProps) {
   const timeAgo = post.createdAt
     ? formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })
     : "";
+  const formattedDate = post.createdAt
+    ? format(new Date(post.createdAt), "MMMM d, yyyy")
+    : "";
 
   return (
     <>
@@ -504,8 +507,8 @@ export function PostCard({ post }: PostCardProps) {
                   {getDisplayName()}
                 </h4>
               </WouterLink>
-              <p className="text-sm text-white">
-                {timeAgo || "Recently"}
+              <p className="text-xs text-muted-foreground">
+                {formattedDate && <span>{formattedDate} · </span>}{timeAgo || "Recently"}
               </p>
             </div>
           </div>
