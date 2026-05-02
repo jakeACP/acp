@@ -45,6 +45,79 @@ import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { FriendButton } from "@/components/friend-button";
 import { apiRequest } from "@/lib/queryClient";
+import type { Post } from "@shared/schema";
+
+function FeedModule({ userId, itemCount, username }: { userId: string; itemCount: number; username?: string }) {
+  const { data: posts, isLoading, isError } = useQuery<Post[]>({
+    queryKey: ["/api/posts/user", userId],
+    queryFn: async () => {
+      const res = await fetch(`/api/posts/user/${userId}`);
+      if (!res.ok) throw new Error(`Failed to fetch posts: ${res.status}`);
+      return res.json();
+    },
+    enabled: !!userId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: itemCount }, (_, i) => (
+          <div key={i} className="p-3 border rounded-lg animate-pulse">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+            </div>
+            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-full mb-1"></div>
+            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 border border-dashed rounded-lg">
+        Could not load posts.
+      </div>
+    );
+  }
+
+  const visiblePosts = (posts ?? []).slice(0, itemCount);
+
+  if (visiblePosts.length === 0) {
+    return (
+      <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 border border-dashed rounded-lg">
+        No posts yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {visiblePosts.map(post => (
+        <div key={post.id} className="p-3 border rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-6 h-6 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+            <span className="text-sm font-medium">{username}</span>
+            {post.createdAt && (
+              <span className="text-xs text-gray-400 ml-auto">
+                {new Date(post.createdAt).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">{post.content}</p>
+          {((post.likesCount ?? 0) > 0 || (post.commentsCount ?? 0) > 0) && (
+            <div className="flex gap-3 mt-2 text-xs text-gray-400">
+              {(post.likesCount ?? 0) > 0 && <span>{post.likesCount} likes</span>}
+              {(post.commentsCount ?? 0) > 0 && <span>{post.commentsCount} comments</span>}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface ProfileModule {
   id: string;
@@ -617,19 +690,9 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
             </div>
           );
         case "feed":
-          return (
-            <div className="space-y-3">
-              {Array.from({ length: module.itemCount }, (_, i) => (
-                <div key={i + 1} className="p-3 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-6 h-6 bg-gray-300 rounded-full"></div>
-                    <span className="text-sm font-medium">{user?.username}</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Sample post content...</p>
-                </div>
-              ))}
-            </div>
-          );
+          return user?.id ? (
+            <FeedModule userId={user.id} itemCount={module.itemCount} username={user.username} />
+          ) : null;
         case "friends":
           return (
             <div className="grid grid-cols-4 gap-2">
