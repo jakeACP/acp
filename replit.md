@@ -128,6 +128,23 @@ Includes `moderator_agent`, `news_agent`, `qa_agent`, `cybersecurity_agent`, `da
 - **ESBuild**: Bundling.
 - **Vite**: Development server.
 - **TSX**: TypeScript execution.
+- **Vitest + Supertest**: Automated test suite for the Agent API Gateway (`server/__tests__/agentAuth.test.ts`). Run with `./node_modules/.bin/vitest run --config vitest.config.ts`.
+
+## Automated Test Suite
+
+### Agent API Gateway Tests (`server/__tests__/agentAuth.test.ts`)
+29 tests covering:
+- **Key generation**: Format and uniqueness of `acp_agent_` prefixed keys.
+- **Authentication**: Missing header, empty header, invalid key, valid key flow, SHA-256 hash lookup.
+- **Audit logging**: Logs written on auth failure, permission denial, and rate limit events; redaction of sensitive fields; endpoint/method/action/status recorded.
+- **lastUsedAt tracking**: `touchAgentApiKey` called on successful auth.
+- **Revocation**: Revoked keys (storage returns undefined) rejected with 401.
+- **Permission enforcement**: Allowed endpoints pass (201/200), disallowed return 403 with action name in error, `system:admin` bypasses all checks.
+- **Rate limiting**: 429 with `Retry-After` header after limit is consumed.
+- **Sandbox mode**: `agentSandbox=true` for keys with `sandboxMode=true` or `role=qa_agent`.
+- **API isolation**: `/api/v1` developer API (Bearer token) is entirely separate; agent keys do not grant access; `findAgentApiKeyByHash` not called on `/api/v1` routes.
+
+Storage is mocked with `vi.mock`, so tests run without a real database or external agent.
 
 ### Payment Integration
 - **Stripe**: Subscription management and crowdfunding.

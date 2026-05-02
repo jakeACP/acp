@@ -2394,7 +2394,6 @@ export type InsertPoliticianDemerit = z.infer<typeof insertPoliticianDemeritSche
 export type GradingAlgorithmSettings = typeof gradingAlgorithmSettings.$inferSelect;
 export type FecCandidateTotals = typeof fecCandidateTotals.$inferSelect;
 export type InsertFecCandidateTotals = typeof fecCandidateTotals.$inferInsert;
-export type PoliticianProfile = typeof politicianProfiles.$inferSelect;
 
 export type SignalWithAuthor = Signal & {
   author: {
