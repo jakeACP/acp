@@ -4,6 +4,7 @@ import type { Request, Response, NextFunction } from "express";
 import type { AgentApiKey } from "@shared/schema";
 import { storage } from "./storage";
 import { hashApiKey } from "./apiKeyAuth";
+import { redactAgentData } from "./agentRedact";
 
 declare global {
   namespace Express {
@@ -30,18 +31,6 @@ function getLimiterForKey(key: AgentApiKey): RateLimiterMemory {
   return rateLimiters.get(limiterKey)!;
 }
 
-function redactPayload(value: unknown): unknown {
-  if (!value || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.slice(0, 20).map(redactPayload);
-  const redacted: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    if (/key|token|secret|password|authorization/i.test(key)) redacted[key] = "[redacted]";
-    else if (typeof item === "string" && item.length > 1000) redacted[key] = item.slice(0, 1000) + "…";
-    else redacted[key] = redactPayload(item);
-  }
-  return redacted;
-}
-
 async function writeRejectedAgentLog(req: Request, action: string, responseStatus: number, responseBody: unknown, message: string) {
   try {
     await storage.createAgentLog({
@@ -51,8 +40,8 @@ async function writeRejectedAgentLog(req: Request, action: string, responseStatu
       endpoint: req.path,
       method: req.method,
       action,
-      payload: redactPayload(req.body ?? req.query ?? null) as Record<string, unknown> | null,
-      response: redactPayload(responseBody) as Record<string, unknown> | null,
+      payload: redactAgentData(req.body ?? req.query ?? null) as Record<string, unknown> | null,
+      response: redactAgentData(responseBody) as Record<string, unknown> | null,
       responseStatus,
       ip: req.ip ?? null,
       sandbox: req.agentSandbox === true || req.path.startsWith("/api/agent/sandbox/"),

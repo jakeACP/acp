@@ -24,6 +24,7 @@ const FFPROBE_BIN = (() => {
 })();
 
 import { storage } from "./storage";
+import { redactAgentData } from "./agentRedact";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
@@ -9336,15 +9337,24 @@ Only include people you are confident about. Return empty arrays/null if unknown
   }
 
   function redactAgentPayload(value: unknown): unknown {
-    if (!value || typeof value !== "object") return value;
-    if (Array.isArray(value)) return value.slice(0, 20).map(redactAgentPayload);
-    const redacted: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-      if (/key|token|secret|password|authorization/i.test(key)) redacted[key] = "[redacted]";
-      else if (typeof item === "string" && item.length > 1000) redacted[key] = item.slice(0, 1000) + "…";
-      else redacted[key] = redactAgentPayload(item);
-    }
-    return redacted;
+    return redactAgentData(value);
+  }
+
+  function sanitizeLogForAgent(log: Record<string, unknown>) {
+    return {
+      id: log.id,
+      agentName: log.agentName,
+      role: log.role,
+      endpoint: log.endpoint,
+      method: log.method,
+      action: log.action,
+      responseStatus: log.responseStatus,
+      status: log.status,
+      success: log.success,
+      message: log.message,
+      sandbox: log.sandbox,
+      createdAt: log.createdAt,
+    };
   }
 
   async function writeAgentLog(req: AgentRequest, action: string, responseStatus: number, success: boolean, responseBody: unknown, message?: string) {
@@ -9479,7 +9489,8 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
       const offset = Math.max(Number(req.query.offset) || 0, 0);
       const logs = await storage.listAgentLogs({ limit, offset, apiKeyId: agentReq.agentKey.id });
-      return res.status(200).json({ success: true, action: "logs:read", data: { logs, pagination: { limit, offset, hasMore: logs.length === limit } }, errors: [], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: agentReq.agentSandbox === true } });
+      const safeLogs = logs.map((log) => sanitizeLogForAgent(log as unknown as Record<string, unknown>));
+      return res.status(200).json({ success: true, action: "logs:read", data: { logs: safeLogs, pagination: { limit, offset, hasMore: logs.length === limit } }, errors: [], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: agentReq.agentSandbox === true } });
     } catch {
       return res.status(500).json({ success: false, action: "logs:read", data: null, errors: [{ message: "Failed to read logs" }], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: agentReq.agentSandbox === true } });
     }
@@ -9619,7 +9630,8 @@ Only include people you are confident about. Return empty arrays/null if unknown
       const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
       const offset = Math.max(Number(req.query.offset) || 0, 0);
       const logs = await storage.listAgentLogs({ limit, offset, apiKeyId: agentReq.agentKey.id });
-      return res.status(200).json({ success: true, action: "logs:read:sandbox", data: { logs, pagination: { limit, offset, hasMore: logs.length === limit } }, errors: [], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: true } });
+      const safeLogs = logs.map((log) => sanitizeLogForAgent(log as unknown as Record<string, unknown>));
+      return res.status(200).json({ success: true, action: "logs:read:sandbox", data: { logs: safeLogs, pagination: { limit, offset, hasMore: logs.length === limit } }, errors: [], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: true } });
     } catch {
       return res.status(500).json({ success: false, action: "logs:read:sandbox", data: null, errors: [{ message: "Failed to read logs" }], meta: { timestamp: new Date().toISOString(), rate_limit_remaining: agentReq.agentRateLimitRemaining ?? null, sandbox: true } });
     }
