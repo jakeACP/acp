@@ -223,10 +223,27 @@ export default function PartyProfilePage() {
         </Link>
 
         {/* Hero */}
-        <Card className="mb-6">
+        <Card className="mb-6 overflow-hidden" style={party.colors?.[0] ? { borderTopColor: party.colors[0], borderTopWidth: "4px" } : undefined}>
+          {party.colors?.[0] && (
+            <div className="h-1.5 w-full" style={{ background: party.colors.length > 1 ? `linear-gradient(to right, ${party.colors.join(", ")})` : party.colors[0] }} />
+          )}
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row gap-6">
-              <CompassChart economic={party.compassEconomic} social={party.compassSocial} />
+              <div className="flex flex-col items-center gap-3 flex-shrink-0">
+                {party.logoUrl ? (
+                  <div className="w-24 h-24 rounded-xl border border-border bg-muted/20 flex items-center justify-center overflow-hidden">
+                    <img src={party.logoUrl} alt={`${party.name} logo`} className="w-full h-full object-contain p-2" />
+                  </div>
+                ) : (
+                  <div
+                    className="w-24 h-24 rounded-xl flex items-center justify-center text-white font-bold text-4xl shadow"
+                    style={{ background: party.colors?.[0] || "#6b7280" }}
+                  >
+                    {party.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <CompassChart economic={party.compassEconomic} social={party.compassSocial} />
+              </div>
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-3 mb-2">
                   <h1 className="text-2xl font-bold">{party.name}</h1>

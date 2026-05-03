@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { AdminNavigation } from "@/components/admin-navigation";
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Pencil, Trash2, RefreshCw, Search, ExternalLink, BarChart2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, RefreshCw, Search, ExternalLink, BarChart2, Upload, X } from "lucide-react";
 import { POLICY_ISSUES } from "@/lib/issue-data";
 
 type Party = {
@@ -20,6 +20,8 @@ type Party = {
   name: string;
   acronym: string | null;
   slug: string;
+  logoUrl: string | null;
+  colors: string[] | null;
   websiteUrl: string | null;
   shortDescription: string | null;
   status: string;
@@ -38,6 +40,10 @@ const EMPTY_FORM = {
   name: "",
   acronym: "",
   slug: "",
+  logoUrl: "",
+  color1: "",
+  color2: "",
+  color3: "",
   websiteUrl: "",
   shortDescription: "",
   fullDescription: "",
@@ -72,6 +78,8 @@ export default function AdminPartiesPage() {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [positionsParty, setPositionsParty] = useState<Party | null>(null);
   const [positionForm, setPositionForm] = useState({ ...EMPTY_POSITION_FORM });
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoFileRef = useRef<HTMLInputElement>(null);
 
   const { data: parties = [], isLoading } = useQuery<Party[]>({
     queryKey: ["/api/parties", { sort: "alpha" }],
@@ -169,6 +177,23 @@ export default function AdminPartiesPage() {
     !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.acronym?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleLogoUpload = async (file: File) => {
+    setLogoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) throw new Error("Upload failed");
+      const { publicUrl } = await res.json();
+      setForm(f => ({ ...f, logoUrl: publicUrl }));
+      toast({ title: "Logo uploaded" });
+    } catch {
+      toast({ title: "Logo upload failed", variant: "destructive" });
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   const openCreate = () => {
     setEditParty(null);
     setForm({ ...EMPTY_FORM });
@@ -177,10 +202,15 @@ export default function AdminPartiesPage() {
 
   const openEdit = (p: Party) => {
     setEditParty(p);
+    const colors = p.colors ?? [];
     setForm({
       name: p.name || "",
       acronym: p.acronym || "",
       slug: p.slug || "",
+      logoUrl: p.logoUrl || "",
+      color1: colors[0] || "",
+      color2: colors[1] || "",
+      color3: colors[2] || "",
       websiteUrl: (p.websiteUrl as string) || "",
       shortDescription: p.shortDescription || "",
       fullDescription: "",
@@ -198,10 +228,13 @@ export default function AdminPartiesPage() {
   };
 
   const handleSubmit = () => {
+    const colors = [form.color1.trim(), form.color2.trim(), form.color3.trim()].filter(Boolean);
     const payload: any = {
       name: form.name.trim(),
       acronym: form.acronym.trim() || null,
       slug: form.slug.trim() || slugify(form.name),
+      logoUrl: form.logoUrl.trim() || null,
+      colors: colors.length > 0 ? colors : null,
       websiteUrl: form.websiteUrl.trim() || null,
       shortDescription: form.shortDescription.trim() || null,
       fullDescription: form.fullDescription.trim() || null,
@@ -327,6 +360,7 @@ export default function AdminPartiesPage() {
             </div>
             <div className="space-y-1">
               <Label>Status</Label>
+
               <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -336,6 +370,73 @@ export default function AdminPartiesPage() {
                 </SelectContent>
               </Select>
             </div>
+            {/* Logo */}
+            <div className="space-y-2 col-span-2">
+              <Label>Party Logo</Label>
+              <div className="flex items-start gap-3">
+                {form.logoUrl ? (
+                  <div className="relative shrink-0">
+                    <img src={form.logoUrl} alt="Logo preview" className="w-16 h-16 object-contain border border-border rounded bg-muted/20" />
+                    <button
+                      type="button"
+                      className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                      onClick={() => setForm(f => ({ ...f, logoUrl: "" }))}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : null}
+                <div className="flex-1 space-y-1.5">
+                  <Input
+                    value={form.logoUrl}
+                    onChange={e => setForm(f => ({ ...f, logoUrl: e.target.value }))}
+                    placeholder="https://example.com/logo.png or upload below"
+                  />
+                  <input
+                    ref={logoFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) handleLogoUpload(file);
+                      e.target.value = "";
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={logoUploading}
+                    onClick={() => logoFileRef.current?.click()}
+                  >
+                    {logoUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+                    Upload Image
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Brand colors */}
+            <div className="space-y-2 col-span-2">
+              <Label>Brand Colors (up to 3 hex values)</Label>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-1">
+                  {form.color1 && <span className="w-5 h-5 rounded border border-border shrink-0" style={{ background: form.color1 }} />}
+                  <Input value={form.color1} onChange={e => setForm(f => ({ ...f, color1: e.target.value }))} placeholder="#1a56db" maxLength={7} className="font-mono text-sm" />
+                </div>
+                <div className="flex items-center gap-1.5 flex-1">
+                  {form.color2 && <span className="w-5 h-5 rounded border border-border shrink-0" style={{ background: form.color2 }} />}
+                  <Input value={form.color2} onChange={e => setForm(f => ({ ...f, color2: e.target.value }))} placeholder="#e02424" maxLength={7} className="font-mono text-sm" />
+                </div>
+                <div className="flex items-center gap-1.5 flex-1">
+                  {form.color3 && <span className="w-5 h-5 rounded border border-border shrink-0" style={{ background: form.color3 }} />}
+                  <Input value={form.color3} onChange={e => setForm(f => ({ ...f, color3: e.target.value }))} placeholder="#ffffff" maxLength={7} className="font-mono text-sm" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Primary color is used as an accent on party cards and profiles.</p>
+            </div>
+
             <div className="space-y-1 col-span-2">
               <Label>Website URL</Label>
               <Input value={form.websiteUrl} onChange={e => setForm(f => ({ ...f, websiteUrl: e.target.value }))} placeholder="https://example.com" />

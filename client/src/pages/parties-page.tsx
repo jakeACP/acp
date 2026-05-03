@@ -42,10 +42,10 @@ function CompassDot({ economic, social }: { economic: number | null; social: num
   const cx = ((economic + 10) / 20) * 100;
   const cy = ((10 - social) / 20) * 100;
   return (
-    <div className="relative w-16 h-16 border border-border rounded overflow-hidden flex-shrink-0 bg-muted/30">
+    <div className="relative w-10 h-10 border border-border rounded overflow-hidden flex-shrink-0 bg-muted/30" title={`Economic: ${economic > 0 ? "+" : ""}${economic}, Social: ${social > 0 ? "+" : ""}${social}`}>
       <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom right, rgba(59,130,246,0.1), rgba(239,68,68,0.1))" }} />
       <div className="absolute" style={{ left: `${cx}%`, top: `${cy}%`, transform: "translate(-50%, -50%)" }}>
-        <div className="w-3 h-3 rounded-full bg-primary border-2 border-primary-foreground shadow" />
+        <div className="w-2.5 h-2.5 rounded-full bg-primary border-2 border-primary-foreground shadow" />
       </div>
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="w-full h-px bg-border opacity-40" />
@@ -53,6 +53,26 @@ function CompassDot({ economic, social }: { economic: number | null; social: num
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="h-full w-px bg-border opacity-40" />
       </div>
+    </div>
+  );
+}
+
+function PartyBadge({ name, logoUrl, primaryColor }: { name: string; logoUrl: string | null; primaryColor: string | null }) {
+  if (logoUrl) {
+    return (
+      <div className="w-14 h-14 rounded-lg overflow-hidden border border-border flex-shrink-0 bg-muted/20 flex items-center justify-center">
+        <img src={logoUrl} alt={`${name} logo`} className="w-full h-full object-contain p-1" />
+      </div>
+    );
+  }
+  const initial = name.charAt(0).toUpperCase();
+  const bg = primaryColor || "#6b7280";
+  return (
+    <div
+      className="w-14 h-14 rounded-lg flex-shrink-0 flex items-center justify-center text-white font-bold text-xl shadow-sm"
+      style={{ background: bg }}
+    >
+      {initial}
     </div>
   );
 }
@@ -156,10 +176,13 @@ export default function PartiesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map(party => (
               <Link key={party.id} href={`/parties/${party.slug}`}>
-                <Card className="cursor-pointer hover:shadow-md transition-all hover:border-primary/50 h-full">
+                <Card
+                  className="cursor-pointer hover:shadow-md transition-all h-full overflow-hidden"
+                  style={party.colors?.[0] ? { borderTopColor: party.colors[0], borderTopWidth: "3px" } : undefined}
+                >
                   <CardHeader className="pb-3">
                     <div className="flex items-start gap-3">
-                      <CompassDot economic={party.compassEconomic} social={party.compassSocial} />
+                      <PartyBadge name={party.name} logoUrl={party.logoUrl} primaryColor={party.colors?.[0] ?? null} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <CardTitle className="text-base leading-tight">{party.name}</CardTitle>
@@ -196,6 +219,13 @@ export default function PartiesPage() {
                         </div>
                       </div>
                     </div>
+
+                    {(party.compassEconomic !== null || party.compassSocial !== null) && (
+                      <div className="flex items-center gap-2">
+                        <CompassDot economic={party.compassEconomic} social={party.compassSocial} />
+                        <span className="text-xs text-muted-foreground">Political Compass</span>
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between text-xs pt-1 border-t border-border">
                       <div className="flex items-center gap-1 text-muted-foreground">
