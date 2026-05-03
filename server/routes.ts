@@ -3943,6 +3943,154 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // My Representatives profile module endpoint
+  app.get("/api/profile/:userId/representatives", async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      // Get user to read their location
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const location = (user.location || "").trim();
+      if (!location) {
+        return res.json({ representatives: [], hasLocation: false });
+      }
+
+      // Try to extract a 5-digit zip code from location string
+      const zipMatch = location.match(/\b(\d{5})\b/);
+      const zip = zipMatch?.[1] ?? null;
+
+      // Try to extract a 2-letter state abbreviation (e.g. ", MN" or " MN " at end)
+      const stateAbbrMatch = location.match(/\b([A-Z]{2})\b/);
+      const stateAbbr = stateAbbrMatch?.[1] ?? null;
+
+      // State name → abbreviation mapping for matching
+      const STATE_ABBR_TO_NAME: Record<string, string> = {
+        AL:"Alabama",AK:"Alaska",AZ:"Arizona",AR:"Arkansas",CA:"California",
+        CO:"Colorado",CT:"Connecticut",DE:"Delaware",FL:"Florida",GA:"Georgia",
+        HI:"Hawaii",ID:"Idaho",IL:"Illinois",IN:"Indiana",IA:"Iowa",
+        KS:"Kansas",KY:"Kentucky",LA:"Louisiana",ME:"Maine",MD:"Maryland",
+        MA:"Massachusetts",MI:"Michigan",MN:"Minnesota",MS:"Mississippi",MO:"Missouri",
+        MT:"Montana",NE:"Nebraska",NV:"Nevada",NH:"New Hampshire",NJ:"New Jersey",
+        NM:"New Mexico",NY:"New York",NC:"North Carolina",ND:"North Dakota",OH:"Ohio",
+        OK:"Oklahoma",OR:"Oregon",PA:"Pennsylvania",RI:"Rhode Island",SC:"South Carolina",
+        SD:"South Dakota",TN:"Tennessee",TX:"Texas",UT:"Utah",VT:"Vermont",
+        VA:"Virginia",WA:"Washington",WV:"West Virginia",WI:"Wisconsin",WY:"Wyoming",
+        DC:"Washington D.C."
+      };
+
+      let stateName: string | null = null;
+      if (stateAbbr && STATE_ABBR_TO_NAME[stateAbbr]) {
+        stateName = STATE_ABBR_TO_NAME[stateAbbr];
+      }
+
+      // If we have a zip code, use the district lookup to get politicians
+      if (zip) {
+        try {
+          const STATE_FIPS: Record<string, string> = {
+            "01":"Alabama","02":"Alaska","04":"Arizona","05":"Arkansas","06":"California",
+            "08":"Colorado","09":"Connecticut","10":"Delaware","11":"Washington D.C.","12":"Florida",
+            "13":"Georgia","15":"Hawaii","16":"Idaho","17":"Illinois","18":"Indiana","19":"Iowa",
+            "20":"Kansas","21":"Kentucky","22":"Louisiana","23":"Maine","24":"Maryland",
+            "25":"Massachusetts","26":"Michigan","27":"Minnesota","28":"Mississippi","29":"Missouri",
+            "30":"Montana","31":"Nebraska","32":"Nevada","33":"New Hampshire","34":"New Jersey",
+            "35":"New Mexico","36":"New York","37":"North Carolina","38":"North Dakota","39":"Ohio",
+            "40":"Oklahoma","41":"Oregon","42":"Pennsylvania","44":"Rhode Island","45":"South Carolina",
+            "46":"South Dakota","47":"Tennessee","48":"Texas","49":"Utah","50":"Vermont","51":"Virginia",
+            "53":"Washington","54":"West Virginia","55":"Wisconsin","56":"Wyoming","72":"Puerto Rico"
+          };
+
+          // Resolve lat/lon from zip
+          const zipRes = await fetch(`https://api.zippopotam.us/us/${zip}`, {
+            signal: AbortSignal.timeout(6000)
+          });
+          if (zipRes.ok) {
+            const zipData: any = await zipRes.json();
+            const place = zipData?.places?.[0];
+            if (place) {
+              const lat = place.latitude;
+              const lon = place.longitude;
+              const censusUrl = `https://geocoding.geo.census.gov/geocoder/geographies/coordinates?x=${lon}&y=${lat}&benchmark=Public_AR_Current&vintage=Current_Current&layers=54&format=json`;
+              const censusRes = await fetch(censusUrl, { signal: AbortSignal.timeout(6000) });
+              const censusData: any = await censusRes.json();
+              const geos = censusData?.result?.geographies ?? {};
+              const layerKey = Object.keys(geos).find(k => k.toLowerCase().includes("congressional districts"));
+              const districts: any[] = layerKey ? (geos[layerKey] ?? []) : [];
+
+              if (districts.length > 0) {
+                const locations: Array<{ stateName: string; districtNum: number }> = [];
+                const seen = new Set<string>();
+                for (const d of districts) {
+                  const stateFips: string = d.STATE ?? "";
+                  const districtCode: string = d.CD119 ?? d.CD118 ?? d.BASENAME ?? "";
+                  const sName = STATE_FIPS[stateFips];
+                  if (!sName) continue;
+                  const districtNum = parseInt(districtCode, 10);
+                  const key = `${sName}|${districtNum}`;
+                  if (!seen.has(key)) { seen.add(key); locations.push({ stateName: sName, districtNum }); }
+                }
+                if (locations.length > 0) {
+                  const primaryState = locations[0].stateName;
+                  const districtNums = locations.map(l => l.districtNum);
+                  const politicians = await storage.getPoliticiansByStateAndDistrict(primaryState, districtNums);
+                  const withGrade = politicians.map((p: any) => ({
+                    id: p.id,
+                    fullName: p.fullName,
+                    party: p.party,
+                    photoUrl: p.photoUrl,
+                    corruptionGrade: p.corruptionGrade,
+                    numericScore: p.numericScore,
+                    isVerified: p.isVerified,
+                    isCurrent: p.isCurrent,
+                    position: p.position,
+                    level: p.position?.level ?? "federal",
+                  }));
+                  const sorted = withGrade.sort((a: any, b: any) => {
+                    const order: Record<string, number> = { federal: 0, state: 1, county: 2, city: 3 };
+                    return (order[a.level] ?? 9) - (order[b.level] ?? 9);
+                  });
+                  return res.json({ representatives: sorted, hasLocation: true, location });
+                }
+              }
+            }
+          }
+        } catch {
+          // Fall through to state-based lookup
+        }
+      }
+
+      // Fall back to state-based lookup if we have a state name
+      if (stateName) {
+        const politicians = await storage.getPoliticiansByStateAndDistrict(stateName, []);
+        const withGrade = politicians.map((p: any) => ({
+          id: p.id,
+          fullName: p.fullName,
+          party: p.party,
+          photoUrl: p.photoUrl,
+          corruptionGrade: p.corruptionGrade,
+          numericScore: p.numericScore,
+          isVerified: p.isVerified,
+          isCurrent: p.isCurrent,
+          position: p.position,
+          level: p.position?.level ?? "federal",
+        }));
+        const sorted = withGrade.sort((a: any, b: any) => {
+          const order: Record<string, number> = { federal: 0, state: 1, county: 2, city: 3 };
+          return (order[a.level] ?? 9) - (order[b.level] ?? 9);
+        });
+        return res.json({ representatives: sorted, hasLocation: true, location });
+      }
+
+      return res.json({ representatives: [], hasLocation: true, location });
+    } catch (error: any) {
+      console.error("Profile representatives error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Gallery photo upload
   app.post("/api/profile/gallery", upload.single("photo"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

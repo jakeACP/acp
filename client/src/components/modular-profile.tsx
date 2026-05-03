@@ -252,10 +252,138 @@ function IssuesSurveyModule({ profileUserId, isOwner, itemCount }: { profileUser
   );
 }
 
+function gradeColors(grade?: string | null) {
+  switch (grade) {
+    case "A": return { badge: "bg-green-600 text-white", label: "text-green-700 dark:text-green-400" };
+    case "B": return { badge: "bg-green-500 text-white", label: "text-green-600 dark:text-green-400" };
+    case "C": return { badge: "bg-yellow-400 text-yellow-900", label: "text-yellow-700 dark:text-yellow-400" };
+    case "D": return { badge: "bg-red-500 text-white", label: "text-red-600 dark:text-red-400" };
+    case "F": return { badge: "bg-red-700 text-white", label: "text-red-700 dark:text-red-400" };
+    default:  return { badge: "bg-slate-400 text-white", label: "text-slate-500 dark:text-slate-400" };
+  }
+}
+
+function partyShort(party?: string | null): string {
+  if (!party) return "—";
+  const p = party.toLowerCase();
+  if (p.includes("republican")) return "R";
+  if (p.includes("democrat")) return "D";
+  if (p.includes("independent")) return "I";
+  return party.slice(0, 1).toUpperCase();
+}
+
+function partyBadgeClass(party?: string | null): string {
+  const p = (party || "").toLowerCase();
+  if (p.includes("republican")) return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300";
+  if (p.includes("democrat")) return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+  return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+}
+
+function RepresentativesModuleContent({ profileUserId }: { profileUserId?: string }) {
+  const { data, isLoading } = useQuery<{ representatives: any[]; hasLocation: boolean; location?: string }>({
+    queryKey: ["/api/profile", profileUserId, "representatives"],
+    queryFn: async () => {
+      if (!profileUserId) return { representatives: [], hasLocation: false };
+      const res = await fetch(`/api/profile/${profileUserId}/representatives`);
+      if (!res.ok) return { representatives: [], hasLocation: false };
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="flex items-center gap-3 p-2 border rounded-lg animate-pulse">
+            <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-32" />
+              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24" />
+            </div>
+            <div className="w-7 h-7 bg-gray-200 dark:bg-gray-700 rounded-full shrink-0" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!data?.hasLocation || !data.representatives || data.representatives.length === 0) {
+    return (
+      <div className="p-4 border-dashed border-2 border-gray-300 dark:border-gray-600 rounded-lg text-center">
+        <Users className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+          {!data?.hasLocation ? "No location set" : "No representatives found"}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          {!data?.hasLocation
+            ? "Set your location in your profile settings to see your elected representatives here."
+            : "We couldn't match representatives for your location. Try visiting the Representatives page."}
+        </p>
+        <a href="/representatives" className="inline-flex items-center gap-1 mt-2 text-xs text-blue-600 hover:underline">
+          <ExternalLink className="h-3 w-3" /> Browse all representatives
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {data.representatives.map((rep: any) => {
+        const initials = rep.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+        const g = gradeColors(rep.corruptionGrade);
+        return (
+          <a
+            key={rep.id}
+            href={`/politicians/${rep.id}`}
+            className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
+          >
+            <div className="relative shrink-0">
+              {rep.photoUrl ? (
+                <img src={rep.photoUrl} alt={rep.fullName}
+                  className="w-10 h-10 rounded-full object-cover border-2 border-slate-200 dark:border-slate-600" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center border-2 border-slate-200 dark:border-slate-600">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-300">{initials}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-sm font-medium text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
+                  {rep.fullName}
+                </span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${partyBadgeClass(rep.party)}`}>
+                  {partyShort(rep.party)}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {rep.position?.title || (rep.isCurrent === false ? "Candidate" : "Representative")}
+              </p>
+            </div>
+            {rep.corruptionGrade ? (
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${g.badge}`}>
+                {rep.corruptionGrade}
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-slate-200 dark:bg-slate-700 text-slate-500">
+                ?
+              </div>
+            )}
+          </a>
+        );
+      })}
+      <a href="/representatives" className="flex items-center justify-center gap-1 mt-1 text-xs text-blue-600 hover:underline">
+        <ExternalLink className="h-3 w-3" /> View all on Representatives page
+      </a>
+    </div>
+  );
+}
+
 interface ProfileModule {
   id: string;
   name: string;
-  type: "bio" | "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "political-compass" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "custom";
+  type: "bio" | "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "political-compass" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "representatives" | "custom";
   isPremium: boolean;
   isEnabled: boolean;
   position: number;
@@ -959,7 +1087,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       widgets: { name: "Custom Widgets", itemCount: 2, customData: {} },
       "supporter-wall": { name: "Supporter Wall", itemCount: 8, customData: {} },
       "democracy-wrapped": { name: "Democracy Wrapped", itemCount: 1, customData: {} },
-      "legacy-timeline": { name: "Legacy Timeline", itemCount: 1, customData: {} }
+      "legacy-timeline": { name: "Legacy Timeline", itemCount: 1, customData: {} },
+      "representatives": { name: "My Representatives", itemCount: 10, customData: {} }
     };
 
     const moduleConfig = moduleTypes[type as keyof typeof moduleTypes];
@@ -1923,6 +2052,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
             </div>
           );
         }
+        case "representatives":
+          return <RepresentativesModuleContent profileUserId={profileUserId} />;
         case "political-compass": {
           const compassResult = (extendedData as any)?.compassResult;
           const hasResult = compassResult && typeof compassResult.economicScore === "number";
@@ -2903,7 +3034,8 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                           { type: "debate-history", name: "Debate History", icon: MessageSquare, description: "Timeline of debates with win/loss tallies" },
                           { type: "events", name: "Event Participation", icon: Calendar, description: "Rallies, protests, town halls you've RSVP'd to" },
                           { type: "political-compass", name: "Political Compass", icon: Target, description: "Show your political position on economic and social axes" },
-                          { type: "youtube", name: "YouTube Video", icon: Youtube, description: "Embed a YouTube video with custom size" }
+                          { type: "youtube", name: "YouTube Video", icon: Youtube, description: "Embed a YouTube video with custom size" },
+                          { type: "representatives", name: "My Representatives", icon: Users, description: "See your elected reps with corruption grades based on your location" }
                         ].map((moduleType) => {
                           const IconComponent = moduleType.icon;
                           return (
