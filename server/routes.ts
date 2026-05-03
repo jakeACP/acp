@@ -5558,6 +5558,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.post("/api/admin/politicians/link-party-endorsements", ensureAdmin, async (req, res) => {
+    try {
+      const result = await storage.linkPartyEndorsements();
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("Link party endorsements error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/admin/politicians/import-candidates", ensureAdmin, async (req, res) => {
     try {
       const { candidates } = req.body;

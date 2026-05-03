@@ -241,7 +241,8 @@ export interface IStorage {
   submitSigCommunityVote(sigId: string, userId: string, vote: number): Promise<SigCommunityVote>;
   seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number>;
   
-  importCongress(): Promise<{ profiles_created: number; profiles_updated: number; positions_created: number; sigs_created: number; sponsorships_created: number }>;
+  importCongress(): Promise<{ profiles_created: number; profiles_updated: number; positions_created: number; sigs_created: number; sponsorships_created: number; endorsements_created: number }>;
+  linkPartyEndorsements(): Promise<{ linked: number; skipped: number }>;
   importCandidates(candidates: Array<{ fullName: string; office: string; officeLevel: string; district: string; state: string; party: string; isIncumbent: string; status: string; primaryDate: string; generalDate: string; ballotpediaUrl: string; fecCandidateId: string; website: string; email: string; phone: string; biography: string; photoUrl: string; notes: string; profileType?: string }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number }>;
   importProfilesCsv(profiles: Array<{ fullName: string; party: string; email: string; phone: string; website: string; biography: string; termStart: string; termEnd: string; isCurrent: string; officeAddress: string }>): Promise<{ created: number; updated: number }>;
   importPositionsCsv(positions: Array<{ title: string; officeType: string; level: string; jurisdiction: string; district: string; termLength: string; isElected: string; isActive: string }>): Promise<{ created: number; updated: number }>;
@@ -5062,6 +5063,7 @@ export class DatabaseStorage implements IStorage {
     positions_created: number;
     sigs_created: number;
     sponsorships_created: number;
+    endorsements_created: number;
   }> {
     const pathMod = await import('path');
     const ExcelJS = await import('exceljs');
@@ -5216,9 +5218,33 @@ export class DatabaseStorage implements IStorage {
       profileByName.set(p.fullName.toLowerCase(), p.id);
     }
 
+    // Pre-load parties for endorsement seeding
+    const allParties = await db.select().from(politicalParties);
+    const partyIdByNorm = new Map<string, string>();
+    for (const p of allParties) {
+      partyIdByNorm.set(p.name.toLowerCase(), p.id);
+      if (p.acronym) partyIdByNorm.set(p.acronym.toLowerCase(), p.id);
+    }
+    function resolvePartyId(partyName: string): string | undefined {
+      const lower = partyName.toLowerCase();
+      if (partyIdByNorm.has(lower)) return partyIdByNorm.get(lower);
+      for (const [key, id] of partyIdByNorm) {
+        if (key.includes(lower) || lower.includes(key)) return id;
+      }
+      return undefined;
+    }
+
+    // Pre-load existing endorsements to avoid duplicates
+    const existingEndorsements = await db.select({
+      politicianId: partyEndorsements.politicianId,
+      partyId: partyEndorsements.partyId,
+    }).from(partyEndorsements).where(sql`${partyEndorsements.politicianId} IS NOT NULL`);
+    const endorsementSet = new Set(existingEndorsements.map(e => `${e.politicianId}:${e.partyId}`));
+
     let profiles_created = 0;
     let profiles_updated = 0;
     let sponsorships_created = 0;
+    let endorsements_created = 0;
 
     for (const row of rows) {
       const fullName = String(row['Name'] || '').trim();
@@ -5283,6 +5309,33 @@ export class DatabaseStorage implements IStorage {
         profiles_created++;
       }
 
+      // Auto-seed party endorsement from party affiliation
+      if (party) {
+        const matchedPartyId = resolvePartyId(party);
+        if (matchedPartyId) {
+          const key = `${politicianId}:${matchedPartyId}`;
+          if (!endorsementSet.has(key)) {
+            const { title: office, stateName: state } = makePositionInfo(district);
+            try {
+              await db.insert(partyEndorsements).values({
+                partyId: matchedPartyId,
+                politicianId,
+                office,
+                state,
+                electionCycle: '2024',
+                endorsementType: 'primary',
+                notes: 'Auto-seeded from Congress import based on party affiliation.',
+                isActive: true,
+              });
+              endorsementSet.add(key);
+              endorsements_created++;
+            } catch {
+              // Conflict — already exists, skip
+            }
+          }
+        }
+      }
+
       // SIG sponsorships
       for (const acronym of lobbyGroupList) {
         const sigId = sigByAcronym.get(acronym);
@@ -5331,7 +5384,65 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    return { profiles_created, profiles_updated, positions_created, sigs_created, sponsorships_created };
+    return { profiles_created, profiles_updated, positions_created, sigs_created, sponsorships_created, endorsements_created };
+  }
+
+  async linkPartyEndorsements(): Promise<{ linked: number; skipped: number }> {
+    // Load all parties and build lookup map
+    const allParties = await db.select().from(politicalParties);
+    const partyIdByNorm = new Map<string, string>();
+    for (const p of allParties) {
+      partyIdByNorm.set(p.name.toLowerCase(), p.id);
+      if (p.acronym) partyIdByNorm.set(p.acronym.toLowerCase(), p.id);
+    }
+    function resolvePartyId(partyName: string): string | undefined {
+      const lower = partyName.toLowerCase();
+      if (partyIdByNorm.has(lower)) return partyIdByNorm.get(lower);
+      for (const [key, id] of partyIdByNorm) {
+        if (key.includes(lower) || lower.includes(key)) return id;
+      }
+      return undefined;
+    }
+
+    // Load existing endorsements to avoid duplicates
+    const existingEndorsements = await db.select({
+      politicianId: partyEndorsements.politicianId,
+      partyId: partyEndorsements.partyId,
+    }).from(partyEndorsements).where(sql`${partyEndorsements.politicianId} IS NOT NULL`);
+    const endorsementSet = new Set(existingEndorsements.map(e => `${e.politicianId}:${e.partyId}`));
+
+    // Load all politician profiles that have a party set
+    const profiles = await db.select({
+      id: politicianProfiles.id,
+      party: politicianProfiles.party,
+    }).from(politicianProfiles).where(sql`${politicianProfiles.party} IS NOT NULL AND ${politicianProfiles.party} != ''`);
+
+    let linked = 0;
+    let skipped = 0;
+
+    for (const profile of profiles) {
+      if (!profile.party) { skipped++; continue; }
+      const matchedPartyId = resolvePartyId(profile.party);
+      if (!matchedPartyId) { skipped++; continue; }
+      const key = `${profile.id}:${matchedPartyId}`;
+      if (endorsementSet.has(key)) { skipped++; continue; }
+      try {
+        await db.insert(partyEndorsements).values({
+          partyId: matchedPartyId,
+          politicianId: profile.id,
+          electionCycle: '2024',
+          endorsementType: 'primary',
+          notes: 'Auto-seeded from party affiliation backfill.',
+          isActive: true,
+        });
+        endorsementSet.add(key);
+        linked++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    return { linked, skipped };
   }
 
   async importCandidates(candidates: Array<{

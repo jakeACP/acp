@@ -139,6 +139,7 @@ export default function AdminPoliticiansPage() {
   const [refreshWebOpen, setRefreshWebOpen] = useState(false);
   const [regradeOpen, setRegradeOpen] = useState(false);
   const [generateHandlesOpen, setGenerateHandlesOpen] = useState(false);
+  const [linkPartyEndorsementsOpen, setLinkPartyEndorsementsOpen] = useState(false);
   const [aiScanOpen, setAiScanOpen] = useState(false);
   const [superPacOpen, setSuperPacOpen] = useState(false);
 
@@ -203,6 +204,20 @@ export default function AdminPoliticiansPage() {
 
   const { data: mergeCandidatesData = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/merge-candidates"],
+  });
+
+  const linkPartyEndorsementsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/politicians/link-party-endorsements", "POST");
+      return await res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "Party endorsements linked", description: `${data.linked || 0} endorsements created, ${data.skipped || 0} skipped (already linked or no match).` });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error linking party endorsements", description: error.message, variant: "destructive" });
+    },
   });
 
   const backfillHandlesMutation = useMutation({
@@ -481,7 +496,7 @@ export default function AdminPoliticiansPage() {
       setImportDialogOpen(false);
       toast({
         title: "Congress import complete",
-        description: `${data.profiles_created} created, ${data.profiles_updated} updated, ${data.positions_created} positions, ${data.sigs_created} lobby groups, ${data.sponsorships_created} sponsorships.`,
+        description: `${data.profiles_created} created, ${data.profiles_updated} updated, ${data.positions_created} positions, ${data.sigs_created} lobby groups, ${data.sponsorships_created} sponsorships, ${data.endorsements_created ?? 0} party endorsements.`,
       });
     },
     onError: (error: any) => {
@@ -2189,6 +2204,35 @@ export default function AdminPoliticiansPage() {
                             <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Generating…</>
                           ) : (
                             <><AtSign className="h-3 w-3 mr-1.5" />Run</>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Link Party Endorsements */}
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
+                      <button className="flex items-start justify-between w-full gap-2 text-left" onClick={() => setLinkPartyEndorsementsOpen(o => !o)}>
+                        <div className="flex items-start gap-2">
+                          <LinkIcon className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Link Party Endorsements</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Auto-create party endorsement records for all politicians with a party set but no matching endorsement</p>
+                          </div>
+                        </div>
+                        {linkPartyEndorsementsOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />}
+                      </button>
+                      {linkPartyEndorsementsOpen && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => linkPartyEndorsementsMutation.mutate()}
+                          disabled={linkPartyEndorsementsMutation.isPending}
+                          className="w-full text-xs"
+                        >
+                          {linkPartyEndorsementsMutation.isPending ? (
+                            <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Linking…</>
+                          ) : (
+                            <><LinkIcon className="h-3 w-3 mr-1.5" />Run Backfill</>
                           )}
                         </Button>
                       )}
