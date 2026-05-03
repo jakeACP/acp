@@ -777,7 +777,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
     try {
       const isFollowing = await storage.isFollowing(req.user.id, req.params.userId);
-      res.json({ isFollowing });
+      const followsYou = await storage.isFollowing(req.params.userId, req.user.id);
+      res.json({ isFollowing, followsYou });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

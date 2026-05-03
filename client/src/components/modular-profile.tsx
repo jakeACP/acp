@@ -57,6 +57,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { FriendButton } from "@/components/friend-button";
 import { FollowButton } from "@/components/follow-button";
@@ -411,6 +412,7 @@ interface UserProfile {
 
 export function ModularProfile({ userId, isOwner = false }: { userId?: string; isOwner?: boolean }) {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const [editMode, setEditMode] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -560,6 +562,37 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
     },
     enabled: !!profileUserId,
   });
+
+  // Follow status for the profile user (includes followsYou for the profile header badge)
+  const { data: profileFollowStatus } = useQuery<{ isFollowing: boolean; followsYou: boolean }>({
+    queryKey: ["/api/follow/status", profileUserId],
+    queryFn: async () => {
+      if (!profileUserId) return { isFollowing: false, followsYou: false };
+      const res = await fetch(`/api/follow/status/${profileUserId}`, { credentials: "include" });
+      if (!res.ok) return { isFollowing: false, followsYou: false };
+      return res.json();
+    },
+    enabled: !!profileUserId && !!currentUser && !isOwner,
+    staleTime: 30000,
+  });
+
+  // Current viewer's own followers — used to show "Follows you" in the following list
+  const { data: myFollowers = [] } = useQuery<any[]>({
+    queryKey: ["/api/users", currentUser?.id, "followers"],
+    queryFn: async () => {
+      if (!currentUser?.id) return [];
+      const res = await fetch(`/api/users/${currentUser.id}/followers`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!currentUser && !isOwner,
+    staleTime: 60000,
+  });
+
+  const myFollowerIds = React.useMemo(
+    () => new Set((isOwner ? followers : myFollowers).map((f: any) => f.id)),
+    [isOwner, followers, myFollowers]
+  );
 
   // All friends (accepted)
   const { data: allProfileFriends = [] } = useQuery<any[]>({
@@ -1387,7 +1420,12 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                       </Avatar>
                       <div className="min-w-0">
                         <span className="text-sm font-medium block truncate">{u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username}</span>
-                        <span className="text-xs text-gray-500">@{u.username}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-500">@{u.username}</span>
+                          {currentUser && u.id !== currentUser.id && myFollowerIds.has(u.id) && (
+                            <Badge variant="secondary" className="text-xs py-0 px-1 h-4 leading-none">Follows you</Badge>
+                          )}
+                        </div>
                       </div>
                     </a>
                     <FollowButton userId={u.id} username={u.username} size="sm" variant="outline" />
@@ -2789,7 +2827,12 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                     : user?.username
                   }
                 </h1>
-                <p className="opacity-90">@{user?.username}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="opacity-90">@{user?.username}</p>
+                  {!isOwner && profileFollowStatus?.followsYou && (
+                    <Badge className="bg-white/20 text-white border-white/30 text-xs">Follows you</Badge>
+                  )}
+                </div>
                 {isPremiumUser && (
                   <Badge className="mt-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white">
                     ACP+ Member
