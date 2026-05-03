@@ -1,0 +1,317 @@
+Build an Admin Panel feature called “Districts.”
+
+Purpose:
+Create, manage, visualize, and assign political/geographic districts at every level so ACP can accurately connect users, candidates, offices, elections, and representatives by location.
+
+Routes:
+- /admin/districts
+- /admin/districts/new
+- /admin/districts/:districtId
+- /admin/districts/:districtId/edit
+
+Core Goal:
+Admins need a map-based system to define district borders, confirm accuracy, and use those districts throughout the ACP platform.
+
+District Types:
+Support districts at multiple levels:
+- Federal Congressional District
+- State Senate District
+- State House District
+- County
+- City
+- Township
+- School Board District
+- Judicial District
+- Ward
+- Precinct
+- Custom District
+
+Database Tables:
+
+districts:
+- id
+- name
+- slug
+- district_type
+- district_code
+- state
+- county
+- city
+- level
+- description
+- geojson_boundary
+- centroid_lat
+- centroid_lng
+- source_url
+- source_name
+- confidence_score
+- status // draft, needs_review, confirmed, archived
+- created_by
+- reviewed_by
+- confirmed_at
+- created_at
+- updated_at
+
+district_versions:
+- id
+- district_id
+- version_number
+- geojson_boundary
+- change_notes
+- changed_by
+- created_at
+
+user_districts:
+- id
+- user_id
+- district_id
+- match_method // address, zip, manual, admin
+- confidence_score
+- created_at
+- updated_at
+
+candidate_districts:
+- id
+- candidate_id
+- district_id
+- office_id
+- election_cycle
+- created_at
+
+Admin Districts List:
+Show all districts in a searchable table:
+- District name
+- Type
+- State/county/city
+- Status
+- Confidence score
+- Last updated
+- Candidate count
+- User count
+
+Filters:
+- State
+- County
+- District type
+- Status
+- Needs review
+- Confirmed
+- Archived
+
+District Map Editor:
+Use an interactive map library such as Mapbox, Leaflet, or Google Maps.
+
+Features:
+- View district boundary on map
+- Draw polygon manually
+- Edit/move boundary points
+- Delete boundary points
+- Add new polygon
+- Support multi-polygons
+- Import GeoJSON
+- Export GeoJSON
+- Undo/redo boundary edits
+- Save draft
+- Confirm district
+
+AI Draft District Tool:
+Add button:
+“Draft Boundary with AI”
+
+Admin provides:
+- District name
+- District type
+- State
+- County/city if applicable
+- Optional source URL or pasted description
+
+The AI should:
+- Search or interpret official district boundary information if available
+- Draft a GeoJSON polygon
+- Set confidence score
+- Mark status as “needs_review”
+- Add source citation if available
+
+Important:
+AI-drafted boundaries are NEVER automatically confirmed.
+Admins must review and click “Confirm District.”
+
+Manual Review Flow:
+1. AI drafts or admin imports boundary
+2. District status = needs_review
+3. Admin reviews map
+4. Admin edits boundary if needed
+5. Admin clicks “Confirm District”
+6. Confirmed district becomes available across ACP
+
+Accuracy Requirements:
+- Prefer official government boundary data when available
+- Store source URL and source name
+- Show confidence score
+- Show warning if no official source is attached
+- Never use unverified AI boundaries as confirmed data
+
+Address/User Matching:
+When a user adds or updates their address:
+- Geocode the address to latitude/longitude
+- Check which confirmed district polygons contain that point
+- Link matching districts to user profile
+- Store match method and confidence score
+
+User Profile Integration:
+Show user’s matched districts:
+- Congressional district
+- State senate district
+- State house district
+- County
+- City
+- School district
+- Ward/precinct when available
+
+Candidate Integration:
+When a candidate runs for office:
+- Candidate must select an office
+- Candidate must select a confirmed district
+- Candidate becomes visible to users inside that district
+- Candidate profile displays district map
+
+District Detail Page:
+Show:
+- District name
+- Type
+- Map
+- Boundary source
+- Confidence score
+- Status
+- Users matched
+- Candidates running
+- Representatives assigned
+- Version history
+
+Version History:
+Every district boundary edit should create a version.
+Admins can:
+- View previous versions
+- Restore previous version
+- Compare old vs new boundary
+- Add change notes
+
+Map Responsiveness:
+District maps must work on:
+- Desktop
+- Tablet
+- Mobile
+
+Map display requirements:
+- Smooth zoom/pan
+- Responsive containers
+- Clear boundary outlines
+- Fit map bounds to district
+- Show centroid marker
+- Lazy-load map assets when possible
+
+Search People Within Borders:
+Add admin tool:
+“Search Users in District”
+
+Function:
+- Select confirmed district
+- Query all users whose saved geocoded location falls inside boundary
+- Display matched users
+- Export CSV option for admins
+- Respect user privacy settings
+
+Privacy:
+- Do not expose exact user addresses publicly
+- Public views should only show district-level matching
+- Admin-only access required for address-level tools
+
+Public District Pages:
+Create optional public district page:
+- /districts/:districtId
+
+Show:
+- District map
+- District type
+- Current candidates
+- Current representatives
+- Related elections
+- Public issue polling summary if available
+
+Do NOT show:
+- User addresses
+- Individual user locations
+
+API Endpoints:
+Create endpoints for:
+- Get district by ID
+- Search districts
+- Create district
+- Update district boundary
+- Confirm district
+- Archive district
+- Match user location to districts
+- Get candidates by district
+- Get users in district for admins only
+
+Recommended Spatial Logic:
+Use PostGIS if available.
+If not available, store GeoJSON and use Turf.js for point-in-polygon matching.
+
+Preferred:
+- PostgreSQL + PostGIS
+- geojson_boundary stored as geometry or JSONB
+- spatial index for fast matching
+
+Fallback:
+- GeoJSON stored as JSON
+- Turf.js booleanPointInPolygon
+
+Admin Permissions:
+Only admins can:
+- Create districts
+- Edit boundaries
+- Confirm districts
+- Archive districts
+- Search users inside districts
+
+Regular users can:
+- View public district pages
+- See their own districts
+- See candidates in their district
+
+Important Terminology:
+Use “district borders” or “district boundaries.”
+Avoid typo “boarders” in UI.
+
+Seed Data:
+Create sample confirmed district:
+- Minnesota Congressional District 6
+- Status: draft or needs_review unless official boundary GeoJSON is imported
+
+Future Hooks:
+Leave architecture ready for:
+- Official Census TIGER/Line imports
+- State GIS imports
+- Ballotpedia/Wikipedia references
+- Election office integrations
+- Automated redistricting updates
+- District comparison maps
+- “Find my ballot” feature
+
+Acceptance Criteria:
+- Admin can create a district
+- Admin can draw/edit a district boundary
+- Admin can import/export GeoJSON
+- Admin can use AI to draft a district boundary
+- AI drafts require human confirmation
+- Confirmed districts are reusable across ACP
+- Users can be matched to districts by location
+- Candidates can be linked to confirmed districts
+- Districts have version history
+- Public maps are responsive
+- Admin can search users within a district
+- Party/SIG/candidate systems can reference district IDs
+
+Disclaimer for Admin UI:
+“District boundaries should be verified against official sources before confirmation. AI-drafted maps are estimates until reviewed.”
