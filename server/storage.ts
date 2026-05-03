@@ -4050,7 +4050,13 @@ export class DatabaseStorage implements IStorage {
       .from(politicianProfiles)
       .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
       .leftJoin(users, eq(politicianProfiles.claimRequestUserId, users.id))
-      .where(eq(politicianProfiles.claimRequestStatus, 'pending'))
+      .where(
+        and(
+          eq(politicianProfiles.claimRequestStatus, 'pending'),
+          // Exclude Run For Office wizard submissions — they have a dedicated admin queue
+          sql`(${politicianProfiles.notes} IS NULL OR ${politicianProfiles.notes} NOT LIKE '%Source: RunForOffice%')`
+        )
+      )
       .orderBy(politicianProfiles.claimRequestDate);
     return results.map(r => ({ ...r.politician, position: r.position, claimantUsername: r.claimantUsername }));
   }

@@ -5493,6 +5493,26 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Admin: Candidacy submissions queue (Run For Office wizard submissions only)
+  // Exclusively identifies wizard submissions via the 'Source: RunForOffice' marker
+  // stamped into notes by /api/run-for-office/submit for both new and matched profiles.
+  app.get("/api/admin/candidacy-submissions", ensureAdmin, async (req, res) => {
+    try {
+      const results = await db.execute(sql`
+        SELECT pp.*, u.username AS claimant_username, u.email AS claimant_email
+        FROM politician_profiles pp
+        LEFT JOIN users u ON pp.claim_request_user_id = u.id
+        WHERE pp.claim_request_status = 'pending'
+          AND pp.notes LIKE '%Source: RunForOffice%'
+        ORDER BY pp.claim_request_date ASC
+      `);
+      res.json(results.rows);
+    } catch (error: any) {
+      console.error("Get candidacy submissions error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin: Approve claim request
   app.patch("/api/admin/politician-profiles/:id/claim-approve", ensureAdmin, async (req, res) => {
     try {
@@ -5503,10 +5523,34 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         const claimingUser = await db.execute(sql`SELECT id FROM users WHERE email = ${profile.claimRequestEmail} LIMIT 1`);
         userId = (claimingUser.rows as { id: string }[])[0]?.id ?? null;
       }
+      // Check before stripping: was this a Run For Office wizard submission?
+      const isWizardSubmission = (profile.notes ?? "").includes("Source: RunForOffice");
+      // Always strip the wizard source marker on resolution so future manual claims
+      // on this profile are not misidentified as wizard submissions.
+      if (isWizardSubmission) {
+        await db.execute(sql`
+          UPDATE politician_profiles
+          SET notes = TRIM(BOTH '; ' FROM
+            REPLACE(REPLACE(notes, '; Source: RunForOffice', ''), 'Source: RunForOffice', ''))
+          WHERE id = ${req.params.id}
+        `);
+      }
       if (userId) {
         await db.execute(sql`UPDATE users SET role = 'candidate' WHERE id = ${userId}`);
         await db.execute(sql`UPDATE politician_profiles SET claimed_by_user_id = ${userId} WHERE id = ${req.params.id}`);
         console.log(`[CLAIM] Approved: politician_id=${req.params.id}, user_id=${userId} elevated to candidate role`);
+        // Send a Run For Office-specific notification only for wizard submissions
+        if (isWizardSubmission) {
+          try {
+            await storage.createNotification({
+              userId,
+              type: "candidacy_approved",
+              title: "Your candidacy submission was approved!",
+              message: `Your Run For Office submission for "${profile.fullName}" has been approved. Your profile is now active as a candidate.`,
+              payload: { politicianId: req.params.id },
+            });
+          } catch (_) {}
+        }
       } else {
         console.warn(`[CLAIM] Approved politician_id=${req.params.id} but no user could be linked (no userId or matching email)`);
       }
@@ -5521,8 +5565,35 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     try {
       const { reason } = req.body || {};
       const profile = await storage.rejectClaimRequest(req.params.id);
+      // Check before stripping: was this a Run For Office wizard submission?
+      const isWizardSubmission = (profile.notes ?? "").includes("Source: RunForOffice");
+      // Always strip the wizard source marker on resolution so future manual claims
+      // on this profile are not misidentified as wizard submissions.
+      if (isWizardSubmission) {
+        await db.execute(sql`
+          UPDATE politician_profiles
+          SET notes = TRIM(BOTH '; ' FROM
+            REPLACE(REPLACE(notes, '; Source: RunForOffice', ''), 'Source: RunForOffice', ''))
+          WHERE id = ${req.params.id}
+        `);
+      }
       if (reason) {
-        await db.execute(sql`UPDATE politician_profiles SET notes = COALESCE(notes, '') || ${'\nRejection reason: ' + reason} WHERE id = ${req.params.id}`);
+        await db.execute(sql`UPDATE politician_profiles SET notes = COALESCE(NULLIF(notes, ''), '') || ${(isWizardSubmission || (profile.notes ?? "") !== '' ? '\nRejection reason: ' : 'Rejection reason: ') + reason} WHERE id = ${req.params.id}`);
+      }
+      // Send a Run For Office-specific notification only for wizard submissions
+      const userId = profile.claimRequestUserId;
+      if (isWizardSubmission && userId) {
+        try {
+          await storage.createNotification({
+            userId,
+            type: "candidacy_rejected",
+            title: "Your candidacy submission was not approved",
+            message: reason
+              ? `Your Run For Office submission for "${profile.fullName}" was not approved. Reason: ${reason}`
+              : `Your Run For Office submission for "${profile.fullName}" was not approved at this time.`,
+            payload: { politicianId: req.params.id, reason },
+          });
+        } catch (_) {}
       }
       res.json(profile);
     } catch (error: any) {
@@ -10023,13 +10094,34 @@ Only include people you are confident about. Return empty arrays/null if unknown
           : officeDetails?.officeTitle || "Candidate";
 
       if (matchedProfileId) {
-        // Link to existing profile — update claim fields
+        // Link to existing profile — update claim fields and mark as wizard submission
         await storage.updatePoliticianProfile(matchedProfileId, {
           claimedByUserId: userId,
           claimRequestStatus: "pending",
           claimRequestDate: new Date(),
           claimRequestUserId: userId,
         });
+        // Build structured metadata parts for review context (same format as new profiles)
+        const matchedNotesParts = [
+          officeDetails?.district ? `District: ${officeDetails.district}` : null,
+          officeDetails?.state ? `State: ${officeDetails.state}` : null,
+          officeTitle ? `Office: ${officeTitle}` : null,
+          officeDetails?.jurisdictionLevel ? `Level: ${officeDetails.jurisdictionLevel}` : null,
+          officeDetails?.campaignSlogan ? `Slogan: ${officeDetails.campaignSlogan}` : null,
+          officeDetails?.electionYear ? `Election year: ${officeDetails.electionYear}` : null,
+          accountInfo?.city ? `City: ${accountInfo.city}` : null,
+          "Source: RunForOffice",
+        ].filter(Boolean).join("; ");
+        // Append wizard metadata so the admin candidacy queue shows full review context
+        await db.execute(sql`
+          UPDATE politician_profiles
+          SET notes = CASE
+            WHEN notes IS NULL OR notes = '' THEN ${matchedNotesParts}
+            WHEN notes NOT LIKE '%Source: RunForOffice%' THEN notes || '; ' || ${matchedNotesParts}
+            ELSE notes
+          END
+          WHERE id = ${matchedProfileId}
+        `);
         politicianId = matchedProfileId;
       } else {
         // Create a new politician profile
@@ -10063,7 +10155,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
           claimRequestUserId: userId,
           claimRequestStatus: "pending",
           claimRequestDate: new Date(),
-          notes: notesParts.length > 0 ? notesParts.join("; ") : null,
+          notes: notesParts.length > 0 ? notesParts.join("; ") + "; Source: RunForOffice" : "Source: RunForOffice",
           previousPositions: yourStory?.politicalHistory ? [yourStory.politicalHistory] : null,
         });
         politicianId = newProfile.id;

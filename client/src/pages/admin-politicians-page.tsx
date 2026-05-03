@@ -113,6 +113,11 @@ export default function AdminPoliticiansPage() {
   const [linkingProfile, setLinkingProfile] = useState<PoliticianProfile | null>(null);
   const [linkUserSearch, setLinkUserSearch] = useState("");
 
+  // Candidacy submission rejection dialog
+  const [rejectCandidacyDialogOpen, setRejectCandidacyDialogOpen] = useState(false);
+  const [rejectingCandidacy, setRejectingCandidacy] = useState<any>(null);
+  const [rejectCandidacyReason, setRejectCandidacyReason] = useState("");
+
   // Positions search/filter
   const [positionSearch, setPositionSearch] = useState("");
   const [positionLevelFilter, setPositionLevelFilter] = useState("all");
@@ -561,6 +566,36 @@ export default function AdminPoliticiansPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles/claim-requests"] });
       toast({ title: "Claim rejected" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  // Candidacy submissions (Run For Office wizard)
+  const { data: candidacySubmissions = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/candidacy-submissions"],
+    refetchInterval: 30000,
+  });
+
+  const approveCandidacyMutation = useMutation({
+    mutationFn: async (id: string) => apiRequest(`/api/admin/politician-profiles/${id}/claim-approve`, "PATCH"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/candidacy-submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles/claim-requests"] });
+      toast({ title: "Candidacy approved", description: "Submission approved and user notified." });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const rejectCandidacyMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      apiRequest(`/api/admin/politician-profiles/${id}/claim-reject`, "PATCH", { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/candidacy-submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles/claim-requests"] });
+      setRejectCandidacyDialogOpen(false);
+      setRejectingCandidacy(null);
+      setRejectCandidacyReason("");
+      toast({ title: "Candidacy rejected", description: "Submission rejected and user notified." });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -1551,7 +1586,7 @@ export default function AdminPoliticiansPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="positions" data-testid="tab-positions">Positions</TabsTrigger>
                 <TabsTrigger value="profiles" data-testid="tab-profiles">Profiles</TabsTrigger>
                 <TabsTrigger value="missing-info" data-testid="tab-missing-info" className="relative">
@@ -1559,6 +1594,14 @@ export default function AdminPoliticiansPage() {
                   {missingInfoData.length > 0 && (
                     <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 text-xs font-bold rounded-full bg-red-500 text-white px-1">
                       {missingInfoData.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="candidacy-submissions" data-testid="tab-candidacy-submissions" className="relative">
+                  Candidacy
+                  {candidacySubmissions.length > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 text-xs font-bold rounded-full bg-amber-500 text-white px-1">
+                      {candidacySubmissions.length}
                     </span>
                   )}
                 </TabsTrigger>
@@ -2614,6 +2657,104 @@ export default function AdminPoliticiansPage() {
                 )}
               </TabsContent>
 
+              {/* ── CANDIDACY SUBMISSIONS TAB ── */}
+              <TabsContent value="candidacy-submissions" className="space-y-4">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  New candidacy submissions submitted via the Run For Office wizard. Review the submission details, then approve or reject with a note. Approved submissions promote the user to "candidate" and send a notification.
+                </p>
+                {candidacySubmissions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <Inbox className="w-10 h-10 mb-3 opacity-40" />
+                    <p className="text-sm">No pending candidacy submissions</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Office / Party</TableHead>
+                        <TableHead>User Account</TableHead>
+                        <TableHead>Submitted</TableHead>
+                        <TableHead>Details</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {candidacySubmissions.map((sub: any) => {
+                        const notes: string = sub.notes || "";
+                        const officeMatch = notes.match(/Office: ([^;]+)/);
+                        const stateMatch = notes.match(/State: ([^;]+)/);
+                        const levelMatch = notes.match(/Level: ([^;]+)/);
+                        const office = officeMatch ? officeMatch[1].trim() : null;
+                        const state = stateMatch ? stateMatch[1].trim() : null;
+                        const level = levelMatch ? levelMatch[1].trim() : null;
+                        return (
+                          <TableRow key={sub.id}>
+                            <TableCell className="font-medium">{sub.full_name || sub.fullName}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {office && <span className="text-xs font-medium">{office}</span>}
+                                {sub.party && <Badge variant="outline" className="text-xs w-fit">{sub.party}</Badge>}
+                                {(state || level) && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {[state, level].filter(Boolean).join(" · ")}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {sub.claimant_username ? (
+                                <Badge variant="secondary" className="text-xs">@{sub.claimant_username}</Badge>
+                              ) : (
+                                <span className="text-slate-400 text-xs">Unknown</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {sub.claim_request_date
+                                ? new Date(sub.claim_request_date).toLocaleDateString()
+                                : sub.claimRequestDate
+                                ? new Date(sub.claimRequestDate).toLocaleDateString()
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="max-w-[180px]">
+                              {sub.biography && (
+                                <p className="text-xs text-muted-foreground line-clamp-2">{sub.biography}</p>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700 text-white gap-1"
+                                  onClick={() => approveCandidacyMutation.mutate(sub.id)}
+                                  disabled={approveCandidacyMutation.isPending}
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="gap-1"
+                                  onClick={() => {
+                                    setRejectingCandidacy(sub);
+                                    setRejectCandidacyReason("");
+                                    setRejectCandidacyDialogOpen(true);
+                                  }}
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  Reject
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </TabsContent>
+
               {/* ── CLAIM REQUESTS TAB ── */}
               <TabsContent value="claim-requests" className="space-y-4">
                 <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -2684,6 +2825,45 @@ export default function AdminPoliticiansPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── CANDIDACY REJECTION DIALOG ── */}
+      <Dialog open={rejectCandidacyDialogOpen} onOpenChange={v => { setRejectCandidacyDialogOpen(v); if (!v) { setRejectingCandidacy(null); setRejectCandidacyReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject Candidacy Submission</DialogTitle>
+            <DialogDescription>
+              Optionally provide a reason. The applicant will be notified.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <Label htmlFor="reject-reason">Rejection Reason (optional)</Label>
+            <Textarea
+              id="reject-reason"
+              placeholder="e.g. Insufficient information provided, duplicate submission, etc."
+              value={rejectCandidacyReason}
+              onChange={e => setRejectCandidacyReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectCandidacyDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={rejectCandidacyMutation.isPending}
+              onClick={() => {
+                if (rejectingCandidacy) {
+                  rejectCandidacyMutation.mutate({ id: rejectingCandidacy.id, reason: rejectCandidacyReason });
+                }
+              }}
+            >
+              {rejectCandidacyMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
+              Reject Submission
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={positionDialogOpen} onOpenChange={v => { setPositionDialogOpen(v); if (!v) { setHolderSearch(""); setHolderSearchOpen(false); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
