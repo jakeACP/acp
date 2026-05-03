@@ -913,6 +913,7 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
   const [editElectionDate, setEditElectionDate] = useState("");
   const [widgetVoteOptimistic, setWidgetVoteOptimistic] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [followingModuleTab, setFollowingModuleTab] = useState<"following" | "followers">("following");
 
   const handleGalleryUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1503,35 +1504,78 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
         }
         case "following": {
           const displayFollowing = followingList.slice(0, module.itemCount);
+          const displayFollowers = followers;
           return (
             <div className="space-y-2">
-              <div className="flex gap-4 text-sm text-gray-500 mb-2">
-                <span><span className="font-semibold text-gray-900 dark:text-gray-100">{followingList.length}</span> Following</span>
-                <span><span className="font-semibold text-gray-900 dark:text-gray-100">{followers.length}</span> Followers</span>
+              <div className="flex border-b border-gray-200 dark:border-gray-700 mb-3">
+                <button
+                  onClick={() => setFollowingModuleTab("following")}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    followingModuleTab === "following"
+                      ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
+                >
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{followingList.length}</span>
+                  <span className="ml-1">Following</span>
+                </button>
+                <button
+                  onClick={() => setFollowingModuleTab("followers")}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    followingModuleTab === "followers"
+                      ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
+                >
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{followers.length}</span>
+                  <span className="ml-1">Followers</span>
+                </button>
               </div>
-              {displayFollowing.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-4">Not following anyone yet.</p>
-              ) : (
-                displayFollowing.map((u: any) => (
-                  <div key={u.id} className="flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
-                    <a href={`/profile/${u.id}`} className="flex items-center gap-2 flex-1 min-w-0">
-                      <Avatar className="w-8 h-8 flex-shrink-0">
-                        <AvatarImage src={u.avatar} alt={u.username} />
-                        <AvatarFallback className="text-xs">{u.firstName?.[0] || u.username?.[0] || "?"}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium block truncate">{u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username}</span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs text-gray-500">@{u.username}</span>
-                          {currentUser && u.id !== currentUser.id && myFollowerIds.has(u.id) && (
-                            <Badge variant="secondary" className="text-xs py-0 px-1 h-4 leading-none">Follows you</Badge>
-                          )}
+              {followingModuleTab === "following" ? (
+                displayFollowing.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">Not following anyone yet.</p>
+                ) : (
+                  displayFollowing.map((u: any) => (
+                    <div key={u.id} className="flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                      <a href={`/profile/${u.id}`} className="flex items-center gap-2 flex-1 min-w-0">
+                        <Avatar className="w-8 h-8 flex-shrink-0">
+                          <AvatarImage src={u.avatar} alt={u.username} />
+                          <AvatarFallback className="text-xs">{u.firstName?.[0] || u.username?.[0] || "?"}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium block truncate">{u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username}</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-500">@{u.username}</span>
+                            {currentUser && u.id !== currentUser.id && myFollowerIds.has(u.id) && (
+                              <Badge variant="secondary" className="text-xs py-0 px-1 h-4 leading-none">Follows you</Badge>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </a>
-                    <FollowButton userId={u.id} username={u.username} size="sm" variant="outline" />
-                  </div>
-                ))
+                      </a>
+                      <FollowButton userId={u.id} username={u.username} size="sm" variant="outline" />
+                    </div>
+                  ))
+                )
+              ) : (
+                displayFollowers.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">No followers yet.</p>
+                ) : (
+                  displayFollowers.map((u: any) => (
+                    <div key={u.id} className="flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                      <a href={`/profile/${u.id}`} className="flex items-center gap-2 flex-1 min-w-0">
+                        <Avatar className="w-8 h-8 flex-shrink-0">
+                          <AvatarImage src={u.avatar} alt={u.username} />
+                          <AvatarFallback className="text-xs">{u.firstName?.[0] || u.username?.[0] || "?"}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium block truncate">{u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username}</span>
+                          <span className="text-xs text-gray-500">@{u.username}</span>
+                        </div>
+                      </a>
+                      <FollowButton userId={u.id} username={u.username} size="sm" variant="outline" />
+                    </div>
+                  ))
+                )
               )}
             </div>
           );
