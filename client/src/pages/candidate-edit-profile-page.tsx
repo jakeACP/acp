@@ -55,7 +55,7 @@ const availableModules = [
   { type: "feed", name: "Recent Posts", icon: MessageSquare, isPremium: false },
   { type: "youtube", name: "YouTube Video", icon: Youtube, isPremium: false },
   { type: "ace-badges", name: "ACE Badges", icon: Shield, isPremium: false },
-  { type: "badges", name: "Badges & Achievements", icon: Award, isPremium: false },
+  { type: "badges", name: "Badges & Pledges", icon: Award, isPremium: false },
   { type: "issues", name: "Issue Interests", icon: Flag, isPremium: false },
   { type: "civic-tracker", name: "Civic Activity Tracker", icon: BarChart3, isPremium: false },
   { type: "pinned-post", name: "Pinned Post", icon: Target, isPremium: false },

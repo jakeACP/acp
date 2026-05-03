@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   User, 
@@ -52,6 +52,7 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { FriendButton } from "@/components/friend-button";
 import { apiRequest } from "@/lib/queryClient";
 import type { Post } from "@shared/schema";
+import { PLEDGE_DEFINITIONS } from "@shared/schema";
 
 interface ExtendedProfileData {
   issueInterests?: string[];
@@ -363,6 +364,50 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       return res.json();
     },
     enabled: !!profileUserId,
+  });
+
+  // Pledges
+  const { data: userPledges = [], refetch: refetchPledges } = useQuery<any[]>({
+    queryKey: ["/api/profile", profileUserId, "pledges"],
+    queryFn: async () => {
+      if (!profileUserId) return [];
+      const res = await fetch(`/api/profile/${profileUserId}/pledges`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  const [pledgeCatalogOpen, setPledgeCatalogOpen] = useState(false);
+  const [selectedPledgeDef, setSelectedPledgeDef] = useState<(typeof PLEDGE_DEFINITIONS)[number] | null>(null);
+  const [pledgeStatement, setPledgeStatement] = useState("");
+  const [pledgeDetailDef, setPledgeDetailDef] = useState<(typeof PLEDGE_DEFINITIONS)[number] | null>(null);
+
+  const submitPledgeMutation = useMutation({
+    mutationFn: async ({ pledgeId, statement }: { pledgeId: string; statement: string }) => {
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const csrfToken = getCsrfToken();
+      const res = await fetch("/api/pledges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(csrfToken ? { "x-csrf-token": csrfToken } : {}) },
+        credentials: "include",
+        body: JSON.stringify({ pledgeId, statement }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to submit pledge");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Pledge submitted!", description: "Your pledge is under review and will appear on your profile once approved." });
+      setSelectedPledgeDef(null);
+      setPledgeStatement("");
+      refetchPledges();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to submit pledge", description: err.message, variant: "destructive" });
+    },
   });
 
   // Scorecard
@@ -783,7 +828,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       feed: { name: "Recent Posts", itemCount: 3, customData: {} },
       friends: { name: "Friends List", itemCount: 8, customData: {} },
       following: { name: "Following", itemCount: 5, customData: {} },
-      badges: { name: "Badges & Achievements", itemCount: 6, customData: {} },
+      badges: { name: "Badges & Pledges", itemCount: 6, customData: {} },
       issues: { name: "Issue Interests", itemCount: 5, customData: {} },
       "civic-tracker": { name: "Civic Activity Tracker", itemCount: 1, customData: {} },
       "pinned-post": { name: "Pinned Post", itemCount: 1, customData: {} },
@@ -1146,19 +1191,81 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
           );
         }
         case "badges": {
-          const displayBadges = badges.slice(0, module.itemCount);
+          const earnedBadges = badges.filter((b: any) => b.earned).slice(0, module.itemCount);
+          const approvedPledges = userPledges.filter((p: any) => p.status === "approved");
+          const pendingPledges = userPledges.filter((p: any) => p.status === "pending");
           return (
-            <div className="grid grid-cols-3 gap-2">
-              {displayBadges.length === 0 ? (
-                <p className="col-span-3 text-sm text-gray-500 text-center py-4">No badges yet.</p>
-              ) : (
-                displayBadges.map((badge: any) => (
-                  <div key={badge.id} className={`text-center p-2 border rounded-lg ${badge.earned ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200" : "opacity-40 grayscale"}`} title={badge.description}>
-                    <Award className={`h-6 w-6 mx-auto mb-1 ${badge.earned ? "text-yellow-500" : "text-gray-400"}`} />
-                    <span className="text-xs font-medium leading-tight block">{badge.name}</span>
-                    {badge.earned && <CheckCircle className="h-3 w-3 text-green-500 mx-auto mt-0.5" />}
+            <div className="space-y-3">
+              {/* Auto-earned badges */}
+              {earnedBadges.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Earned Badges</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {earnedBadges.map((badge: any) => (
+                      <div key={badge.id} className="text-center p-2 border rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800" title={badge.description}>
+                        <Award className="h-6 w-6 mx-auto mb-1 text-yellow-500" />
+                        <span className="text-xs font-medium leading-tight block">{badge.name}</span>
+                        <CheckCircle className="h-3 w-3 text-green-500 mx-auto mt-0.5" />
+                      </div>
+                    ))}
                   </div>
-                ))
+                </div>
+              )}
+
+              {/* Approved pledges */}
+              {approvedPledges.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Civic Pledges</p>
+                  <div className="space-y-2">
+                    {approvedPledges.map((pledge: any) => {
+                      const def = PLEDGE_DEFINITIONS.find((d) => d.id === pledge.pledgeId);
+                      return (
+                        <div key={pledge.id} className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <BadgeCheck className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div className="min-w-0">
+                            <span className="text-xs font-semibold text-blue-800 dark:text-blue-200 block">{def?.name || pledge.pledgeId}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 italic">"{pledge.statement}"</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Pending pledges (owner only) */}
+              {isOwner && pendingPledges.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Pending Review</p>
+                  <div className="space-y-1">
+                    {pendingPledges.map((pledge: any) => {
+                      const def = PLEDGE_DEFINITIONS.find((d) => d.id === pledge.pledgeId);
+                      return (
+                        <div key={pledge.id} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                          <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-xs text-gray-500">{def?.name || pledge.pledgeId} — awaiting approval</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {earnedBadges.length === 0 && approvedPledges.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-2">No badges or pledges yet.</p>
+              )}
+
+              {/* Make Pledge button (owner only) */}
+              {isOwner && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full mt-1 text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                  onClick={() => setPledgeCatalogOpen(true)}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Make a Pledge
+                </Button>
               )}
             </div>
           );
@@ -2498,7 +2605,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                           { type: "feed", name: "Recent Posts", icon: MessageSquare, description: "Personal activity feed" },
                           { type: "friends", name: "Friends List", icon: Users, description: "Connections you highlight" },
                           { type: "following", name: "Following", icon: Heart, description: "Who you follow and who follows you" },
-                          { type: "badges", name: "Badges & Achievements", icon: Award, description: "Earned through voting, debates, contributions" },
+                          { type: "badges", name: "Badges & Pledges", icon: Award, description: "Earned badges and civic pledges you've made" },
                           { type: "issues", name: "Issue Interests", icon: Flag, description: "Healthcare, corruption, climate issues displayed" },
                           { type: "civic-tracker", name: "Civic Activity Tracker", icon: BarChart3, description: "Votes cast, polls participated, events joined" },
                           { type: "pinned-post", name: "Pinned Post", icon: Star, description: "Highlight a personal statement, meme, or campaign" },
@@ -2725,6 +2832,144 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
           </CardContent>
         </Card>
       )}
+
+      {/* Pledge Catalog Dialog */}
+      <Dialog open={pledgeCatalogOpen} onOpenChange={(o) => { if (!o) { setPledgeCatalogOpen(false); setSelectedPledgeDef(null); setPledgeStatement(""); } }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BadgeCheck className="h-5 w-5 text-blue-600" />
+              Civic Pledge Catalogue
+            </DialogTitle>
+            <DialogDescription>
+              Browse available pledges. Each one requires a public statement that will be reviewed by an admin before appearing on your profile.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPledgeDef ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <BadgeCheck className="h-6 w-6 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-blue-900 dark:text-blue-100">{selectedPledgeDef.name}</p>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">{selectedPledgeDef.description}</p>
+                  <span className="mt-2 inline-block text-xs bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">{selectedPledgeDef.category}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Your Public Pledge Statement</Label>
+                <p className="text-xs text-gray-500">Write your personal statement committing to this pledge. This will be publicly visible on your profile after admin approval.</p>
+                <Textarea
+                  value={pledgeStatement}
+                  onChange={(e) => setPledgeStatement(e.target.value)}
+                  placeholder={`e.g., "${selectedPledgeDef.description}"`}
+                  rows={4}
+                  className="resize-none"
+                />
+                <p className="text-xs text-gray-400">{pledgeStatement.length} chars (minimum 10)</p>
+              </div>
+
+              <DialogFooter className="gap-2 flex-col sm:flex-row">
+                <Button variant="outline" onClick={() => { setSelectedPledgeDef(null); setPledgeStatement(""); }}>
+                  ← Back to Catalogue
+                </Button>
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={pledgeStatement.trim().length < 10 || submitPledgeMutation.isPending}
+                  onClick={() => submitPledgeMutation.mutate({ pledgeId: selectedPledgeDef.id, statement: pledgeStatement })}
+                >
+                  {submitPledgeMutation.isPending ? (
+                    <><span className="animate-spin mr-1">⟳</span> Submitting...</>
+                  ) : (
+                    <><BadgeCheck className="h-4 w-4 mr-1" /> Submit Pledge</>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {PLEDGE_DEFINITIONS.map((pledge) => {
+                const existing = userPledges.find((p: any) => p.pledgeId === pledge.id);
+                return (
+                  <div key={pledge.id} className="flex items-start gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <BadgeCheck className={`h-5 w-5 mt-0.5 flex-shrink-0 ${existing?.status === "approved" ? "text-green-500" : existing?.status === "pending" ? "text-yellow-500" : "text-gray-400"}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{pledge.name}</span>
+                        <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 px-1.5 py-0.5 rounded">{pledge.category}</span>
+                        {existing?.status === "approved" && <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded font-medium">✓ Pledged</span>}
+                        {existing?.status === "pending" && <span className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 px-1.5 py-0.5 rounded">⏳ Pending</span>}
+                        {existing?.status === "rejected" && <span className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-1.5 py-0.5 rounded">✗ Rejected</span>}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{pledge.description}</p>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs"
+                        onClick={() => setPledgeDetailDef(pledge)}
+                      >
+                        See More
+                      </Button>
+                      {(!existing || existing.status === "rejected") && (
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => { setSelectedPledgeDef(pledge); setPledgeStatement(""); }}
+                        >
+                          Make Pledge
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pledge Detail Dialog (See More) */}
+      <Dialog open={!!pledgeDetailDef} onOpenChange={(o) => { if (!o) setPledgeDetailDef(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BadgeCheck className="h-5 w-5 text-blue-600" />
+              {pledgeDetailDef?.name}
+            </DialogTitle>
+            <DialogDescription>
+              <span className="inline-block text-xs bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full mb-2">{pledgeDetailDef?.category}</span>
+            </DialogDescription>
+          </DialogHeader>
+          {pledgeDetailDef && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{pledgeDetailDef.description}</p>
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-800 dark:text-amber-300">
+                <strong>How it works:</strong> Write a personal public statement committing to this pledge. An admin will review it and, once approved, it will appear on your Badges &amp; Pledges profile module for everyone to see.
+              </div>
+              <div className="text-xs text-gray-500">
+                Available to: <span className="font-medium capitalize">{pledgeDetailDef.audience === "all" ? "everyone" : pledgeDetailDef.audience.replace(",", ", ")}</span>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setPledgeDetailDef(null)}>Close</Button>
+            {pledgeDetailDef && (() => {
+              const existing = userPledges.find((p: any) => p.pledgeId === pledgeDetailDef.id);
+              return isOwner && (!existing || existing.status === "rejected") ? (
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => { setPledgeDetailDef(null); setSelectedPledgeDef(pledgeDetailDef); setPledgeStatement(""); setPledgeCatalogOpen(true); }}
+                >
+                  Make Pledge
+                </Button>
+              ) : null;
+            })()}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

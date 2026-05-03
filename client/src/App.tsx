@@ -62,6 +62,7 @@ import AdminStateDataPage from "@/pages/admin-state-data-page";
 import AdminImportExportPage from "@/pages/admin-import-export-page";
 import AdminTradingFlagsPage from "@/pages/admin-trading-flags-page";
 import AdminAcePledgesPage from "@/pages/admin-ace-pledges-page";
+import AdminPledgeRequestsPage from "@/pages/admin-pledge-requests-page";
 import AdminScannerPage from "@/pages/admin-scanner-page";
 import AdminAgenticAiPage from "@/pages/admin-agentic-ai-page";
 import SigsDirectoryPage from "@/pages/sigs-directory-page";
@@ -200,6 +201,7 @@ function Router() {
       <ProtectedRoute path="/admin/acp-plus" component={AdminAcpPlusPage} />
       <ProtectedRoute path="/admin/voter-verification" component={AdminVoterVerificationPage} />
       <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />
+      <ProtectedRoute path="/admin/pledge-requests" component={AdminPledgeRequestsPage} />
       <Route path="/developer" component={DeveloperPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />  

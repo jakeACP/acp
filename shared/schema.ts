@@ -2482,6 +2482,129 @@ export const insertAcePledgeRequestSchema = createInsertSchema(acePledgeRequests
 export type AcePledgeRequest = typeof acePledgeRequests.$inferSelect;
 export type InsertAcePledgeRequest = z.infer<typeof insertAcePledgeRequestSchema>;
 
+// Civic Pledge Definitions — static catalogue of pledges any user can earn
+export const PLEDGE_DEFINITIONS = [
+  {
+    id: "anti-corruption",
+    name: "Anti-Corruption Pledge",
+    description: "I pledge to stand against corruption in all its forms and to report any corrupt practices I witness.",
+    icon: "shield",
+    audience: "all",
+    category: "Integrity",
+  },
+  {
+    id: "voter-participation",
+    name: "Voter Participation Pledge",
+    description: "I pledge to vote in every election I am eligible for and to encourage others in my community to do the same.",
+    icon: "check-circle",
+    audience: "voter",
+    category: "Civic Duty",
+  },
+  {
+    id: "transparency",
+    name: "Transparency Pledge",
+    description: "I pledge to be fully transparent about my funding sources, decision-making process, and any potential conflicts of interest.",
+    icon: "eye",
+    audience: "candidate,representative",
+    category: "Transparency",
+  },
+  {
+    id: "no-pac",
+    name: "No PAC Money Pledge",
+    description: "I pledge to reject all PAC and Super PAC funding and to rely solely on small-dollar individual donations.",
+    icon: "ban",
+    audience: "candidate,representative",
+    category: "Campaign Finance",
+  },
+  {
+    id: "term-limits",
+    name: "Term Limits Support Pledge",
+    description: "I pledge to support and respect term limits and will not seek to extend my own tenure beyond what voters have approved.",
+    icon: "clock",
+    audience: "candidate,representative",
+    category: "Democracy",
+  },
+  {
+    id: "community-first",
+    name: "Community First Pledge",
+    description: "I pledge to always put my community's needs before special interests or personal gain.",
+    icon: "heart",
+    audience: "all",
+    category: "Service",
+  },
+  {
+    id: "civic-education",
+    name: "Civic Education Pledge",
+    description: "I pledge to actively promote civic education and help others understand their rights and responsibilities as citizens.",
+    icon: "book-open",
+    audience: "all",
+    category: "Education",
+  },
+  {
+    id: "clean-campaigns",
+    name: "Clean Campaigns Pledge",
+    description: "I pledge to run only fact-based, respectful campaign communications and to refrain from personal attacks or disinformation.",
+    icon: "star",
+    audience: "candidate",
+    category: "Campaign Conduct",
+  },
+  {
+    id: "open-records",
+    name: "Open Records Pledge",
+    description: "I pledge to support full public access to government records and to oppose secrecy that undermines democratic accountability.",
+    icon: "folder-open",
+    audience: "candidate,representative",
+    category: "Transparency",
+  },
+  {
+    id: "local-engagement",
+    name: "Local Engagement Pledge",
+    description: "I pledge to actively attend and participate in local government meetings, town halls, and community forums.",
+    icon: "map-pin",
+    audience: "voter",
+    category: "Civic Duty",
+  },
+  {
+    id: "anti-bribery",
+    name: "Anti-Bribery Pledge",
+    description: "I pledge to never accept bribes, improper gifts, or any form of compensation that could influence my public duties.",
+    icon: "shield-off",
+    audience: "representative",
+    category: "Integrity",
+  },
+  {
+    id: "ethics",
+    name: "Civic Ethics Pledge",
+    description: "I pledge to conduct myself with the highest ethical standards in all civic and public life activities.",
+    icon: "award",
+    audience: "all",
+    category: "Integrity",
+  },
+] as const;
+
+export type PledgeDefinition = (typeof PLEDGE_DEFINITIONS)[number];
+
+// Pledge Requests — users submit a pledge with a public statement; admin approves or rejects
+export const pledgeRequests = pgTable("pledge_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  pledgeId: text("pledge_id").notNull(), // references PLEDGE_DEFINITIONS[].id
+  statement: text("statement").notNull(), // user's public pledge statement
+  status: text("status").notNull().default("pending"), // pending | approved | rejected
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewNote: text("review_note"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("pledge_requests_user_idx").on(table.userId),
+  statusIndex: index("pledge_requests_status_idx").on(table.status),
+  uniquePledge: sql`UNIQUE(${table.userId}, ${table.pledgeId})`,
+}));
+
+export const insertPledgeRequestSchema = createInsertSchema(pledgeRequests).omit({ id: true, createdAt: true, updatedAt: true, reviewedBy: true, reviewNote: true, status: true });
+export type PledgeRequest = typeof pledgeRequests.$inferSelect;
+export type InsertPledgeRequest = z.infer<typeof insertPledgeRequestSchema>;
+
 // Corruption News Scanner — AI-ingested corruption findings for admin review
 export const scanFindings = pgTable('scan_findings', {
   id:               serial('id').primaryKey(),

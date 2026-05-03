@@ -28,7 +28,7 @@ import { redactAgentData } from "./agentRedact";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, politicalPositions, candidates, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, type InsertAgentApp, type AgentApiKey } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, politicalPositions, candidates, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, PLEDGE_DEFINITIONS, type InsertAgentApp, type AgentApiKey } from "@shared/schema";
 import archiver from "archiver";
 import multer from "multer";
 import unzipper from "unzipper";
@@ -3818,6 +3818,65 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     try {
       const badges = await storage.getUserBadges(req.params.userId);
       res.json(badges);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Pledge definitions catalogue
+  app.get("/api/pledge-definitions", (_req, res) => {
+    res.json(PLEDGE_DEFINITIONS);
+  });
+
+  // Get pledges for a profile (approved only for public view, all for owner)
+  app.get("/api/profile/:userId/pledges", async (req, res) => {
+    try {
+      const isOwner = req.isAuthenticated() && req.user.id === req.params.userId;
+      const pledges = isOwner
+        ? await storage.getUserPledges(req.params.userId)
+        : await storage.getApprovedPledges(req.params.userId);
+      res.json(pledges);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Submit a pledge request
+  app.post("/api/pledges", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const { pledgeId, statement } = req.body;
+      if (!pledgeId || typeof pledgeId !== "string") return res.status(400).json({ message: "pledgeId required" });
+      if (!statement || typeof statement !== "string" || statement.trim().length < 10) return res.status(400).json({ message: "statement must be at least 10 characters" });
+      const validPledge = PLEDGE_DEFINITIONS.find((p) => p.id === pledgeId);
+      if (!validPledge) return res.status(400).json({ message: "Invalid pledge ID" });
+      const result = await storage.submitPledgeRequest(req.user.id, pledgeId, statement.trim());
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin — list pledge requests
+  app.get("/api/admin/pledges", async (req, res) => {
+    if (!req.isAuthenticated() || !["admin", "moderator"].includes(req.user.role)) return res.sendStatus(403);
+    try {
+      const status = typeof req.query.status === "string" ? req.query.status : undefined;
+      const rows = await storage.getPledgeRequests(status);
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin — review a pledge request
+  app.post("/api/admin/pledges/:id/review", async (req, res) => {
+    if (!req.isAuthenticated() || !["admin", "moderator"].includes(req.user.role)) return res.sendStatus(403);
+    try {
+      const { status, reviewNote } = req.body;
+      if (!["approved", "rejected"].includes(status)) return res.status(400).json({ message: "status must be approved or rejected" });
+      await storage.reviewPledgeRequest(req.params.id, status, req.user.id, reviewNote || "");
+      res.json({ ok: true });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
