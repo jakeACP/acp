@@ -32,7 +32,7 @@ import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSch
 import archiver from "archiver";
 import multer from "multer";
 import unzipper from "unzipper";
-import { eq, inArray, or, sql, asc } from "drizzle-orm";
+import { eq, inArray, or, sql, asc, and, ilike } from "drizzle-orm";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
 import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle } from "./openai";
@@ -9936,6 +9936,220 @@ Only include people you are confident about. Return empty arrays/null if unknown
   });
 
   // Legacy sideloaded agent-app management routes were removed in favor of the ACP Agent API Gateway.
+
+  // ============================================================
+  // Run For Office API
+  // ============================================================
+
+  // Duplicate check — fuzzy name + state search in politician_profiles
+  app.get("/api/run-for-office/check-duplicate", async (req, res) => {
+    try {
+      const name = (req.query.name as string || "").trim();
+      const state = (req.query.state as string || "").trim();
+      if (!name) return res.status(400).json({ message: "name is required" });
+
+      const rows = await db
+        .select({
+          id: politicianProfiles.id,
+          fullName: politicianProfiles.fullName,
+          party: politicianProfiles.party,
+          photoUrl: politicianProfiles.photoUrl,
+          profileType: politicianProfiles.profileType,
+          handle: politicianProfiles.handle,
+          office: politicianProfiles.notes,
+          officeAddress: politicianProfiles.officeAddress,
+        })
+        .from(politicianProfiles)
+        .where(
+          state
+            ? and(
+                ilike(politicianProfiles.fullName, `%${name}%`),
+                or(
+                  sql`${politicianProfiles.officeAddress} ILIKE ${'%' + state + '%'}`,
+                  sql`${politicianProfiles.notes} ILIKE ${'%' + state + '%'}`
+                )
+              )
+            : ilike(politicianProfiles.fullName, `%${name}%`)
+        )
+        .limit(10);
+
+      res.json(rows);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("check-duplicate error:", msg);
+      res.status(500).json({ message: msg });
+    }
+  });
+
+  // Parties and SIGs endpoint — returns ACE groups and recognized parties/endorsement orgs
+  app.get("/api/run-for-office/parties-and-sigs", async (req, res) => {
+    try {
+      const allSigs = await storage.listSpecialInterestGroups({ isActive: true });
+      const RECOGNIZED_CATEGORIES = ["Political Party", "Endorsement Org", "Labor Union", "Pledge", "Civic Organization"];
+      const filtered = allSigs.filter(
+        (s) => s.isAce || RECOGNIZED_CATEGORIES.includes(s.category)
+      );
+      res.json(filtered);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("parties-and-sigs error:", msg);
+      res.status(500).json({ message: msg });
+    }
+  });
+
+  // Full wizard submission
+  app.post("/api/run-for-office/submit", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const {
+        matchedProfileId,
+        accountInfo,
+        officeDetails,
+        yourStory,
+        policyPlatform,
+        acpPledge,
+        endorsementSigIds,
+      } = req.body;
+
+      const userId = req.user!.id;
+
+      let politicianId: string;
+      let candidateId: string | undefined;
+
+      const officeTitle =
+        officeDetails?.officeTitle === "Other"
+          ? officeDetails?.customOfficeTitle || "Candidate"
+          : officeDetails?.officeTitle || "Candidate";
+
+      if (matchedProfileId) {
+        // Link to existing profile — update claim fields
+        await storage.updatePoliticianProfile(matchedProfileId, {
+          claimedByUserId: userId,
+          claimRequestStatus: "pending",
+          claimRequestDate: new Date(),
+          claimRequestUserId: userId,
+        });
+        politicianId = matchedProfileId;
+      } else {
+        // Create a new politician profile
+        const fullName =
+          `${accountInfo?.firstName || ""} ${accountInfo?.lastName || ""}`.trim() ||
+          req.user!.username;
+        const notesParts = [
+          officeDetails?.district ? `District: ${officeDetails.district}` : null,
+          officeDetails?.state ? `State: ${officeDetails.state}` : null,
+          officeTitle ? `Office: ${officeTitle}` : null,
+          officeDetails?.jurisdictionLevel ? `Level: ${officeDetails.jurisdictionLevel}` : null,
+          officeDetails?.campaignSlogan ? `Slogan: ${officeDetails.campaignSlogan}` : null,
+          officeDetails?.electionYear ? `Election year: ${officeDetails.electionYear}` : null,
+          accountInfo?.city ? `City: ${accountInfo.city}` : null,
+          yourStory?.professionalBackground ? `Background: ${yourStory.professionalBackground}` : null,
+          yourStory?.politicalHistory ? `Political history: ${yourStory.politicalHistory}` : null,
+          yourStory?.whyRunning ? `Why running: ${yourStory.whyRunning}` : null,
+        ].filter(Boolean);
+
+        const newProfile = await storage.createPoliticianProfile({
+          fullName,
+          party: officeDetails?.party || null,
+          email: accountInfo?.email || req.user!.email,
+          phone: accountInfo?.phone || null,
+          website: officeDetails?.campaignWebsite || null,
+          biography: yourStory?.biography || null,
+          photoUrl: accountInfo?.avatarUrl || null,
+          profileType: "candidate",
+          isCurrent: false,
+          claimedByUserId: userId,
+          claimRequestUserId: userId,
+          claimRequestStatus: "pending",
+          claimRequestDate: new Date(),
+          notes: notesParts.length > 0 ? notesParts.join("; ") : null,
+          previousPositions: yourStory?.politicalHistory ? [yourStory.politicalHistory] : null,
+        });
+        politicianId = newProfile.id;
+      }
+
+      // Always create a candidate row (for both new profiles and matched ones)
+      interface PolicyPayload { topic?: string; description?: string; }
+      const candidate = await storage.createCandidate({
+        userId,
+        position: officeTitle,
+        platform: yourStory?.whyRunning || "",
+        proposals: (policyPlatform || []).map((p: PolicyPayload, i: number) => ({
+          id: `policy-${i}`,
+          title: p.topic || `Policy ${i + 1}`,
+          description: p.description || "",
+        })),
+        isActive: true,
+      });
+      candidateId = candidate?.id;
+
+      // Update user account with collected accountInfo fields
+      {
+        const userUpdate: Record<string, string> = {};
+        if (accountInfo?.firstName) userUpdate.firstName = accountInfo.firstName as string;
+        if (accountInfo?.lastName) userUpdate.lastName = accountInfo.lastName as string;
+        if (accountInfo?.phone) userUpdate.phoneNumber = accountInfo.phone as string;
+        if (accountInfo?.avatarUrl) userUpdate.avatar = accountInfo.avatarUrl as string;
+        if (accountInfo?.city || accountInfo?.state) {
+          userUpdate.location = [accountInfo.city, accountInfo.state].filter(Boolean).join(", ");
+        }
+        if (Object.keys(userUpdate).length > 0) {
+          await storage.updateUser(userId, userUpdate);
+        }
+      }
+
+      // Update user role to candidate if still citizen
+      if (req.user!.role === "citizen") {
+        await storage.updateUser(userId, { role: "candidate" });
+      }
+
+      // Save ACP pledge requests — one per ACE SIG regardless of video URL.
+      // videoUrl is NOT NULL in the schema; use empty string when no video is provided
+      // so the pledge acceptance is recorded even without an ACE badge review.
+      {
+        const allSigs = await storage.listSpecialInterestGroups({ isActive: true });
+        const aceSigs = allSigs.filter((s) => s.isAce);
+        // Fall back to first available SIG if no ACE SIGs exist yet
+        const sigsToRecord = aceSigs.length > 0 ? aceSigs : allSigs.slice(0, 1);
+        const pledgeVideoUrl = (acpPledge?.videoUrl as string | undefined) || "";
+        for (const aceSig of sigsToRecord) {
+          try {
+            await storage.createAcePledgeRequest({
+              politicianId,
+              sigId: aceSig.id,
+              videoUrl: pledgeVideoUrl,
+            });
+          } catch (_) {
+            // Skip if duplicate constraint
+          }
+        }
+      }
+
+      // Save endorsement requests as politician_sig_sponsorships
+      if (Array.isArray(endorsementSigIds) && endorsementSigIds.length > 0) {
+        for (const sigId of endorsementSigIds) {
+          try {
+            await storage.linkSponsorToPolitician({
+              politicianId,
+              sigId,
+              relationshipType: "endorsed",
+              isVerified: false,
+              notes: "Endorsement requested via Run For Office wizard",
+            });
+          } catch (_) {
+            // Skip duplicates silently
+          }
+        }
+      }
+
+      res.json({ success: true, politicianId, candidateId });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("run-for-office submit error:", msg);
+      res.status(500).json({ message: msg });
+    }
+  });
 
   return httpServer;
 }
