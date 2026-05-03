@@ -71,6 +71,8 @@ export const users = pgTable("users", {
   profileViews: integer("profile_views").default(0),
   // Extended profile data (JSON blob for issue interests, pinned post, gallery, etc.)
   extendedProfileData: json("extended_profile_data"),
+  // Custom avatar configuration (JSON blob for the avatar builder)
+  avatarConfig: json("avatar_config"),
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,

@@ -11,7 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarSVG } from "@/components/avatar-svg";
+import { AvatarBuilder } from "@/components/avatar-builder";
 import { 
   User, 
   Camera, 
@@ -184,6 +187,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
   const [editMode, setEditMode] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [showAvatarBuilder, setShowAvatarBuilder] = useState(false);
   const [showPoliticalQuiz, setShowPoliticalQuiz] = useState(false);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
   const [currentQuizStep, setCurrentQuizStep] = useState(0);
@@ -2341,33 +2345,62 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
         <CardContent className="relative z-10 p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-4">
-              <div className="relative w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center group">
-                {user?.avatar ? (
-                  <img src={user.avatar} alt="Profile" className="w-full h-full rounded-full object-cover" />
-                ) : (
-                  <User className="h-10 w-10 text-white" />
-                )}
-                
-                {isOwner && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                    <label htmlFor="avatar-upload" className="cursor-pointer">
-                      {uploadingAvatar ? (
-                        <LoadingSpinner className="h-6 w-6 text-white" />
+              {/* Profile photo / avatar area */}
+              {isOwner ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <div className="relative w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center group cursor-pointer">
+                      {(user as any)?.avatarConfig ? (
+                        <div className="w-full h-full rounded-full overflow-hidden">
+                          <AvatarSVG config={(user as any).avatarConfig} size={80} />
+                        </div>
+                      ) : user?.avatar ? (
+                        <img src={user.avatar} alt="Profile" className="w-full h-full rounded-full object-cover" />
                       ) : (
-                        <Camera className="h-6 w-6 text-white" />
+                        <User className="h-10 w-10 text-white" />
                       )}
-                    </label>
-                    <input
-                      id="avatar-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleAvatarUpload}
-                      disabled={uploadingAvatar}
-                      className="hidden"
-                    />
-                  </div>
-                )}
-              </div>
+                      <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        {uploadingAvatar ? (
+                          <LoadingSpinner className="h-6 w-6 text-white" />
+                        ) : (
+                          <Camera className="h-6 w-6 text-white" />
+                        )}
+                      </div>
+                    </div>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-52">
+                    <DropdownMenuItem onSelect={() => document.getElementById("avatar-upload-hidden")?.click()}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload New Photo
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setShowAvatarBuilder(true)}>
+                      <Palette className="h-4 w-4 mr-2" />
+                      Create Avatar
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <div className="relative w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                  {(user as any)?.avatarConfig ? (
+                    <div className="w-full h-full rounded-full overflow-hidden">
+                      <AvatarSVG config={(user as any).avatarConfig} size={80} />
+                    </div>
+                  ) : user?.avatar ? (
+                    <img src={user.avatar} alt="Profile" className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    <User className="h-10 w-10 text-white" />
+                  )}
+                </div>
+              )}
+              {/* Hidden file input for photo upload */}
+              <input
+                id="avatar-upload-hidden"
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                disabled={uploadingAvatar}
+                className="hidden"
+              />
               <div>
                 <h1 className="text-2xl font-bold">
                   {user?.firstName && user?.lastName 
@@ -2705,6 +2738,15 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
           </Card>
         )}
       </div>
+
+      {/* Avatar Builder Dialog */}
+      {showAvatarBuilder && (
+        <AvatarBuilder
+          open={showAvatarBuilder}
+          onClose={() => setShowAvatarBuilder(false)}
+          initialConfig={(user as any)?.avatarConfig ?? undefined}
+        />
+      )}
 
       {/* Political Compass Quiz Dialog */}
       <Dialog open={showPoliticalQuiz} onOpenChange={setShowPoliticalQuiz}>

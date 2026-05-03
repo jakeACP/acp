@@ -48,6 +48,34 @@ Preferred communication style: Simple, everyday language.
 - **Trading & Demerit System**: User-submitted insider trading flags, admin-assigned demerits, integration with politician profiles.
 - **ACE Badges Module**: Candidates can apply for Anti-Corruption Endorsement (ACE) badges via video pledges, which, upon admin approval, positively impact their corruption grade.
 
+## 3D Customizable Avatar System
+
+### Overview
+Users can create personalized SVG avatars instead of uploading photos. Clicking the profile photo shows a menu: "Upload New Photo" and "Create Avatar".
+
+### Files
+- `client/src/components/avatar-svg.tsx` — Complete SVG avatar renderer + all option definitions
+- `client/src/components/avatar-builder.tsx` — Tabbed builder dialog with live preview and save
+
+### Customization Options
+- **14 skin tones** — 10 natural + 4 fantasy (lavender, sky, mint, golden)
+- **25+ hair styles** — buzz, short-crop, side-part, spikes, undercut, fade, short-afro, curly-medium, wavy-medium, bob, bangs, shoulder-straight, long-straight, long-wavy, long-curly, high-ponytail, low-ponytail, high-bun, low-bun, braids, space-buns, mohawk, faux-hawk, pixie, locs, taper, cornrows
+- **20 hair colors** — 10 natural + 10 eccentric (pink, purple, electric blue, teal, forest, orange, magenta, silver, rose-gold, lime)
+- **7 eye shapes** — almond, round, upturned, downturned, wide, hooded, monolid
+- **13 eye colors** — 6 natural + 7 fantasy
+- **7 eyebrow styles** — natural arch, thick straight, thin arched, bushy, angled, rounded, thin straight
+- **5 nose styles** — button, round, narrow, wide, upturned
+- **5 mouth styles** — natural, full lips, thin, smile, pursed
+- **6 facial hair styles** — none, stubble, mustache, goatee, short beard, full beard
+- **6 glasses styles** — none, round, rectangle, cat-eye, oval, sunglasses
+- **12 background gradients**
+
+### Architecture
+- Avatar is rendered client-side from `avatarConfig` JSON stored in the `avatar_config` DB column (jsonb)
+- SVG uses radial gradients for 3D spherical shading; hair uses three rendering layers: `back` (ponytails/long back), `front` (cap before head), `above` (buns/spikes on top of head)
+- API: `PUT /api/profile/avatar-config` saves the config; `/api/user` returns `avatarConfig`
+- Profile photo area auto-detects `avatarConfig` and renders `AvatarSVG`; falls back to uploaded photo, then initials
+
 ## ACP Agent API Gateway
 
 ### Overview

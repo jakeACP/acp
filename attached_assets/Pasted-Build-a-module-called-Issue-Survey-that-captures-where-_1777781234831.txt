@@ -1,0 +1,220 @@
+Build a module called “Issue Survey” that captures where users stand on major U.S. policy issues in a neutral, structured way.
+
+Goal:
+Collect user positions across 30 diverse issues with minimal bias, using consistent, objective phrasing and scalable scoring.
+
+Core Design:
+- Route: /issues
+- Use ACP Liquid Glass UI
+- Present 30 issues, grouped by category
+- Each issue = 1 statement + 1 response scale
+- Users can skip questions
+- Show progress bar
+- Save responses for logged-in users
+
+Response Scale (IMPORTANT):
+Use a 5-point structured scale focused on LEVEL OF GOVERNMENT INVOLVEMENT:
+
+1 = Strongly Decrease Government Role
+2 = Slightly Decrease Government Role
+3 = Keep About the Same / Unsure
+4 = Slightly Increase Government Role
+5 = Strongly Increase Government Role
+
+This keeps all questions objective and consistent.
+
+Also include optional toggle per question:
+[ ] “This issue is important to me”
+
+Data Model:
+Each issue should include:
+- id
+- category
+- title
+- prompt
+- description (1 sentence context)
+- tags
+
+Store answers as:
+{
+  issueId,
+  response (1–5),
+  priority (true/false)
+}
+
+Categories + Issues:
+
+=== ECONOMY & LABOR ===
+
+1. Minimum Wage
+Prompt: “What level of government involvement should there be in setting minimum wage standards?”
+Description: Covers federal/state wage floors.
+
+2. Taxation
+Prompt: “What level of government involvement should there be in adjusting tax rates across income levels?”
+Description: Includes progressive vs flat structures.
+
+3. Government Spending
+Prompt: “What level of government involvement should there be in overall public spending on programs and services?”
+Description: Budget size and allocation.
+
+4. Labor Unions
+Prompt: “What level of government involvement should there be in supporting or regulating labor unions?”
+Description: Worker organizing and protections.
+
+5. Corporate Regulation
+Prompt: “What level of government involvement should there be in regulating large corporations?”
+Description: Market oversight and compliance.
+
+6. Trade Policy
+Prompt: “What level of government involvement should there be in regulating international trade?”
+Description: Tariffs, agreements, and restrictions.
+
+=== HEALTHCARE ===
+
+7. Universal Healthcare
+Prompt: “What level of government involvement should there be in ensuring access to healthcare for all citizens?”
+Description: Public vs private coverage.
+
+8. Drug Pricing
+Prompt: “What level of government involvement should there be in controlling prescription drug prices?”
+Description: Price caps and negotiations.
+
+9. Mental Health Services
+Prompt: “What level of government involvement should there be in providing mental health services?”
+Description: Access and funding.
+
+=== EDUCATION ===
+
+10. Public School Funding
+Prompt: “What level of government involvement should there be in funding public schools?”
+Description: Local vs federal roles.
+
+11. Student Loan Policy
+Prompt: “What level of government involvement should there be in managing student debt?”
+Description: Forgiveness, interest, repayment.
+
+12. School Choice
+Prompt: “What level of government involvement should there be in supporting alternatives to public schools?”
+Description: Charter schools, vouchers.
+
+=== SOCIAL POLICY ===
+
+13. Abortion Policy
+Prompt: “What level of government involvement should there be in regulating abortion access?”
+Description: Restrictions vs protections.
+
+14. Gun Policy
+Prompt: “What level of government involvement should there be in regulating firearm ownership?”
+Description: Access, background checks.
+
+15. LGBTQ+ Protections
+Prompt: “What level of government involvement should there be in protecting LGBTQ+ rights?”
+Description: Anti-discrimination laws.
+
+16. Drug Policy
+Prompt: “What level of government involvement should there be in regulating or decriminalizing drug use?”
+Description: Enforcement vs legalization.
+
+17. Death Penalty
+Prompt: “What level of government involvement should there be in allowing or restricting capital punishment?”
+Description: Use of death penalty.
+
+=== IMMIGRATION ===
+
+18. Border Security
+Prompt: “What level of government involvement should there be in securing national borders?”
+Description: Enforcement and funding.
+
+19. Immigration Levels
+Prompt: “What level of government involvement should there be in controlling legal immigration levels?”
+Description: Caps and admissions.
+
+20. Path to Citizenship
+Prompt: “What level of government involvement should there be in providing pathways to citizenship for undocumented immigrants?”
+Description: Legalization programs.
+
+=== ENVIRONMENT & ENERGY ===
+
+21. Climate Policy
+Prompt: “What level of government involvement should there be in addressing climate change?”
+Description: Regulation and investment.
+
+22. Fossil Fuel Regulation
+Prompt: “What level of government involvement should there be in regulating oil, gas, and coal industries?”
+Description: Restrictions vs expansion.
+
+23. Renewable Energy
+Prompt: “What level of government involvement should there be in promoting renewable energy?”
+Description: Subsidies and mandates.
+
+=== TECHNOLOGY & PRIVACY ===
+
+24. Data Privacy
+Prompt: “What level of government involvement should there be in protecting personal data online?”
+Description: Consumer protections.
+
+25. Big Tech Regulation
+Prompt: “What level of government involvement should there be in regulating large technology companies?”
+Description: Antitrust, moderation.
+
+=== JUSTICE & GOVERNANCE ===
+
+26. Policing Policy
+Prompt: “What level of government involvement should there be in setting policing standards?”
+Description: Oversight and reform.
+
+27. Criminal Justice Reform
+Prompt: “What level of government involvement should there be in reforming sentencing and incarceration policies?”
+Description: Prison system changes.
+
+28. Election Policy
+Prompt: “What level of government involvement should there be in regulating elections?”
+Description: Access, ID laws, security.
+
+29. Campaign Finance
+Prompt: “What level of government involvement should there be in limiting political donations?”
+Description: Money in politics.
+
+30. Government Transparency
+Prompt: “What level of government involvement should there be in requiring transparency from public officials?”
+Description: Disclosure laws.
+
+Results System:
+
+After completion:
+- Show a “Top Issues” list based on priority toggles
+- Show “Strongest Positions”:
+  - Responses of 1 or 5 = strong stance
+- Show “Moderate / Mixed Areas”:
+  - Responses of 2–4
+
+Optional Future Feature:
+- Match users with candidates based on issue alignment
+- Compare user results with district averages
+
+UI Flow:
+1. Intro screen:
+“Where do you stand on the issues?”
+Short explanation + Start button
+
+2. Survey screen:
+- Card per issue
+- Response slider or buttons
+- Priority toggle
+- Next/Back navigation
+
+3. Results screen:
+- Summary cards
+- Top 5 issues (priority)
+- Most consistent lean (more 1s vs 5s)
+- Download/share option
+
+Important:
+- Do NOT label answers as left/right
+- Keep language neutral and consistent
+- Avoid emotionally loaded wording
+- Keep all prompts focused on “level of government involvement”
+
+Disclaimer:
+“This survey captures general preferences on policy direction. Real-world policy details may vary.”

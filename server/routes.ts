@@ -3146,6 +3146,22 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Save avatar configuration
+  app.put("/api/profile/avatar-config", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const { avatarConfig } = req.body;
+    if (!avatarConfig || typeof avatarConfig !== "object") {
+      return res.status(400).json({ error: "avatarConfig is required" });
+    }
+    try {
+      await storage.updateUser(req.user.id, { avatarConfig } as any);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error saving avatar config:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Endpoint for updating user bio
   app.put("/api/profile/bio", async (req, res) => {
     if (!req.isAuthenticated()) {

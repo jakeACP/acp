@@ -1,0 +1,312 @@
+Build a new ACP module called “Political Compass.”
+
+Goal:
+Create a quick 20-question quiz that places users on a 2-axis political compass:
+1. Economic Scale: Left ↔ Right
+2. Social Scale: Libertarian ↔ Authoritarian
+
+The module should be neutral, nonpartisan, educational, and designed to help users understand their own political leanings without forcing party labels.
+
+Core Requirements:
+- Add a new page/module: /political-compass
+- Use ACP’s existing design system and Liquid Glass styling.
+- Show a short intro explaining the quiz.
+- Ask 20 questions total.
+- Each question uses a 5-point Likert scale:
+  - Strongly Disagree
+  - Disagree
+  - Neutral / Unsure
+  - Agree
+  - Strongly Agree
+- After completion, calculate the user’s position on a 2D compass.
+- Show:
+  - Economic score from -10 to +10
+  - Social score from -10 to +10
+  - Compass chart with a plotted dot
+  - Plain-English result summary
+  - Optional shareable result card
+
+Scoring System:
+Each answer should convert to a numeric value:
+
+Strongly Disagree = -2
+Disagree = -1
+Neutral / Unsure = 0
+Agree = +1
+Strongly Agree = +2
+
+Each question has:
+- axis: "economic" or "social"
+- direction: +1 or -1
+
+Final score formula:
+questionScore = answerValue * direction
+
+Economic raw score = sum of all economic question scores
+Social raw score = sum of all social question scores
+
+Normalize each axis to a -10 to +10 scale:
+
+normalizedScore = (rawScore / maxPossibleRawScoreForAxis) * 10
+
+Economic interpretation:
+-10 = strongly economic left
+0 = mixed/centrist economics
++10 = strongly economic right
+
+Social interpretation:
+-10 = strongly libertarian/civil-liberties oriented
+0 = mixed/centrist social views
++10 = strongly authoritarian/order-oriented
+
+Compass Quadrants:
+Economic Left + Libertarian:
+“Community Libertarian”
+Supports economic fairness, public investment, civil liberties, and decentralized power.
+
+Economic Left + Authoritarian:
+“State Progressive”
+Supports economic intervention, public programs, regulation, and stronger government authority.
+
+Economic Right + Libertarian:
+“Market Libertarian”
+Supports free markets, low regulation, individual freedom, and limited government power.
+
+Economic Right + Authoritarian:
+“National Conservative”
+Supports market-oriented economics, traditional institutions, law/order, and stronger national authority.
+
+Near Center:
+“Pragmatic Centrist”
+Mixed views across economics and social issues. May prefer issue-by-issue decision-making.
+
+Questions Data Model:
+Create questions as a reusable array/object so they can be edited easily later.
+
+Use this question set:
+
+[
+  {
+    id: 1,
+    text: "The government should do more to reduce income inequality.",
+    axis: "economic",
+    direction: -1
+  },
+  {
+    id: 2,
+    text: "Taxes should generally be lower, even if that means fewer government services.",
+    axis: "economic",
+    direction: 1
+  },
+  {
+    id: 3,
+    text: "Healthcare should be guaranteed as a basic public service.",
+    axis: "economic",
+    direction: -1
+  },
+  {
+    id: 4,
+    text: "Private businesses usually solve problems better than government programs.",
+    axis: "economic",
+    direction: 1
+  },
+  {
+    id: 5,
+    text: "Large corporations should face stricter rules to protect workers and consumers.",
+    axis: "economic",
+    direction: -1
+  },
+  {
+    id: 6,
+    text: "People should mostly be responsible for their own financial success or failure.",
+    axis: "economic",
+    direction: 1
+  },
+  {
+    id: 7,
+    text: "Public funding should be increased for education, housing, and infrastructure.",
+    axis: "economic",
+    direction: -1
+  },
+  {
+    id: 8,
+    text: "Government regulation often hurts economic growth more than it helps.",
+    axis: "economic",
+    direction: 1
+  },
+  {
+    id: 9,
+    text: "Workers should have stronger legal protections to organize and negotiate with employers.",
+    axis: "economic",
+    direction: -1
+  },
+  {
+    id: 10,
+    text: "Free markets should be trusted more than government planning.",
+    axis: "economic",
+    direction: 1
+  },
+
+  {
+    id: 11,
+    text: "People should be free to live however they want as long as they are not harming others.",
+    axis: "social",
+    direction: -1
+  },
+  {
+    id: 12,
+    text: "The government should have stronger powers to maintain public order.",
+    axis: "social",
+    direction: 1
+  },
+  {
+    id: 13,
+    text: "Freedom of speech should be protected even when the speech is offensive or unpopular.",
+    axis: "social",
+    direction: -1
+  },
+  {
+    id: 14,
+    text: "National security sometimes requires limiting individual privacy.",
+    axis: "social",
+    direction: 1
+  },
+  {
+    id: 15,
+    text: "Adults should generally be allowed to make their own personal lifestyle choices without government interference.",
+    axis: "social",
+    direction: -1
+  },
+  {
+    id: 16,
+    text: "Schools should place more emphasis on discipline, tradition, and respect for authority.",
+    axis: "social",
+    direction: 1
+  },
+  {
+    id: 17,
+    text: "Police and government agencies should face stronger oversight when individual rights are at stake.",
+    axis: "social",
+    direction: -1
+  },
+  {
+    id: 18,
+    text: "Society works best when people follow traditional social expectations.",
+    axis: "social",
+    direction: 1
+  },
+  {
+    id: 19,
+    text: "Peaceful protest should be strongly protected, even when it disrupts normal activity.",
+    axis: "social",
+    direction: -1
+  },
+  {
+    id: 20,
+    text: "The government should be able to restrict certain behaviors if they are considered harmful to society.",
+    axis: "social",
+    direction: 1
+  }
+]
+
+UI Flow:
+1. Intro screen:
+Title: “Find Your Political Compass”
+Subtitle: “Answer 20 quick questions to see where your views fall on economic and social issues.”
+Button: “Start Quiz”
+
+2. Question screen:
+- Show progress bar: Question X of 20
+- Show question text
+- Show 5 answer buttons
+- Allow Back and Next
+- Store answers in component state
+
+3. Results screen:
+Show:
+- Compass chart
+- Economic score
+- Social score
+- Quadrant label
+- Short explanation
+- Button: “Retake Quiz”
+- Button: “Share Result”
+
+Compass Chart:
+- X-axis = Economic Left to Economic Right
+- Y-axis = Social Authoritarian at top, Libertarian at bottom
+- Plot user dot at:
+  x = economicScore
+  y = socialScore
+- Center lines at 0
+- Label quadrants:
+  - Top Left: State Progressive
+  - Top Right: National Conservative
+  - Bottom Left: Community Libertarian
+  - Bottom Right: Market Libertarian
+
+Important:
+For visual display, social authoritarian should appear higher on the chart, libertarian lower.
+
+Data Storage:
+If user is logged in:
+- Save latest compass result to their profile.
+- Store:
+  - economicScore
+  - socialScore
+  - quadrant
+  - completedAt
+  - answer set
+If user is not logged in:
+- Allow quiz without account.
+- Store result locally in browser only.
+- Prompt user to create account to save result.
+
+Privacy:
+- Do not make results public by default.
+- Add toggle:
+  “Show my compass result on my profile”
+Default: OFF
+
+Admin/Developer Notes:
+- Keep scoring logic in a separate utility function.
+- Keep question list in a separate config file.
+- Make the system easy to expand from 20 to 40 questions later.
+- Add unit tests for scoring normalization.
+
+Result Labels:
+Use these thresholds:
+- If absolute economic score < 2 and absolute social score < 2:
+  “Pragmatic Centrist”
+- If economic < -2 and social < -2:
+  “Community Libertarian”
+- If economic < -2 and social > 2:
+  “State Progressive”
+- If economic > 2 and social < -2:
+  “Market Libertarian”
+- If economic > 2 and social > 2:
+  “National Conservative”
+- Otherwise:
+  “Mixed / Issue-by-Issue Voter”
+
+Result Summary Generator:
+Create a function that returns a short explanation based on score.
+
+Example:
+Economic Left:
+“You tend to support stronger public investment, worker protections, and government action to reduce inequality.”
+
+Economic Right:
+“You tend to support lower regulation, private enterprise, and market-based solutions.”
+
+Social Libertarian:
+“You tend to prioritize civil liberties, personal freedom, privacy, and limits on government authority.”
+
+Social Authoritarian:
+“You tend to prioritize order, tradition, national security, and stronger institutional authority.”
+
+Neutral:
+“Your answers suggest a mixed or balanced position on this axis.”
+
+Add disclaimer:
+“This quiz is educational and simplified. Political views are complex and may not fit perfectly into any single chart.”
