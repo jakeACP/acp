@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { sanitizeUrl } from "@/lib/utils";
 import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink, Flag, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronRight, ShieldAlert, Lock, PieChart as PieChartIcon, BarChart3, Wallet, User, ThumbsUp, ThumbsDown } from "lucide-react";
+import DistrictBudgetWidget, { jurisdictionToStateKey } from "@/components/district-budget-widget";
 import { format } from "date-fns";
 import { useState, useMemo, useEffect, useRef, lazy, Suspense } from "react";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -636,6 +637,12 @@ export default function PoliticianProfilePage() {
 
         {/* ── RIGHT: Sidebar — contact, bio, grades, scorecard ── */}
         <div className="w-full lg:w-80 xl:w-96 flex-shrink-0 space-y-4">
+
+          {/* District Budget Priorities */}
+          <DistrictBudgetWidget
+            stateKey={jurisdictionToStateKey(profile.position?.jurisdiction ?? profile.targetPosition?.jurisdiction)}
+            districtLabel={profile.position?.jurisdiction ?? profile.targetPosition?.jurisdiction ?? undefined}
+          />
 
           {/* Contact & Term Info */}
           {(profile.email || profile.phone || profile.website || profile.ballotpediaUrl || profile.officeAddress || profile.position?.jurisdiction || profile.termStart) && (

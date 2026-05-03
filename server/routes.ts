@@ -11367,4 +11367,45 @@ function registerBudgetRoutes(app: Express) {
       res.status(500).json({ message: err.message });
     }
   });
+
+  // Public district aggregate endpoint for profile pages
+  app.get("/api/budget/district-aggregate/:state", async (req: Request, res: Response) => {
+    try {
+      let allData: any[] = [];
+      try {
+        allData = await storage.getBudgetSimulationsDistrictAverages();
+      } catch {
+        // Budget tables may not exist yet; return empty aggregate
+      }
+
+      const stateParam = req.params.state.toLowerCase();
+
+      const districtData = stateParam === "national"
+        ? null
+        : allData.find((d) => d.district.toLowerCase() === stateParam) || null;
+
+      const totalCount = allData.reduce((s: number, d: any) => s + d.count, 0);
+      const totalDeficit = allData.reduce((s: number, d: any) => s + d.avgDeficit * d.count, 0);
+      const nationalAvgDeficit = totalCount > 0 ? totalDeficit / totalCount : 0;
+
+      const nationalLabels: Record<string, number> = {};
+      for (const d of allData) {
+        for (const [label, cnt] of Object.entries(d.labelDistribution as Record<string, number>)) {
+          nationalLabels[label] = (nationalLabels[label] ?? 0) + cnt;
+        }
+      }
+
+      res.json({
+        state: req.params.state,
+        districtData,
+        national: {
+          count: totalCount,
+          avgDeficit: nationalAvgDeficit,
+          labelDistribution: nationalLabels,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 }

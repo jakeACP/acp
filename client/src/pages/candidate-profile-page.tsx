@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ArrowLeft, Heart, HeartOff, Users, Calendar, FileText, MapPin, Mail, Award } from "lucide-react";
+import DistrictBudgetWidget from "@/components/district-budget-widget";
 import { format } from "date-fns";
 
 interface CandidateWithUser {
@@ -285,6 +286,9 @@ export default function CandidateProfilePage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* District Budget Priorities (national data for community candidates) */}
+            <DistrictBudgetWidget stateKey={null} districtLabel="National" />
+
             {/* Endorsed By */}
             {partyEndorsements.length > 0 && (
               <Card>
