@@ -598,6 +598,18 @@ export interface IStorage {
   getComposeJob(id: string): Promise<ComposeJob | undefined>;
   updateComposeJob(id: string, update: { status: string; signalId?: string; errorMessage?: string }): Promise<void>;
   countRecentComposeJobs(authorId: string, sinceMs: number): Promise<number>;
+
+  // Extended profile data
+  getExtendedProfileData(userId: string): Promise<any>;
+  saveExtendedProfileData(userId: string, data: any): Promise<void>;
+  incrementProfileViews(userId: string): Promise<void>;
+  getActivityStats(userId: string): Promise<{ postsCount: number; votesCount: number; commentsCount: number; likesReceived: number }>;
+  getUserBadges(userId: string): Promise<Array<{ id: string; name: string; description: string; icon: string; earned: boolean }>>;
+  getCivicScorecard(userId: string): Promise<{ trustGrade: string; engagementGrade: string; communityGrade: string; trustScore: number; postCount: number; followerCount: number; followingCount: number }>;
+  getDemocracyWrapped(userId: string, year: number): Promise<{ postsWritten: number; votesCast: number; commentsMade: number; friendsAdded: number; likesReceived: number }>;
+  saveWidgetPollVote(profileUserId: string, voterId: string, option: string): Promise<void>;
+  getWidgetPollVote(profileUserId: string, voterId: string): Promise<string | null>;
+  getWidgetPollResults(profileUserId: string): Promise<Record<string, number>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -9167,6 +9179,121 @@ export class DatabaseStorage implements IStorage {
       githubUrl: "https://github.com/openai/codex",
       status: "not_installed",
     });
+  }
+
+  async getExtendedProfileData(userId: string): Promise<any> {
+    const user = await db.select({ extendedProfileData: users.extendedProfileData }).from(users).where(eq(users.id, userId)).limit(1);
+    return user[0]?.extendedProfileData || {};
+  }
+
+  async saveExtendedProfileData(userId: string, data: any): Promise<void> {
+    const existing = await this.getExtendedProfileData(userId);
+    const merged = { ...existing, ...data };
+    await db.execute(sql`UPDATE users SET extended_profile_data = ${JSON.stringify(merged)}::jsonb WHERE id = ${userId}`);
+  }
+
+  async incrementProfileViews(userId: string): Promise<void> {
+    await db.execute(sql`UPDATE users SET profile_views = COALESCE(profile_views, 0) + 1 WHERE id = ${userId}`);
+  }
+
+  async getActivityStats(userId: string): Promise<{ postsCount: number; votesCount: number; commentsCount: number; likesReceived: number }> {
+    const [postsResult] = await db.select({ count: count() }).from(posts).where(and(eq(posts.authorId, userId), eq(posts.isDeleted, false)));
+    const postsCount = postsResult?.count || 0;
+    const [votesResult] = await db.select({ count: count() }).from(pollVotes).where(eq(pollVotes.userId, userId));
+    const votesCount = votesResult?.count || 0;
+    const [commentsResult] = await db.select({ count: count() }).from(comments).where(eq(comments.authorId, userId));
+    const commentsCount = commentsResult?.count || 0;
+    const userPosts = await db.select({ likesCount: posts.likesCount }).from(posts).where(and(eq(posts.authorId, userId), eq(posts.isDeleted, false)));
+    const likesReceived = userPosts.reduce((sum, p) => sum + (p.likesCount || 0), 0);
+    return { postsCount, votesCount, commentsCount, likesReceived };
+  }
+
+  async getUserBadges(userId: string): Promise<Array<{ id: string; name: string; description: string; icon: string; earned: boolean }>> {
+    const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user[0]) return [];
+    const u = user[0];
+    const stats = await this.getActivityStats(userId);
+    const friends = await this.getFriends(userId);
+    const joinDate = u.createdAt ? new Date(u.createdAt) : new Date();
+    const daysSinceJoin = Math.floor((Date.now() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
+    const badges = [
+      { id: "early-adopter", name: "Early Adopter", description: "One of the first to join the platform", icon: "star", earned: daysSinceJoin >= 0 },
+      { id: "first-post", name: "First Voice", description: "Made your first post", icon: "message-square", earned: stats.postsCount >= 1 },
+      { id: "active-voice", name: "Active Voice", description: "Created 10 or more posts", icon: "trending-up", earned: stats.postsCount >= 10 },
+      { id: "prolific-poster", name: "Prolific Poster", description: "Created 50 or more posts", icon: "zap", earned: stats.postsCount >= 50 },
+      { id: "poll-voter", name: "Civic Voter", description: "Voted in your first poll", icon: "check-circle", earned: stats.votesCount >= 1 },
+      { id: "engaged-citizen", name: "Engaged Citizen", description: "Cast 10 or more votes", icon: "award", earned: stats.votesCount >= 10 },
+      { id: "well-connected", name: "Well Connected", description: "Made 5 or more friends", icon: "users", earned: friends.length >= 5 },
+      { id: "community-pillar", name: "Community Pillar", description: "Made 25 or more friends", icon: "shield", earned: friends.length >= 25 },
+      { id: "trusted-citizen", name: "Trusted Citizen", description: "High trust score from the community", icon: "heart", earned: parseFloat(u.trustScore as string || "0") >= 0.7 },
+      { id: "verified-id", name: "Verified ID", description: "Identity verified on the platform", icon: "badge-check", earned: u.voterVerificationStatus === "verified" },
+      { id: "premium-member", name: "ACP+ Member", description: "Subscribed to ACP+ premium", icon: "crown", earned: u.subscriptionStatus === "premium" },
+      { id: "commenter", name: "Conversationalist", description: "Made 10 or more comments", icon: "message-circle", earned: stats.commentsCount >= 10 },
+    ];
+    return badges;
+  }
+
+  async getCivicScorecard(userId: string): Promise<{ trustGrade: string; engagementGrade: string; communityGrade: string; trustScore: number; postCount: number; followerCount: number; followingCount: number }> {
+    const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user[0]) return { trustGrade: "N/A", engagementGrade: "N/A", communityGrade: "N/A", trustScore: 0, postCount: 0, followerCount: 0, followingCount: 0 };
+    const u = user[0];
+    const trustScore = parseFloat(u.trustScore as string || "0");
+    const stats = await this.getActivityStats(userId);
+    const followers = await this.getFollowers(userId);
+    const following = await this.getFollowing(userId);
+    const friends = await this.getFriends(userId);
+
+    // Trust grade: based on community trust score (0–1 scale)
+    const trustGrade = trustScore >= 0.9 ? "A+" : trustScore >= 0.8 ? "A" : trustScore >= 0.7 ? "B+" : trustScore >= 0.6 ? "B" : trustScore >= 0.5 ? "C+" : trustScore >= 0.4 ? "C" : "D";
+
+    // Engagement grade: engagement rate = (likes received + comments made) per post created
+    // Higher engagement per post = more impactful content
+    const engagementRate = stats.postsCount > 0 ? (stats.likesReceived + stats.commentsCount) / stats.postsCount : 0;
+    const engagementGrade = engagementRate >= 20 ? "A+" : engagementRate >= 10 ? "A" : engagementRate >= 5 ? "B+" : engagementRate >= 2 ? "B" : engagementRate >= 1 ? "C" : "D";
+
+    // Community grade: based on friends count AND follower/following ratio
+    // Follower:following ratio > 1 means more people follow you than you follow
+    const followerFollowingRatio = following.length > 0 ? followers.length / following.length : followers.length > 0 ? 2 : 0;
+    const friendScore = friends.length;
+    // Combine friends and follower ratio into community grade
+    const communityScore = friendScore * 2 + followers.length + (followerFollowingRatio > 1 ? 20 : 0);
+    const communityGrade = communityScore >= 200 ? "A+" : communityScore >= 100 ? "A" : communityScore >= 50 ? "B+" : communityScore >= 20 ? "B" : communityScore >= 5 ? "C" : "D";
+
+    return { trustGrade, engagementGrade, communityGrade, trustScore, postCount: stats.postsCount, followerCount: followers.length, followingCount: following.length };
+  }
+
+  async saveWidgetPollVote(profileUserId: string, voterId: string, option: string): Promise<void> {
+    const existing = await this.getExtendedProfileData(profileUserId);
+    const widgetVotes: Record<string, string> = existing?.widgetVotes || {};
+    widgetVotes[voterId] = option;
+    await this.saveExtendedProfileData(profileUserId, { widgetVotes });
+  }
+
+  async getWidgetPollVote(profileUserId: string, voterId: string): Promise<string | null> {
+    const existing = await this.getExtendedProfileData(profileUserId);
+    return existing?.widgetVotes?.[voterId] || null;
+  }
+
+  async getWidgetPollResults(profileUserId: string): Promise<Record<string, number>> {
+    const existing = await this.getExtendedProfileData(profileUserId);
+    const widgetVotes: Record<string, string> = existing?.widgetVotes || {};
+    const tally: Record<string, number> = {};
+    for (const option of Object.values(widgetVotes)) {
+      tally[option] = (tally[option] || 0) + 1;
+    }
+    return tally;
+  }
+
+  async getDemocracyWrapped(userId: string, year: number): Promise<{ postsWritten: number; votesCast: number; commentsMade: number; friendsAdded: number; likesReceived: number }> {
+    const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
+    const endOfYear = new Date(`${year + 1}-01-01T00:00:00.000Z`);
+    const [postsResult] = await db.select({ count: count() }).from(posts).where(and(eq(posts.authorId, userId), eq(posts.isDeleted, false), gte(posts.createdAt, startOfYear), sql`${posts.createdAt} < ${endOfYear}`));
+    const [votesResult] = await db.select({ count: count() }).from(pollVotes).where(and(eq(pollVotes.userId, userId), gte(pollVotes.votedAt, startOfYear), sql`${pollVotes.votedAt} < ${endOfYear}`));
+    const [commentsResult] = await db.select({ count: count() }).from(comments).where(and(eq(comments.authorId, userId), gte(comments.createdAt, startOfYear), sql`${comments.createdAt} < ${endOfYear}`));
+    const [friendsResult] = await db.select({ count: count() }).from(friendships).where(and(or(eq(friendships.requesterId, userId), eq(friendships.addresseeId, userId)), eq(friendships.status, "accepted"), gte(friendships.updatedAt, startOfYear), sql`${friendships.updatedAt} < ${endOfYear}`));
+    const yearPosts = await db.select({ likesCount: posts.likesCount }).from(posts).where(and(eq(posts.authorId, userId), eq(posts.isDeleted, false), gte(posts.createdAt, startOfYear), sql`${posts.createdAt} < ${endOfYear}`));
+    const likesReceived = yearPosts.reduce((sum, p) => sum + (p.likesCount || 0), 0);
+    return { postsWritten: postsResult?.count || 0, votesCast: votesResult?.count || 0, commentsMade: commentsResult?.count || 0, friendsAdded: friendsResult?.count || 0, likesReceived };
   }
 
   async ensurePaperclipApp(): Promise<AgentApp> {

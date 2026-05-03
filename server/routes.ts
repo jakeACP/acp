@@ -1017,6 +1017,22 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.get("/api/users/:userId/friends", async (req, res) => {
+    try {
+      const friends = await storage.getFriends(req.params.userId);
+      const safe = friends.map((f: any) => ({
+        userId: f.userId,
+        username: f.username,
+        firstName: f.firstName,
+        lastName: f.lastName,
+        avatar: f.avatar,
+      }));
+      res.json(safe);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.put("/api/profile/top8", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
@@ -3158,7 +3174,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         profileBackground,
         favoriteSong,
         profileLayout,
-        createdAt
+        createdAt,
+        voterVerificationStatus,
+        trustScore,
+        profileViews
       } = user;
       
       res.json({
@@ -3173,7 +3192,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         profileBackground,
         favoriteSong,
         profileLayout,
-        createdAt
+        createdAt,
+        voterVerificationStatus,
+        trustScore,
+        profileViews
       });
     } catch (error: any) {
       console.error("Error fetching user profile:", error);
@@ -3645,6 +3667,153 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     } catch (error) {
       console.error("Error updating profile customization:", error);
       res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  // Extended profile data
+  app.get("/api/profile/:userId/extended", async (req, res) => {
+    try {
+      const data = await storage.getExtendedProfileData(req.params.userId);
+      // Sanitize: omit widgetVotes (voter choices are private — served via /widget-poll only)
+      const { widgetVotes: _omitted, ...publicData } = data as Record<string, unknown>;
+      res.json(publicData);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/profile/extended", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      await storage.saveExtendedProfileData(req.user.id, req.body);
+      const updated = await storage.getExtendedProfileData(req.user.id);
+      // Omit widgetVotes from response (voter choices are private)
+      const { widgetVotes: _omitted, ...publicUpdated } = updated as Record<string, unknown>;
+      res.json(publicUpdated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Track profile views — session-deduplicated so repeat visits in same session don't inflate counts
+  app.post("/api/profile/:userId/view", async (req, res) => {
+    try {
+      const targetUserId = req.params.userId;
+      // Never count the profile owner viewing their own profile
+      if (req.isAuthenticated() && req.user.id === targetUserId) {
+        return res.json({ ok: true, counted: false });
+      }
+      // Session-based deduplication: track which profiles have been counted per session
+      const sessionKey = `viewed_profiles`;
+      const session = req.session as any;
+      if (!session[sessionKey]) session[sessionKey] = {};
+      if (session[sessionKey][targetUserId]) {
+        return res.json({ ok: true, counted: false });
+      }
+      session[sessionKey][targetUserId] = Date.now();
+      await storage.incrementProfileViews(targetUserId);
+      res.json({ ok: true, counted: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Widget poll vote — per-user, persisted in extendedProfileData
+  app.post("/api/profile/:userId/widget-vote", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const { option } = req.body;
+      if (!option || typeof option !== "string") return res.status(400).json({ message: "option required" });
+      await storage.saveWidgetPollVote(req.params.userId, req.user.id, option);
+      const results = await storage.getWidgetPollResults(req.params.userId);
+      const myVote = await storage.getWidgetPollVote(req.params.userId, req.user.id);
+      res.json({ results, myVote });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get widget poll results + current user's vote
+  app.get("/api/profile/:userId/widget-poll", async (req, res) => {
+    try {
+      const results = await storage.getWidgetPollResults(req.params.userId);
+      const myVote = req.isAuthenticated()
+        ? await storage.getWidgetPollVote(req.params.userId, req.user.id)
+        : null;
+      res.json({ results, myVote });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Civic activity stats
+  app.get("/api/profile/:userId/activity-stats", async (req, res) => {
+    try {
+      const stats = await storage.getActivityStats(req.params.userId);
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // User badges
+  app.get("/api/profile/:userId/badges", async (req, res) => {
+    try {
+      const badges = await storage.getUserBadges(req.params.userId);
+      res.json(badges);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Civic scorecard
+  app.get("/api/profile/:userId/scorecard", async (req, res) => {
+    try {
+      const scorecard = await storage.getCivicScorecard(req.params.userId);
+      res.json(scorecard);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Democracy Wrapped
+  app.get("/api/profile/:userId/wrapped/:year", async (req, res) => {
+    try {
+      const year = parseInt(req.params.year) || new Date().getFullYear();
+      const wrapped = await storage.getDemocracyWrapped(req.params.userId, year);
+      res.json(wrapped);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Gallery photo upload
+  app.post("/api/profile/gallery", upload.single("photo"), async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    try {
+      const privateObjectDir = objectStorageService.getPrivateObjectDir();
+      const fileId = randomUUID();
+      const ext = req.file.originalname.toLowerCase().slice(req.file.originalname.lastIndexOf(".")) || ".jpg";
+      const objectName = `gallery/${fileId}${ext}`;
+      const fullPath = `${privateObjectDir}/${objectName}`;
+      const pathParts = fullPath.split("/").filter(p => p);
+      const bucketName = pathParts[0];
+      const objectPath = pathParts.slice(1).join("/");
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(objectPath);
+      await file.save(req.file.buffer, { contentType: req.file.mimetype });
+      const { setObjectAclPolicy } = await import("./objectStorage");
+      await setObjectAclPolicy(file, { owner: req.user.id.toString(), visibility: "public" });
+      const publicUrl = `/objects/gallery/${fileId}${ext}`;
+      const existing = await storage.getExtendedProfileData(req.user.id);
+      const galleryPhotos = Array.isArray(existing.galleryPhotos) ? existing.galleryPhotos : [];
+      galleryPhotos.push(publicUrl);
+      await storage.saveExtendedProfileData(req.user.id, { galleryPhotos });
+      res.json({ url: publicUrl });
+    } catch (error: any) {
+      console.error("Gallery upload error:", error);
+      res.status(500).json({ message: error.message });
     }
   });
 

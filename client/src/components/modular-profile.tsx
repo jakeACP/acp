@@ -40,13 +40,42 @@ import {
   Zap,
   Calendar,
   Star,
-  Target
+  Target,
+  Trash2,
+  BadgeCheck,
+  CheckCircle,
+  Clock,
+  ExternalLink
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { FriendButton } from "@/components/friend-button";
 import { apiRequest } from "@/lib/queryClient";
 import type { Post } from "@shared/schema";
+
+interface ExtendedProfileData {
+  issueInterests?: string[];
+  pinnedPostId?: string | null;
+  galleryPhotos?: string[];
+  campaignHubLinks?: {
+    donateUrl?: string | null;
+    volunteerUrl?: string | null;
+  };
+  legacyTimeline?: Array<{ text: string; date: string }>;
+  widgetConfig?: {
+    pollQuestion?: string | null;
+    pollOption1?: string;
+    pollOption2?: string;
+    electionDate?: string | null;
+  };
+}
+
+const PRESET_ISSUES = [
+  "Healthcare Reform", "Climate Action", "Education", "Economic Justice",
+  "Anti-Corruption", "Housing Affordability", "Criminal Justice Reform",
+  "Immigration", "LGBTQ+ Rights", "Voting Rights", "Gun Control",
+  "Labor Rights", "Veterans Affairs", "Foreign Policy", "Tax Reform"
+];
 
 function FeedModule({ userId, itemCount, username }: { userId: string; itemCount: number; username?: string }) {
   const { data: posts, isLoading, isError } = useQuery<Post[]>({
@@ -143,6 +172,10 @@ interface UserProfile {
   profileBackground?: string;
   favoriteSong?: string;
   profileLayout?: any;
+  voterVerificationStatus?: string;
+  trustScore?: string;
+  profileViews?: number;
+  createdAt?: string;
 }
 
 export function ModularProfile({ userId, isOwner = false }: { userId?: string; isOwner?: boolean }) {
@@ -259,6 +292,253 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
     queryKey: ["/api/friends"],
     enabled: isOwner,
   });
+
+  // Extended profile data (issue interests, pinned post, gallery, etc.)
+  const { data: extendedData = {} as ExtendedProfileData, refetch: refetchExtended } = useQuery<ExtendedProfileData>({
+    queryKey: ["/api/profile", profileUserId, "extended"],
+    queryFn: async () => {
+      if (!profileUserId) return {};
+      const res = await fetch(`/api/profile/${profileUserId}/extended`);
+      if (!res.ok) return {};
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // Followers (Supporter Wall)
+  const { data: followers = [] } = useQuery<any[]>({
+    queryKey: ["/api/users", profileUserId, "followers"],
+    queryFn: async () => {
+      if (!profileUserId) return [];
+      const res = await fetch(`/api/users/${profileUserId}/followers`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // Following list
+  const { data: followingList = [] } = useQuery<any[]>({
+    queryKey: ["/api/users", profileUserId, "following"],
+    queryFn: async () => {
+      if (!profileUserId) return [];
+      const res = await fetch(`/api/users/${profileUserId}/following`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // All friends (accepted)
+  const { data: allProfileFriends = [] } = useQuery<any[]>({
+    queryKey: ["/api/users", profileUserId, "friends"],
+    queryFn: async () => {
+      if (!profileUserId) return [];
+      const res = await fetch(`/api/users/${profileUserId}/friends`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // Activity stats
+  const { data: activityStats } = useQuery<any>({
+    queryKey: ["/api/profile", profileUserId, "activity-stats"],
+    queryFn: async () => {
+      if (!profileUserId) return null;
+      const res = await fetch(`/api/profile/${profileUserId}/activity-stats`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // Badges
+  const { data: badges = [] } = useQuery<any[]>({
+    queryKey: ["/api/profile", profileUserId, "badges"],
+    queryFn: async () => {
+      if (!profileUserId) return [];
+      const res = await fetch(`/api/profile/${profileUserId}/badges`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // Scorecard
+  const { data: scorecard } = useQuery<any>({
+    queryKey: ["/api/profile", profileUserId, "scorecard"],
+    queryFn: async () => {
+      if (!profileUserId) return null;
+      const res = await fetch(`/api/profile/${profileUserId}/scorecard`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // Democracy Wrapped
+  const wrappedYear = new Date().getFullYear();
+  const { data: wrappedData } = useQuery<any>({
+    queryKey: ["/api/profile", profileUserId, "wrapped", wrappedYear],
+    queryFn: async () => {
+      if (!profileUserId) return null;
+      const res = await fetch(`/api/profile/${profileUserId}/wrapped/${wrappedYear}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+  const [wrappedExpanded, setWrappedExpanded] = useState(false);
+
+  // Widget poll (backend-persisted votes)
+  const { data: widgetPollData, refetch: refetchWidgetPoll } = useQuery<{ results: Record<string, number>; myVote: string | null }>({
+    queryKey: ["/api/profile", profileUserId, "widget-poll"],
+    queryFn: async () => {
+      if (!profileUserId) return { results: {}, myVote: null };
+      const res = await fetch(`/api/profile/${profileUserId}/widget-poll`);
+      if (!res.ok) return { results: {}, myVote: null };
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  const castWidgetVoteMutation = useMutation({
+    mutationFn: async (option: string) => {
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const csrfToken = getCsrfToken();
+      const res = await fetch(`/api/profile/${profileUserId}/widget-vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(csrfToken ? { "x-csrf-token": csrfToken } : {}) },
+        credentials: "include",
+        body: JSON.stringify({ option }),
+      });
+      if (!res.ok) throw new Error("Vote failed");
+      return res.json();
+    },
+    onMutate: (option) => setWidgetVoteOptimistic(option),
+    onSuccess: () => {
+      refetchWidgetPoll();
+      setWidgetVoteOptimistic(null);
+    },
+    onError: () => {
+      setWidgetVoteOptimistic(null);
+      toast({ title: "Vote failed", variant: "destructive" });
+    },
+  });
+
+  // User signals (Media Hub)
+  const { data: userSignals = [] } = useQuery<any[]>({
+    queryKey: ["/api/mobile/signals/user", profileUserId],
+    queryFn: async () => {
+      if (!profileUserId) return [];
+      const res = await fetch(`/api/mobile/signals/user/${profileUserId}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // User posts (Debate History + Event Participation)
+  const { data: userPostsList = [] } = useQuery<any[]>({
+    queryKey: ["/api/posts/user", profileUserId],
+    queryFn: async () => {
+      if (!profileUserId) return [];
+      const res = await fetch(`/api/posts/user/${profileUserId}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // Pinned post
+  const pinnedPostId = extendedData?.pinnedPostId;
+  const { data: pinnedPost } = useQuery<any>({
+    queryKey: ["/api/posts", pinnedPostId],
+    queryFn: async () => {
+      if (!pinnedPostId) return null;
+      const res = await fetch(`/api/posts/${pinnedPostId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!pinnedPostId,
+  });
+
+  // Track profile views on load (skip own profile)
+  const hasTrackedView = React.useRef(false);
+  React.useEffect(() => {
+    if (profileUserId && !isOwner && !hasTrackedView.current) {
+      hasTrackedView.current = true;
+      fetch(`/api/profile/${profileUserId}/view`, { method: "POST" }).catch(() => {});
+    }
+  }, [profileUserId, isOwner]);
+
+  // Save extended profile data mutation
+  const saveExtendedMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const csrfToken = getCsrfToken();
+      const response = await fetch("/api/profile/extended", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...(csrfToken ? { "x-csrf-token": csrfToken } : {}) },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to save");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profile", profileUserId, "extended"] });
+      refetchExtended();
+      toast({ title: "Saved!", description: "Profile updated." });
+    },
+    onError: () => {
+      toast({ title: "Save Failed", variant: "destructive" });
+    },
+  });
+
+  // Local edit states for extended profile fields
+  const [editIssues, setEditIssues] = useState<string[]>([]);
+  const [editPinnedPostId, setEditPinnedPostId] = useState<string>("");
+  const [editingTimelineIndex, setEditingTimelineIndex] = useState<number | null>(null);
+  const [editingTimelineText, setEditingTimelineText] = useState<string>("");
+  const [editingTimelineDate, setEditingTimelineDate] = useState<string>("");
+  const [pinnedPostSearch, setPinnedPostSearch] = useState<string>("");
+  const [editCampaignDonate, setEditCampaignDonate] = useState("");
+  const [editCampaignVolunteer, setEditCampaignVolunteer] = useState("");
+  const [editTimelineText, setEditTimelineText] = useState("");
+  const [editTimelineDate, setEditTimelineDate] = useState("");
+  const [editPollQuestion, setEditPollQuestion] = useState("");
+  const [editPollOption1, setEditPollOption1] = useState("");
+  const [editPollOption2, setEditPollOption2] = useState("");
+  const [editElectionDate, setEditElectionDate] = useState("");
+  const [widgetVoteOptimistic, setWidgetVoteOptimistic] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const handleGalleryUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const { getCsrfToken } = await import("@/lib/queryClient");
+      const csrfToken = getCsrfToken();
+      const formData = new FormData();
+      formData.append("photo", file);
+      const response = await fetch("/api/profile/gallery", {
+        method: "POST",
+        headers: { ...(csrfToken ? { "x-csrf-token": csrfToken } : {}) },
+        credentials: "include",
+        body: formData,
+      });
+      if (!response.ok) throw new Error("Upload failed");
+      await refetchExtended();
+      toast({ title: "Photo added!", description: "Your gallery has been updated." });
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const saveTop8Mutation = useMutation({
     mutationFn: async (friendIds: string[]) => {
@@ -725,30 +1005,62 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
               )}
             </div>
           );
-        case "photos":
+        case "photos": {
+          const galleryPhotos: string[] = extendedData?.galleryPhotos || [];
           return (
-            <div className="grid grid-cols-3 gap-2">
-              {Array.from({ length: module.itemCount }, (_, i) => (
-                <div key={i + 1} className="aspect-square bg-gray-200 rounded-lg flex items-center justify-center">
-                  <Camera className="h-6 w-6 text-gray-400" />
+            <div className="space-y-3">
+              {isOwner && (
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <Button size="sm" variant="outline" asChild>
+                      <span>
+                        {uploadingPhoto ? <Clock className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />}
+                        {uploadingPhoto ? "Uploading..." : "Add Photo"}
+                      </span>
+                    </Button>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleGalleryUpload} disabled={uploadingPhoto} />
+                  </label>
                 </div>
-              ))}
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                {galleryPhotos.slice(0, module.itemCount).map((url, i) => (
+                  <div key={i} className="relative aspect-square rounded-lg overflow-hidden group">
+                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                    {isOwner && (
+                      <button
+                        onClick={() => {
+                          const updated = galleryPhotos.filter((_, idx) => idx !== i);
+                          saveExtendedMutation.mutate({ galleryPhotos: updated });
+                        }}
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {galleryPhotos.length === 0 && Array.from({ length: Math.min(module.itemCount, 6) }, (_, i) => (
+                  <div key={i} className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+                    <Camera className="h-6 w-6 text-gray-400" />
+                  </div>
+                ))}
+              </div>
             </div>
           );
+        }
         case "feed":
           return user?.id ? (
             <FeedModule userId={user.id} itemCount={module.itemCount} username={user.username} />
           ) : null;
-        case "friends":
+        case "friends": {
+          const displayFriends = allProfileFriends.slice(0, module.itemCount);
           return (
             <div className="space-y-2">
-              {top8Friends.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-4">
-                  {isOwner ? "No Top 8 selected yet. Click the edit icon to choose friends." : "No Top 8 friends selected."}
-                </p>
+              {displayFriends.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">No friends yet.</p>
               ) : (
                 <div className="grid grid-cols-4 gap-2">
-                  {top8Friends.map((friend: any) => (
+                  {displayFriends.map((friend: any) => (
                     <a key={friend.userId} href={`/profile/${friend.userId}`} className="text-center group">
                       <Avatar className="w-12 h-12 mx-auto mb-1">
                         <AvatarImage src={friend.avatar} alt={friend.username} />
@@ -765,17 +1077,30 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
               )}
             </div>
           );
-        case "following":
+        }
+        case "following": {
+          const displayFollowing = followingList.slice(0, module.itemCount);
           return (
             <div className="space-y-2">
-              {Array.from({ length: module.itemCount }, (_, i) => (
-                <div key={i + 1} className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-gray-300 rounded-full"></div>
-                  <span className="text-sm">Following {i + 1}</span>
-                </div>
-              ))}
+              {displayFollowing.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">Not following anyone yet.</p>
+              ) : (
+                displayFollowing.map((u: any) => (
+                  <a key={u.id} href={`/profile/${u.id}`} className="flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                    <Avatar className="w-8 h-8">
+                      <AvatarImage src={u.avatar} alt={u.username} />
+                      <AvatarFallback className="text-xs">{u.firstName?.[0] || u.username?.[0] || "?"}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <span className="text-sm font-medium block">{u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username}</span>
+                      <span className="text-xs text-gray-500">@{u.username}</span>
+                    </div>
+                  </a>
+                ))
+              )}
             </div>
           );
+        }
         case "music":
           return (
             <div className="text-center">
@@ -820,229 +1145,436 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
             </div>
           );
         }
-        case "badges":
+        case "badges": {
+          const displayBadges = badges.slice(0, module.itemCount);
           return (
             <div className="grid grid-cols-3 gap-2">
-              {Array.from({ length: module.itemCount }, (_, i) => (
-                <div key={i + 1} className="text-center p-2 border rounded-lg">
-                  <Award className="h-6 w-6 mx-auto mb-1 text-yellow-500" />
-                  <span className="text-xs">Badge {i + 1}</span>
-                </div>
-              ))}
+              {displayBadges.length === 0 ? (
+                <p className="col-span-3 text-sm text-gray-500 text-center py-4">No badges yet.</p>
+              ) : (
+                displayBadges.map((badge: any) => (
+                  <div key={badge.id} className={`text-center p-2 border rounded-lg ${badge.earned ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200" : "opacity-40 grayscale"}`} title={badge.description}>
+                    <Award className={`h-6 w-6 mx-auto mb-1 ${badge.earned ? "text-yellow-500" : "text-gray-400"}`} />
+                    <span className="text-xs font-medium leading-tight block">{badge.name}</span>
+                    {badge.earned && <CheckCircle className="h-3 w-3 text-green-500 mx-auto mt-0.5" />}
+                  </div>
+                ))
+              )}
             </div>
           );
-        case "issues":
+        }
+        case "issues": {
+          const savedIssues: string[] = extendedData?.issueInterests || [];
           return (
             <div className="space-y-2">
-              {["Healthcare Reform", "Anti-Corruption", "Climate Action", "Education", "Economic Justice"].slice(0, module.itemCount).map((issue, i) => (
-                <div key={i} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
-                  <Flag className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm font-medium">{issue}</span>
-                </div>
-              ))}
+              {savedIssues.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  {isOwner ? "Click edit to select your top issues." : "No issue interests set."}
+                </p>
+              ) : (
+                savedIssues.slice(0, module.itemCount).map((issue: string, i: number) => (
+                  <div key={i} className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <Flag className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium">{issue}</span>
+                  </div>
+                ))
+              )}
             </div>
           );
+        }
         case "civic-tracker":
           return (
             <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-3 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">23</div>
-                <div className="text-xs text-green-700">Votes Cast</div>
+              <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{activityStats?.postsCount ?? "—"}</div>
+                <div className="text-xs text-blue-700">Posts Created</div>
               </div>
-              <div className="text-center p-3 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">8</div>
-                <div className="text-xs text-blue-700">Events Joined</div>
+              <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{activityStats?.votesCount ?? "—"}</div>
+                <div className="text-xs text-green-700">Polls Voted</div>
               </div>
-              <div className="text-center p-3 bg-purple-50 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">15</div>
-                <div className="text-xs text-purple-700">Polls Created</div>
+              <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">{activityStats?.commentsCount ?? "—"}</div>
+                <div className="text-xs text-purple-700">Comments Made</div>
               </div>
-              <div className="text-center p-3 bg-orange-50 rounded-lg">
-                <div className="text-2xl font-bold text-orange-600">42</div>
-                <div className="text-xs text-orange-700">Debates</div>
+              <div className="text-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                <div className="text-2xl font-bold text-orange-600">{activityStats?.likesReceived ?? "—"}</div>
+                <div className="text-xs text-orange-700">Likes Received</div>
               </div>
             </div>
           );
-        case "pinned-post":
+        case "pinned-post": {
+          if (!extendedData?.pinnedPostId) {
+            return (
+              <div className="p-4 border-dashed border-2 border-gray-300 rounded-lg text-center">
+                <Star className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm text-gray-500">{isOwner ? "Click edit to pin a post." : "No pinned post."}</p>
+              </div>
+            );
+          }
+          if (!pinnedPost) {
+            return <div className="p-4 text-sm text-gray-400 text-center">Loading pinned post...</div>;
+          }
           return (
-            <div className="p-4 border-l-4 border-blue-500 bg-blue-50 rounded-lg">
+            <div className="p-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <div className="flex items-start gap-2">
-                <Star className="h-5 w-5 text-blue-600 mt-1" />
+                <Star className="h-5 w-5 text-blue-600 mt-1 flex-shrink-0" />
                 <div>
-                  <p className="font-medium text-blue-900">Pinned Statement</p>
-                  <p className="text-sm text-blue-700 mt-1">"Democracy works best when we all participate. Let's build a better future together! #ACP2024"</p>
+                  <p className="text-sm text-blue-800 dark:text-blue-200 line-clamp-4">{pinnedPost.content}</p>
+                  <div className="flex gap-3 mt-2 text-xs text-blue-600">
+                    {(pinnedPost.likesCount ?? 0) > 0 && <span>{pinnedPost.likesCount} likes</span>}
+                    {pinnedPost.createdAt && <span>{new Date(pinnedPost.createdAt).toLocaleDateString()}</span>}
+                  </div>
                 </div>
               </div>
             </div>
           );
-        case "debate-history":
+        }
+        case "debate-history": {
+          const debatePosts = userPostsList.filter((p: any) => p.type === "poll" || p.type === "debate").slice(0, module.itemCount);
           return (
             <div className="space-y-2">
-              {Array.from({ length: module.itemCount }, (_, i) => (
-                <div key={i + 1} className="flex items-center justify-between p-2 border rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-gray-600" />
-                    <span className="text-sm">Healthcare Debate #{i + 1}</span>
+              {debatePosts.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">No debates or polls yet.</p>
+              ) : (
+                debatePosts.map((post: any) => (
+                  <div key={post.id} className="flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <MessageSquare className="h-4 w-4 text-gray-600 flex-shrink-0" />
+                      <span className="text-sm truncate">{post.title || post.content?.slice(0, 50) || "Untitled"}</span>
+                    </div>
+                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                      <span className="text-xs text-gray-400">{post.likesCount ?? 0} likes</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">{post.type}</span>
+                    </div>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded ${i % 2 === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {i % 2 === 0 ? 'Won' : 'Lost'}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           );
-        case "events":
+        }
+        case "events": {
+          const volunteerPosts = userPostsList.filter((p: any) => p.type === "volunteer").slice(0, module.itemCount);
           return (
             <div className="space-y-2">
-              {Array.from({ length: module.itemCount }, (_, i) => (
-                <div key={i + 1} className="flex items-center gap-2 p-2 border rounded-lg">
-                  <Calendar className="h-4 w-4 text-blue-600" />
-                  <div>
-                    <div className="text-sm font-medium">Town Hall #{i + 1}</div>
-                    <div className="text-xs text-gray-500">RSVP'd • Jan {15 + i}</div>
+              {volunteerPosts.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">No volunteer events yet.</p>
+              ) : (
+                volunteerPosts.map((post: any) => (
+                  <div key={post.id} className="flex items-center gap-2 p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <Calendar className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{post.volunteerTitle || post.title || post.content?.slice(0, 40) || "Volunteer Event"}</div>
+                      <div className="text-xs text-gray-500">{post.volunteerOrganization || (post.createdAt ? new Date(post.createdAt).toLocaleDateString() : "")}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           );
+        }
         case "analytics":
           return (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm">Profile Views</span>
-                <span className="font-bold">1,247</span>
+                <span className="font-bold">{(user?.profileViews ?? 0).toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm">Post Reach</span>
-                <span className="font-bold">3,856</span>
+                <span className="text-sm">Followers</span>
+                <span className="font-bold">{followers.length.toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm">Follower Growth</span>
-                <span className="font-bold text-green-600">+127</span>
+                <span className="text-sm">Following</span>
+                <span className="font-bold">{followingList.length.toLocaleString()}</span>
               </div>
-              <BarChart3 className="h-16 w-full text-gray-300" />
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Friends</span>
+                <span className="font-bold">{allProfileFriends.length.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Posts</span>
+                <span className="font-bold">{activityStats?.postsCount ?? 0}</span>
+              </div>
             </div>
           );
-        case "campaign-hub":
+        case "campaign-hub": {
+          const donateUrl = extendedData?.campaignHubLinks?.donateUrl;
+          const volunteerUrl = extendedData?.campaignHubLinks?.volunteerUrl;
           return (
             <div className="space-y-3">
-              <Button className="w-full" variant="default">
-                <Heart className="h-4 w-4 mr-2" />
-                Donate to Campaign
-              </Button>
-              <Button className="w-full" variant="outline">
-                <Users className="h-4 w-4 mr-2" />
-                Volunteer Sign-Up
-              </Button>
-              <div className="text-center p-2 bg-gray-50 rounded">
-                <div className="text-sm font-medium">Next Event</div>
-                <div className="text-xs text-gray-600">Rally - Jan 20, 2025</div>
+              {donateUrl ? (
+                <a href={donateUrl} target="_blank" rel="noopener noreferrer">
+                  <Button className="w-full" variant="default">
+                    <Heart className="h-4 w-4 mr-2" />
+                    Donate to Campaign
+                    <ExternalLink className="h-3 w-3 ml-2" />
+                  </Button>
+                </a>
+              ) : (
+                <Button className="w-full" variant="default" disabled={!isOwner}>
+                  <Heart className="h-4 w-4 mr-2" />
+                  {isOwner ? "Add Donation Link (click edit)" : "No donation link set"}
+                </Button>
+              )}
+              {volunteerUrl ? (
+                <a href={volunteerUrl} target="_blank" rel="noopener noreferrer">
+                  <Button className="w-full" variant="outline">
+                    <Users className="h-4 w-4 mr-2" />
+                    Volunteer Sign-Up
+                    <ExternalLink className="h-3 w-3 ml-2" />
+                  </Button>
+                </a>
+              ) : (
+                <Button className="w-full" variant="outline" disabled={!isOwner}>
+                  <Users className="h-4 w-4 mr-2" />
+                  {isOwner ? "Add Volunteer Link (click edit)" : "No volunteer link set"}
+                </Button>
+              )}
+            </div>
+          );
+        }
+        case "verified-badge": {
+          const isVerified = user?.voterVerificationStatus === "verified";
+          const isPremium = user?.subscriptionStatus === "premium";
+          return (
+            <div className="text-center p-4">
+              <Shield className={`h-12 w-12 mx-auto mb-2 ${isVerified ? "text-blue-600" : "text-gray-400"}`} />
+              <div className={`font-bold ${isVerified ? "text-blue-900 dark:text-blue-300" : "text-gray-600"}`}>
+                {isVerified ? "Verified Citizen" : "Not Verified"}
+              </div>
+              <div className="text-xs text-gray-500 mt-1 space-y-1">
+                <div className={`flex items-center justify-center gap-1 ${isVerified ? "text-green-600" : "text-gray-400"}`}>
+                  {isVerified ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                  {isVerified ? "ID Verified" : user?.voterVerificationStatus === "pending" ? "Verification Pending" : "Not Verified"}
+                </div>
+                <div className={`flex items-center justify-center gap-1 ${isPremium ? "text-purple-600" : "text-gray-400"}`}>
+                  {isPremium ? <Crown className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                  {isPremium ? "ACP+ Member" : "Free Account"}
+                </div>
               </div>
             </div>
           );
-        case "verified-badge":
-          return (
-            <div className="text-center p-4">
-              <Shield className="h-12 w-12 mx-auto mb-2 text-blue-600" />
-              <div className="font-bold text-blue-900">Verified Citizen</div>
-              <div className="text-xs text-blue-700">ID Verified • ACP+ Member</div>
-            </div>
-          );
+        }
         case "civic-scorecard":
           return (
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm">Contribution Score</span>
-                <span className="font-bold text-green-600">A+</span>
+                <span className="text-sm">Trust Score</span>
+                <span className={`font-bold ${scorecard?.trustGrade?.startsWith("A") ? "text-green-600" : scorecard?.trustGrade?.startsWith("B") ? "text-blue-600" : "text-gray-600"}`}>{scorecard?.trustGrade ?? "N/A"}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm">Fact-Check Accuracy</span>
-                <span className="font-bold">94%</span>
+                <span className="text-sm">Engagement Grade</span>
+                <span className={`font-bold ${scorecard?.engagementGrade?.startsWith("A") ? "text-green-600" : scorecard?.engagementGrade?.startsWith("B") ? "text-blue-600" : "text-gray-600"}`}>{scorecard?.engagementGrade ?? "N/A"}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm">Community Trust</span>
-                <span className="font-bold text-blue-600">High</span>
+                <span className="text-sm">Community Grade</span>
+                <span className={`font-bold ${scorecard?.communityGrade?.startsWith("A") ? "text-green-600" : scorecard?.communityGrade?.startsWith("B") ? "text-blue-600" : "text-gray-600"}`}>{scorecard?.communityGrade ?? "N/A"}</span>
               </div>
-              <div className="text-center mt-3">
-                <TrendingUp className="h-8 w-8 mx-auto text-green-500" />
+              <div className="flex justify-between items-center text-xs text-gray-500 pt-1 border-t">
+                <span>{scorecard?.postCount ?? 0} posts</span>
+                <span>{scorecard?.followerCount ?? 0} followers</span>
+                <span>Trust: {scorecard?.trustScore != null ? `${Math.round(scorecard.trustScore * 100)}%` : "N/A"}</span>
               </div>
             </div>
           );
-        case "media-hub":
+        case "media-hub": {
+          const displaySignals = userSignals.slice(0, module.itemCount);
           return (
             <div className="grid grid-cols-1 gap-2">
-              {Array.from({ length: module.itemCount }, (_, i) => (
-                <div key={i + 1} className="flex items-center gap-2 p-2 border rounded-lg">
-                  <Video className="h-4 w-4 text-purple-600" />
-                  <span className="text-sm">Video Blog #{i + 1}</span>
-                  <span className="text-xs text-gray-500 ml-auto">12:34</span>
-                </div>
-              ))}
+              {displaySignals.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">No videos yet.</p>
+              ) : (
+                displaySignals.map((signal: any) => (
+                  <div key={signal.id} className="flex items-center gap-2 p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                    {signal.thumbnailUrl ? (
+                      <img src={signal.thumbnailUrl} alt={signal.title} className="w-12 h-9 object-cover rounded" />
+                    ) : (
+                      <div className="w-12 h-9 bg-purple-100 dark:bg-purple-900/30 rounded flex items-center justify-center">
+                        <Video className="h-4 w-4 text-purple-600" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium truncate block">{signal.title || "Untitled Video"}</span>
+                      <span className="text-xs text-gray-500">{signal.createdAt ? new Date(signal.createdAt).toLocaleDateString() : ""}</span>
+                    </div>
+                    {signal.duration && <span className="text-xs text-gray-500 ml-auto">{Math.floor(signal.duration / 60)}:{String(signal.duration % 60).padStart(2, "0")}</span>}
+                  </div>
+                ))
+              )}
             </div>
           );
-        case "widgets":
+        }
+        case "widgets": {
+          const widgetConfig = extendedData?.widgetConfig || {};
+          const pollQuestion = widgetConfig.pollQuestion;
+          const pollOption1 = widgetConfig.pollOption1 || "Option A";
+          const pollOption2 = widgetConfig.pollOption2 || "Option B";
+          const electionDate = widgetConfig.electionDate ? new Date(widgetConfig.electionDate) : null;
+          const daysUntilElection = electionDate ? Math.max(0, Math.ceil((electionDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : null;
+          // Backend-persisted vote data with optimistic UI
+          const myVote = widgetVoteOptimistic ?? widgetPollData?.myVote ?? null;
+          const pollResults = widgetPollData?.results || {};
+          const totalVotes = Object.values(pollResults).reduce((s, n) => s + n, 0);
+          const opt1Count = pollResults[pollOption1] || 0;
+          const opt2Count = pollResults[pollOption2] || 0;
+          const opt1Pct = totalVotes > 0 ? Math.round((opt1Count / totalVotes) * 100) : 0;
+          const opt2Pct = totalVotes > 0 ? Math.round((opt2Count / totalVotes) * 100) : 0;
           return (
             <div className="space-y-2">
-              <div className="p-3 border rounded-lg bg-yellow-50">
+              <div className="p-3 border rounded-lg bg-yellow-50 dark:bg-yellow-900/20">
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="h-4 w-4 text-yellow-600" />
                   <span className="text-sm font-medium">Quick Poll</span>
+                  {totalVotes > 0 && <span className="text-xs text-gray-400 ml-auto">{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</span>}
                 </div>
-                <p className="text-xs text-gray-600">Should we increase healthcare funding?</p>
+                {pollQuestion ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{pollQuestion}</p>
+                    {myVote ? (
+                      // Show results after voting
+                      <div className="space-y-1.5">
+                        {[{ opt: pollOption1, count: opt1Count, pct: opt1Pct }, { opt: pollOption2, count: opt2Count, pct: opt2Pct }].map(({ opt, count, pct }) => (
+                          <div key={opt}>
+                            <div className="flex justify-between text-xs mb-0.5">
+                              <span className={myVote === opt ? "font-semibold" : ""}>{opt} {myVote === opt && "✓"}</span>
+                              <span>{pct}% ({count})</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${myVote === opt ? "bg-yellow-400" : "bg-gray-400"}`} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => castWidgetVoteMutation.mutate(pollOption1)}
+                          disabled={castWidgetVoteMutation.isPending}
+                          className="flex-1 text-xs py-1 px-2 rounded border border-gray-200 bg-white hover:bg-yellow-50 transition-colors"
+                        >{pollOption1}</button>
+                        <button
+                          onClick={() => castWidgetVoteMutation.mutate(pollOption2)}
+                          disabled={castWidgetVoteMutation.isPending}
+                          className="flex-1 text-xs py-1 px-2 rounded border border-gray-200 bg-white hover:bg-yellow-50 transition-colors"
+                        >{pollOption2}</button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">{isOwner ? "Click edit to set a poll question." : "No poll set."}</p>
+                )}
               </div>
-              <div className="p-3 border rounded-lg bg-green-50">
+              <div className="p-3 border rounded-lg bg-green-50 dark:bg-green-900/20">
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="h-4 w-4 text-green-600" />
                   <span className="text-sm font-medium">Election Countdown</span>
                 </div>
-                <p className="text-xs text-gray-600">127 days until local elections</p>
+                {daysUntilElection !== null ? (
+                  <p className="text-sm font-bold text-green-700">{daysUntilElection} days until {electionDate?.toLocaleDateString()}</p>
+                ) : (
+                  <p className="text-xs text-gray-500">{isOwner ? "Click edit to set an election date." : "No election date set."}</p>
+                )}
               </div>
             </div>
           );
-        case "supporter-wall":
+        }
+        case "supporter-wall": {
+          const displayFollowers = followers.slice(0, module.itemCount);
           return (
             <div className="grid grid-cols-4 gap-2">
-              {Array.from({ length: module.itemCount }, (_, i) => (
-                <div key={i + 1} className="text-center">
-                  <div className="w-10 h-10 bg-green-100 rounded-full mx-auto mb-1 flex items-center justify-center">
-                    <Heart className="h-4 w-4 text-green-600" />
-                  </div>
-                  <span className="text-xs">Supporter {i + 1}</span>
-                </div>
-              ))}
+              {displayFollowers.length === 0 ? (
+                <p className="col-span-4 text-sm text-gray-500 text-center py-4">No supporters yet.</p>
+              ) : (
+                displayFollowers.map((follower: any) => (
+                  <a key={follower.id} href={`/profile/${follower.id}`} className="text-center group">
+                    <Avatar className="w-10 h-10 mx-auto mb-1">
+                      <AvatarImage src={follower.avatar} alt={follower.username} />
+                      <AvatarFallback className="text-xs bg-green-100 text-green-700">
+                        {follower.firstName?.[0] || follower.username?.[0] || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-xs truncate block group-hover:text-green-600 transition-colors">
+                      {follower.firstName || follower.username}
+                    </span>
+                  </a>
+                ))
+              )}
             </div>
           );
+        }
         case "democracy-wrapped":
           return (
-            <div className="bg-gradient-to-r from-purple-500 to-blue-500 text-white p-4 rounded-lg text-center">
-              <Star className="h-8 w-8 mx-auto mb-2" />
-              <div className="font-bold">2024 Democracy Wrapped</div>
-              <div className="text-sm opacity-90">Your year in civic engagement</div>
-              <Button variant="secondary" size="sm" className="mt-2">
-                View Report
-              </Button>
+            <div className="space-y-3">
+              <div className="bg-gradient-to-r from-purple-500 to-blue-500 text-white p-4 rounded-lg text-center">
+                <Star className="h-8 w-8 mx-auto mb-2" />
+                <div className="font-bold">{wrappedYear} Democracy Wrapped</div>
+                <div className="text-sm opacity-90">
+                  {wrappedData ? `${wrappedData.postsWritten} posts · ${wrappedData.votesCast} votes · ${wrappedData.commentsMade} comments` : "Your year in civic engagement"}
+                </div>
+                <Button variant="secondary" size="sm" className="mt-2" onClick={() => setWrappedExpanded(e => !e)}>
+                  {wrappedExpanded ? "Hide Report" : "View Report"}
+                </Button>
+              </div>
+              {wrappedExpanded && wrappedData && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-center p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                    <div className="text-xl font-bold text-purple-600">{wrappedData.postsWritten}</div>
+                    <div className="text-xs text-gray-600">Posts Written</div>
+                  </div>
+                  <div className="text-center p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <div className="text-xl font-bold text-blue-600">{wrappedData.votesCast}</div>
+                    <div className="text-xs text-gray-600">Votes Cast</div>
+                  </div>
+                  <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <div className="text-xl font-bold text-green-600">{wrappedData.commentsMade}</div>
+                    <div className="text-xs text-gray-600">Comments Made</div>
+                  </div>
+                  <div className="text-center p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                    <div className="text-xl font-bold text-orange-600">{wrappedData.friendsAdded}</div>
+                    <div className="text-xs text-gray-600">Friends Added</div>
+                  </div>
+                  <div className="col-span-2 text-center p-2 bg-pink-50 dark:bg-pink-900/20 rounded-lg">
+                    <div className="text-xl font-bold text-pink-600">{wrappedData.likesReceived}</div>
+                    <div className="text-xs text-gray-600">Likes Received</div>
+                  </div>
+                </div>
+              )}
             </div>
           );
-        case "legacy-timeline":
+        case "legacy-timeline": {
+          const timeline: Array<{text: string; date: string}> = extendedData?.legacyTimeline || [];
+          const sortedTimeline = [...timeline].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const dotColors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-orange-500", "bg-pink-500", "bg-teal-500"];
           return (
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-sm">Joined ACP - Jan 2024</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-sm">First Vote Cast - Feb 2024</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <span className="text-sm">Debate Champion - Mar 2024</span>
-              </div>
-              <Button variant="outline" size="sm" className="w-full mt-2">
-                View Full Timeline
-              </Button>
+              {sortedTimeline.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">{isOwner ? "Click edit to add milestones." : "No timeline entries yet."}</p>
+              ) : (
+                sortedTimeline.map((entry, i) => (
+                  <div key={i} className="flex items-start gap-2 group">
+                    <div className={`w-2 h-2 ${dotColors[i % dotColors.length]} rounded-full mt-1.5 flex-shrink-0`}></div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm">{entry.text}</span>
+                      <span className="text-xs text-gray-400 ml-2">{new Date(entry.date).toLocaleDateString()}</span>
+                    </div>
+                    {isOwner && (
+                      <button
+                        onClick={() => {
+                          const updated = timeline.filter((_, idx) => idx !== i);
+                          saveExtendedMutation.mutate({ legacyTimeline: updated });
+                        }}
+                        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           );
+        }
         case "political-compass":
           return (
             <div className="space-y-3">
@@ -1306,6 +1838,337 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                             </div>
                           </div>
                         )}
+
+                          {/* Issue Interests specific configuration */}
+                          {module.type === "issues" && (
+                            <div className="space-y-3">
+                              <Label className="text-sm font-medium">Select Your Top Issues</Label>
+                              <p className="text-xs text-gray-500">Pick issues you care about (up to 10)</p>
+                              <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                                {PRESET_ISSUES.map((issue) => {
+                                  const selected = (extendedData?.issueInterests || []).includes(issue);
+                                  return (
+                                    <button
+                                      key={issue}
+                                      type="button"
+                                      onClick={() => {
+                                        const current: string[] = extendedData?.issueInterests || [];
+                                        const updated = selected
+                                          ? current.filter((i: string) => i !== issue)
+                                          : current.length < 10 ? [...current, issue] : current;
+                                        saveExtendedMutation.mutate({ issueInterests: updated });
+                                      }}
+                                      className={`text-left text-xs p-2 rounded-lg border transition-colors ${selected ? "border-blue-500 bg-blue-50 dark:bg-blue-950 font-medium" : "border-gray-200 hover:border-gray-300"}`}
+                                    >
+                                      {selected && "✓ "}{issue}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Pinned Post specific configuration */}
+                          {module.type === "pinned-post" && (
+                            <div className="space-y-3">
+                              <Label className="text-sm font-medium">Select a Post to Pin</Label>
+                              <Input
+                                placeholder="Search your posts..."
+                                value={pinnedPostSearch}
+                                onChange={(e) => setPinnedPostSearch(e.target.value)}
+                              />
+                              <div className="space-y-1 max-h-48 overflow-y-auto border rounded-lg p-1">
+                                {userPostsList.length === 0 ? (
+                                  <p className="text-xs text-gray-500 text-center py-4">No posts found.</p>
+                                ) : (
+                                  userPostsList
+                                    .filter((p: any) => !pinnedPostSearch || (p.content || p.title || "").toLowerCase().includes(pinnedPostSearch.toLowerCase()))
+                                    .slice(0, 20)
+                                    .map((post: any) => {
+                                      const isSelected = extendedData?.pinnedPostId === String(post.id);
+                                      return (
+                                        <button
+                                          key={post.id}
+                                          type="button"
+                                          onClick={() => {
+                                            saveExtendedMutation.mutate({ pinnedPostId: String(post.id) });
+                                            setPinnedPostSearch("");
+                                          }}
+                                          disabled={saveExtendedMutation.isPending}
+                                          className={`w-full text-left text-xs p-2 rounded transition-colors ${isSelected ? "bg-blue-50 dark:bg-blue-950 border border-blue-400" : "hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent"}`}
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            {isSelected && <Star className="h-3 w-3 text-blue-500 flex-shrink-0" />}
+                                            <span className="truncate">{post.content?.slice(0, 80) || post.title || `Post #${post.id}`}</span>
+                                          </div>
+                                          <span className="text-gray-400 ml-auto">{post.createdAt ? new Date(post.createdAt).toLocaleDateString() : ""}</span>
+                                        </button>
+                                      );
+                                    })
+                                )}
+                              </div>
+                              {extendedData?.pinnedPostId && (
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-600 text-xs">Currently pinned post #{extendedData.pinnedPostId}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-red-500 h-6"
+                                    onClick={() => saveExtendedMutation.mutate({ pinnedPostId: null })}
+                                  >
+                                    Unpin
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Campaign Hub specific configuration */}
+                          {module.type === "campaign-hub" && (
+                            <div className="space-y-3">
+                              <Label className="text-sm font-medium">Campaign Links</Label>
+                              <div className="space-y-2">
+                                <div>
+                                  <Label className="text-xs text-gray-500">Donation URL</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      type="url"
+                                      placeholder="https://..."
+                                      value={editCampaignDonate}
+                                      onChange={(e) => setEditCampaignDonate(e.target.value)}
+                                      className="flex-1"
+                                    />
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        saveExtendedMutation.mutate({
+                                          campaignHubLinks: {
+                                            ...(extendedData?.campaignHubLinks || {}),
+                                            donateUrl: editCampaignDonate.trim() || null,
+                                          }
+                                        });
+                                        setEditCampaignDonate("");
+                                      }}
+                                      disabled={saveExtendedMutation.isPending}
+                                    >
+                                      Save
+                                    </Button>
+                                  </div>
+                                  {extendedData?.campaignHubLinks?.donateUrl && (
+                                    <p className="text-xs text-green-600 mt-1">Current: {extendedData.campaignHubLinks.donateUrl}</p>
+                                  )}
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-gray-500">Volunteer Sign-Up URL</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      type="url"
+                                      placeholder="https://..."
+                                      value={editCampaignVolunteer}
+                                      onChange={(e) => setEditCampaignVolunteer(e.target.value)}
+                                      className="flex-1"
+                                    />
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        saveExtendedMutation.mutate({
+                                          campaignHubLinks: {
+                                            ...(extendedData?.campaignHubLinks || {}),
+                                            volunteerUrl: editCampaignVolunteer.trim() || null,
+                                          }
+                                        });
+                                        setEditCampaignVolunteer("");
+                                      }}
+                                      disabled={saveExtendedMutation.isPending}
+                                    >
+                                      Save
+                                    </Button>
+                                  </div>
+                                  {extendedData?.campaignHubLinks?.volunteerUrl && (
+                                    <p className="text-xs text-green-600 mt-1">Current: {extendedData.campaignHubLinks.volunteerUrl}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Legacy Timeline specific configuration */}
+                          {module.type === "legacy-timeline" && (
+                            <div className="space-y-3">
+                              <Label className="text-sm font-medium">Add New Milestone</Label>
+                              <div className="space-y-2">
+                                <Input
+                                  placeholder="Milestone description..."
+                                  value={editTimelineText}
+                                  onChange={(e) => setEditTimelineText(e.target.value)}
+                                />
+                                <Input
+                                  type="date"
+                                  value={editTimelineDate}
+                                  onChange={(e) => setEditTimelineDate(e.target.value)}
+                                />
+                                <Button
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() => {
+                                    if (editTimelineText.trim() && editTimelineDate) {
+                                      const current: Array<{text: string; date: string}> = extendedData?.legacyTimeline || [];
+                                      saveExtendedMutation.mutate({
+                                        legacyTimeline: [...current, { text: editTimelineText.trim(), date: editTimelineDate }]
+                                      });
+                                      setEditTimelineText("");
+                                      setEditTimelineDate("");
+                                    }
+                                  }}
+                                  disabled={saveExtendedMutation.isPending || !editTimelineText.trim() || !editTimelineDate}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Milestone
+                                </Button>
+                              </div>
+                              {(extendedData?.legacyTimeline || []).length > 0 && (
+                                <div className="space-y-1 max-h-52 overflow-y-auto">
+                                  <Label className="text-xs text-gray-500">Edit existing milestones:</Label>
+                                  {(extendedData.legacyTimeline ?? []).map((entry, i) => (
+                                    <div key={i} className="border rounded-lg p-2 bg-gray-50 dark:bg-gray-800 space-y-1.5">
+                                      {editingTimelineIndex === i ? (
+                                        // Inline edit form
+                                        <div className="space-y-1.5">
+                                          <Input
+                                            value={editingTimelineText}
+                                            onChange={(e) => setEditingTimelineText(e.target.value)}
+                                            className="h-7 text-xs"
+                                          />
+                                          <Input
+                                            type="date"
+                                            value={editingTimelineDate}
+                                            onChange={(e) => setEditingTimelineDate(e.target.value)}
+                                            className="h-7 text-xs"
+                                          />
+                                          <div className="flex gap-1">
+                                            <Button
+                                              size="sm"
+                                              className="h-6 text-xs flex-1"
+                                              onClick={() => {
+                                                if (editingTimelineText.trim() && editingTimelineDate) {
+                                                  const updated = (extendedData.legacyTimeline ?? []).map((e, idx) =>
+                                                    idx === i ? { text: editingTimelineText.trim(), date: editingTimelineDate } : e
+                                                  );
+                                                  saveExtendedMutation.mutate({ legacyTimeline: updated });
+                                                  setEditingTimelineIndex(null);
+                                                }
+                                              }}
+                                              disabled={saveExtendedMutation.isPending}
+                                            >Save</Button>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-6 text-xs"
+                                              onClick={() => setEditingTimelineIndex(null)}
+                                            >Cancel</Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        // Display row with edit + delete buttons
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-medium truncate">{entry.text}</p>
+                                            <p className="text-xs text-gray-400">{new Date(entry.date).toLocaleDateString()}</p>
+                                          </div>
+                                          <div className="flex gap-1 flex-shrink-0">
+                                            <button
+                                              onClick={() => {
+                                                setEditingTimelineIndex(i);
+                                                setEditingTimelineText(entry.text);
+                                                setEditingTimelineDate(entry.date);
+                                              }}
+                                              className="text-blue-400 hover:text-blue-600"
+                                              title="Edit"
+                                            >
+                                              <Edit className="h-3 w-3" />
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                const updated = (extendedData.legacyTimeline ?? []).filter((_, idx) => idx !== i);
+                                                saveExtendedMutation.mutate({ legacyTimeline: updated });
+                                              }}
+                                              className="text-red-400 hover:text-red-600"
+                                              title="Delete"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Custom Widgets specific configuration */}
+                          {module.type === "widgets" && (
+                            <div className="space-y-3">
+                              <Label className="text-sm font-medium">Widget Settings</Label>
+                              <div>
+                                <Label className="text-xs text-gray-500">Poll Question</Label>
+                                <Input
+                                  placeholder="e.g. Should we raise the minimum wage?"
+                                  value={editPollQuestion}
+                                  onChange={(e) => setEditPollQuestion(e.target.value)}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs text-gray-500">Option A</Label>
+                                  <Input
+                                    placeholder="Yes"
+                                    value={editPollOption1}
+                                    onChange={(e) => setEditPollOption1(e.target.value)}
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-gray-500">Option B</Label>
+                                  <Input
+                                    placeholder="No"
+                                    value={editPollOption2}
+                                    onChange={(e) => setEditPollOption2(e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <Label className="text-xs text-gray-500">Election Date (for countdown)</Label>
+                                <Input
+                                  type="date"
+                                  value={editElectionDate}
+                                  onChange={(e) => setEditElectionDate(e.target.value)}
+                                />
+                              </div>
+                              <Button
+                                size="sm"
+                                className="w-full"
+                                onClick={() => {
+                                  saveExtendedMutation.mutate({
+                                    widgetConfig: {
+                                      pollQuestion: editPollQuestion.trim() || extendedData?.widgetConfig?.pollQuestion || null,
+                                      pollOption1: editPollOption1.trim() || extendedData?.widgetConfig?.pollOption1 || "Yes",
+                                      pollOption2: editPollOption2.trim() || extendedData?.widgetConfig?.pollOption2 || "No",
+                                      electionDate: editElectionDate || extendedData?.widgetConfig?.electionDate || null,
+                                    }
+                                  });
+                                  setEditPollQuestion("");
+                                  setEditPollOption1("");
+                                  setEditPollOption2("");
+                                  setEditElectionDate("");
+                                }}
+                                disabled={saveExtendedMutation.isPending}
+                              >
+                                Save Widget Settings
+                              </Button>
+                            </div>
+                          )}
+
                         </>
                       )}
                       

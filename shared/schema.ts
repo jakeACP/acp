@@ -67,6 +67,10 @@ export const users = pgTable("users", {
   googleId: text("google_id").unique(), // Google OAuth sub ID
   // Top 8 Friends (ordered list of up to 8 friend user IDs)
   top8FriendIds: text("top8_friend_ids").array(),
+  // Profile analytics
+  profileViews: integer("profile_views").default(0),
+  // Extended profile data (JSON blob for issue interests, pinned post, gallery, etc.)
+  extendedProfileData: json("extended_profile_data"),
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,
