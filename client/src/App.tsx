@@ -65,6 +65,8 @@ import AdminAcePledgesPage from "@/pages/admin-ace-pledges-page";
 import AdminPledgeRequestsPage from "@/pages/admin-pledge-requests-page";
 import AdminScannerPage from "@/pages/admin-scanner-page";
 import AdminAgenticAiPage from "@/pages/admin-agentic-ai-page";
+import BudgetSimulatorPage from "@/pages/budget-simulator-page";
+import AdminBudgetBaselinesPage from "@/pages/admin-budget-baselines-page";
 import SigsDirectoryPage from "@/pages/sigs-directory-page";
 import SigProfilePage from "@/pages/sig-profile-page";
 import WhistleblowingPage from "@/pages/whistleblowing-page";
@@ -205,6 +207,8 @@ function Router() {
       <ProtectedRoute path="/admin/voter-verification" component={AdminVoterVerificationPage} />
       <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />
       <ProtectedRoute path="/admin/pledge-requests" component={AdminPledgeRequestsPage} />
+      <ProtectedRoute path="/budget-simulator" component={BudgetSimulatorPage} />
+      <ProtectedRoute path="/admin/budget-baselines" component={AdminBudgetBaselinesPage} />
       <Route path="/political-compass" component={PoliticalCompassPage} />
       <Route path="/developer" component={DeveloperPage} />
       <Route path="/auth" component={AuthPage} />

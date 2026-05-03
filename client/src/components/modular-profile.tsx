@@ -93,6 +93,75 @@ const PRESET_ISSUES = [
   "Labor Rights", "Veterans Affairs", "Foreign Policy", "Tax Reform"
 ];
 
+function BudgetSimulatorProfileCard({ userId }: { userId?: string }) {
+  const { data: sims = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/budget/simulations/me"],
+    enabled: !!userId,
+  });
+
+  if (isLoading) {
+    return <div className="h-20 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-lg" />;
+  }
+
+  const latest = sims[0];
+
+  if (!latest) {
+    return (
+      <div className="rounded-lg border border-dashed p-4 text-center space-y-2">
+        <p className="text-sm font-medium text-muted-foreground">No budget simulation yet</p>
+        <a href="/budget-simulator">
+          <Button variant="outline" size="sm" className="text-xs">
+            <BarChart3 className="h-3 w-3 mr-1" /> Try the Budget Simulator
+          </Button>
+        </a>
+      </div>
+    );
+  }
+
+  const isDeficit = latest.estimatedDeficit >= 0;
+  const absDiff = Math.abs(latest.proposedTotal - (latest.baselineTotal ?? latest.proposedTotal));
+
+  const colorMap: Record<string, string> = {
+    "Deficit Hawk": "bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-700",
+    "National Security Hawk": "bg-red-50 border-red-300 dark:bg-red-950/30 dark:border-red-700",
+    "Progressive": "bg-blue-50 border-blue-300 dark:bg-blue-950/30 dark:border-blue-700",
+    "Libertarian": "bg-yellow-50 border-yellow-300 dark:bg-yellow-950/30 dark:border-yellow-700",
+    "Social Democrat": "bg-purple-50 border-purple-300 dark:bg-purple-950/30 dark:border-purple-700",
+    "Fiscal Conservative": "bg-orange-50 border-orange-300 dark:bg-orange-950/30 dark:border-orange-700",
+    "Centrist": "bg-slate-50 border-slate-300 dark:bg-slate-800 dark:border-slate-600",
+  };
+  const cardClass = colorMap[latest.philosophyLabel] ?? "bg-slate-50 border-slate-200 dark:bg-slate-900 dark:border-slate-700";
+
+  const formatB = (v: number) => Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(2)}T` : `$${v.toFixed(0)}B`;
+
+  return (
+    <div className={`rounded-lg border p-4 space-y-2 ${cardClass}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Budget Philosophy</span>
+        <BarChart3 className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <p className="text-lg font-bold">{latest.philosophyLabel}</p>
+      <div className="flex gap-4 text-sm">
+        <div>
+          <span className="text-muted-foreground text-xs">Proposed Total</span>
+          <p className="font-semibold">{formatB(latest.proposedTotal)}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs">{isDeficit ? "Est. Deficit" : "Est. Surplus"}</span>
+          <p className={`font-semibold ${isDeficit ? "text-red-600" : "text-green-600"}`}>
+            {formatB(Math.abs(latest.estimatedDeficit))}
+          </p>
+        </div>
+      </div>
+      <a href="/budget-simulator">
+        <Button variant="outline" size="sm" className="w-full text-xs mt-1">
+          <BarChart3 className="h-3 w-3 mr-1" /> Update My Budget
+        </Button>
+      </a>
+    </div>
+  );
+}
+
 function FeedModule({ userId, itemCount, username }: { userId: string; itemCount: number; username?: string }) {
   const { data: posts, isLoading, isError } = useQuery<Post[]>({
     queryKey: ["/api/posts/user", userId],
@@ -461,7 +530,7 @@ function ApprovalRatingModuleInline({ politicianProfileId }: { politicianProfile
 interface ProfileModule {
   id: string;
   name: string;
-  type: "bio" | "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "political-compass" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "representatives" | "approval-rating" | "custom";
+  type: "bio" | "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "political-compass" | "economic-simulator" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "representatives" | "approval-rating" | "custom";
   isPremium: boolean;
   isEnabled: boolean;
   position: number;
@@ -1213,6 +1282,7 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
       "debate-history": { name: "Debate History", itemCount: 5, customData: {} },
       events: { name: "Event Participation", itemCount: 4, customData: {} },
       youtube: { name: "YouTube Video", itemCount: 1, customData: { videoUrl: "", height: "200" } },
+      "economic-simulator": { name: "Budget Simulator", itemCount: 1, customData: {} },
       // Premium modules
       analytics: { name: "Analytics Dashboard", itemCount: 1, customData: {} },
       "campaign-hub": { name: "Campaign Hub", itemCount: 1, customData: {} },
@@ -2322,6 +2392,13 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
           if (!pid) return <p className="text-gray-500 text-sm">No politician linked.</p>;
           return <ApprovalRatingModuleInline politicianProfileId={pid} />;
         }
+        case "economic-simulator": {
+          return (
+            <div className="space-y-3">
+              <BudgetSimulatorProfileCard userId={profileUserId} />
+            </div>
+          );
+        }
         default:
           return <p className="text-gray-500">Module content coming soon...</p>;
       }
@@ -3232,7 +3309,8 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
                           { type: "events", name: "Event Participation", icon: Calendar, description: "Rallies, protests, town halls you've RSVP'd to" },
                           { type: "political-compass", name: "Political Compass", icon: Target, description: "Show your political position on economic and social axes" },
                           { type: "youtube", name: "YouTube Video", icon: Youtube, description: "Embed a YouTube video with custom size" },
-                          { type: "representatives", name: "My Representatives", icon: Users, description: "See your elected reps with corruption grades based on your location" }
+                          { type: "representatives", name: "My Representatives", icon: Users, description: "See your elected reps with corruption grades based on your location" },
+                          { type: "economic-simulator", name: "Budget Simulator", icon: BarChart3, description: "Show your federal budget philosophy from the Policy Simulator" }
                         ].map((moduleType) => {
                           const IconComponent = moduleType.icon;
                           return (

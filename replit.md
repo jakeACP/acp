@@ -47,6 +47,7 @@ Preferred communication style: Simple, everyday language.
 - **Signal Video Features**: Multi-clip hold-to-record camera with filters and editing capabilities (trim, text annotations, audio, photos/footage, FFmpeg stitching) for short video content, stored via IDB session and uploaded to `uploads/signals/`. Desktop timeline editor at `/signals/edit` with video preview, trim controls, text overlays, background music, and server-side compose via FFmpeg.
 - **Trading & Demerit System**: User-submitted insider trading flags, admin-assigned demerits, integration with politician profiles.
 - **ACE Badges Module**: Candidates can apply for Anti-Corruption Endorsement (ACE) badges via video pledges, which, upon admin approval, positively impact their corruption grade.
+- **Economic Policy Simulator**: 3-step flow (Intro → Simulator → Results) at `/budget-simulator`. Uses FY 2024 CBO baseline ($6,752B outlays, 10 spending categories, Net Interest locked). Sliders ±10% per category, live pie chart, live math panel (proposed total, vs-baseline, vs-goal, est. deficit), 9 philosophy labels (Deficit Hawk, Progressive, Libertarian, etc.). Results include comparison table, share card, save-to-profile with public/private toggle. Profile module `"economic-simulator"` shows saved philosophy card. Admin baseline manager at `/admin/budget-baselines` (full CRUD for baselines and categories, district aggregation, active toggle). DB tables: `budget_baselines`, `budget_categories`, `user_budget_simulations`.
 
 ## Civic Activity Tracker Module
 

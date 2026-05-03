@@ -2761,3 +2761,68 @@ export const candidateApprovalVotes = pgTable("candidate_approval_votes", {
 export const insertCandidateApprovalVoteSchema = createInsertSchema(candidateApprovalVotes).omit({ id: true, votedAt: true });
 export type CandidateApprovalVote = typeof candidateApprovalVotes.$inferSelect;
 export type InsertCandidateApprovalVote = z.infer<typeof insertCandidateApprovalVoteSchema>;
+
+// ─── Economic Policy Simulator ───────────────────────────────────────────────
+
+// Fiscal year baselines (e.g. FY 2024 CBO)
+export const budgetBaselines = pgTable("budget_baselines", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fiscalYear: integer("fiscal_year").notNull(),
+  sourceName: text("source_name").notNull(),
+  sourceUrl: text("source_url"),
+  totalOutlays: real("total_outlays").notNull(),   // in $B
+  totalReceipts: real("total_receipts").notNull(), // in $B
+  deficit: real("deficit").notNull(),              // in $B (positive = deficit)
+  isActive: boolean("is_active").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  activeIndex: index("budget_baselines_active_idx").on(table.isActive),
+  fyIndex: index("budget_baselines_fy_idx").on(table.fiscalYear),
+}));
+
+export const insertBudgetBaselineSchema = createInsertSchema(budgetBaselines).omit({ id: true, createdAt: true, updatedAt: true });
+export type BudgetBaseline = typeof budgetBaselines.$inferSelect;
+export type InsertBudgetBaseline = z.infer<typeof insertBudgetBaselineSchema>;
+
+// Per-category rows for a baseline
+export const budgetCategories = pgTable("budget_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  baselineId: varchar("baseline_id").notNull().references(() => budgetBaselines.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  amountBillions: real("amount_billions").notNull(),
+  isLocked: boolean("is_locked").default(false),
+  lockedTooltip: text("locked_tooltip"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  colorHex: text("color_hex"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  baselineIndex: index("budget_categories_baseline_idx").on(table.baselineId),
+  sortIndex: index("budget_categories_sort_idx").on(table.baselineId, table.sortOrder),
+}));
+
+export const insertBudgetCategorySchema = createInsertSchema(budgetCategories).omit({ id: true, createdAt: true });
+export type BudgetCategory = typeof budgetCategories.$inferSelect;
+export type InsertBudgetCategory = z.infer<typeof insertBudgetCategorySchema>;
+
+// User submitted budget simulations
+export const userBudgetSimulations = pgTable("user_budget_simulations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  baselineId: varchar("baseline_id").notNull().references(() => budgetBaselines.id),
+  totalSpendingAdjustment: real("total_spending_adjustment").notNull().default(0), // % on total-goal slider
+  categoryAdjustmentsJson: json("category_adjustments_json").$type<Record<string, number>>().notNull(),
+  proposedTotal: real("proposed_total").notNull(),   // $B
+  estimatedDeficit: real("estimated_deficit").notNull(), // $B (negative = surplus)
+  philosophyLabel: text("philosophy_label").notNull(),
+  visibility: text("visibility").notNull().default("private"), // public | private
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("user_budget_simulations_user_idx").on(table.userId),
+  baselineIndex: index("user_budget_simulations_baseline_idx").on(table.baselineId),
+  userBaselineIndex: index("user_budget_simulations_user_baseline_idx").on(table.userId, table.baselineId),
+}));
+
+export const insertUserBudgetSimulationSchema = createInsertSchema(userBudgetSimulations).omit({ id: true, createdAt: true });
+export type UserBudgetSimulation = typeof userBudgetSimulations.$inferSelect;
+export type InsertUserBudgetSimulation = z.infer<typeof insertUserBudgetSimulationSchema>;

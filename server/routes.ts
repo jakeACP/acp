@@ -10626,6 +10626,8 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  registerBudgetRoutes(app);
+
   return httpServer;
 }
 
@@ -10761,4 +10763,162 @@ async function transformDivisionsToRepresentatives(divisionsData: any, address: 
   };
 }
 
+// ─── Economic Policy Simulator Routes ────────────────────────────────────────
+function registerBudgetRoutes(app: Express) {
+  // GET active baseline (public - any logged-in user)
+  app.get("/api/budget/active-baseline", async (req: Request, res: Response) => {
+    try {
+      const baseline = await storage.getActiveBudgetBaseline();
+      if (!baseline) return res.status(404).json({ message: "No active baseline found" });
+      res.json(baseline);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
+  // POST save simulation (authenticated)
+  app.post("/api/budget/simulations", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const { baselineId, totalSpendingAdjustment, categoryAdjustmentsJson, proposedTotal, estimatedDeficit, philosophyLabel, visibility } = req.body;
+      if (!baselineId || proposedTotal == null || estimatedDeficit == null) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      const sim = await storage.createUserBudgetSimulation({
+        userId: (req.user as any).id,
+        baselineId,
+        totalSpendingAdjustment: totalSpendingAdjustment ?? 0,
+        categoryAdjustmentsJson: categoryAdjustmentsJson ?? {},
+        proposedTotal,
+        estimatedDeficit,
+        philosophyLabel: philosophyLabel ?? "Mixed Priorities",
+        visibility: visibility ?? "private",
+      });
+      res.json(sim);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET user's own simulations
+  app.get("/api/budget/simulations/me", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const sims = await storage.getUserBudgetSimulations((req.user as any).id);
+      res.json(sims);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // PATCH update visibility of a simulation
+  app.patch("/api/budget/simulations/:id", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const sim = await storage.getBudgetSimulationById(req.params.id);
+      if (!sim) return res.status(404).json({ message: "Not found" });
+      if (sim.userId !== (req.user as any).id) return res.status(403).json({ message: "Forbidden" });
+      const updated = await storage.updateUserBudgetSimulation(req.params.id, { visibility: req.body.visibility });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Admin routes ──────────────────────────────────────────────────────────
+  app.get("/api/admin/budget-baselines", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const baselines = await storage.getAllBudgetBaselines();
+      res.json(baselines);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admin/budget-baselines", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const baseline = await storage.createBudgetBaseline(req.body);
+      res.status(201).json(baseline);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/admin/budget-baselines/:id/set-active", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      await storage.setActiveBudgetBaseline(req.params.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/budget-baselines/:id", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      await storage.deleteBudgetBaseline(req.params.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admin/budget-baselines/:baselineId/categories", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const cat = await storage.createBudgetCategory({ ...req.body, baselineId: req.params.baselineId });
+      res.status(201).json(cat);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/admin/budget-baselines/:baselineId/categories/:id", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const cat = await storage.updateBudgetCategory(req.params.id, req.body);
+      res.json(cat);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/budget-baselines/:baselineId/categories/:id", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      await storage.deleteBudgetCategory(req.params.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/admin/budget-simulations/district-averages", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const data = await storage.getBudgetSimulationsDistrictAverages();
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+}

@@ -629,6 +629,24 @@ export interface IStorage {
   getUserApprovalVote(userId: string, politicianProfileId: string): Promise<string | null>;
   getFeedApprovalPrompts(userId: string): Promise<Array<{ id: string; fullName: string; party: string | null; photoUrl: string | null; positionTitle: string | null; office: string | null }>>;
   getApprovalStatsAdmin(): Promise<Array<{ id: string; fullName: string; party: string | null; approveCount: number; disapproveCount: number; total: number; approvalPct: number }>>;
+
+  // Economic Policy Simulator
+  getActiveBudgetBaseline(): Promise<any | undefined>;
+  getAllBudgetBaselines(): Promise<any[]>;
+  getBudgetBaselineWithCategories(id: string): Promise<any | undefined>;
+  createBudgetBaseline(data: any): Promise<any>;
+  deleteBudgetBaseline(id: string): Promise<void>;
+  setActiveBudgetBaseline(id: string): Promise<void>;
+  getBudgetCategoriesForBaseline(baselineId: string): Promise<any[]>;
+  createBudgetCategory(data: any): Promise<any>;
+  updateBudgetCategory(id: string, data: any): Promise<any>;
+  deleteBudgetCategory(id: string): Promise<void>;
+  createUserBudgetSimulation(data: any): Promise<any>;
+  getUserBudgetSimulations(userId: string): Promise<any[]>;
+  getUserLatestBudgetSimulation(userId: string, baselineId: string): Promise<any | undefined>;
+  updateUserBudgetSimulation(id: string, data: any): Promise<any>;
+  getBudgetSimulationById(id: string): Promise<any | undefined>;
+  getBudgetSimulationsDistrictAverages(): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -9586,7 +9604,135 @@ export class DatabaseStorage implements IStorage {
       const total = e.approveCount + e.disapproveCount;
       return { ...e, total, approvalPct: total > 0 ? Math.round((e.approveCount / total) * 100) : 0 };
     }).sort((a, b) => b.total - a.total);
->>>>>>> 3f13987 (feat: Candidate Approval Rating system (Task #56))
+  }
+
+  // ─── Economic Policy Simulator ──────────────────────────────────────────────
+  async getActiveBudgetBaseline(): Promise<any | undefined> {
+    const { budgetBaselines, budgetCategories } = await import("@shared/schema");
+    const [baseline] = await db.select().from(budgetBaselines).where(eq(budgetBaselines.isActive, true)).limit(1);
+    if (!baseline) return undefined;
+    const cats = await db.select().from(budgetCategories).where(eq(budgetCategories.baselineId, baseline.id)).orderBy(budgetCategories.sortOrder);
+    return { ...baseline, categories: cats };
+  }
+
+  async getAllBudgetBaselines(): Promise<any[]> {
+    const { budgetBaselines, budgetCategories } = await import("@shared/schema");
+    const baselines = await db.select().from(budgetBaselines).orderBy(desc(budgetBaselines.fiscalYear));
+    const result = await Promise.all(baselines.map(async (b) => {
+      const cats = await db.select().from(budgetCategories).where(eq(budgetCategories.baselineId, b.id)).orderBy(budgetCategories.sortOrder);
+      return { ...b, categories: cats };
+    }));
+    return result;
+  }
+
+  async getBudgetBaselineWithCategories(id: string): Promise<any | undefined> {
+    const { budgetBaselines, budgetCategories } = await import("@shared/schema");
+    const [baseline] = await db.select().from(budgetBaselines).where(eq(budgetBaselines.id, id)).limit(1);
+    if (!baseline) return undefined;
+    const cats = await db.select().from(budgetCategories).where(eq(budgetCategories.baselineId, id)).orderBy(budgetCategories.sortOrder);
+    return { ...baseline, categories: cats };
+  }
+
+  async createBudgetBaseline(data: any): Promise<any> {
+    const { budgetBaselines } = await import("@shared/schema");
+    const [row] = await db.insert(budgetBaselines).values(data).returning();
+    return row;
+  }
+
+  async deleteBudgetBaseline(id: string): Promise<void> {
+    const { budgetBaselines } = await import("@shared/schema");
+    await db.delete(budgetBaselines).where(eq(budgetBaselines.id, id));
+  }
+
+  async setActiveBudgetBaseline(id: string): Promise<void> {
+    const { budgetBaselines } = await import("@shared/schema");
+    await db.update(budgetBaselines).set({ isActive: false });
+    await db.update(budgetBaselines).set({ isActive: true, updatedAt: new Date() }).where(eq(budgetBaselines.id, id));
+  }
+
+  async getBudgetCategoriesForBaseline(baselineId: string): Promise<any[]> {
+    const { budgetCategories } = await import("@shared/schema");
+    return db.select().from(budgetCategories).where(eq(budgetCategories.baselineId, baselineId)).orderBy(budgetCategories.sortOrder);
+  }
+
+  async createBudgetCategory(data: any): Promise<any> {
+    const { budgetCategories } = await import("@shared/schema");
+    const [row] = await db.insert(budgetCategories).values(data).returning();
+    return row;
+  }
+
+  async updateBudgetCategory(id: string, data: any): Promise<any> {
+    const { budgetCategories } = await import("@shared/schema");
+    const [row] = await db.update(budgetCategories).set(data).where(eq(budgetCategories.id, id)).returning();
+    return row;
+  }
+
+  async deleteBudgetCategory(id: string): Promise<void> {
+    const { budgetCategories } = await import("@shared/schema");
+    await db.delete(budgetCategories).where(eq(budgetCategories.id, id));
+  }
+
+  async createUserBudgetSimulation(data: any): Promise<any> {
+    const { userBudgetSimulations } = await import("@shared/schema");
+    const [row] = await db.insert(userBudgetSimulations).values(data).returning();
+    return row;
+  }
+
+  async getUserBudgetSimulations(userId: string): Promise<any[]> {
+    const { userBudgetSimulations } = await import("@shared/schema");
+    return db.select().from(userBudgetSimulations).where(eq(userBudgetSimulations.userId, userId)).orderBy(desc(userBudgetSimulations.createdAt));
+  }
+
+  async getUserLatestBudgetSimulation(userId: string, baselineId: string): Promise<any | undefined> {
+    const { userBudgetSimulations } = await import("@shared/schema");
+    const [row] = await db.select().from(userBudgetSimulations)
+      .where(and(eq(userBudgetSimulations.userId, userId), eq(userBudgetSimulations.baselineId, baselineId)))
+      .orderBy(desc(userBudgetSimulations.createdAt))
+      .limit(1);
+    return row;
+  }
+
+  async updateUserBudgetSimulation(id: string, data: any): Promise<any> {
+    const { userBudgetSimulations } = await import("@shared/schema");
+    const [row] = await db.update(userBudgetSimulations).set(data).where(eq(userBudgetSimulations.id, id)).returning();
+    return row;
+  }
+
+  async getBudgetSimulationById(id: string): Promise<any | undefined> {
+    const { userBudgetSimulations } = await import("@shared/schema");
+    const [row] = await db.select().from(userBudgetSimulations).where(eq(userBudgetSimulations.id, id)).limit(1);
+    return row;
+  }
+
+  async getBudgetSimulationsDistrictAverages(): Promise<any[]> {
+    const { userBudgetSimulations } = await import("@shared/schema");
+    const rows = await db.select({
+      userId: userBudgetSimulations.userId,
+      proposedTotal: userBudgetSimulations.proposedTotal,
+      estimatedDeficit: userBudgetSimulations.estimatedDeficit,
+      philosophyLabel: userBudgetSimulations.philosophyLabel,
+    }).from(userBudgetSimulations).where(eq(userBudgetSimulations.visibility, "public"));
+
+    const districtMap: Record<string, { count: number; totalDeficit: number; labels: Record<string, number> }> = {};
+    const userIds = [...new Set(rows.map((r) => r.userId))];
+
+    for (const uid of userIds) {
+      const userRows = await db.select({ state: users.state }).from(users).where(eq(users.id, uid)).limit(1);
+      const districtKey = userRows[0]?.state || "Unknown";
+      if (!districtMap[districtKey]) districtMap[districtKey] = { count: 0, totalDeficit: 0, labels: {} };
+      const sim = rows.find((r) => r.userId === uid);
+      if (!sim) continue;
+      districtMap[districtKey].count++;
+      districtMap[districtKey].totalDeficit += sim.estimatedDeficit;
+      districtMap[districtKey].labels[sim.philosophyLabel] = (districtMap[districtKey].labels[sim.philosophyLabel] ?? 0) + 1;
+    }
+
+    return Object.entries(districtMap).map(([district, data]) => ({
+      district,
+      count: data.count,
+      avgDeficit: data.count > 0 ? data.totalDeficit / data.count : 0,
+      labelDistribution: data.labels,
+    })).sort((a, b) => b.count - a.count);
   }
 }
 

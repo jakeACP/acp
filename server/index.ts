@@ -101,6 +101,14 @@ async function setupRoutes() {
     const { registerRoutes } = await import("./routes");
     await registerRoutes(app, httpServer);
 
+    // Seed FY 2024 CBO baseline if not already seeded
+    try {
+      const { seedFY2024Baseline } = await import("./budget-seed");
+      await seedFY2024Baseline();
+    } catch (e: any) {
+      log(`Budget seed skipped: ${e.message}`);
+    }
+
     // Global error handler
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
