@@ -25,20 +25,35 @@ const US_STATES = [
   "VA","WA","WV","WI","WY","DC",
 ];
 
+function injectLeafletCSS() {
+  const leafletCss = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  const leafletDrawCss = "https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css";
+  [leafletCss, leafletDrawCss].forEach((href) => {
+    if (!document.querySelector(`link[href="${href}"]`)) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      document.head.appendChild(link);
+    }
+  });
+}
+
 function LeafletMapEditor({ geojson, onChange }: { geojson: any; onChange: (geo: any) => void }) {
   const mapRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const drawnItemsRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
+  const suppressExternalUpdateRef = useRef(false);
 
   useEffect(() => {
-    let L: any;
     let map: any;
 
     const init = async () => {
       if (!containerRef.current || mapRef.current) return;
-      // Dynamic imports for leaflet (avoids SSR issues)
-      L = (await import("leaflet")).default;
+
+      injectLeafletCSS();
+
+      const L = (await import("leaflet")).default;
       await import("leaflet-draw");
 
       // Fix default marker icons
@@ -52,6 +67,7 @@ function LeafletMapEditor({ geojson, onChange }: { geojson: any; onChange: (geo:
       map = L.map(containerRef.current).setView([39.5, -98.35], 4);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
       }).addTo(map);
 
       const drawnItems = new L.FeatureGroup();
@@ -59,27 +75,44 @@ function LeafletMapEditor({ geojson, onChange }: { geojson: any; onChange: (geo:
       drawnItemsRef.current = drawnItems;
 
       const drawControl = new (L as any).Control.Draw({
-        edit: { featureGroup: drawnItems },
-        draw: { polygon: true, rectangle: false, circle: false, circlemarker: false, marker: false, polyline: false },
+        position: "topleft",
+        edit: {
+          featureGroup: drawnItems,
+          remove: true,
+        },
+        draw: {
+          polygon: {
+            allowIntersection: false,
+            showArea: true,
+            shapeOptions: { color: "#2563eb", fillOpacity: 0.2 },
+          },
+          rectangle: {
+            shapeOptions: { color: "#2563eb", fillOpacity: 0.2 },
+          },
+          polyline: false,
+          circle: false,
+          circlemarker: false,
+          marker: false,
+        },
       });
       map.addControl(drawControl);
+
+      const emitGeoJSON = () => {
+        suppressExternalUpdateRef.current = true;
+        const geo = drawnItems.toGeoJSON();
+        onChange(geo);
+        // Reset flag after React state update cycle
+        setTimeout(() => { suppressExternalUpdateRef.current = false; }, 100);
+      };
 
       map.on((L as any).Draw.Event.CREATED, (e: any) => {
         drawnItems.clearLayers();
         drawnItems.addLayer(e.layer);
-        const geo = drawnItems.toGeoJSON();
-        onChange(geo);
+        emitGeoJSON();
       });
 
-      map.on((L as any).Draw.Event.EDITED, () => {
-        const geo = drawnItems.toGeoJSON();
-        onChange(geo);
-      });
-
-      map.on((L as any).Draw.Event.DELETED, () => {
-        const geo = drawnItems.toGeoJSON();
-        onChange(geo);
-      });
+      map.on((L as any).Draw.Event.EDITED, emitGeoJSON);
+      map.on((L as any).Draw.Event.DELETED, emitGeoJSON);
 
       mapRef.current = { map, L };
       setMapReady(true);
@@ -91,19 +124,23 @@ function LeafletMapEditor({ geojson, onChange }: { geojson: any; onChange: (geo:
       if (mapRef.current?.map) {
         mapRef.current.map.remove();
         mapRef.current = null;
+        drawnItemsRef.current = null;
       }
     };
   }, []);
 
-  // Render geojson when it changes
+  // Render geojson on the map when it changes externally (AI draft, undo/redo, load existing)
   useEffect(() => {
     if (!mapReady || !mapRef.current || !drawnItemsRef.current) return;
+    if (suppressExternalUpdateRef.current) return;
     const { map, L } = mapRef.current;
     const drawnItems = drawnItemsRef.current;
     drawnItems.clearLayers();
     if (geojson && (geojson.features?.length > 0 || geojson.geometry)) {
       try {
-        const layer = L.geoJSON(geojson);
+        const layer = L.geoJSON(geojson, {
+          style: { color: "#2563eb", fillOpacity: 0.2 },
+        });
         layer.eachLayer((l: any) => drawnItems.addLayer(l));
         const bounds = drawnItems.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
