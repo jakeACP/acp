@@ -54,6 +54,8 @@ interface Baseline {
   totalOutlays: number;
   totalReceipts: number;
   deficit: number;
+  sliderRangeMin: number;
+  sliderRangeMax: number;
   categories: Category[];
 }
 
@@ -340,7 +342,7 @@ export default function BudgetSimulatorPage() {
                   <div className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</div>
                   <div>
                     <p className="font-medium text-sm">Adjust spending categories</p>
-                    <p className="text-xs text-muted-foreground">Slide each category ±10% from the FY {baseline.fiscalYear} baseline</p>
+                    <p className="text-xs text-muted-foreground">Slide each category {baseline.sliderRangeMin ?? -10}% to +{baseline.sliderRangeMax ?? 10}% from the FY {baseline.fiscalYear} baseline</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -370,7 +372,7 @@ export default function BudgetSimulatorPage() {
 
             <p className="text-xs text-muted-foreground text-center px-4">
               Data based on {baseline.sourceName} FY {baseline.fiscalYear} projections.
-              This is an educational tool — adjustments are simplified to ±10% per category.
+              This is an educational tool — adjustments range from {baseline.sliderRangeMin ?? -10}% to +{baseline.sliderRangeMax ?? 10}% per category.
               Actual budget policy involves far more complexity.
             </p>
           </div>
@@ -753,17 +755,17 @@ export default function BudgetSimulatorPage() {
                     </span>
                   </div>
                   <Slider
-                    min={-10}
-                    max={10}
+                    min={baseline.sliderRangeMin ?? -10}
+                    max={baseline.sliderRangeMax ?? 10}
                     step={1}
                     value={[totalGoalAdj]}
                     onValueChange={([v]) => setTotalGoalAdj(v)}
                     className="mb-1"
                   />
                   <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>-10% ({formatBillions(baselineTotal * 0.9)})</span>
+                    <span>{baseline.sliderRangeMin ?? -10}% ({formatBillions(baselineTotal * (1 + (baseline.sliderRangeMin ?? -10) / 100))})</span>
                     <span>{formatBillions(targetTotal)} target</span>
-                    <span>+10% ({formatBillions(baselineTotal * 1.1)})</span>
+                    <span>+{baseline.sliderRangeMax ?? 10}% ({formatBillions(baselineTotal * (1 + (baseline.sliderRangeMax ?? 10) / 100))})</span>
                   </div>
                 </CardContent>
               </Card>
@@ -808,8 +810,8 @@ export default function BudgetSimulatorPage() {
                         ) : (
                           <>
                             <Slider
-                              min={-10}
-                              max={10}
+                              min={baseline.sliderRangeMin ?? -10}
+                              max={baseline.sliderRangeMax ?? 10}
                               step={1}
                               value={[adj]}
                               onValueChange={([v]) =>
@@ -817,9 +819,9 @@ export default function BudgetSimulatorPage() {
                               }
                             />
                             <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                              <span>-10%</span>
+                              <span>{baseline.sliderRangeMin ?? -10}%</span>
                               <span>0%</span>
-                              <span>+10%</span>
+                              <span>+{baseline.sliderRangeMax ?? 10}%</span>
                             </div>
                           </>
                         )}

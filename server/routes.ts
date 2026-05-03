@@ -11108,6 +11108,18 @@ function registerBudgetRoutes(app: Express) {
     }
   });
 
+  app.patch("/api/admin/budget-baselines/:id", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const baseline = await storage.updateBudgetBaseline(req.params.id, req.body);
+      res.json(baseline);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.patch("/api/admin/budget-baselines/:id/set-active", async (req: Request, res: Response) => {
     if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
       return res.status(403).json({ message: "Forbidden" });
@@ -11115,6 +11127,22 @@ function registerBudgetRoutes(app: Express) {
     try {
       await storage.setActiveBudgetBaseline(req.params.id);
       res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admin/budget-baselines/:id/clone", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !["admin", "global_admin"].includes((req.user as any).role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const fiscalYear = req.body.fiscalYear;
+      if (!fiscalYear || typeof fiscalYear !== "number") {
+        return res.status(400).json({ message: "fiscalYear is required" });
+      }
+      const newBaseline = await storage.cloneBudgetBaseline(req.params.id, fiscalYear);
+      res.status(201).json(newBaseline);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

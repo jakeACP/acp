@@ -28,12 +28,13 @@ import {
   Trash2,
   CheckCircle,
   Lock,
-  Unlock,
   GripVertical,
   ChevronDown,
   ChevronRight,
   DollarSign,
   BarChart3,
+  Copy,
+  Settings2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -57,6 +58,8 @@ interface Baseline {
   totalReceipts: number;
   deficit: number;
   isActive: boolean;
+  sliderRangeMin: number;
+  sliderRangeMax: number;
   categories: Category[];
 }
 
@@ -317,6 +320,8 @@ export default function AdminBudgetBaselinesPage() {
     totalReceipts: "",
     deficit: "",
   });
+  const [sliderEdits, setSliderEdits] = useState<Record<string, { min: number; max: number }>>({});
+  const [cloneFiscalYear, setCloneFiscalYear] = useState<Record<string, string>>({});
 
   const { data: baselines = [], refetch } = useQuery<Baseline[]>({
     queryKey: ["/api/admin/budget-baselines"],
@@ -354,6 +359,23 @@ export default function AdminBudgetBaselinesPage() {
       apiRequest("DELETE", `/api/admin/budget-baselines/${id}`, {}),
     onSuccess: () => { refetch(); toast({ title: "Baseline deleted" }); },
     onError: () => toast({ title: "Delete failed", variant: "destructive" }),
+  });
+
+  const updateSliderMutation = useMutation({
+    mutationFn: async ({ id, min, max }: { id: string; min: number; max: number }) =>
+      apiRequest("PATCH", `/api/admin/budget-baselines/${id}`, { sliderRangeMin: min, sliderRangeMax: max }),
+    onSuccess: () => { refetch(); toast({ title: "Slider range saved" }); },
+    onError: () => toast({ title: "Failed to save slider range", variant: "destructive" }),
+  });
+
+  const cloneMutation = useMutation({
+    mutationFn: async ({ id, fiscalYear }: { id: string; fiscalYear: number }) =>
+      apiRequest("POST", `/api/admin/budget-baselines/${id}/clone`, { fiscalYear }),
+    onSuccess: () => {
+      refetch();
+      toast({ title: "Baseline cloned successfully" });
+    },
+    onError: () => toast({ title: "Clone failed", variant: "destructive" }),
   });
 
   const { data: districtAverages } = useQuery<any>({
@@ -529,7 +551,7 @@ export default function AdminBudgetBaselinesPage() {
                   </CardHeader>
 
                   {isExpanded && (
-                    <CardContent className="pt-0">
+                    <CardContent className="pt-0 space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Pie chart preview */}
                         <div>
@@ -574,6 +596,105 @@ export default function AdminBudgetBaselinesPage() {
                             Categories ({bl.categories.length}) — Total: {formatB(total)}
                           </p>
                           <CategoryEditor baselineId={bl.id} categories={bl.categories} onRefresh={refetch} />
+                        </div>
+                      </div>
+
+                      {/* Simulator Settings */}
+                      <div className="border rounded-lg p-4 space-y-4 bg-slate-50 dark:bg-slate-900">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
+                          <Settings2 className="h-3.5 w-3.5" /> Simulator Settings
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium">Category Slider Range (%)</p>
+                            <p className="text-[11px] text-muted-foreground">Controls how far users can adjust each spending category in the simulator.</p>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <Label className="text-[10px] text-muted-foreground">Min %</Label>
+                                <Input
+                                  type="number"
+                                  className="h-7 text-xs"
+                                  value={sliderEdits[bl.id]?.min ?? bl.sliderRangeMin ?? -10}
+                                  onChange={(e) => {
+                                    const parsed = parseInt(e.target.value);
+                                    setSliderEdits((prev) => ({
+                                      ...prev,
+                                      [bl.id]: { min: Number.isNaN(parsed) ? (prev[bl.id]?.min ?? bl.sliderRangeMin ?? -10) : parsed, max: prev[bl.id]?.max ?? bl.sliderRangeMax ?? 10 },
+                                    }));
+                                  }}
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <Label className="text-[10px] text-muted-foreground">Max %</Label>
+                                <Input
+                                  type="number"
+                                  className="h-7 text-xs"
+                                  value={sliderEdits[bl.id]?.max ?? bl.sliderRangeMax ?? 10}
+                                  onChange={(e) => {
+                                    const parsed = parseInt(e.target.value);
+                                    setSliderEdits((prev) => ({
+                                      ...prev,
+                                      [bl.id]: { min: prev[bl.id]?.min ?? bl.sliderRangeMin ?? -10, max: Number.isNaN(parsed) ? (prev[bl.id]?.max ?? bl.sliderRangeMax ?? 10) : parsed },
+                                    }));
+                                  }}
+                                />
+                              </div>
+                              <div className="flex items-end pb-0.5">
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => {
+                                    const edit = sliderEdits[bl.id];
+                                    updateSliderMutation.mutate({
+                                      id: bl.id,
+                                      min: edit?.min ?? bl.sliderRangeMin ?? -10,
+                                      max: edit?.max ?? bl.sliderRangeMax ?? 10,
+                                    });
+                                  }}
+                                  disabled={updateSliderMutation.isPending}
+                                >
+                                  Save
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              Current: {bl.sliderRangeMin ?? -10}% to +{bl.sliderRangeMax ?? 10}%
+                            </p>
+                          </div>
+
+                          {/* Clone baseline */}
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium">Clone as New Fiscal Year</p>
+                            <p className="text-[11px] text-muted-foreground">Copy this baseline's categories and settings to a new fiscal year.</p>
+                            <div className="flex items-end gap-2">
+                              <div className="flex-1">
+                                <Label className="text-[10px] text-muted-foreground">New Fiscal Year</Label>
+                                <Input
+                                  type="number"
+                                  className="h-7 text-xs"
+                                  placeholder={String(bl.fiscalYear + 1)}
+                                  value={cloneFiscalYear[bl.id] ?? ""}
+                                  onChange={(e) => setCloneFiscalYear((prev) => ({ ...prev, [bl.id]: e.target.value }))}
+                                />
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs shrink-0"
+                                onClick={() => {
+                                  const fy = parseInt(cloneFiscalYear[bl.id] ?? "");
+                                  if (!fy) return;
+                                  if (confirm(`Clone FY ${bl.fiscalYear} as FY ${fy}?`)) {
+                                    cloneMutation.mutate({ id: bl.id, fiscalYear: fy });
+                                    setCloneFiscalYear((prev) => ({ ...prev, [bl.id]: "" }));
+                                  }
+                                }}
+                                disabled={cloneMutation.isPending || !cloneFiscalYear[bl.id]}
+                              >
+                                <Copy className="h-3 w-3 mr-1" /> Clone
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </CardContent>

@@ -2774,6 +2774,8 @@ export const budgetBaselines = pgTable("budget_baselines", {
   totalReceipts: real("total_receipts").notNull(), // in $B
   deficit: real("deficit").notNull(),              // in $B (positive = deficit)
   isActive: boolean("is_active").default(false),
+  sliderRangeMin: integer("slider_range_min").notNull().default(-10), // % min for category sliders
+  sliderRangeMax: integer("slider_range_max").notNull().default(10),  // % max for category sliders
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

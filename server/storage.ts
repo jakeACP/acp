@@ -9669,6 +9669,26 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
+  async updateBudgetBaseline(id: string, data: any): Promise<any> {
+    const { budgetBaselines } = await import("@shared/schema");
+    const [row] = await db.update(budgetBaselines).set({ ...data, updatedAt: new Date() }).where(eq(budgetBaselines.id, id)).returning();
+    return row;
+  }
+
+  async cloneBudgetBaseline(sourceId: string, fiscalYear: number): Promise<any> {
+    const { budgetBaselines, budgetCategories } = await import("@shared/schema");
+    const [source] = await db.select().from(budgetBaselines).where(eq(budgetBaselines.id, sourceId)).limit(1);
+    if (!source) throw new Error("Source baseline not found");
+    const { id: _id, createdAt: _c, updatedAt: _u, isActive: _a, fiscalYear: _fy, ...rest } = source;
+    const [newBaseline] = await db.insert(budgetBaselines).values({ ...rest, fiscalYear, isActive: false }).returning();
+    const sourceCats = await db.select().from(budgetCategories).where(eq(budgetCategories.baselineId, sourceId)).orderBy(budgetCategories.sortOrder);
+    if (sourceCats.length > 0) {
+      const catRows = sourceCats.map(({ id: _cid, createdAt: _cc, baselineId: _bid, ...catRest }) => ({ ...catRest, baselineId: newBaseline.id }));
+      await db.insert(budgetCategories).values(catRows);
+    }
+    return newBaseline;
+  }
+
   async deleteBudgetBaseline(id: string): Promise<void> {
     const { budgetBaselines } = await import("@shared/schema");
     await db.delete(budgetBaselines).where(eq(budgetBaselines.id, id));
