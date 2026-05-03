@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,7 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Loader2, ChevronRight, ChevronLeft, CheckCircle2, AlertTriangle,
   Search, User, Building2, BookOpen, Lightbulb, HandshakeIcon, Award,
-  ClipboardList, Pencil,
+  ClipboardList, Pencil, Camera, X,
 } from "lucide-react";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ const accountSchema = z.object({
   phone: z.string().optional(),
   state: z.string().optional(),
   city: z.string().optional(),
-  avatarUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
+  avatarUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")).or(z.string().startsWith("/objects/")),
 });
 
 const officeSchema = z.object({
@@ -347,6 +347,127 @@ function StepDuplicateCheck({
   );
 }
 
+// ─── Photo Uploader ───────────────────────────────────────────────────────────
+function PhotoUploader({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (url: string) => void;
+}) {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid file type", description: "Please select an image file.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Photo must be under 10 MB.", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Upload failed");
+      }
+      const data = await res.json();
+      onChange(data.url);
+      toast({ title: "Photo uploaded", description: "Your profile photo has been uploaded." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      toast({ title: "Upload failed", description: msg, variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const previewSrc = value
+    ? value.startsWith("/objects/")
+      ? value
+      : value.startsWith("http")
+      ? value
+      : null
+    : null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-4">
+        <div className="relative shrink-0">
+          <div className="h-20 w-20 rounded-full border-2 border-border bg-muted flex items-center justify-center overflow-hidden">
+            {previewSrc ? (
+              <img src={previewSrc} alt="Profile preview" className="h-full w-full object-cover" />
+            ) : (
+              <User className="h-9 w-9 text-muted-foreground" />
+            )}
+          </div>
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:bg-destructive/80 transition-colors"
+              aria-label="Remove photo"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploading ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading…</>
+            ) : (
+              <><Camera className="mr-2 h-4 w-4" /> {value ? "Replace Photo" : "Upload Photo"}</>
+            )}
+          </Button>
+          <button
+            type="button"
+            onClick={() => setShowUrlInput((v) => !v)}
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground text-left"
+          >
+            {showUrlInput ? "Hide URL field" : "Or paste a photo URL"}
+          </button>
+        </div>
+      </div>
+
+      {showUrlInput && (
+        <Input
+          type="url"
+          placeholder="https://example.com/your-photo.jpg"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Step 1: Account Info ─────────────────────────────────────────────────────
 function StepAccount({
   defaultValues,
@@ -360,7 +481,7 @@ function StepAccount({
   const form = useForm<AccountInfo>({
     resolver: zodResolver(accountSchema),
     defaultValues: {
-      firstName: "", lastName: "", email: "", phone: "", state: "", city: "",
+      firstName: "", lastName: "", email: "", phone: "", state: "", city: "", avatarUrl: "",
       ...defaultValues,
     },
   });
@@ -375,6 +496,20 @@ function StepAccount({
             <p className="text-sm text-muted-foreground">Pre-filled from your account where available. Update as needed.</p>
           </div>
         </div>
+
+        <FormField control={form.control} name="avatarUrl" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Profile Photo <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+            <FormControl>
+              <PhotoUploader value={field.value || ""} onChange={field.onChange} />
+            </FormControl>
+            <p className="text-xs text-muted-foreground">
+              Upload a professional headshot (JPG, PNG, WebP, HEIC — max 10 MB).
+            </p>
+            <FormMessage />
+          </FormItem>
+        )} />
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField control={form.control} name="firstName" render={({ field }) => (
             <FormItem>
@@ -428,18 +563,6 @@ function StepAccount({
             </FormItem>
           )} />
         </div>
-        <FormField control={form.control} name="avatarUrl" render={({ field }) => (
-          <FormItem>
-            <FormLabel>Headshot / Avatar URL <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-            <FormControl>
-              <Input type="url" placeholder="https://example.com/your-photo.jpg" {...field} />
-            </FormControl>
-            <p className="text-xs text-muted-foreground">
-              Paste a direct link to a professional headshot. You can upload a photo after account creation.
-            </p>
-            <FormMessage />
-          </FormItem>
-        )} />
         <div className="flex gap-3 pt-2">
           <Button type="button" variant="outline" onClick={onBack}><ChevronLeft className="mr-1 h-4 w-4" /> Back</Button>
           <Button type="submit" className="flex-1">Continue <ChevronRight className="ml-2 h-4 w-4" /></Button>
@@ -1172,6 +1295,7 @@ export default function RunForOfficePage() {
     firstName: user?.firstName || "",
     lastName: user?.lastName || "",
     email: user?.email || "",
+    avatarUrl: user?.avatar || "",
   });
   const [officeDetails, setOfficeDetails] = useState<Partial<OfficeDetails>>({});
   const [yourStory, setYourStory] = useState<Partial<YourStory>>({});

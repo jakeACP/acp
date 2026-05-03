@@ -60,15 +60,15 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
   fileFilter: (req, file, cb) => {
-    // Accept JPEG, PNG, and HEIC images
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/heic', 'image/heif'];
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.heic', '.heif'];
+    // Accept JPEG, PNG, WebP, and HEIC images
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'];
     const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
     
     if (allowedTypes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Only JPEG, PNG, and HEIC images are allowed'));
+      cb(new Error('Only JPEG, PNG, WebP, and HEIC images are allowed'));
     }
   }
 });
@@ -10168,6 +10168,7 @@ Only include people you are confident about. Return empty arrays/null if unknown
           officeDetails?.campaignSlogan ? `Slogan: ${officeDetails.campaignSlogan}` : null,
           officeDetails?.electionYear ? `Election year: ${officeDetails.electionYear}` : null,
           accountInfo?.city ? `City: ${accountInfo.city}` : null,
+          accountInfo?.avatarUrl ? `Pending photo: ${accountInfo.avatarUrl}` : null,
           "Source: RunForOffice",
         ].filter(Boolean).join("; ");
         // Append wizard metadata so the admin candidacy queue shows full review context
