@@ -2826,3 +2826,148 @@ export const userBudgetSimulations = pgTable("user_budget_simulations", {
 export const insertUserBudgetSimulationSchema = createInsertSchema(userBudgetSimulations).omit({ id: true, createdAt: true });
 export type UserBudgetSimulation = typeof userBudgetSimulations.$inferSelect;
 export type InsertUserBudgetSimulation = z.infer<typeof insertUserBudgetSimulationSchema>;
+
+// ─── Political Parties ────────────────────────────────────────────────────────
+
+export const politicalParties = pgTable("political_parties", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  acronym: text("acronym"),
+  slug: text("slug").notNull().unique(),
+  logoUrl: text("logo_url"),
+  websiteUrl: text("website_url"),
+  shortDescription: text("short_description"),
+  fullDescription: text("full_description"),
+  status: text("status").notNull().default("active"), // active | inactive | historical
+  // Political Compass placement (-10 to +10)
+  compassEconomic: real("compass_economic"), // -10 left, +10 right
+  compassSocial: real("compass_social"),     // -10 auth, +10 lib
+  // Transparency score 0–100
+  transparencyScore: real("transparency_score"),
+  transparencyNotes: text("transparency_notes"),
+  // Ballot access
+  hasFederalBallotAccess: boolean("has_federal_ballot_access").default(false),
+  statesWithBallotAccess: integer("states_with_ballot_access").default(0),
+  foundedYear: integer("founded_year"),
+  headquartersState: text("headquarters_state"),
+  membershipEstimate: text("membership_estimate"),
+  colors: text("colors").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  slugIndex: index("political_parties_slug_idx").on(table.slug),
+  statusIndex: index("political_parties_status_idx").on(table.status),
+}));
+
+export const partyLeaders = pgTable("party_leaders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partyId: varchar("party_id").notNull().references(() => politicalParties.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  title: text("title"), // Chair, Co-Chair, President, etc.
+  photoUrl: text("photo_url"),
+  startYear: integer("start_year"),
+  endYear: integer("end_year"), // null = current
+  isPrimary: boolean("is_primary").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  partyIndex: index("party_leaders_party_idx").on(table.partyId),
+}));
+
+export const partyBallotAccess = pgTable("party_ballot_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partyId: varchar("party_id").notNull().references(() => politicalParties.id, { onDelete: "cascade" }),
+  stateCode: text("state_code").notNull(), // 2-letter state code
+  accessLevel: text("access_level").notNull().default("full"), // full | partial | petition | none
+  notes: text("notes"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  partyStateUnique: sql`UNIQUE(${table.partyId}, ${table.stateCode})`,
+  partyIndex: index("party_ballot_access_party_idx").on(table.partyId),
+}));
+
+export const partyPolicyPositions = pgTable("party_policy_positions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partyId: varchar("party_id").notNull().references(() => politicalParties.id, { onDelete: "cascade" }),
+  issueId: text("issue_id").notNull(), // matches issue survey issueId
+  issueCategory: text("issue_category"),
+  issueLabel: text("issue_label"),
+  positionValue: real("position_value"), // 1-5 like survey (1=strongly oppose, 5=strongly support)
+  positionLabel: text("position_label"), // human-readable label
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  partyIssueUnique: sql`UNIQUE(${table.partyId}, ${table.issueId})`,
+  partyIndex: index("party_policy_positions_party_idx").on(table.partyId),
+}));
+
+export const partyEndorsements = pgTable("party_endorsements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partyId: varchar("party_id").notNull().references(() => politicalParties.id, { onDelete: "cascade" }),
+  // Can reference a politicianProfile or an external candidate
+  politicianId: varchar("politician_id").references(() => politicianProfiles.id, { onDelete: "set null" }),
+  candidateName: text("candidate_name"), // fallback if not in system
+  office: text("office"),
+  district: text("district"),
+  state: text("state"),
+  electionCycle: text("election_cycle"), // e.g. "2024"
+  endorsementType: text("endorsement_type").default("primary"), // primary | general | runoff | special
+  sourceUrl: text("source_url"),
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  partyIndex: index("party_endorsements_party_idx").on(table.partyId),
+  politicianIndex: index("party_endorsements_politician_idx").on(table.politicianId),
+}));
+
+export const partyUserRatings = pgTable("party_user_ratings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partyId: varchar("party_id").notNull().references(() => politicalParties.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  rating: real("rating").notNull(), // -50 to +50
+  letterGrade: text("letter_grade"), // optional A-F
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  partyUserUnique: sql`UNIQUE(${table.partyId}, ${table.userId})`,
+  partyIndex: index("party_user_ratings_party_idx").on(table.partyId),
+  userIndex: index("party_user_ratings_user_idx").on(table.userId),
+}));
+
+export const partyControversies = pgTable("party_controversies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partyId: varchar("party_id").notNull().references(() => politicalParties.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  date: text("date"), // "YYYY-MM" or "YYYY"
+  sourceUrl: text("source_url"),
+  severity: text("severity").default("minor"), // minor | moderate | major
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  partyIndex: index("party_controversies_party_idx").on(table.partyId),
+}));
+
+// Insert schemas
+export const insertPoliticalPartySchema = createInsertSchema(politicalParties).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPartyLeaderSchema = createInsertSchema(partyLeaders).omit({ id: true, createdAt: true });
+export const insertPartyBallotAccessSchema = createInsertSchema(partyBallotAccess).omit({ id: true, updatedAt: true });
+export const insertPartyPolicyPositionSchema = createInsertSchema(partyPolicyPositions).omit({ id: true, createdAt: true });
+export const insertPartyEndorsementSchema = createInsertSchema(partyEndorsements).omit({ id: true, createdAt: true });
+export const insertPartyUserRatingSchema = createInsertSchema(partyUserRatings).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPartyControversySchema = createInsertSchema(partyControversies).omit({ id: true, createdAt: true });
+
+// Select types
+export type PoliticalParty = typeof politicalParties.$inferSelect;
+export type InsertPoliticalParty = z.infer<typeof insertPoliticalPartySchema>;
+export type PartyLeader = typeof partyLeaders.$inferSelect;
+export type InsertPartyLeader = z.infer<typeof insertPartyLeaderSchema>;
+export type PartyBallotAccess = typeof partyBallotAccess.$inferSelect;
+export type InsertPartyBallotAccess = z.infer<typeof insertPartyBallotAccessSchema>;
+export type PartyPolicyPosition = typeof partyPolicyPositions.$inferSelect;
+export type InsertPartyPolicyPosition = z.infer<typeof insertPartyPolicyPositionSchema>;
+export type PartyEndorsement = typeof partyEndorsements.$inferSelect;
+export type InsertPartyEndorsement = z.infer<typeof insertPartyEndorsementSchema>;
+export type PartyUserRating = typeof partyUserRatings.$inferSelect;
+export type InsertPartyUserRating = z.infer<typeof insertPartyUserRatingSchema>;
+export type PartyControversy = typeof partyControversies.$inferSelect;
+export type InsertPartyControversy = z.infer<typeof insertPartyControversySchema>;

@@ -1,10 +1,10 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse } from "@shared/schema";
+import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, politicalParties, partyLeaders, partyBallotAccess, partyPolicyPositions, partyEndorsements, partyUserRatings, partyControversies, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, composeJobs, pledgeRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest, type ComposeJob, type SignalComment, type InsertSignalComment } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
-import { eq, desc, and, or, sql, count, inArray, gte, ilike } from "drizzle-orm";
+import { eq, desc, asc, and, or, sql, count, inArray, gte, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -647,6 +647,36 @@ export interface IStorage {
   updateUserBudgetSimulation(id: string, data: any): Promise<any>;
   getBudgetSimulationById(id: string): Promise<any | undefined>;
   getBudgetSimulationsDistrictAverages(): Promise<any[]>;
+
+  // Political Parties
+  listParties(filters?: { status?: string; sort?: string; minTransparency?: number; minRating?: number; hasBallotAccess?: boolean; economicMin?: number; economicMax?: number; socialMin?: number; socialMax?: number }): Promise<any[]>;
+  getPartyByIdOrSlug(idOrSlug: string): Promise<any | undefined>;
+  createParty(data: any): Promise<any>;
+  updateParty(id: string, patch: any): Promise<any>;
+  deleteParty(id: string): Promise<void>;
+  listPartyLeaders(partyId: string): Promise<any[]>;
+  upsertPartyLeader(data: any): Promise<any>;
+  deletePartyLeader(id: string): Promise<void>;
+  listPartyBallotAccess(partyId: string): Promise<any[]>;
+  upsertPartyBallotAccess(partyId: string, stateCode: string, accessLevel: string, notes?: string): Promise<any>;
+  listPartyPolicyPositions(partyId: string): Promise<any[]>;
+  upsertPartyPolicyPosition(data: any): Promise<any>;
+  deletePartyPolicyPosition(id: string): Promise<void>;
+  listPartyEndorsements(partyId: string, filters?: { electionCycle?: string; state?: string }): Promise<any[]>;
+  createPartyEndorsement(data: any): Promise<any>;
+  updatePartyEndorsement(id: string, patch: any): Promise<any>;
+  deletePartyEndorsement(id: string): Promise<void>;
+  getEndorsementsByPoliticianId(politicianId: string): Promise<any[]>;
+  listPartyControversies(partyId: string): Promise<any[]>;
+  createPartyControversy(data: any): Promise<any>;
+  updatePartyControversy(id: string, patch: any): Promise<any>;
+  deletePartyControversy(id: string): Promise<void>;
+  getPartyRatingStats(partyId: string): Promise<{ average: number; count: number; distribution: Record<string, number> }>;
+  getUserPartyRating(partyId: string, userId: string): Promise<any | undefined>;
+  upsertPartyUserRating(partyId: string, userId: string, rating: number, letterGrade?: string): Promise<any>;
+  getPartyCrossEndorsements(partyId: string): Promise<any[]>;
+  getPartyEndorsementCount(partyId: string): Promise<number>;
+  seedParties(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -9733,6 +9763,311 @@ export class DatabaseStorage implements IStorage {
       avgDeficit: data.count > 0 ? data.totalDeficit / data.count : 0,
       labelDistribution: data.labels,
     })).sort((a, b) => b.count - a.count);
+  }
+
+  // ─── Political Parties ────────────────────────────────────────────────────────
+
+  async listParties(filters: { status?: string; sort?: string; minTransparency?: number; minRating?: number; hasBallotAccess?: boolean; economicMin?: number; economicMax?: number; socialMin?: number; socialMax?: number } = {}): Promise<any[]> {
+    const conditions: any[] = [];
+    if (filters.status) conditions.push(eq(politicalParties.status, filters.status));
+    if (filters.hasBallotAccess === true) conditions.push(eq(politicalParties.hasFederalBallotAccess, true));
+    if (filters.minTransparency !== undefined) conditions.push(sql`${politicalParties.transparencyScore} >= ${filters.minTransparency}`);
+    if (filters.economicMin !== undefined) conditions.push(sql`${politicalParties.compassEconomic} >= ${filters.economicMin}`);
+    if (filters.economicMax !== undefined) conditions.push(sql`${politicalParties.compassEconomic} <= ${filters.economicMax}`);
+    if (filters.socialMin !== undefined) conditions.push(sql`${politicalParties.compassSocial} >= ${filters.socialMin}`);
+    if (filters.socialMax !== undefined) conditions.push(sql`${politicalParties.compassSocial} <= ${filters.socialMax}`);
+
+    const rows = await db.select().from(politicalParties)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    // Get rating aggregates
+    const ratingAggs = await db
+      .select({
+        partyId: partyUserRatings.partyId,
+        avgRating: sql<number>`AVG(${partyUserRatings.rating})`,
+        cnt: count(partyUserRatings.id),
+      })
+      .from(partyUserRatings)
+      .groupBy(partyUserRatings.partyId);
+
+    const ratingMap = new Map(ratingAggs.map(r => [r.partyId, { avg: r.avgRating, cnt: r.cnt }]));
+
+    // Get endorsement counts
+    const endorsementCounts = await db
+      .select({ partyId: partyEndorsements.partyId, cnt: count(partyEndorsements.id) })
+      .from(partyEndorsements)
+      .where(eq(partyEndorsements.isActive, true))
+      .groupBy(partyEndorsements.partyId);
+    const endorsementMap = new Map(endorsementCounts.map(e => [e.partyId, e.cnt]));
+
+    let result = rows.map(p => ({
+      ...p,
+      averageRating: ratingMap.get(p.id)?.avg ?? null,
+      ratingCount: ratingMap.get(p.id)?.cnt ?? 0,
+      endorsementCount: endorsementMap.get(p.id) ?? 0,
+    }));
+
+    if (filters.minRating !== undefined) {
+      result = result.filter(p => p.averageRating !== null && p.averageRating >= filters.minRating!);
+    }
+
+    // Sort
+    const sort = filters.sort || "random";
+    if (sort === "alpha") result.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort === "transparency") result.sort((a, b) => (b.transparencyScore ?? 0) - (a.transparencyScore ?? 0));
+    else if (sort === "rating") result.sort((a, b) => (b.averageRating ?? -999) - (a.averageRating ?? -999));
+    else if (sort === "endorsements") result.sort((a, b) => b.endorsementCount - a.endorsementCount);
+    else {
+      // Random shuffle (default "randomized discovery")
+      for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+    }
+    return result;
+  }
+
+  async getPartyByIdOrSlug(idOrSlug: string): Promise<any | undefined> {
+    const [byId] = await db.select().from(politicalParties).where(eq(politicalParties.id, idOrSlug)).limit(1);
+    if (byId) {
+      const leaders = await this.listPartyLeaders(byId.id);
+      const ballotAccess = await this.listPartyBallotAccess(byId.id);
+      const positions = await this.listPartyPolicyPositions(byId.id);
+      const stats = await this.getPartyRatingStats(byId.id);
+      const endorsementCount = await this.getPartyEndorsementCount(byId.id);
+      return { ...byId, leaders, ballotAccess, positions, ratingStats: stats, endorsementCount };
+    }
+    const [bySlug] = await db.select().from(politicalParties).where(eq(politicalParties.slug, idOrSlug)).limit(1);
+    if (!bySlug) return undefined;
+    const leaders = await this.listPartyLeaders(bySlug.id);
+    const ballotAccess = await this.listPartyBallotAccess(bySlug.id);
+    const positions = await this.listPartyPolicyPositions(bySlug.id);
+    const stats = await this.getPartyRatingStats(bySlug.id);
+    const endorsementCount = await this.getPartyEndorsementCount(bySlug.id);
+    return { ...bySlug, leaders, ballotAccess, positions, ratingStats: stats, endorsementCount };
+  }
+
+  async createParty(data: any): Promise<any> {
+    const [created] = await db.insert(politicalParties).values(data).returning();
+    return created;
+  }
+
+  async updateParty(id: string, patch: any): Promise<any> {
+    const [updated] = await db.update(politicalParties).set({ ...patch, updatedAt: new Date() }).where(eq(politicalParties.id, id)).returning();
+    return updated;
+  }
+
+  async deleteParty(id: string): Promise<void> {
+    await db.delete(politicalParties).where(eq(politicalParties.id, id));
+  }
+
+  async listPartyLeaders(partyId: string): Promise<any[]> {
+    return db.select().from(partyLeaders).where(eq(partyLeaders.partyId, partyId)).orderBy(desc(partyLeaders.isPrimary), asc(partyLeaders.startYear));
+  }
+
+  async upsertPartyLeader(data: any): Promise<any> {
+    if (data.id) {
+      const [updated] = await db.update(partyLeaders).set(data).where(eq(partyLeaders.id, data.id)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(partyLeaders).values(data).returning();
+    return created;
+  }
+
+  async deletePartyLeader(id: string): Promise<void> {
+    await db.delete(partyLeaders).where(eq(partyLeaders.id, id));
+  }
+
+  async listPartyBallotAccess(partyId: string): Promise<any[]> {
+    return db.select().from(partyBallotAccess).where(eq(partyBallotAccess.partyId, partyId)).orderBy(asc(partyBallotAccess.stateCode));
+  }
+
+  async upsertPartyBallotAccess(partyId: string, stateCode: string, accessLevel: string, notes?: string): Promise<any> {
+    const [result] = await db
+      .insert(partyBallotAccess)
+      .values({ partyId, stateCode, accessLevel, notes, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [partyBallotAccess.partyId, partyBallotAccess.stateCode],
+        set: { accessLevel, notes, updatedAt: new Date() },
+      })
+      .returning();
+    return result;
+  }
+
+  async listPartyPolicyPositions(partyId: string): Promise<any[]> {
+    return db.select().from(partyPolicyPositions).where(eq(partyPolicyPositions.partyId, partyId)).orderBy(asc(partyPolicyPositions.issueCategory));
+  }
+
+  async upsertPartyPolicyPosition(data: any): Promise<any> {
+    if (data.id) {
+      const [updated] = await db.update(partyPolicyPositions).set(data).where(eq(partyPolicyPositions.id, data.id)).returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(partyPolicyPositions)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [partyPolicyPositions.partyId, partyPolicyPositions.issueId],
+        set: { positionValue: data.positionValue, positionLabel: data.positionLabel, notes: data.notes, issueLabel: data.issueLabel, issueCategory: data.issueCategory },
+      })
+      .returning();
+    return created;
+  }
+
+  async deletePartyPolicyPosition(id: string): Promise<void> {
+    await db.delete(partyPolicyPositions).where(eq(partyPolicyPositions.id, id));
+  }
+
+  async listPartyEndorsements(partyId: string, filters: { electionCycle?: string; state?: string } = {}): Promise<any[]> {
+    const conditions: any[] = [eq(partyEndorsements.partyId, partyId)];
+    if (filters.electionCycle) conditions.push(eq(partyEndorsements.electionCycle, filters.electionCycle));
+    if (filters.state) conditions.push(eq(partyEndorsements.state, filters.state));
+    return db.select().from(partyEndorsements).where(and(...conditions)).orderBy(desc(partyEndorsements.createdAt));
+  }
+
+  async createPartyEndorsement(data: any): Promise<any> {
+    const [created] = await db.insert(partyEndorsements).values(data).returning();
+    return created;
+  }
+
+  async updatePartyEndorsement(id: string, patch: any): Promise<any> {
+    const [updated] = await db.update(partyEndorsements).set(patch).where(eq(partyEndorsements.id, id)).returning();
+    return updated;
+  }
+
+  async deletePartyEndorsement(id: string): Promise<void> {
+    await db.delete(partyEndorsements).where(eq(partyEndorsements.id, id));
+  }
+
+  async getEndorsementsByPoliticianId(politicianId: string): Promise<any[]> {
+    const rows = await db
+      .select({
+        id: partyEndorsements.id,
+        partyId: partyEndorsements.partyId,
+        office: partyEndorsements.office,
+        district: partyEndorsements.district,
+        state: partyEndorsements.state,
+        electionCycle: partyEndorsements.electionCycle,
+        endorsementType: partyEndorsements.endorsementType,
+        sourceUrl: partyEndorsements.sourceUrl,
+        notes: partyEndorsements.notes,
+        isActive: partyEndorsements.isActive,
+        partyName: politicalParties.name,
+        partyAcronym: politicalParties.acronym,
+        partySlug: politicalParties.slug,
+        partyLogoUrl: politicalParties.logoUrl,
+        partyColors: politicalParties.colors,
+      })
+      .from(partyEndorsements)
+      .leftJoin(politicalParties, eq(partyEndorsements.partyId, politicalParties.id))
+      .where(eq(partyEndorsements.politicianId, politicianId))
+      .orderBy(desc(partyEndorsements.createdAt));
+    return rows;
+  }
+
+  async listPartyControversies(partyId: string): Promise<any[]> {
+    return db.select().from(partyControversies)
+      .where(and(eq(partyControversies.partyId, partyId), sql`${partyControversies.sourceUrl} IS NOT NULL AND ${partyControversies.sourceUrl} != ''`))
+      .orderBy(desc(partyControversies.date));
+  }
+
+  async createPartyControversy(data: any): Promise<any> {
+    const [created] = await db.insert(partyControversies).values(data).returning();
+    return created;
+  }
+
+  async updatePartyControversy(id: string, patch: any): Promise<any> {
+    const [updated] = await db.update(partyControversies).set(patch).where(eq(partyControversies.id, id)).returning();
+    return updated;
+  }
+
+  async deletePartyControversy(id: string): Promise<void> {
+    await db.delete(partyControversies).where(eq(partyControversies.id, id));
+  }
+
+  async getPartyRatingStats(partyId: string): Promise<{ average: number; count: number; distribution: Record<string, number> }> {
+    const ratings = await db.select({ rating: partyUserRatings.rating }).from(partyUserRatings).where(eq(partyUserRatings.partyId, partyId));
+    if (ratings.length === 0) return { average: 0, count: 0, distribution: {} };
+    const avg = ratings.reduce((s, r) => s + r.rating, 0) / ratings.length;
+    const dist: Record<string, number> = {};
+    for (const r of ratings) {
+      const bucket = r.rating <= -30 ? "very_negative" : r.rating <= -10 ? "negative" : r.rating < 10 ? "neutral" : r.rating < 30 ? "positive" : "very_positive";
+      dist[bucket] = (dist[bucket] || 0) + 1;
+    }
+    return { average: Math.round(avg * 10) / 10, count: ratings.length, distribution: dist };
+  }
+
+  async getUserPartyRating(partyId: string, userId: string): Promise<any | undefined> {
+    const [row] = await db.select().from(partyUserRatings).where(and(eq(partyUserRatings.partyId, partyId), eq(partyUserRatings.userId, userId))).limit(1);
+    return row;
+  }
+
+  async upsertPartyUserRating(partyId: string, userId: string, rating: number, letterGrade?: string): Promise<any> {
+    const [result] = await db
+      .insert(partyUserRatings)
+      .values({ partyId, userId, rating, letterGrade, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [partyUserRatings.partyId, partyUserRatings.userId],
+        set: { rating, letterGrade, updatedAt: new Date() },
+      })
+      .returning();
+    return result;
+  }
+
+  async getPartyCrossEndorsements(partyId: string): Promise<any[]> {
+    // Find candidates endorsed by this party, then find other parties that also endorse them
+    const myEndorsements = await db.select({ politicianId: partyEndorsements.politicianId }).from(partyEndorsements)
+      .where(and(eq(partyEndorsements.partyId, partyId), sql`${partyEndorsements.politicianId} IS NOT NULL`));
+    if (myEndorsements.length === 0) return [];
+    const polIds = myEndorsements.map(e => e.politicianId).filter(Boolean) as string[];
+    const otherEndorsements = await db
+      .select({
+        partyId: partyEndorsements.partyId,
+        partyName: politicalParties.name,
+        partyAcronym: politicalParties.acronym,
+        partySlug: politicalParties.slug,
+        sharedCount: count(partyEndorsements.id),
+      })
+      .from(partyEndorsements)
+      .leftJoin(politicalParties, eq(partyEndorsements.partyId, politicalParties.id))
+      .where(and(
+        sql`${partyEndorsements.partyId} != ${partyId}`,
+        inArray(partyEndorsements.politicianId, polIds)
+      ))
+      .groupBy(partyEndorsements.partyId, politicalParties.name, politicalParties.acronym, politicalParties.slug)
+      .orderBy(desc(sql`count(${partyEndorsements.id})`));
+    return otherEndorsements;
+  }
+
+  async getPartyEndorsementCount(partyId: string): Promise<number> {
+    const [result] = await db.select({ cnt: count() }).from(partyEndorsements).where(and(eq(partyEndorsements.partyId, partyId), eq(partyEndorsements.isActive, true)));
+    return result?.cnt ?? 0;
+  }
+
+  async seedParties(): Promise<void> {
+    const SEED_PARTIES = [
+      { name: "Democratic Party", acronym: "DEM", slug: "democratic-party", shortDescription: "One of the two major American political parties, founded in 1828. Associated with liberal and progressive policy positions.", status: "active", hasFederalBallotAccess: true, statesWithBallotAccess: 50, foundedYear: 1828, compassEconomic: -2.5, compassSocial: 4.0, transparencyScore: 55 },
+      { name: "Republican Party", acronym: "GOP", slug: "republican-party", shortDescription: "One of the two major American political parties, founded in 1854. Associated with conservative and right-leaning policy positions.", status: "active", hasFederalBallotAccess: true, statesWithBallotAccess: 50, foundedYear: 1854, compassEconomic: 3.5, compassSocial: -3.0, transparencyScore: 53 },
+      { name: "Libertarian Party", acronym: "LP", slug: "libertarian-party", shortDescription: "Founded in 1971, the largest third party in the US. Advocates for individual freedom, limited government, and free markets.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 36, foundedYear: 1971, compassEconomic: 6.0, compassSocial: 7.0, transparencyScore: 70 },
+      { name: "Green Party", acronym: "GP", slug: "green-party", shortDescription: "Founded in 1984, advocates for environmental protection, social justice, nonviolence, and grassroots democracy.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 21, foundedYear: 1984, compassEconomic: -6.0, compassSocial: 7.5, transparencyScore: 65 },
+      { name: "Constitution Party", acronym: "CP", slug: "constitution-party", shortDescription: "Founded in 1992, advocates for a return to the original intent of the U.S. Constitution and natural law.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 15, foundedYear: 1992, compassEconomic: 4.0, compassSocial: -6.0, transparencyScore: 60 },
+      { name: "Reform Party", acronym: "RPUSA", slug: "reform-party", shortDescription: "Founded in 1995 by Ross Perot. Focused on campaign finance reform, fiscal responsibility, and government accountability.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 5, foundedYear: 1995, compassEconomic: 0.5, compassSocial: 0.5, transparencyScore: 50 },
+      { name: "Working Families Party", acronym: "WFP", slug: "working-families-party", shortDescription: "Founded in 1998, focuses on economic equality, workers' rights, and progressive policy at state and local levels.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 10, foundedYear: 1998, compassEconomic: -5.0, compassSocial: 5.5, transparencyScore: 68 },
+      { name: "American Solidarity Party", acronym: "ASP", slug: "american-solidarity-party", shortDescription: "Founded in 2011, Christian democratic party that advocates for consistent life ethic, subsidiarity, and social justice.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 4, foundedYear: 2011, compassEconomic: -2.0, compassSocial: -2.0, transparencyScore: 72 },
+      { name: "Forward Party", acronym: "FWD", slug: "forward-party", shortDescription: "Founded in 2021 by Andrew Yang. Advocates for ranked choice voting, nonpartisan primaries, and pragmatic governance.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 12, foundedYear: 2021, compassEconomic: 0.0, compassSocial: 2.0, transparencyScore: 75 },
+      { name: "Justice Party", acronym: "JP", slug: "justice-party", shortDescription: "Founded in 2011, advocates for social justice, ending corporate influence in politics, and campaign finance reform.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 3, foundedYear: 2011, compassEconomic: -5.5, compassSocial: 6.0, transparencyScore: 62 },
+      { name: "Party for Socialism and Liberation", acronym: "PSL", slug: "party-for-socialism-and-liberation", shortDescription: "Founded in 2004, Marxist party that advocates for a socialist transformation of society and opposes imperialism.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 7, foundedYear: 2004, compassEconomic: -9.0, compassSocial: 8.0, transparencyScore: 55 },
+      { name: "Socialist Party USA", acronym: "SPUSA", slug: "socialist-party-usa", shortDescription: "Founded in 1973, democratic socialist party advocating for worker ownership, environmental sustainability, and social equality.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 6, foundedYear: 1973, compassEconomic: -8.0, compassSocial: 7.5, transparencyScore: 58 },
+      { name: "Prohibition Party", acronym: "PRO", slug: "prohibition-party", shortDescription: "Founded in 1869, the oldest third party in the US. Best known for its advocacy against alcohol, also supports social conservatism.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 2, foundedYear: 1869, compassEconomic: 1.0, compassSocial: -7.0, transparencyScore: 60 },
+      { name: "Alliance Party", acronym: "ALP", slug: "alliance-party", shortDescription: "A centrist party focused on unity, reducing partisan division, and pragmatic solutions to national challenges.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 2, foundedYear: 2018, compassEconomic: 0.0, compassSocial: 1.0, transparencyScore: 65 },
+      { name: "Anti-Corruption Party", acronym: "ACP", slug: "anti-corruption-party", shortDescription: "Dedicated to eliminating corruption in government, promoting radical transparency, and returning power to the people.", status: "active", hasFederalBallotAccess: false, statesWithBallotAccess: 0, foundedYear: 2020, compassEconomic: 0.0, compassSocial: 3.0, transparencyScore: 95 },
+    ];
+    for (const party of SEED_PARTIES) {
+      const [existing] = await db.select({ id: politicalParties.id }).from(politicalParties).where(eq(politicalParties.slug, party.slug)).limit(1);
+      if (!existing) {
+        await db.insert(politicalParties).values(party);
+      }
+    }
   }
 }
 

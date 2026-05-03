@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Navigation } from "@/components/navigation";
@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowLeft, Heart, HeartOff, Users, Calendar, FileText, MapPin, Mail } from "lucide-react";
+import { ArrowLeft, Heart, HeartOff, Users, Calendar, FileText, MapPin, Mail, Award } from "lucide-react";
 import { format } from "date-fns";
 
 interface CandidateWithUser {
@@ -57,6 +57,18 @@ export default function CandidateProfilePage() {
   const { data: supporters = [] } = useQuery<User[]>({
     queryKey: ["/api/candidates", candidateId, "supporters"],
     enabled: !!candidateId,
+  });
+
+  // Party endorsements for this candidate (uses politician ID if available)
+  const politicianId = (candidate as any)?.politicianId;
+  const { data: partyEndorsements = [] } = useQuery<any[]>({
+    queryKey: ["/api/politicians", politicianId, "party-endorsements"],
+    queryFn: async () => {
+      const res = await fetch(`/api/politicians/${politicianId}/party-endorsements`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!politicianId,
   });
 
   const supportMutation = useMutation({
@@ -273,6 +285,39 @@ export default function CandidateProfilePage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Endorsed By */}
+            {partyEndorsements.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Award className="h-5 w-5" />
+                    Endorsed By
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {partyEndorsements.map((e: any) => (
+                    <div key={e.id} className="flex items-center justify-between gap-2">
+                      <Link href={`/parties/${e.partySlug || e.partyId}`}>
+                        <div className="flex items-center gap-2 cursor-pointer hover:underline">
+                          <div
+                            className="w-3 h-3 rounded-full border border-border"
+                            style={{ backgroundColor: e.partyColors?.[0] || "#6b7280" }}
+                          />
+                          <span className="text-sm font-medium">{e.partyName}</span>
+                          {e.partyAcronym && (
+                            <Badge variant="outline" className="text-xs font-mono px-1 py-0">{e.partyAcronym}</Badge>
+                          )}
+                        </div>
+                      </Link>
+                      <Badge variant="secondary" className="text-xs capitalize shrink-0">
+                        {e.endorsementType || "endorsed"}
+                      </Badge>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Contact Information */}
             <Card>
               <CardHeader>

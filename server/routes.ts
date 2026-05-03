@@ -10314,6 +10314,264 @@ Only include people you are confident about. Return empty arrays/null if unknown
   // Legacy sideloaded agent-app management routes were removed in favor of the ACP Agent API Gateway.
 
   // ============================================================
+  // Political Parties API
+  // ============================================================
+
+  // Seed parties (admin-only)
+  app.post("/api/admin/parties/seed", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      await storage.seedParties();
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // List parties (public)
+  app.get("/api/parties", async (req: Request, res: Response) => {
+    try {
+      const filters = {
+        status: req.query.status as string | undefined,
+        sort: req.query.sort as string | undefined,
+        minTransparency: req.query.minTransparency ? Number(req.query.minTransparency) : undefined,
+        minRating: req.query.minRating ? Number(req.query.minRating) : undefined,
+        hasBallotAccess: req.query.hasBallotAccess === "true" ? true : undefined,
+        economicMin: req.query.economicMin !== undefined ? Number(req.query.economicMin) : undefined,
+        economicMax: req.query.economicMax !== undefined ? Number(req.query.economicMax) : undefined,
+        socialMin: req.query.socialMin !== undefined ? Number(req.query.socialMin) : undefined,
+        socialMax: req.query.socialMax !== undefined ? Number(req.query.socialMax) : undefined,
+      };
+      const parties = await storage.listParties(filters);
+      return res.json(parties);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get single party (public)
+  app.get("/api/parties/:partyId", async (req: Request, res: Response) => {
+    try {
+      const party = await storage.getPartyByIdOrSlug(req.params.partyId);
+      if (!party) return res.status(404).json({ message: "Party not found" });
+      return res.json(party);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Create party (admin-only)
+  app.post("/api/admin/parties", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const party = await storage.createParty(req.body);
+      return res.status(201).json(party);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Update party (admin-only)
+  app.patch("/api/admin/parties/:partyId", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const party = await storage.updateParty(req.params.partyId, req.body);
+      if (!party) return res.status(404).json({ message: "Party not found" });
+      return res.json(party);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Delete party (admin-only)
+  app.delete("/api/admin/parties/:partyId", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      await storage.deleteParty(req.params.partyId);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Party leaders
+  app.get("/api/parties/:partyId/leaders", async (req: Request, res: Response) => {
+    try {
+      const leaders = await storage.listPartyLeaders(req.params.partyId);
+      return res.json(leaders);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admin/parties/:partyId/leaders", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const leader = await storage.upsertPartyLeader({ ...req.body, partyId: req.params.partyId });
+      return res.status(201).json(leader);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/party-leaders/:leaderId", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      await storage.deletePartyLeader(req.params.leaderId);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Party endorsements
+  app.get("/api/parties/:partyId/endorsements", async (req: Request, res: Response) => {
+    try {
+      const endorsements = await storage.listPartyEndorsements(req.params.partyId, {
+        electionCycle: req.query.electionCycle as string | undefined,
+        state: req.query.state as string | undefined,
+      });
+      return res.json(endorsements);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admin/parties/:partyId/endorsements", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const endorsement = await storage.createPartyEndorsement({ ...req.body, partyId: req.params.partyId });
+      return res.status(201).json(endorsement);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/admin/party-endorsements/:endorsementId", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const endorsement = await storage.updatePartyEndorsement(req.params.endorsementId, req.body);
+      return res.json(endorsement);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/party-endorsements/:endorsementId", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      await storage.deletePartyEndorsement(req.params.endorsementId);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Endorsements by politician
+  app.get("/api/politicians/:politicianId/party-endorsements", async (req: Request, res: Response) => {
+    try {
+      const endorsements = await storage.getEndorsementsByPoliticianId(req.params.politicianId);
+      return res.json(endorsements);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Party controversies
+  app.get("/api/parties/:partyId/controversies", async (req: Request, res: Response) => {
+    try {
+      const controversies = await storage.listPartyControversies(req.params.partyId);
+      return res.json(controversies);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admin/parties/:partyId/controversies", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const controversy = await storage.createPartyControversy({ ...req.body, partyId: req.params.partyId });
+      return res.status(201).json(controversy);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/party-controversies/:controversyId", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      await storage.deletePartyControversy(req.params.controversyId);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Party policy positions
+  app.get("/api/parties/:partyId/positions", async (req: Request, res: Response) => {
+    try {
+      const positions = await storage.listPartyPolicyPositions(req.params.partyId);
+      return res.json(positions);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admin/parties/:partyId/positions", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const position = await storage.upsertPartyPolicyPosition({ ...req.body, partyId: req.params.partyId });
+      return res.status(201).json(position);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/party-positions/:positionId", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      await storage.deletePartyPolicyPosition(req.params.positionId);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Party user ratings
+  app.get("/api/parties/:partyId/rating-stats", async (req: Request, res: Response) => {
+    try {
+      const stats = await storage.getPartyRatingStats(req.params.partyId);
+      return res.json(stats);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/parties/:partyId/my-rating", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) return res.json(null);
+    try {
+      const rating = await storage.getUserPartyRating(req.params.partyId, (req.user as any).id);
+      return res.json(rating || null);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/parties/:partyId/rate", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const { rating, letterGrade } = req.body;
+      if (typeof rating !== "number" || rating < -50 || rating > 50) {
+        return res.status(400).json({ message: "rating must be a number between -50 and 50" });
+      }
+      const result = await storage.upsertPartyUserRating(req.params.partyId, (req.user as any).id, rating, letterGrade);
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ============================================================
   // Run For Office API
   // ============================================================
 

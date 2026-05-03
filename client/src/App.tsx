@@ -69,6 +69,9 @@ import BudgetSimulatorPage from "@/pages/budget-simulator-page";
 import AdminBudgetBaselinesPage from "@/pages/admin-budget-baselines-page";
 import SigsDirectoryPage from "@/pages/sigs-directory-page";
 import SigProfilePage from "@/pages/sig-profile-page";
+import PartiesPage from "@/pages/parties-page";
+import PartyProfilePage from "@/pages/party-profile-page";
+import AdminPartiesPage from "@/pages/admin-parties-page";
 import WhistleblowingPage from "@/pages/whistleblowing-page";
 import PoliticalCompassPage from "@/pages/political-compass";
 import CreateArticlePage from "@/pages/create-article-page";
@@ -191,7 +194,10 @@ function Router() {
       <ProtectedRoute path="/admin/politicians" component={AdminPoliticiansPage} />
       <Route path="/sigs" component={SigsDirectoryPage} />
       <Route path="/sigs/:tag" component={SigProfilePage} />
+      <Route path="/parties" component={PartiesPage} />
+      <Route path="/parties/:partyId" component={PartyProfilePage} />
       <ProtectedRoute path="/admin/sigs" component={AdminSigsPage} />
+      <ProtectedRoute path="/admin/parties" component={AdminPartiesPage} />
       <ProtectedRoute path="/admin/state-data" component={AdminStateDataPage} />
       <ProtectedRoute path="/admin/import-export" component={AdminImportExportPage} />
       <ProtectedRoute path="/admin/trading-flags" component={AdminTradingFlagsPage} />

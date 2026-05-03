@@ -65,6 +65,7 @@ const navCategories: NavCategory[] = [
       { name: "Users", href: "/admin/users", icon: UserCircle },
       { name: "Politicians", href: "/admin/politicians", icon: Users },
       { name: "SIGs", href: "/admin/sigs", icon: Building2 },
+      { name: "Parties", href: "/admin/parties", icon: Flag },
       { name: "ACEs", href: "/admin/ace-pledges", icon: BadgeCheck },
       { name: "Pledges", href: "/admin/pledge-requests", icon: BadgeCheck },
       { name: "Trading Flags", href: "/admin/trading-flags", icon: Flag },
