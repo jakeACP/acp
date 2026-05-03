@@ -59,6 +59,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { FriendButton } from "@/components/friend-button";
+import { FollowButton } from "@/components/follow-button";
 import { apiRequest } from "@/lib/queryClient";
 import type { Post } from "@shared/schema";
 import { PLEDGE_DEFINITIONS } from "@shared/schema";
@@ -1241,20 +1242,27 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
           const displayFollowing = followingList.slice(0, module.itemCount);
           return (
             <div className="space-y-2">
+              <div className="flex gap-4 text-sm text-gray-500 mb-2">
+                <span><span className="font-semibold text-gray-900 dark:text-gray-100">{followingList.length}</span> Following</span>
+                <span><span className="font-semibold text-gray-900 dark:text-gray-100">{followers.length}</span> Followers</span>
+              </div>
               {displayFollowing.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-4">Not following anyone yet.</p>
               ) : (
                 displayFollowing.map((u: any) => (
-                  <a key={u.id} href={`/profile/${u.id}`} className="flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
-                    <Avatar className="w-8 h-8">
-                      <AvatarImage src={u.avatar} alt={u.username} />
-                      <AvatarFallback className="text-xs">{u.firstName?.[0] || u.username?.[0] || "?"}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <span className="text-sm font-medium block">{u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username}</span>
-                      <span className="text-xs text-gray-500">@{u.username}</span>
-                    </div>
-                  </a>
+                  <div key={u.id} className="flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                    <a href={`/profile/${u.id}`} className="flex items-center gap-2 flex-1 min-w-0">
+                      <Avatar className="w-8 h-8 flex-shrink-0">
+                        <AvatarImage src={u.avatar} alt={u.username} />
+                        <AvatarFallback className="text-xs">{u.firstName?.[0] || u.username?.[0] || "?"}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium block truncate">{u.firstName ? `${u.firstName} ${u.lastName || ""}`.trim() : u.username}</span>
+                        <span className="text-xs text-gray-500">@{u.username}</span>
+                      </div>
+                    </a>
+                    <FollowButton userId={u.id} username={u.username} size="sm" variant="outline" />
+                  </div>
                 ))
               )}
             </div>
@@ -2688,12 +2696,20 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                 )}
               </div>
             ) : user?.id && (
-              <FriendButton 
-                userId={user.id} 
-                username={user.username}
-                variant="outline"
-                className="bg-white/10 hover:bg-white/20 text-white border-white/30"
-              />
+              <div className="flex gap-2">
+                <FriendButton 
+                  userId={user.id} 
+                  username={user.username}
+                  variant="outline"
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/30"
+                />
+                <FollowButton
+                  userId={user.id}
+                  username={user.username}
+                  variant="outline"
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/30"
+                />
+              </div>
             )}
           </div>
 

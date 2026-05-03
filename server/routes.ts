@@ -738,6 +738,19 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         followeeId: req.body.userId,
       });
       await storage.followUser(followData.followerId, followData.followeeId);
+      // Notify the followee
+      try {
+        const follower = await storage.getUser(followData.followerId);
+        if (follower) {
+          await storage.createNotification({
+            userId: followData.followeeId,
+            type: "new_follower",
+            title: "New follower",
+            message: `@${follower.username} started following you.`,
+            payload: { followerId: followData.followerId },
+          });
+        }
+      } catch (_) {}
       res.status(201).json({ message: "User followed successfully" });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
