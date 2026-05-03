@@ -30,6 +30,7 @@ import {
   Info,
   CheckCircle2,
   ChevronDown,
+  Send,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -147,6 +148,7 @@ export default function BudgetSimulatorPage() {
   const [totalGoalAdj, setTotalGoalAdj] = useState(0);
   const [visibility, setVisibility] = useState<"public" | "private">("private");
   const [savedSimId, setSavedSimId] = useState<string | null>(null);
+  const [postedToFeed, setPostedToFeed] = useState(false);
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const { data: baseline, isLoading } = useQuery<Baseline>({
@@ -254,6 +256,46 @@ export default function BudgetSimulatorPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/budget/simulations/me"] });
+    },
+  });
+
+  const postToFeedMutation = useMutation({
+    mutationFn: async () => {
+      const allChanges = [
+        ...biggestIncreases.map((c) => ({ label: `+${c.adj}% ${c.name}`, abs: c.absoluteChange })),
+        ...biggestCuts.map((c) => ({ label: `${c.adj}% ${c.name}`, abs: Math.abs(c.absoluteChange) })),
+      ]
+        .sort((a, b) => b.abs - a.abs)
+        .slice(0, 3)
+        .map((x) => x.label);
+      const changesLine = allChanges.length > 0 ? `Top changes: ${allChanges.join(", ")}` : null;
+
+      const lines = [
+        `I just built my FY ${baseline!.fiscalYear} federal budget! My philosophy: ${philosophyLabel}`,
+        `Proposed total: ${formatBillions(proposedTotal)} | ${estimatedDeficit >= 0 ? "Est. Deficit" : "Est. Surplus"}: ${formatBillions(Math.abs(estimatedDeficit))}`,
+        changesLine,
+        `Build your own at the ACP Budget Simulator →`,
+      ].filter(Boolean);
+
+      return apiRequest("POST", "/api/posts", {
+        content: lines.join("\n"),
+        type: "budget-simulation",
+        tags: ["budget", "fiscal-policy"],
+        linkPreview: {
+          url: `${window.location.origin}/budget-simulator`,
+          title: "ACP Budget Simulator — Build Your Federal Budget",
+          description: `${philosophyLabel}: Proposed ${formatBillions(proposedTotal)}, ${estimatedDeficit >= 0 ? "Deficit" : "Surplus"} ${formatBillions(Math.abs(estimatedDeficit))}`,
+          siteName: "Anti-Corruption Party Platform",
+        },
+      });
+    },
+    onSuccess: () => {
+      setPostedToFeed(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({ title: "Posted to feed!", description: "Your budget summary is now on the social feed." });
+    },
+    onError: () => {
+      toast({ title: "Post failed", description: "Could not post to feed. Please try again.", variant: "destructive" });
     },
   });
 
@@ -530,6 +572,49 @@ export default function BudgetSimulatorPage() {
                       {saveMutation.isPending ? "Saving…" : "Save My Budget"}
                     </Button>
                   )}
+
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-semibold mb-1 flex items-center gap-2">
+                      <Send className="h-4 w-4 text-blue-600" /> Share with the Community
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-3">Post your budget summary to the social feed so others can comment and react.</p>
+                    {postedToFeed ? (
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Posted! Check the feed to see your budget.
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={() => postToFeedMutation.mutate()}
+                        disabled={postToFeedMutation.isPending}
+                        className="w-full"
+                      >
+                        <Send className="h-4 w-4 mr-2" />
+                        {postToFeedMutation.isPending ? "Posting…" : "Post to Feed"}
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Post to Feed card for non-authenticated users */}
+            {!user && (
+              <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900">
+                <CardContent className="pt-6 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Send className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <p className="font-semibold text-sm">Post to Feed</p>
+                      <p className="text-xs text-muted-foreground">Sign in to share your budget with the community</p>
+                    </div>
+                  </div>
+                  <Link href="/auth">
+                    <Button variant="outline" className="w-full">
+                      Sign in to Post
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             )}

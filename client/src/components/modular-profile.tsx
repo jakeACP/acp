@@ -64,7 +64,6 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { FriendButton } from "@/components/friend-button";
 import { FollowButton } from "@/components/follow-button";
 import { apiRequest } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
 import type { Post } from "@shared/schema";
 import { PLEDGE_DEFINITIONS } from "@shared/schema";
 import { POLICY_ISSUES, RESPONSE_LABELS } from "@/lib/issue-data";
