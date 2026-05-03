@@ -1,0 +1,335 @@
+Core Philosophy:
+ACP does not treat the U.S. as a two-party system. All political parties should be represented equally in the UI. Parties are organizations that may endorse candidates, publish platforms, organize members, and influence elections, but party endorsement alone does not imply corruption.
+
+Route:
+- /parties
+- /parties/:partyId
+- /admin/parties
+
+Navigation:
+Add “Political Parties” as its own main tab, separate from:
+- Candidates
+- Representatives
+- SIGs
+- Donors
+- Issues
+
+Initial Party Seed List:
+Include these parties as starter records:
+
+1. Democratic Party
+2. Republican Party
+3. Libertarian Party
+4. Green Party
+5. Constitution Party
+6. Working Families Party
+7. Forward Party
+8. Reform Party
+9. American Solidarity Party
+10. Party for Socialism and Liberation
+11. Socialist Equality Party
+12. Prohibition Party
+13. United States Pirate Party
+14. Alliance Party
+15. Independence Party
+
+Important UI Rule:
+Do NOT visually prioritize Democratic and Republican parties above others by default.
+Default sorting should be:
+- Alphabetical
+- Randomized rotation
+- User issue alignment
+- Ballot access relevance
+But never “major parties first.”
+
+Database Tables:
+
+political_parties:
+- id
+- name
+- acronym
+- slug
+- logo_url
+- website_url
+- founded_year
+- headquarters
+- status // active, inactive, regional, historical
+- short_description
+- long_description
+- economic_axis_score // -10 to +10
+- social_axis_score // -10 to +10
+- governance_style // decentralized, federalist, centralized, mixed
+- transparency_score // 0 to 100
+- controversy_index // 0 to 100, optional
+- ballot_access_summary
+- membership_model // open, closed, delegated, unknown
+- source_urls_json
+- created_at
+- updated_at
+
+party_policy_positions:
+- id
+- party_id
+- issue_id
+- stance_score // -2 to +2
+- summary
+- source_url
+- updated_at
+
+party_endorsements:
+- id
+- party_id
+- candidate_id
+- office_id
+- election_cycle
+- endorsement_type // official, informal, coalition, withdrawn
+- source_url
+- notes
+- created_at
+- updated_at
+
+party_user_ratings:
+- id
+- user_id
+- party_id
+- rating_score // -50 to +50
+- letter_grade // optional: A, B, C, D, F
+- confidence_level // optional: low, medium, high
+- comment
+- created_at
+- updated_at
+
+party_leaders:
+- id
+- party_id
+- name
+- role
+- state
+- source_url
+- active
+- created_at
+- updated_at
+
+party_ballot_access:
+- id
+- party_id
+- state
+- has_ballot_access
+- access_status // full, partial, presidential_only, local_only, none, unknown
+- source_url
+- updated_at
+
+Candidate Relationship:
+Candidates can have many party endorsements.
+Parties can endorse many candidates.
+Endorsements are informational only.
+
+Do NOT use party ratings, party transparency score, or party controversy index in candidate corruption grading.
+
+Candidate profile integration:
+On candidate profiles, show:
+“Endorsed By”
+- Party logo
+- Party name
+- Endorsement type
+- Source link
+- Election cycle
+
+Party Profile Page:
+Each party profile should include:
+
+1. Header Card
+- Logo
+- Name
+- Acronym
+- Short description
+- Website
+- Founded year
+- Status
+
+2. Political Compass Placement
+Show party on same Economic/Social compass system used by ACP.
+- Economic axis: -10 to +10
+- Social axis: -10 to +10
+Label this as “Estimated Platform Position.”
+
+3. Platform Positions
+Show issue-by-issue stance connected to ACP Issue Survey categories.
+Each row:
+- Issue name
+- Party stance
+- Short summary
+- Source
+
+4. Endorsements
+Show candidates endorsed by this party.
+Filters:
+- Election year
+- Office level
+- State
+- Endorsement type
+
+5. Cross-Endorsement Network
+Show candidates endorsed by multiple parties.
+Example:
+“This party shares endorsed candidates with: Green Party, Working Families Party, Forward Party.”
+
+6. User Rating Section
+Allow logged-in users to rate the party:
+Option A:
+Slider from -50 to +50
+Labels:
+-50 = Strongly Oppose / Distrust
+0 = Neutral / Unsure
++50 = Strongly Support / Trust
+
+Optional:
+Letter grade A/B/C/D/F
+
+Display:
+- Average rating
+- Rating count
+- Distribution chart
+- Do NOT call this a corruption grade
+
+7. Transparency Score
+Show party-level transparency score separately:
+Score 0–100 based on:
+- Funding disclosure clarity
+- Platform clarity
+- Leadership visibility
+- Endorsement source quality
+- Ballot access clarity
+
+Label:
+“Party Transparency Score”
+
+Tooltip:
+“This score reflects how easy it is to verify information about this party. It does not affect candidate corruption grades.”
+
+8. Controversy Timeline
+Optional but recommended:
+List major controversies, internal conflicts, lawsuits, platform reversals, or scandals.
+Each item must require a source URL.
+Do not display unsourced claims.
+
+Main Parties Page:
+Create a searchable/filterable directory.
+
+Cards should show:
+- Party name
+- Logo
+- Short description
+- Estimated compass position
+- Transparency score
+- Number of endorsed candidates
+- User rating average
+
+Filters:
+- Active status
+- State ballot access
+- Economic axis range
+- Social axis range
+- Transparency score
+- User rating
+- Endorses candidates in my district
+- Has cross-party endorsements
+
+Sorting:
+- Alphabetical
+- Highest transparency
+- Highest user rating
+- Most endorsements
+- Best issue alignment with me
+- Randomized discovery mode
+
+Important:
+Default sort should be “Randomized Discovery” or “Alphabetical,” not two-party-first.
+
+Issue Alignment Feature:
+If the user completed the Issue Survey, show:
+“Your estimated alignment with this party: X%”
+
+Calculate alignment by comparing:
+- user issue survey answers
+- party_policy_positions
+
+Simple formula:
+For each shared issue:
+difference = abs(userStance - partyStance)
+issueScore = 1 - (difference / maxDifference)
+Average all issueScores and convert to percentage.
+
+Do not call this an endorsement.
+Label:
+“Estimated Issue Alignment”
+
+Admin Panel:
+/admin/parties
+
+Admin can:
+- Create party
+- Edit party
+- Upload logo
+- Add website/source links
+- Add platform positions
+- Add leaders
+- Add ballot access by state
+- Add endorsements
+- Add controversy timeline entries
+- Set transparency score
+- Set estimated compass position
+- Mark party active/inactive/regional/historical
+
+Admin Endorsement Manager:
+Allow admin to connect:
+- Party
+- Candidate
+- Office
+- Election cycle
+- Source URL
+- Endorsement type
+
+Validation:
+- Endorsements require source URL
+- Controversy entries require source URL
+- Platform positions should include source URL when possible
+- Party name must be unique
+- Slug must be unique
+
+Design:
+Use ACP Liquid Glass design.
+Use equal card sizes for all parties.
+Do not use red/blue styling that implies Democrat/Republican dominance.
+Use neutral colors, gradients, or party logo colors only inside each party card.
+
+Recommended UI Sections:
+- “Explore Political Parties”
+- “Parties Endorsing Candidates Near You”
+- “Parties You Align With”
+- “Cross-Endorsement Map”
+- “New & Emerging Parties”
+- “Highest Transparency”
+
+Disclaimer:
+“Political parties are shown as non-exclusive endorsement organizations. A candidate may be endorsed by multiple parties. Party ratings and party transparency scores do not affect candidate corruption grades.”
+
+Future Feature Hooks:
+Leave structure ready for:
+- Coalition Builder
+- Party comparison tool
+- Party membership links
+- Party event calendar
+- Party donation transparency
+- Party platform version history
+- AI-generated party summaries with citations
+
+Acceptance Criteria:
+- Parties exist separately from SIGs
+- Candidates can have multiple party endorsements
+- Party data does not affect candidate corruption grade
+- User can rate parties separately
+- Admin can manage party records
+- UI does not imply only two parties matter
+- Party pages include sources wherever claims are made
+- Party alignment can use ACP Issue Survey data
