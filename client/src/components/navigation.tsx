@@ -135,14 +135,6 @@ export function Navigation() {
                   <Link href="/profile">
                     <DropdownMenuItem className="cursor-pointer">Profile</DropdownMenuItem>
                   </Link>
-                  {!user?.claimedPoliticianId && (
-                    <Link href="/run-for-office">
-                      <DropdownMenuItem className="cursor-pointer font-medium text-primary">
-                        <Megaphone className="mr-2 h-4 w-4" />
-                        Run For Office
-                      </DropdownMenuItem>
-                    </Link>
-                  )}
                   {user?.claimedPoliticianId && (
                     <>
                       <Link href="/political-profile">
@@ -185,6 +177,14 @@ export function Navigation() {
                     <Link href="/admin/representatives">
                       <DropdownMenuItem className="cursor-pointer" data-testid="link-admin-representatives">
                         Representatives Admin
+                      </DropdownMenuItem>
+                    </Link>
+                  )}
+                  {!user?.claimedPoliticianId && (
+                    <Link href="/run-for-office">
+                      <DropdownMenuItem className="cursor-pointer font-medium text-primary">
+                        <Megaphone className="mr-2 h-4 w-4" />
+                        Run For Office
                       </DropdownMenuItem>
                     </Link>
                   )}
@@ -279,18 +279,6 @@ export function Navigation() {
                   Profile
                 </Button>
               </Link>
-              {!user?.claimedPoliticianId && (
-                <Link href="/run-for-office">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start font-medium text-primary"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    <Megaphone className="mr-2 h-4 w-4" />
-                    Run For Office
-                  </Button>
-                </Link>
-              )}
               {user?.claimedPoliticianId && (
                 <>
                   <Link href="/political-profile">
@@ -378,6 +366,18 @@ export function Navigation() {
                   Front End
                 </Button>
               </Link>
+              {!user?.claimedPoliticianId && (
+                <Link href="/run-for-office">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start font-medium text-primary"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <Megaphone className="mr-2 h-4 w-4" />
+                    Run For Office
+                  </Button>
+                </Link>
+              )}
               <Button 
                 variant="ghost" 
                 className="w-full justify-start text-red-600 dark:text-red-400"
