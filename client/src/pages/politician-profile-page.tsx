@@ -773,9 +773,133 @@ export default function PoliticianProfilePage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Endorsed By (Party) */}
+          <EndorsedByCard politicianId={id!} />
         </div>
       </div>
       </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   ENDORSED BY CARD (sidebar)
+   ════════════════════════════════════════════════════════════ */
+function alignmentColor(pct: number) {
+  if (pct >= 70) return "text-green-600 dark:text-green-400";
+  if (pct >= 40) return "text-yellow-600 dark:text-yellow-400";
+  return "text-red-500 dark:text-red-400";
+}
+
+function EndorsedByCard({ politicianId }: { politicianId: string }) {
+  const { data: endorsements = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/politicians", politicianId, "party-endorsements"],
+    queryFn: async () => {
+      const res = await fetch(`/api/politicians/${politicianId}/party-endorsements`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!politicianId,
+  });
+
+  const { data: issueResponses = [] } = useQuery<any[]>({
+    queryKey: ["/api/politician-profiles", politicianId, "issue-responses"],
+    queryFn: async () => {
+      const res = await fetch(`/api/politician-profiles/${politicianId}/issue-responses`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!politicianId,
+  });
+
+  const activeEndorsements = endorsements.filter((e: any) => e.isActive !== false);
+  if (isLoading || activeEndorsements.length === 0) return null;
+
+  const responseMap: Record<string, number> = {};
+  for (const r of issueResponses) {
+    if (r.response !== null) responseMap[r.issueId] = r.response;
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+          <Award className="w-4 h-4" />
+          Endorsed By
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {activeEndorsements.map((e: any) => (
+          <PartyEndorsementRow key={e.id} endorsement={e} responseMap={responseMap} politicianId={politicianId} />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PartyEndorsementRow({ endorsement, responseMap, politicianId }: {
+  endorsement: any;
+  responseMap: Record<string, number>;
+  politicianId: string;
+}) {
+  const { data: positions = [] } = useQuery<any[]>({
+    queryKey: ["/api/parties", endorsement.partyId, "positions"],
+    queryFn: async () => {
+      const res = await fetch(`/api/parties/${endorsement.partyId}/positions`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!endorsement.partyId,
+  });
+
+  const overlapping = positions.filter((p: any) => p.positionValue !== null && responseMap[p.issueId] !== undefined);
+  const aligned = overlapping.filter((p: any) => Math.abs((responseMap[p.issueId] ?? 0) - p.positionValue) <= 1);
+  const alignmentPct = overlapping.length > 0 ? Math.round((aligned.length / overlapping.length) * 100) : null;
+
+  return (
+    <div className="rounded-lg border p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <Link href={`/parties/${endorsement.partySlug || endorsement.partyId}`}>
+            <span className="text-sm font-medium hover:underline text-primary cursor-pointer">
+              {endorsement.partyAcronym ?? endorsement.partyName}
+            </span>
+          </Link>
+          {endorsement.partyAcronym && endorsement.partyName && (
+            <p className="text-xs text-muted-foreground">{endorsement.partyName}</p>
+          )}
+        </div>
+        <Badge variant="outline" className="text-xs capitalize shrink-0">{endorsement.endorsementType}</Badge>
+      </div>
+      {endorsement.office && (
+        <p className="text-xs text-muted-foreground">
+          {endorsement.office}{endorsement.state ? ` · ${endorsement.state}` : ""}{endorsement.electionCycle ? ` · ${endorsement.electionCycle}` : ""}
+        </p>
+      )}
+      {alignmentPct !== null && (
+        <div className="pt-1">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-muted-foreground">Policy alignment</span>
+            <span className={`font-semibold ${alignmentColor(alignmentPct)}`}>{alignmentPct}%</span>
+          </div>
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${alignmentPct >= 70 ? "bg-green-500" : alignmentPct >= 40 ? "bg-yellow-500" : "bg-red-500"}`}
+              style={{ width: `${alignmentPct}%` }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {aligned.length} of {overlapping.length} shared issues within 1 point
+          </p>
+        </div>
+      )}
+      {positions.length > 0 && Object.keys(responseMap).length > 0 && overlapping.length === 0 && (
+        <p className="text-xs text-muted-foreground italic">No overlapping survey issues to compare</p>
+      )}
+      {positions.length === 0 && (
+        <p className="text-xs text-muted-foreground italic">Party has no policy positions on record yet</p>
+      )}
     </div>
   );
 }

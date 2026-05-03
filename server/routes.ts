@@ -5715,6 +5715,19 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Public route: get a politician's issue survey responses (only if they claimed the profile)
+  app.get("/api/politician-profiles/:id/issue-responses", async (req, res) => {
+    try {
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+      if (!(profile as any).claimedByUserId) return res.json([]);
+      const responses = await storage.getIssueResponses((profile as any).claimedByUserId);
+      res.json(responses);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Admin: Refresh BallotPedia/Wikipedia data for all profiles (or one)
   app.post("/api/admin/politician-profiles/refresh-data", ensureAdmin, async (req, res) => {
     try {

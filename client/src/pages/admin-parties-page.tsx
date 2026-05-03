@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Pencil, Trash2, RefreshCw, Search, ExternalLink } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, RefreshCw, Search, ExternalLink, BarChart2 } from "lucide-react";
+import { POLICY_ISSUES } from "@/lib/issue-data";
 
 type Party = {
   id: string;
@@ -55,6 +56,12 @@ function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+const EMPTY_POSITION_FORM = {
+  issueId: "",
+  positionValue: "",
+  positionLabel: "",
+};
+
 export default function AdminPartiesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -63,6 +70,8 @@ export default function AdminPartiesPage() {
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Party | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [positionsParty, setPositionsParty] = useState<Party | null>(null);
+  const [positionForm, setPositionForm] = useState({ ...EMPTY_POSITION_FORM });
 
   const { data: parties = [], isLoading } = useQuery<Party[]>({
     queryKey: ["/api/parties", { sort: "alpha" }],
@@ -113,6 +122,48 @@ export default function AdminPartiesPage() {
     },
     onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
   });
+
+  const { data: partyPositions = [] } = useQuery<any[]>({
+    queryKey: ["/api/parties", positionsParty?.id, "positions"],
+    queryFn: async () => {
+      const res = await fetch(`/api/parties/${positionsParty!.id}/positions`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!positionsParty,
+  });
+
+  const addPositionMutation = useMutation({
+    mutationFn: (data: any) => apiRequest(`/api/admin/parties/${positionsParty!.id}/positions`, "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/parties", positionsParty?.id, "positions"] });
+      setPositionForm({ ...EMPTY_POSITION_FORM });
+      toast({ title: "Position saved" });
+    },
+    onError: (e: any) => toast({ title: "Failed to save position", description: e.message, variant: "destructive" }),
+  });
+
+  const deletePositionMutation = useMutation({
+    mutationFn: (positionId: string) => apiRequest(`/api/admin/party-positions/${positionId}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/parties", positionsParty?.id, "positions"] });
+      toast({ title: "Position deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete position", variant: "destructive" }),
+  });
+
+  const handleAddPosition = () => {
+    if (!positionForm.issueId) return;
+    const issue = POLICY_ISSUES.find(i => i.id === positionForm.issueId);
+    const payload: any = {
+      issueId: positionForm.issueId,
+      issueLabel: issue?.title ?? positionForm.issueId,
+      issueCategory: issue?.category ?? null,
+      positionValue: positionForm.positionValue !== "" ? parseFloat(positionForm.positionValue) : null,
+      positionLabel: positionForm.positionLabel.trim() || null,
+    };
+    addPositionMutation.mutate(payload);
+  };
 
   const filtered = parties.filter(p =>
     !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.acronym?.toLowerCase().includes(search.toLowerCase())
@@ -237,6 +288,9 @@ export default function AdminPartiesPage() {
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Button>
                       </a>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Manage policy positions" onClick={() => { setPositionsParty(party); setPositionForm({ ...EMPTY_POSITION_FORM }); }}>
+                        <BarChart2 className="h-3.5 w-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(party)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -352,6 +406,105 @@ export default function AdminPartiesPage() {
               {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Delete
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Policy Positions Dialog */}
+      <Dialog open={!!positionsParty} onOpenChange={v => { if (!v) setPositionsParty(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Policy Positions — {positionsParty?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Existing positions */}
+            {partyPositions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">No positions on record yet. Add one below.</p>
+            ) : (
+              <div className="divide-y divide-border border rounded-md">
+                {partyPositions.map((pos: any) => (
+                  <div key={pos.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{pos.issueLabel || pos.issueId}</p>
+                      <p className="text-xs text-muted-foreground">{pos.issueCategory || ""}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {pos.positionLabel && (
+                        <Badge variant="outline" className="text-xs">{pos.positionLabel}</Badge>
+                      )}
+                      {pos.positionValue !== null && (
+                        <span className="text-xs text-muted-foreground">{pos.positionValue}/5</span>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => deletePositionMutation.mutate(pos.id)}
+                        disabled={deletePositionMutation.isPending}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add new position */}
+            <div className="border rounded-md p-3 space-y-3 bg-muted/30">
+              <p className="text-sm font-medium">Add Position</p>
+              <div className="space-y-1">
+                <Label className="text-xs">Issue *</Label>
+                <Select value={positionForm.issueId} onValueChange={v => setPositionForm(f => ({ ...f, issueId: v }))}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select an issue..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {POLICY_ISSUES.map(issue => (
+                      <SelectItem key={issue.id} value={issue.id}>
+                        {issue.title} <span className="text-muted-foreground text-xs">({issue.category})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Position Value (1–5)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={5}
+                    step={0.5}
+                    placeholder="e.g. 4"
+                    className="h-8 text-sm"
+                    value={positionForm.positionValue}
+                    onChange={e => setPositionForm(f => ({ ...f, positionValue: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">1 = Much Less, 5 = Much More</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Position Label</Label>
+                  <Input
+                    placeholder="e.g. Strongly Supports"
+                    className="h-8 text-sm"
+                    value={positionForm.positionLabel}
+                    onChange={e => setPositionForm(f => ({ ...f, positionLabel: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleAddPosition}
+                disabled={!positionForm.issueId || addPositionMutation.isPending}
+              >
+                {addPositionMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+                Add Position
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPositionsParty(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
