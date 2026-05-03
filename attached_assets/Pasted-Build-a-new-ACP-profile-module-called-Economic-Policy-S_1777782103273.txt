@@ -1,0 +1,220 @@
+Build a new ACP profile module called “Economic Policy Simulator.”
+
+Purpose:
+Let users redesign the federal budget by adjusting spending categories in a pie chart. The module starts with the current real-world U.S. federal budget, then lets users increase or cut categories based on their priorities.
+
+Source baseline:
+Use FY 2024 federal outlays as the starting dataset. CBO estimated total FY 2024 federal outlays at $6.752 trillion and a deficit of about $1.8 trillion. Use CBO as the preferred source for baseline updates. Sources: CBO Monthly Budget Review FY2024.
+
+Initial Budget Categories:
+Use these baseline FY 2024 values in billions:
+
+[
+  { id: "social_security", label: "Social Security", amount: 1448 },
+  { id: "medicare", label: "Medicare", amount: 870 },
+  { id: "medicaid", label: "Medicaid", amount: 618 },
+  { id: "defense", label: "Defense / Military", amount: 826 },
+  { id: "net_interest", label: "Net Interest on Debt", amount: 949, locked: true },
+  { id: "education", label: "Education", amount: 268 },
+  { id: "veterans", label: "Veterans Affairs", amount: 325 },
+  { id: "food_nutrition", label: "Food & Nutrition", amount: 147 },
+  { id: "tax_credits", label: "Refundable Tax Credits", amount: 199 },
+  { id: "other", label: "Other Federal Spending", amount: 1102 }
+]
+
+Total baseline should equal approximately $6.752 trillion.
+
+Important:
+Net Interest should be visible but locked by default because users cannot directly “choose” interest costs without changing debt, interest rates, or deficits. Add tooltip: “Interest is mostly determined by existing debt and interest rates, so it is locked in this simplified simulator.”
+
+User Controls:
+1. Interactive pie chart
+- Show current federal spending as a pie chart.
+- User can click a slice to select a category.
+- Selected category shows a slider.
+
+2. Category slider
+Each category can be changed between:
+-10% and +10%
+Default: 0%
+
+Example:
+Defense baseline = $826B
+User sets -10%
+New amount = $743.4B
+
+3. Overall spending slider
+Add a separate “Total Spending Goal” slider:
+Range: -10% to +10%
+Default: 0%
+
+This represents whether the user wants the whole federal budget to shrink or grow.
+
+Behavior:
+- Category sliders adjust individual categories.
+- Overall spending slider adjusts the target total.
+- Show whether the user’s category changes are above or below their selected total spending goal.
+- If category choices do not match the target, show:
+  “Your proposed category changes are $X above/below your total spending target.”
+
+Budget Math:
+baselineTotal = sum baseline amounts
+targetTotal = baselineTotal * (1 + totalSpendingAdjustment / 100)
+categoryAdjustedAmount = baselineAmount * (1 + categoryAdjustment / 100)
+proposedTotal = sum categoryAdjustedAmounts
+differenceFromTarget = proposedTotal - targetTotal
+
+Display:
+- Baseline total
+- Proposed total
+- Difference from baseline
+- Difference from target
+- Estimated deficit impact
+
+Use FY 2024 baseline:
+baselineOutlays = 6752
+baselineReceipts = 4919
+baselineDeficit = 1833
+
+estimatedDeficit = proposedTotal - baselineReceipts
+
+Results Screen:
+Show:
+- User’s proposed budget pie chart
+- Baseline vs proposed comparison table
+- Biggest increases
+- Biggest cuts
+- Estimated deficit or surplus impact
+- “Your Budget Philosophy” summary
+
+Budget Philosophy Labels:
+- If total spending adjustment <= -5:
+  “Spending Cutter”
+- If total spending adjustment >= 5:
+  “Public Investment Expander”
+- If defense is cut and healthcare/social programs increased:
+  “Domestic Investment Prioritizer”
+- If defense increased and social programs cut:
+  “Security & Austerity Prioritizer”
+- If most sliders stay between -2 and +2:
+  “Status Quo Budgeter”
+- Otherwise:
+  “Mixed-Priority Budgeter”
+
+Profile Integration:
+If logged in:
+Save result to user profile:
+{
+  userId,
+  baselineFiscalYear,
+  baselineTotal,
+  baselineReceipts,
+  baselineDeficit,
+  totalSpendingAdjustment,
+  categoryAdjustments,
+  proposedTotal,
+  estimatedDeficit,
+  philosophyLabel,
+  createdAt,
+  visibility
+}
+
+Default visibility:
+Private
+
+Add toggle:
+“Show my economic simulator result on my profile”
+Default OFF.
+
+Admin Panel:
+Build an admin interface at:
+/admin/budget-baselines
+
+Admin can:
+- Create/edit fiscal year baseline
+- Set fiscal year
+- Set source name
+- Set source URL
+- Set total outlays
+- Set total receipts
+- Set deficit
+- Add/edit/delete spending categories
+- Lock categories like Net Interest
+- Mark one baseline as “active”
+- Preview pie chart before publishing
+
+Database Tables:
+budget_baselines:
+- id
+- fiscal_year
+- source_name
+- source_url
+- total_outlays
+- total_receipts
+- deficit
+- is_active
+- created_at
+- updated_at
+
+budget_categories:
+- id
+- baseline_id
+- category_key
+- label
+- amount
+- locked
+- sort_order
+- created_at
+- updated_at
+
+user_budget_simulations:
+- id
+- user_id
+- baseline_id
+- total_spending_adjustment
+- category_adjustments_json
+- proposed_total
+- estimated_deficit
+- philosophy_label
+- visibility
+- created_at
+
+UI Flow:
+1. Intro:
+Title: “Build Your Federal Budget”
+Subtitle: “Start with the real U.S. budget, then adjust where you think tax money should go.”
+Button: “Start Simulator”
+
+2. Simulator:
+- Pie chart
+- Category list
+- Selected category slider
+- Total spending goal slider
+- Live totals panel
+
+3. Results:
+- New pie chart
+- Baseline vs proposed table
+- Deficit impact
+- Philosophy label
+- Save to profile
+- Share card
+
+Share Card:
+Generate a simple visual card:
+“My Federal Budget”
+- Top 3 increases
+- Top 3 cuts
+- Proposed total spending
+- Estimated deficit
+- ACP logo
+
+Disclaimer:
+“This simulator is simplified. Federal budgeting is complex, and some categories are legally mandatory or affected by economic conditions. Results are for civic education, not official budget forecasting.”
+
+Design Notes:
+Use ACP Liquid Glass styling.
+Make the pie chart animated and mobile-friendly.
+Make sliders satisfying to use.
+Keep the language neutral.
+Avoid party labels.

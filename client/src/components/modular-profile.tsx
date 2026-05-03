@@ -1686,73 +1686,86 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
             </div>
           );
         }
-        case "political-compass":
+        case "political-compass": {
+          const compassResult = (extendedData as any)?.compassResult;
+          const hasResult = compassResult && typeof compassResult.economicScore === "number";
+          const eScore: number = hasResult ? compassResult.economicScore : 0;
+          const sScore: number = hasResult ? compassResult.socialScore : 0;
+          const quadrant: string = hasResult ? (compassResult.quadrant || "") : "";
+
+          // Mini compass SVG constants
+          const sz = 180;
+          const pad = 20;
+          const area = sz - pad * 2;
+          const ccx = sz / 2;
+          const ccy = sz / 2;
+          const sc = (area / 2) / 10;
+          const dotX = ccx + eScore * sc;
+          const dotY = ccy - sScore * sc;
+
           return (
             <div className="space-y-3">
-              <div className="text-center mb-3">
-                <h4 className="font-medium text-sm">My Political Position</h4>
-              </div>
-              <div className="relative bg-gradient-to-br from-gray-50 to-gray-100 border rounded-lg p-4">
-                {/* Political Compass Grid */}
-                <svg viewBox="0 0 200 200" className="w-full h-40">
-                  {/* Grid lines */}
-                  <defs>
-                    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e5e7eb" strokeWidth="0.5"/>
-                    </pattern>
-                  </defs>
-                  <rect width="200" height="200" fill="url(#grid)" />
-                  
-                  {/* Main axes */}
-                  <line x1="100" y1="0" x2="100" y2="200" stroke="#9ca3af" strokeWidth="2"/>
-                  <line x1="0" y1="100" x2="200" y2="100" stroke="#9ca3af" strokeWidth="2"/>
-                  
-                  {/* Quadrant colors */}
-                  <rect x="0" y="0" width="100" height="100" fill="#ef4444" fillOpacity="0.1"/>
-                  <rect x="100" y="0" width="100" height="100" fill="#3b82f6" fillOpacity="0.1"/>
-                  <rect x="0" y="100" width="100" height="100" fill="#10b981" fillOpacity="0.1"/>
-                  <rect x="100" y="100" width="100" height="100" fill="#f59e0b" fillOpacity="0.1"/>
-                  
-                  {/* User position - Sample data for now */}
-                  <circle 
-                    cx={module.customData?.economicPosition || 120} 
-                    cy={module.customData?.socialPosition || 80} 
-                    r="6" 
-                    fill="#dc2626" 
-                    stroke="#fff" 
-                    strokeWidth="2"
-                  />
-                </svg>
-                
-                {/* Axis labels */}
-                <div className="flex justify-between text-xs text-gray-600 mt-2">
-                  <span>Socialist</span>
-                  <span>Capitalist</span>
-                </div>
-                <div className="flex flex-col items-center justify-between h-12 absolute left-0 top-0 -ml-1 text-xs text-gray-600">
-                  <span className="transform -rotate-90 whitespace-nowrap">Authoritarian</span>
-                </div>
-                <div className="flex flex-col items-center justify-between h-12 absolute left-0 bottom-0 -ml-1 text-xs text-gray-600">
-                  <span className="transform -rotate-90 whitespace-nowrap">Libertarian</span>
-                </div>
-              </div>
-              
-              {/* Take Quiz Button */}
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full"
-                onClick={() => {
-                  setShowPoliticalQuiz(true);
-                  setCurrentQuizStep(0);
-                  setQuizAnswers({});
-                }}
-              >
-                <Target className="h-4 w-4 mr-2" />
-                {module.customData?.hasResults ? "Retake Quiz" : "Take Political Quiz"}
-              </Button>
+              {hasResult ? (
+                <>
+                  {/* Compass chart */}
+                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-900 to-indigo-950 p-3">
+                    <div className="flex items-center justify-center">
+                      <svg viewBox={`0 0 ${sz} ${sz}`} width={sz} height={sz}>
+                        {/* Quadrant fills */}
+                        <rect x={pad} y={pad} width={area/2} height={area/2} fill="#ef4444" fillOpacity="0.15" />
+                        <rect x={ccx}  y={pad} width={area/2} height={area/2} fill="#6366f1" fillOpacity="0.15" />
+                        <rect x={pad}  y={ccy} width={area/2} height={area/2} fill="#10b981" fillOpacity="0.15" />
+                        <rect x={ccx}  y={ccy} width={area/2} height={area/2} fill="#f59e0b" fillOpacity="0.15" />
+                        {/* Border */}
+                        <rect x={pad} y={pad} width={area} height={area} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" rx="2" />
+                        {/* Axes */}
+                        <line x1={ccx} y1={pad} x2={ccx} y2={sz-pad} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+                        <line x1={pad} y1={ccy} x2={sz-pad} y2={ccy} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+                        {/* Axis labels */}
+                        <text x={ccx} y={pad-4} fontSize="6" fill="rgba(255,255,255,0.5)" textAnchor="middle">AUTH.</text>
+                        <text x={ccx} y={sz-pad+10} fontSize="6" fill="rgba(255,255,255,0.5)" textAnchor="middle">LIB.</text>
+                        <text x={pad+2} y={ccy-2} fontSize="6" fill="rgba(255,255,255,0.5)" textAnchor="start">L</text>
+                        <text x={sz-pad-2} y={ccy-2} fontSize="6" fill="rgba(255,255,255,0.5)" textAnchor="end">R</text>
+                        {/* Dot glow */}
+                        <circle cx={dotX} cy={dotY} r="10" fill="#f97316" fillOpacity="0.25" />
+                        {/* Dot ring */}
+                        <circle cx={dotX} cy={dotY} r="6" fill="none" stroke="white" strokeWidth="1.5" opacity="0.7" />
+                        {/* Dot core */}
+                        <circle cx={dotX} cy={dotY} r="4" fill="#f97316" />
+                      </svg>
+                    </div>
+                    <div className="text-center mt-1">
+                      <p className="text-white text-xs font-semibold">{quadrant}</p>
+                      <p className="text-slate-400 text-xs mt-0.5">
+                        Econ {eScore >= 0 ? "+" : ""}{eScore.toFixed(1)} · Social {sScore >= 0 ? "+" : ""}{sScore.toFixed(1)}
+                      </p>
+                    </div>
+                  </div>
+                  <a href="/political-compass">
+                    <Button variant="outline" size="sm" className="w-full">
+                      <Target className="h-4 w-4 mr-2" />
+                      Retake Quiz
+                    </Button>
+                  </a>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-5 text-center space-y-2">
+                    <Target className="h-8 w-8 text-indigo-400 mx-auto opacity-60" />
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No compass result yet</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">Take the quiz to discover where your views fall on economic and social issues.</p>
+                  </div>
+                  <a href="/political-compass">
+                    <Button size="sm" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white">
+                      <Target className="h-4 w-4 mr-2" />
+                      Take the Political Compass Quiz
+                    </Button>
+                  </a>
+                </>
+              )}
             </div>
           );
+        }
         default:
           return <p className="text-gray-500">Module content coming soon...</p>;
       }

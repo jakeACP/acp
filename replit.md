@@ -48,6 +48,30 @@ Preferred communication style: Simple, everyday language.
 - **Trading & Demerit System**: User-submitted insider trading flags, admin-assigned demerits, integration with politician profiles.
 - **ACE Badges Module**: Candidates can apply for Anti-Corruption Endorsement (ACE) badges via video pledges, which, upon admin approval, positively impact their corruption grade.
 
+## Political Compass Module
+
+### Overview
+A full 20-question quiz at `/political-compass` that places users on a 2-axis compass: Economic Left↔Right and Social Libertarian↔Authoritarian. Public (no login required); logged-in users can save results to their profile.
+
+### Files
+- `client/src/pages/political-compass.tsx` — Full quiz page (intro / quiz / results screens)
+- `client/src/lib/political-compass-config.ts` — Question data, quadrant info, Likert options
+- `client/src/lib/political-compass-scoring.ts` — `calculateScores`, `getQuadrant`, `getResultSummary`, `formatScore` utilities
+
+### Flow
+1. **Intro** — Hero with live compass preview, feature badges, "Start Quiz" CTA
+2. **Quiz** — 20 questions with color-coded Likert buttons (5-point scale), axis badge (Economic/Social), progress bar, Back/Next
+3. **Results** — Full compass SVG chart with user dot, score breakdown bars (Economic & Social axes), quadrant classification, plain-English summary, save-to-profile toggle, share button
+
+### Scoring
+- `answerValue ∈ {-2,-1,0,1,2}` × `question.direction ∈ {+1,-1}` → raw axis score
+- Normalised: `(rawScore / maxRaw) * 10` → `-10` to `+10`
+- Quadrants: Community Libertarian / State Progressive / Market Libertarian / National Conservative / Pragmatic Centrist / Mixed
+
+### Data Storage
+- Logged-in: `PUT /api/profile/extended` saves `compassResult: { economicScore, socialScore, quadrant, completedAt, showOnProfile }` into `extendedProfileData`
+- Profile module (Political Compass card) auto-renders the saved mini-chart; "Take Quiz" button links to `/political-compass`
+
 ## 3D Customizable Avatar System
 
 ### Overview

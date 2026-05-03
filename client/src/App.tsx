@@ -68,6 +68,7 @@ import AdminAgenticAiPage from "@/pages/admin-agentic-ai-page";
 import SigsDirectoryPage from "@/pages/sigs-directory-page";
 import SigProfilePage from "@/pages/sig-profile-page";
 import WhistleblowingPage from "@/pages/whistleblowing-page";
+import PoliticalCompassPage from "@/pages/political-compass";
 import CreateArticlePage from "@/pages/create-article-page";
 import ArticlePage from "@/pages/article-page";
 import PublicLandingPage from "@/pages/public-landing-page";
@@ -202,6 +203,7 @@ function Router() {
       <ProtectedRoute path="/admin/voter-verification" component={AdminVoterVerificationPage} />
       <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />
       <ProtectedRoute path="/admin/pledge-requests" component={AdminPledgeRequestsPage} />
+      <Route path="/political-compass" component={PoliticalCompassPage} />
       <Route path="/developer" component={DeveloperPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />  
