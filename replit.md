@@ -48,6 +48,22 @@ Preferred communication style: Simple, everyday language.
 - **Trading & Demerit System**: User-submitted insider trading flags, admin-assigned demerits, integration with politician profiles.
 - **ACE Badges Module**: Candidates can apply for Anti-Corruption Endorsement (ACE) badges via video pledges, which, upon admin approval, positively impact their corruption grade.
 
+## Civic Activity Tracker Module
+
+### Overview
+The "Civic Activity Tracker" profile module is now fully functional, backed by real database queries. It shows a civic engagement level system, an 8-metric stats grid, and a live recent activity feed.
+
+### Features
+- **Civic Engagement Level** — Computed score (posts×3, comments×1, votes×2, groups×5, events×5, friends×2) maps to 6 named tiers: Observer → Newcomer → Participant → Civic Voice → Active Citizen → Civic Champion. Progress bar shows points to next level.
+- **8-metric Stats Grid** (2×4) — Posts, Comments, Votes Cast, Likes Received, Friends, Groups Joined, Events Attended, Profile Views — all with icons and Tailwind color theming.
+- **Recent Activity Feed** — Chronological timeline of last 8 actions pulled from posts, comments, poll votes, group joins, and event registrations. Each item shows type icon, action label, description snippet, and relative time.
+
+### Data Layer
+- `getActivityStats()` in `server/storage.ts` expanded to return: `groupsJoined`, `eventsAttended`, `friendsCount`, `profileViews` in addition to existing fields
+- `getRecentActivity(userId, limit)` added to storage — fetches recent items from 5 tables (posts, comments, group_members + groups JOIN, event_attendees + events JOIN, poll_votes), merges and sorts by date
+- `GET /api/profile/:userId/recent-activity` route added to `server/routes.ts`
+- Frontend query added in `modular-profile.tsx` at `/api/profile/:userId/recent-activity?limit=8`
+
 ## Political Compass Module
 
 ### Overview

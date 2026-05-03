@@ -603,7 +603,8 @@ export interface IStorage {
   getExtendedProfileData(userId: string): Promise<any>;
   saveExtendedProfileData(userId: string, data: any): Promise<void>;
   incrementProfileViews(userId: string): Promise<void>;
-  getActivityStats(userId: string): Promise<{ postsCount: number; votesCount: number; commentsCount: number; likesReceived: number }>;
+  getActivityStats(userId: string): Promise<{ postsCount: number; votesCount: number; commentsCount: number; likesReceived: number; groupsJoined: number; eventsAttended: number; friendsCount: number; profileViews: number }>;
+  getRecentActivity(userId: string, limit?: number): Promise<Array<{ type: string; id: string; label: string; description: string; activityAt: Date | null }>>;
   getUserBadges(userId: string): Promise<Array<{ id: string; name: string; description: string; icon: string; earned: boolean }>>;
   getCivicScorecard(userId: string): Promise<{ trustGrade: string; engagementGrade: string; communityGrade: string; trustScore: number; postCount: number; followerCount: number; followingCount: number }>;
   getDemocracyWrapped(userId: string, year: number): Promise<{ postsWritten: number; votesCast: number; commentsMade: number; friendsAdded: number; likesReceived: number }>;
@@ -9209,7 +9210,7 @@ export class DatabaseStorage implements IStorage {
     await db.execute(sql`UPDATE users SET profile_views = COALESCE(profile_views, 0) + 1 WHERE id = ${userId}`);
   }
 
-  async getActivityStats(userId: string): Promise<{ postsCount: number; votesCount: number; commentsCount: number; likesReceived: number }> {
+  async getActivityStats(userId: string): Promise<{ postsCount: number; votesCount: number; commentsCount: number; likesReceived: number; groupsJoined: number; eventsAttended: number; friendsCount: number; profileViews: number }> {
     const [postsResult] = await db.select({ count: count() }).from(posts).where(and(eq(posts.authorId, userId), eq(posts.isDeleted, false)));
     const postsCount = postsResult?.count || 0;
     const [votesResult] = await db.select({ count: count() }).from(pollVotes).where(eq(pollVotes.userId, userId));
@@ -9218,7 +9219,68 @@ export class DatabaseStorage implements IStorage {
     const commentsCount = commentsResult?.count || 0;
     const userPosts = await db.select({ likesCount: posts.likesCount }).from(posts).where(and(eq(posts.authorId, userId), eq(posts.isDeleted, false)));
     const likesReceived = userPosts.reduce((sum, p) => sum + (p.likesCount || 0), 0);
-    return { postsCount, votesCount, commentsCount, likesReceived };
+    const [groupsResult] = await db.select({ count: count() }).from(groupMembers).where(eq(groupMembers.userId, userId));
+    const groupsJoined = groupsResult?.count || 0;
+    const [eventsResult] = await db.select({ count: count() }).from(eventAttendees).where(eq(eventAttendees.userId, userId));
+    const eventsAttended = eventsResult?.count || 0;
+    const [friendsResult] = await db.select({ count: count() }).from(friendships).where(and(or(eq(friendships.requesterId, userId), eq(friendships.addresseeId, userId)), eq(friendships.status, "accepted")));
+    const friendsCount = friendsResult?.count || 0;
+    const [userResult] = await db.select({ profileViews: users.profileViews }).from(users).where(eq(users.id, userId)).limit(1);
+    const profileViews = userResult?.profileViews || 0;
+    return { postsCount, votesCount, commentsCount, likesReceived, groupsJoined, eventsAttended, friendsCount, profileViews };
+  }
+
+  async getRecentActivity(userId: string, limit: number = 10): Promise<Array<{ type: string; id: string; label: string; description: string; activityAt: Date | null }>> {
+    const items: Array<{ type: string; id: string; label: string; description: string; activityAt: Date | null }> = [];
+
+    const recentPosts = await db
+      .select({ id: posts.id, content: posts.content, title: posts.title, createdAt: posts.createdAt })
+      .from(posts).where(and(eq(posts.authorId, userId), eq(posts.isDeleted, false)))
+      .orderBy(desc(posts.createdAt)).limit(5);
+    for (const p of recentPosts) {
+      items.push({ type: "post", id: p.id, label: "Created a post", description: (p.title || p.content || "").slice(0, 70), activityAt: p.createdAt });
+    }
+
+    const recentComments = await db
+      .select({ id: comments.id, content: comments.content, createdAt: comments.createdAt })
+      .from(comments).where(eq(comments.authorId, userId))
+      .orderBy(desc(comments.createdAt)).limit(5);
+    for (const c of recentComments) {
+      items.push({ type: "comment", id: c.id, label: "Left a comment", description: (c.content || "").slice(0, 70), activityAt: c.createdAt });
+    }
+
+    const recentGroupJoins = await db
+      .select({ id: groupMembers.id, joinedAt: groupMembers.joinedAt, groupName: groups.name })
+      .from(groupMembers).innerJoin(groups, eq(groups.id, groupMembers.groupId))
+      .where(eq(groupMembers.userId, userId))
+      .orderBy(desc(groupMembers.joinedAt)).limit(4);
+    for (const g of recentGroupJoins) {
+      items.push({ type: "group", id: g.id, label: "Joined a group", description: g.groupName || "", activityAt: g.joinedAt });
+    }
+
+    const recentEventAttendances = await db
+      .select({ id: eventAttendees.id, registeredAt: eventAttendees.registeredAt, eventTitle: events.title })
+      .from(eventAttendees).innerJoin(events, eq(events.id, eventAttendees.eventId))
+      .where(eq(eventAttendees.userId, userId))
+      .orderBy(desc(eventAttendees.registeredAt)).limit(4);
+    for (const e of recentEventAttendances) {
+      items.push({ type: "event", id: e.id, label: "Registered for an event", description: e.eventTitle || "", activityAt: e.registeredAt });
+    }
+
+    const recentVotes = await db
+      .select({ id: pollVotes.id, votedAt: pollVotes.votedAt })
+      .from(pollVotes).where(eq(pollVotes.userId, userId))
+      .orderBy(desc(pollVotes.votedAt)).limit(5);
+    for (const v of recentVotes) {
+      items.push({ type: "vote", id: v.id, label: "Cast a poll vote", description: "", activityAt: v.votedAt });
+    }
+
+    items.sort((a, b) => {
+      const aTime = a.activityAt ? new Date(a.activityAt).getTime() : 0;
+      const bTime = b.activityAt ? new Date(b.activityAt).getTime() : 0;
+      return bTime - aTime;
+    });
+    return items.slice(0, limit);
   }
 
   async getUserBadges(userId: string): Promise<Array<{ id: string; name: string; description: string; icon: string; earned: boolean }>> {

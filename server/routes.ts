@@ -3829,6 +3829,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Recent civic activity feed
+  app.get("/api/profile/:userId/recent-activity", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+      const activity = await storage.getRecentActivity(req.params.userId, limit);
+      res.json(activity);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // User badges
   app.get("/api/profile/:userId/badges", async (req, res) => {
     try {

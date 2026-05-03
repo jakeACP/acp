@@ -48,7 +48,13 @@ import {
   BadgeCheck,
   CheckCircle,
   Clock,
-  ExternalLink
+  ExternalLink,
+  FileText,
+  Activity,
+  Flame,
+  Vote,
+  ThumbsUp,
+  UsersRound,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -353,6 +359,18 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       if (!profileUserId) return null;
       const res = await fetch(`/api/profile/${profileUserId}/activity-stats`);
       if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!profileUserId,
+  });
+
+  // Recent civic activity feed
+  const { data: recentActivity = [] } = useQuery<any[]>({
+    queryKey: ["/api/profile", profileUserId, "recent-activity"],
+    queryFn: async () => {
+      if (!profileUserId) return [];
+      const res = await fetch(`/api/profile/${profileUserId}/recent-activity?limit=8`);
+      if (!res.ok) return [];
       return res.json();
     },
     enabled: !!profileUserId,
@@ -1293,27 +1311,162 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
             </div>
           );
         }
-        case "civic-tracker":
+        case "civic-tracker": {
+          const engScore =
+            (activityStats?.postsCount    || 0) * 3 +
+            (activityStats?.commentsCount || 0) * 1 +
+            (activityStats?.votesCount    || 0) * 2 +
+            (activityStats?.groupsJoined  || 0) * 5 +
+            (activityStats?.eventsAttended|| 0) * 5 +
+            (activityStats?.friendsCount  || 0) * 2;
+
+          const LEVELS = [
+            { min: 0,   max: 24,  name: "Observer",       color: "slate",  hex: "#64748b" },
+            { min: 25,  max: 74,  name: "Newcomer",       color: "blue",   hex: "#3b82f6" },
+            { min: 75,  max: 149, name: "Participant",    color: "teal",   hex: "#14b8a6" },
+            { min: 150, max: 299, name: "Civic Voice",    color: "purple", hex: "#a855f7" },
+            { min: 300, max: 499, name: "Active Citizen", color: "orange", hex: "#f97316" },
+            { min: 500, max: Infinity, name: "Civic Champion", color: "yellow", hex: "#eab308" },
+          ];
+          const lvl = LEVELS.find(l => engScore >= l.min && engScore <= l.max) || LEVELS[0];
+          const nextLvl = LEVELS[LEVELS.indexOf(lvl) + 1];
+          const lvlProgress = nextLvl
+            ? Math.min(((engScore - lvl.min) / (nextLvl.min - lvl.min)) * 100, 100)
+            : 100;
+
+          const STAT_ROWS = [
+            [
+              { icon: FileText,    label: "Posts",         value: activityStats?.postsCount    ?? 0, color: "blue"   },
+              { icon: MessageSquare, label: "Comments",    value: activityStats?.commentsCount ?? 0, color: "indigo" },
+              { icon: CheckCircle, label: "Votes Cast",    value: activityStats?.votesCount    ?? 0, color: "green"  },
+              { icon: ThumbsUp,    label: "Likes Rcvd",   value: activityStats?.likesReceived ?? 0, color: "rose"   },
+            ],
+            [
+              { icon: Users,       label: "Friends",       value: activityStats?.friendsCount  ?? 0, color: "purple" },
+              { icon: UsersRound,  label: "Groups",        value: activityStats?.groupsJoined  ?? 0, color: "orange" },
+              { icon: Calendar,    label: "Events",        value: activityStats?.eventsAttended?? 0, color: "teal"   },
+              { icon: Eye,         label: "Profile Views", value: activityStats?.profileViews  ?? 0, color: "cyan"   },
+            ],
+          ];
+
+          const TYPE_META: Record<string, { icon: any; color: string; dot: string }> = {
+            post:    { icon: FileText,     color: "text-blue-500",   dot: "bg-blue-500"   },
+            comment: { icon: MessageSquare,color: "text-indigo-500", dot: "bg-indigo-500" },
+            vote:    { icon: CheckCircle,  color: "text-green-500",  dot: "bg-green-500"  },
+            group:   { icon: UsersRound,   color: "text-purple-500", dot: "bg-purple-500" },
+            event:   { icon: Calendar,     color: "text-orange-500", dot: "bg-orange-500" },
+          };
+
+          const relTime = (d: string | null) => {
+            if (!d) return "";
+            const diff = Date.now() - new Date(d).getTime();
+            const days = Math.floor(diff / 86400000);
+            const hrs  = Math.floor(diff / 3600000);
+            const mins = Math.floor(diff / 60000);
+            if (days > 30) return new Date(d).toLocaleDateString();
+            if (days > 0)  return `${days}d ago`;
+            if (hrs  > 0)  return `${hrs}h ago`;
+            if (mins > 0)  return `${mins}m ago`;
+            return "just now";
+          };
+
           return (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">{activityStats?.postsCount ?? "—"}</div>
-                <div className="text-xs text-blue-700">Posts Created</div>
+            <div className="space-y-4">
+              {/* ── Engagement Level ─────────────────────────── */}
+              <div
+                className="rounded-xl p-4 border"
+                style={{ borderColor: lvl.hex + "40", background: lvl.hex + "12" }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider opacity-70" style={{ color: lvl.hex }}>
+                      Civic Engagement
+                    </p>
+                    <p className="text-base font-bold text-foreground flex items-center gap-1.5">
+                      <Flame className="w-4 h-4" style={{ color: lvl.hex }} />
+                      {lvl.name}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-black" style={{ color: lvl.hex }}>{engScore}</span>
+                    <p className="text-xs text-muted-foreground">pts</p>
+                  </div>
+                </div>
+                <div className="relative h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full transition-all duration-700"
+                    style={{ width: `${lvlProgress}%`, backgroundColor: lvl.hex }}
+                  />
+                </div>
+                {nextLvl && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {nextLvl.min - engScore} more pts to <span className="font-medium">{nextLvl.name}</span>
+                  </p>
+                )}
               </div>
-              <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{activityStats?.votesCount ?? "—"}</div>
-                <div className="text-xs text-green-700">Polls Voted</div>
+
+              {/* ── Stats Grid ───────────────────────────────── */}
+              <div className="space-y-2">
+                {STAT_ROWS.map((row, ri) => (
+                  <div key={ri} className="grid grid-cols-4 gap-2">
+                    {row.map(stat => {
+                      const Icon = stat.icon;
+                      return (
+                        <div
+                          key={stat.label}
+                          className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors"
+                        >
+                          <Icon className={`w-3.5 h-3.5 text-${stat.color}-500`} />
+                          <span className="text-base font-bold leading-none text-foreground">{stat.value}</span>
+                          <span className="text-[10px] text-muted-foreground text-center leading-tight">{stat.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
-              <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">{activityStats?.commentsCount ?? "—"}</div>
-                <div className="text-xs text-purple-700">Comments Made</div>
-              </div>
-              <div className="text-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                <div className="text-2xl font-bold text-orange-600">{activityStats?.likesReceived ?? "—"}</div>
-                <div className="text-xs text-orange-700">Likes Received</div>
-              </div>
+
+              {/* ── Recent Activity Feed ─────────────────────── */}
+              {recentActivity.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-1">
+                    <Activity className="w-3 h-3" /> Recent Activity
+                  </p>
+                  <div className="rounded-xl border border-border/50 bg-muted/20 divide-y divide-border/40 overflow-hidden">
+                    {recentActivity.map((item: any, i: number) => {
+                      const meta = TYPE_META[item.type] || TYPE_META.post;
+                      const Icon = meta.icon;
+                      return (
+                        <div key={item.id ?? i} className="flex items-start gap-2.5 px-3 py-2">
+                          <div className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${meta.dot}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-foreground/80 leading-snug">
+                              <span className={`font-medium ${meta.color}`}>{item.label}</span>
+                              {item.description && (
+                                <span className="text-muted-foreground ml-1 truncate">
+                                  — {item.description}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground flex-shrink-0 mt-0.5">
+                            {relTime(item.activityAt)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {recentActivity.length === 0 && activityStats && (
+                <div className="text-center py-3 text-xs text-muted-foreground">
+                  Start engaging — posts, votes, and group joins will appear here.
+                </div>
+              )}
             </div>
           );
+        }
         case "pinned-post": {
           if (!extendedData?.pinnedPostId) {
             return (
