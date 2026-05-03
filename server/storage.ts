@@ -690,7 +690,8 @@ export interface IStorage {
   getDistrictVersions(districtId: string): Promise<any[]>;
   restoreDistrictVersion(districtId: string, versionId: string, restoredBy: string): Promise<any>;
   getUsersInDistrict(districtId: string): Promise<any[]>;
-  upsertUserDistrict(userId: string, districtId: string): Promise<void>;
+  upsertUserDistrict(userId: string, districtId: string, matchMethod?: string): Promise<void>;
+  removeAutoMatchedUsersNotIn(districtId: string, retainUserIds: string[]): Promise<number>;
   getUserDistricts(userId: string): Promise<any[]>;
   listCandidateDistricts(districtId: string): Promise<any[]>;
   createCandidateDistrict(candidateId: string, districtId: string): Promise<any>;
@@ -9848,13 +9849,40 @@ export class DatabaseStorage implements IStorage {
 
   async getUsersInDistrict(districtId: string): Promise<any[]> {
     const { userDistricts: ud } = await import("@shared/schema");
-    return db.select({ id: users.id, username: users.username, firstName: users.firstName, lastName: users.lastName, email: users.email, avatar: users.avatar, location: users.location })
+    return db.select({ id: users.id, username: users.username, firstName: users.firstName, lastName: users.lastName, email: users.email, avatar: users.avatar, location: users.location, matchMethod: ud.matchMethod, matchedAt: ud.matchedAt })
       .from(ud).innerJoin(users, eq(ud.userId, users.id)).where(eq(ud.districtId, districtId)).limit(200);
   }
 
-  async upsertUserDistrict(userId: string, districtId: string): Promise<void> {
+  async upsertUserDistrict(userId: string, districtId: string, matchMethod: string = "address"): Promise<void> {
     const { userDistricts: ud } = await import("@shared/schema");
-    await db.insert(ud).values({ userId, districtId }).onConflictDoNothing();
+    await db.insert(ud).values({ userId, districtId, matchMethod, matchedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [ud.userId, ud.districtId],
+        set: { matchMethod, matchedAt: new Date() },
+      });
+  }
+
+  async removeAutoMatchedUsersNotIn(districtId: string, retainUserIds: string[]): Promise<number> {
+    const { userDistricts: ud } = await import("@shared/schema");
+    // Fetch all auto-matched users in the district
+    const existing = await db.select({ userId: ud.userId })
+      .from(ud)
+      .where(and(eq(ud.districtId, districtId), eq(ud.matchMethod, "address")));
+    const retainSet = new Set(retainUserIds);
+    const toRemove = existing.filter(r => !retainSet.has(r.userId)).map(r => r.userId);
+    if (toRemove.length === 0) return 0;
+    // Delete in chunks to avoid SQL parameter limits
+    const CHUNK = 200;
+    let removed = 0;
+    const { inArray } = await import("drizzle-orm");
+    for (let i = 0; i < toRemove.length; i += CHUNK) {
+      const chunk = toRemove.slice(i, i + CHUNK);
+      const result = await db.delete(ud)
+        .where(and(eq(ud.districtId, districtId), inArray(ud.userId, chunk)))
+        .returning({ id: ud.id });
+      removed += result.length;
+    }
+    return removed;
   }
 
   async getUserDistricts(userId: string): Promise<any[]> {

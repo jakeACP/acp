@@ -9,9 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeft, Edit, CheckCircle2, Archive, MapPin, Users, UserCheck, History, AlertTriangle, RotateCcw, Search, Loader2 } from "lucide-react";
+import { ArrowLeft, Edit, CheckCircle2, Archive, MapPin, Users, UserCheck, History, AlertTriangle, RotateCcw, Loader2, RefreshCw, Trash2, Plus } from "lucide-react";
 import { format } from "date-fns";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -64,13 +66,42 @@ function ReadOnlyLeafletMap({ geojson }: { geojson: any }) {
   );
 }
 
+const MATCH_METHOD_STYLES: Record<string, string> = {
+  address: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  zip: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  boundary: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  manual: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+  admin: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+};
+
+function MatchMethodBadge({ method }: { method: string }) {
+  const label = method.charAt(0).toUpperCase() + method.slice(1);
+  const className = MATCH_METHOD_STYLES[method] ?? MATCH_METHOD_STYLES.address;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${className}`}>
+      {label}
+    </span>
+  );
+}
+
+function UserAvatar({ user }: { user: any }) {
+  const initials = [user.firstName, user.lastName].filter(Boolean).map((n: string) => n[0]).join("").toUpperCase() || user.username?.[0]?.toUpperCase() || "?";
+  return (
+    <Avatar className="h-8 w-8">
+      <AvatarImage src={user.avatar || undefined} alt={user.username} />
+      <AvatarFallback className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200">{initials}</AvatarFallback>
+    </Avatar>
+  );
+}
+
 export default function AdminDistrictDetailPage() {
   const params = useParams<{ districtId: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [tab, setTab] = useState("overview");
   const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
-  const [searchUsersOpen, setSearchUsersOpen] = useState(false);
+  const [addCandidateOpen, setAddCandidateOpen] = useState(false);
+  const [selectedCandidateId, setSelectedCandidateId] = useState("");
 
   const { data: district, isLoading } = useQuery<any>({
     queryKey: ["/api/admin/districts", params.districtId],
@@ -99,6 +130,27 @@ export default function AdminDistrictDetailPage() {
       return res.json();
     },
     enabled: tab === "users",
+  });
+
+  const { data: candidatesInDistrict = [], isLoading: candidatesLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/districts", params.districtId, "candidates"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/districts/${params.districtId}/candidates`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: tab === "candidates",
+  });
+
+  const { data: allPoliticians = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/politician-profiles"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/politician-profiles", { credentials: "include" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: addCandidateOpen,
   });
 
   const confirmMutation = useMutation({
@@ -138,6 +190,46 @@ export default function AdminDistrictDetailPage() {
     onError: (e: any) => toast({ title: "Restore failed", description: e.message, variant: "destructive" }),
   });
 
+  const runMatchMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(`/api/admin/districts/${params.districtId}/run-match`, "POST");
+      return res;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/districts", params.districtId, "users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/districts", params.districtId] });
+      const msg = data?.message ?? `Matched ${data?.matched ?? 0} users, removed ${data?.removed ?? 0} stale matches`;
+      toast({ title: "Re-match complete", description: msg });
+    },
+    onError: (e: any) => toast({ title: "Match failed", description: e.message, variant: "destructive" }),
+  });
+
+  const addCandidateMutation = useMutation({
+    mutationFn: async (candidateId: string) => {
+      await apiRequest(`/api/admin/districts/${params.districtId}/candidates`, "POST", { candidateId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/districts", params.districtId, "candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/districts", params.districtId] });
+      setAddCandidateOpen(false);
+      setSelectedCandidateId("");
+      toast({ title: "Candidate linked to district" });
+    },
+    onError: (e: any) => toast({ title: "Failed to add candidate", description: e.message, variant: "destructive" }),
+  });
+
+  const removeCandidateMutation = useMutation({
+    mutationFn: async (candidateId: string) => {
+      await apiRequest(`/api/admin/districts/${params.districtId}/candidates/${candidateId}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/districts", params.districtId, "candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/districts", params.districtId] });
+      toast({ title: "Candidate removed from district" });
+    },
+    onError: (e: any) => toast({ title: "Failed to remove candidate", description: e.message, variant: "destructive" }),
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -160,6 +252,8 @@ export default function AdminDistrictDetailPage() {
       </div>
     );
   }
+
+  const linkedCandidateIds = new Set(candidatesInDistrict.map((c: any) => c.candidateId));
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -270,32 +364,69 @@ export default function AdminDistrictDetailPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Users className="h-4 w-4" /> Matched Users
+                    <span className="text-sm font-normal text-slate-500">({usersInDistrict.length})</span>
                   </CardTitle>
-                  <span className="text-sm text-slate-500">{district.userCount ?? 0} users</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => runMatchMutation.mutate()}
+                    disabled={runMatchMutation.isPending}
+                  >
+                    {runMatchMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    Run Match
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 {usersLoading ? (
                   <div className="flex items-center justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
                 ) : usersInDistrict.length === 0 ? (
-                  <p className="text-slate-500 text-sm py-6 text-center">No users matched to this district yet. Users are matched when they save/update their address.</p>
+                  <div className="py-10 text-center">
+                    <Users className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-slate-500 text-sm">No users matched to this district yet.</p>
+                    <p className="text-slate-400 text-xs mt-1">Click "Run Match" to find users whose location matches this district.</p>
+                  </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Username</TableHead>
-                        <TableHead>Name</TableHead>
+                        <TableHead>User</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Location</TableHead>
+                        <TableHead>Match Method</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {usersInDistrict.map((u: any) => (
                         <TableRow key={u.id}>
-                          <TableCell className="font-mono text-xs">{u.username}</TableCell>
-                          <TableCell>{[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}</TableCell>
-                          <TableCell className="text-xs text-slate-500">{u.email}</TableCell>
-                          <TableCell className="text-xs text-slate-500">{u.location || "—"}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2.5">
+                              <UserAvatar user={u} />
+                              <div>
+                                <div className="font-medium text-sm">{[u.firstName, u.lastName].filter(Boolean).join(" ") || u.username}</div>
+                                <div className="text-xs text-slate-400 font-mono">@{u.username}</div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-500">{u.email || "—"}</TableCell>
+                          <TableCell className="text-xs text-slate-500">
+                            {u.location ? (
+                              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{u.location}</span>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <MatchMethodBadge method={u.matchMethod ?? "address"} />
+                              {u.matchedAt && (
+                                <span className="text-xs text-slate-400">{format(new Date(u.matchedAt), "MMM d, yyyy")}</span>
+                              )}
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -308,26 +439,62 @@ export default function AdminDistrictDetailPage() {
           <TabsContent value="candidates">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <UserCheck className="h-4 w-4" /> Linked Candidates
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <UserCheck className="h-4 w-4" /> Linked Candidates
+                    <span className="text-sm font-normal text-slate-500">({candidatesInDistrict.length})</span>
+                  </CardTitle>
+                  <Button size="sm" className="gap-1.5" onClick={() => setAddCandidateOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Add Candidate
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                {!district.candidates?.length ? (
-                  <p className="text-slate-500 text-sm py-6 text-center">No candidates linked to this district yet.</p>
+                {candidatesLoading ? (
+                  <div className="flex items-center justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
+                ) : candidatesInDistrict.length === 0 ? (
+                  <div className="py-10 text-center">
+                    <UserCheck className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-slate-500 text-sm">No candidates linked to this district yet.</p>
+                    <p className="text-slate-400 text-xs mt-1">Click "Add Candidate" to link a politician to this district.</p>
+                  </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
+                        <TableHead>Candidate</TableHead>
                         <TableHead>Party</TableHead>
+                        <TableHead className="w-16"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {district.candidates.map((c: any) => (
+                      {candidatesInDistrict.map((c: any) => (
                         <TableRow key={c.candidateId}>
-                          <TableCell className="font-medium">{c.name || "—"}</TableCell>
-                          <TableCell>{c.party || "—"}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2.5">
+                              <Avatar className="h-7 w-7">
+                                <AvatarImage src={c.photoUrl || undefined} alt={c.name} />
+                                <AvatarFallback className="text-xs bg-slate-200 dark:bg-slate-700">{c.name?.[0] ?? "?"}</AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium text-sm">{c.name || "—"}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {c.party ? (
+                              <Badge variant="outline" className="text-xs font-normal">{c.party}</Badge>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => removeCandidateMutation.mutate(c.candidateId)}
+                              disabled={removeCandidateMutation.isPending}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -391,6 +558,40 @@ export default function AdminDistrictDetailPage() {
               <Button variant="outline" onClick={() => setConfirmArchiveOpen(false)}>Cancel</Button>
               <Button variant="destructive" onClick={() => archiveMutation.mutate()} disabled={archiveMutation.isPending}>
                 {archiveMutation.isPending ? "Archiving..." : "Archive"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add candidate dialog */}
+        <Dialog open={addCandidateOpen} onOpenChange={setAddCandidateOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Candidate to District</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-slate-500">Select a politician to link to this district.</p>
+            <Select value={selectedCandidateId} onValueChange={setSelectedCandidateId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a candidate..." />
+              </SelectTrigger>
+              <SelectContent>
+                {allPoliticians
+                  .filter((p: any) => !linkedCandidateIds.has(p.id))
+                  .map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.fullName}{p.party ? ` (${p.party})` : ""}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setAddCandidateOpen(false); setSelectedCandidateId(""); }}>Cancel</Button>
+              <Button
+                onClick={() => selectedCandidateId && addCandidateMutation.mutate(selectedCandidateId)}
+                disabled={!selectedCandidateId || addCandidateMutation.isPending}
+              >
+                {addCandidateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Add Candidate
               </Button>
             </div>
           </DialogContent>

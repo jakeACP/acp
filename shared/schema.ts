@@ -3027,6 +3027,7 @@ export const userDistricts = pgTable("user_districts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   districtId: varchar("district_id").notNull().references(() => districts.id, { onDelete: "cascade" }),
+  matchMethod: varchar("match_method", { length: 32 }).default("address"),
   matchedAt: timestamp("matched_at").defaultNow(),
 }, (table) => ({
   userIndex: index("user_districts_user_idx").on(table.userId),

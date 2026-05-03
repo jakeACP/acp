@@ -11013,6 +11013,90 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  app.post("/api/admin/districts/:id/run-match", ensureAdmin, async (req: any, res) => {
+    try {
+      const district = await storage.getDistrict(req.params.id);
+      if (!district) return res.status(404).json({ message: "District not found" });
+
+      const { users: usersTable } = await import("@shared/schema");
+      const { ilike, isNotNull } = await import("drizzle-orm");
+
+      const stateAbbr = district.state?.toUpperCase();
+      if (!stateAbbr) return res.json({ matched: 0, removed: 0, message: "District has no state set" });
+
+      // Location matching (case-insensitive): state is required (AND), county and city further
+      // narrow results (AND) to the specific district region.
+      // Note: precise GeoJSON boundary point-in-polygon matching requires geocoded user lat/lng
+      // which is not stored in this codebase; location string matching is the best available.
+      const conditions: any[] = [
+        isNotNull(usersTable.location),
+        ilike(usersTable.location, `%${stateAbbr}%`),
+      ];
+      if (district.county) conditions.push(ilike(usersTable.location, `%${district.county}%`));
+      if (district.city) conditions.push(ilike(usersTable.location, `%${district.city}%`));
+      const matchWhere = and(...conditions);
+
+      // Fetch ALL matching users in batches (no hard cap) to avoid missing valid matches
+      const BATCH = 500;
+      let offset = 0;
+      const matchedUserIds: string[] = [];
+      while (true) {
+        const batch = await db.select({ id: usersTable.id }).from(usersTable)
+          .where(matchWhere)
+          .limit(BATCH).offset(offset);
+        for (const u of batch) matchedUserIds.push(u.id);
+        if (batch.length < BATCH) break;
+        offset += BATCH;
+      }
+
+      // Upsert all matched users — updates matchMethod + matchedAt on conflict
+      for (const userId of matchedUserIds) {
+        await storage.upsertUserDistrict(userId, req.params.id, "address");
+      }
+
+      // Reconcile: only remove previously auto-matched ("address") entries that no longer
+      // qualify, preserving any manually or admin-assigned memberships
+      const removed = await storage.removeAutoMatchedUsersNotIn(req.params.id, matchedUserIds);
+
+      res.json({
+        matched: matchedUserIds.length,
+        removed,
+        message: `Matched ${matchedUserIds.length} users, removed ${removed} stale auto-matches`,
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/admin/districts/:id/candidates", ensureAdmin, async (req: any, res) => {
+    try {
+      const candidates = await storage.listCandidateDistricts(req.params.id);
+      res.json(candidates);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/admin/districts/:id/candidates", ensureAdmin, async (req: any, res) => {
+    try {
+      const { candidateId } = req.body;
+      if (!candidateId) return res.status(400).json({ message: "candidateId is required" });
+      const row = await storage.createCandidateDistrict(candidateId, req.params.id);
+      res.json(row);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.delete("/api/admin/districts/:id/candidates/:candidateId", ensureAdmin, async (req: any, res) => {
+    try {
+      await storage.deleteCandidateDistrict(req.params.candidateId, req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   // AI draft boundary endpoint
   app.post("/api/admin/districts/ai-draft", ensureAdmin, async (req: any, res) => {
     try {
