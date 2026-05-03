@@ -16,7 +16,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { sanitizeUrl } from "@/lib/utils";
-import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink, Flag, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronRight, ShieldAlert, Lock, PieChart as PieChartIcon, BarChart3, Wallet, User } from "lucide-react";
+import { CheckCircle2, Globe, Mail, Phone, MapPin, Calendar, Award, AlertTriangle, Star, DollarSign, Building2, ExternalLink, Flag, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronRight, ShieldAlert, Lock, PieChart as PieChartIcon, BarChart3, Wallet, User, ThumbsUp, ThumbsDown } from "lucide-react";
 import { format } from "date-fns";
 import { useState, useMemo, useEffect, useRef, lazy, Suspense } from "react";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -1569,6 +1569,105 @@ function YouTubeEmbed({ videoId }: { videoId: string }) {
   );
 }
 
+function ApprovalRatingModule({ politicianId }: { politicianId: string }) {
+  const { user } = useAuth();
+  const [localVote, setLocalVote] = useState<string | null>(null);
+  const [localStats, setLocalStats] = useState<{ approveCount: number; disapproveCount: number; total: number; approvalPct: number } | null>(null);
+
+  const { data } = useQuery<{ stats: { approveCount: number; disapproveCount: number; total: number; approvalPct: number }; userVote: string | null }>({
+    queryKey: ["/api/approval", politicianId],
+    queryFn: async () => {
+      const res = await fetch(`/api/approval/${politicianId}`, { credentials: "include" });
+      if (!res.ok) return { stats: { approveCount: 0, disapproveCount: 0, total: 0, approvalPct: 0 }, userVote: null };
+      return res.json();
+    },
+  });
+
+  const voteMutation = useMutation({
+    mutationFn: async (vote: string) => {
+      const res = await apiRequest("POST", "/api/approval/vote", { politicianProfileId: politicianId, vote });
+      return res.json();
+    },
+    onSuccess: (result) => {
+      setLocalVote(result.userVote);
+      setLocalStats(result.stats);
+      queryClient.invalidateQueries({ queryKey: ["/api/approval", politicianId] });
+    },
+  });
+
+  const stats = localStats ?? data?.stats ?? { approveCount: 0, disapproveCount: 0, total: 0, approvalPct: 0 };
+  const userVote = localVote ?? data?.userVote ?? null;
+  const approvalPct = stats.approvalPct;
+
+  return (
+    <Card className="md:col-span-2">
+      <CardHeader className="pb-2 flex-row items-center justify-between">
+        <div className="flex items-center gap-2">
+          <ThumbsUp className="h-4 w-4 text-primary" />
+          <CardTitle className="text-sm">Community Approval Rating</CardTitle>
+        </div>
+        <Badge variant="outline" className="text-xs flex items-center gap-1">
+          <Lock className="h-3 w-3" />
+          Live
+        </Badge>
+      </CardHeader>
+      <CardContent>
+        {stats.total > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400 font-medium">
+                <ThumbsUp className="h-4 w-4" />
+                {stats.approveCount.toLocaleString()} ({approvalPct}%)
+              </span>
+              <span className="text-lg font-bold">{approvalPct}%</span>
+              <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-medium">
+                {100 - approvalPct}% ({stats.disapproveCount.toLocaleString()})
+                <ThumbsDown className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="flex h-3 rounded-full overflow-hidden bg-muted">
+              <div className="bg-green-500 transition-all duration-700" style={{ width: `${approvalPct}%` }} />
+              <div className="bg-red-500 transition-all duration-700" style={{ width: `${100 - approvalPct}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground text-center">{stats.total.toLocaleString()} community {stats.total === 1 ? "vote" : "votes"}</p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-2">No votes yet. Be the first to rate this politician.</p>
+        )}
+        {user && (
+          <div className="mt-4 space-y-2">
+            <p className="text-xs text-muted-foreground text-center">
+              {userVote ? `You voted: ${userVote}. Change your vote:` : "Cast your vote:"}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={userVote === "approve" ? "default" : "outline"}
+                className={`flex-1 text-xs h-8 ${userVote === "approve" ? "bg-green-600 hover:bg-green-700 border-green-600" : "border-green-500/40 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30 hover:border-green-500"}`}
+                onClick={() => voteMutation.mutate("approve")}
+                disabled={voteMutation.isPending}
+              >
+                <ThumbsUp className="h-3.5 w-3.5 mr-1.5" />
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant={userVote === "disapprove" ? "default" : "outline"}
+                className={`flex-1 text-xs h-8 ${userVote === "disapprove" ? "bg-red-600 hover:bg-red-700 border-red-600 text-white" : "border-red-500/40 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 hover:border-red-500"}`}
+                onClick={() => voteMutation.mutate("disapprove")}
+                disabled={voteMutation.isPending}
+              >
+                <ThumbsDown className="h-3.5 w-3.5 mr-1.5" />
+                Disapprove
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function CandidateProfileTab({ politicianId }: { politicianId: string }) {
   const { data: modules = [], isLoading } = useQuery<CandidateProfileModule[]>({
     queryKey: ["/api/candidate-profile", politicianId, "modules"],
@@ -1581,19 +1680,9 @@ function CandidateProfileTab({ politicianId }: { politicianId: string }) {
 
   if (isLoading) return <div className="py-8 text-center text-muted-foreground">Loading candidate profile...</div>;
 
-  if (modules.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          <User className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-          <p>This candidate hasn't set up their profile modules yet.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ApprovalRatingModule politicianId={politicianId} />
       {modules.map((mod) => {
         const type = mod.moduleType;
         const rawContent = mod.content;
@@ -1618,6 +1707,14 @@ function CandidateProfileTab({ politicianId }: { politicianId: string }) {
           </Card>
         );
       })}
+      {modules.length === 0 && (
+        <Card>
+          <CardContent className="py-6 text-center text-muted-foreground col-span-1">
+            <User className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm">This candidate hasn't set up their profile modules yet.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

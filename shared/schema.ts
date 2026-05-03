@@ -2743,3 +2743,21 @@ export const issueResponses = pgTable("issue_responses", {
 export const insertIssueResponseSchema = createInsertSchema(issueResponses).omit({ id: true, updatedAt: true });
 export type IssueResponse = typeof issueResponses.$inferSelect;
 export type InsertIssueResponse = z.infer<typeof insertIssueResponseSchema>;
+
+// Candidate Approval Votes — community-driven approval rating for politicians/candidates
+export const candidateApprovalVotes = pgTable("candidate_approval_votes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  politicianProfileId: varchar("politician_profile_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  vote: text("vote").notNull(), // 'approve' | 'disapprove'
+  votedAt: timestamp("voted_at").defaultNow(),
+}, (table) => ({
+  uniqueUserPolitician: sql`UNIQUE(${table.userId}, ${table.politicianProfileId})`,
+  userIndex: index("approval_votes_user_idx").on(table.userId),
+  politicianIndex: index("approval_votes_politician_idx").on(table.politicianProfileId),
+  voteCheck: sql`CHECK (${table.vote} IN ('approve', 'disapprove'))`,
+}));
+
+export const insertCandidateApprovalVoteSchema = createInsertSchema(candidateApprovalVotes).omit({ id: true, votedAt: true });
+export type CandidateApprovalVote = typeof candidateApprovalVotes.$inferSelect;
+export type InsertCandidateApprovalVote = z.infer<typeof insertCandidateApprovalVoteSchema>;

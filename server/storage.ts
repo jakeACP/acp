@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse } from "@shared/schema";
+import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, composeJobs, pledgeRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest, type ComposeJob, type SignalComment, type InsertSignalComment } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
@@ -622,6 +622,13 @@ export interface IStorage {
   // Issue Survey
   getIssueResponses(userId: string): Promise<IssueResponse[]>;
   upsertIssueResponses(userId: string, responses: Array<{ issueId: string; response: number | null; priority: boolean }>): Promise<void>;
+
+  // Candidate Approval Votes
+  upsertApprovalVote(userId: string, politicianProfileId: string, vote: string): Promise<void>;
+  getApprovalStats(politicianProfileId: string): Promise<{ approveCount: number; disapproveCount: number; total: number; approvalPct: number }>;
+  getUserApprovalVote(userId: string, politicianProfileId: string): Promise<string | null>;
+  getFeedApprovalPrompts(userId: string): Promise<Array<{ id: string; fullName: string; party: string | null; photoUrl: string | null; positionTitle: string | null; office: string | null }>>;
+  getApprovalStatsAdmin(): Promise<Array<{ id: string; fullName: string; party: string | null; approveCount: number; disapproveCount: number; total: number; approvalPct: number }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -9467,6 +9474,119 @@ export class DatabaseStorage implements IStorage {
           set: { response: r.response ?? null, priority: r.priority, updatedAt: new Date() },
         });
     }
+  }
+
+  async upsertApprovalVote(userId: string, politicianProfileId: string, vote: string): Promise<void> {
+    await db.insert(candidateApprovalVotes)
+      .values({ userId, politicianProfileId, vote, votedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [candidateApprovalVotes.userId, candidateApprovalVotes.politicianProfileId],
+        set: { vote, votedAt: new Date() },
+      });
+  }
+
+  async getApprovalStats(politicianProfileId: string): Promise<{ approveCount: number; disapproveCount: number; total: number; approvalPct: number }> {
+    const rows = await db
+      .select({ vote: candidateApprovalVotes.vote, cnt: count() })
+      .from(candidateApprovalVotes)
+      .where(eq(candidateApprovalVotes.politicianProfileId, politicianProfileId))
+      .groupBy(candidateApprovalVotes.vote);
+    const approveCount = Number(rows.find(r => r.vote === 'approve')?.cnt ?? 0);
+    const disapproveCount = Number(rows.find(r => r.vote === 'disapprove')?.cnt ?? 0);
+    const total = approveCount + disapproveCount;
+    const approvalPct = total > 0 ? Math.round((approveCount / total) * 100) : 0;
+    return { approveCount, disapproveCount, total, approvalPct };
+  }
+
+  async getUserApprovalVote(userId: string, politicianProfileId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ vote: candidateApprovalVotes.vote })
+      .from(candidateApprovalVotes)
+      .where(and(eq(candidateApprovalVotes.userId, userId), eq(candidateApprovalVotes.politicianProfileId, politicianProfileId)))
+      .limit(1);
+    return row?.vote ?? null;
+  }
+
+  async getFeedApprovalPrompts(userId: string): Promise<Array<{ id: string; fullName: string; party: string | null; photoUrl: string | null; positionTitle: string | null; office: string | null }>> {
+    const votedRows = await db
+      .select({ pid: candidateApprovalVotes.politicianProfileId })
+      .from(candidateApprovalVotes)
+      .where(eq(candidateApprovalVotes.userId, userId));
+    const votedIds = votedRows.map(r => r.pid);
+
+    // Get names of user's followed representatives to prioritize
+    const followedRows = await db
+      .select({ name: followedRepresentatives.name })
+      .from(followedRepresentatives)
+      .where(eq(followedRepresentatives.userId, userId));
+    const followedNames = followedRows.map(r => r.name.toLowerCase().trim());
+
+    const posAlias = alias(politicalPositions, "pp");
+    const baseWhere = votedIds.length > 0
+      ? and(eq(politicianProfiles.isCurrent, true), sql`${politicianProfiles.id} NOT IN (${sql.join(votedIds.map(id => sql`${id}`), sql`, `)})`)
+      : eq(politicianProfiles.isCurrent, true);
+
+    const rows = await db
+      .select({
+        id: politicianProfiles.id,
+        fullName: politicianProfiles.fullName,
+        party: politicianProfiles.party,
+        photoUrl: politicianProfiles.photoUrl,
+        positionTitle: posAlias.title,
+      })
+      .from(politicianProfiles)
+      .leftJoin(posAlias, eq(politicianProfiles.positionId, posAlias.id))
+      .where(baseWhere)
+      .limit(20);
+
+    // Prioritize politicians whose names match followed representatives
+    const prioritized: typeof rows = [];
+    const rest: typeof rows = [];
+    for (const row of rows) {
+      const nameLower = row.fullName.toLowerCase().trim();
+      if (followedNames.some(fn => nameLower.includes(fn) || fn.includes(nameLower))) {
+        prioritized.push(row);
+      } else {
+        rest.push(row);
+      }
+    }
+
+    const selected = [...prioritized, ...rest].slice(0, 3);
+    return selected.map(r => ({
+      id: r.id,
+      fullName: r.fullName,
+      party: r.party,
+      photoUrl: r.photoUrl,
+      positionTitle: r.positionTitle,
+      office: r.positionTitle,
+    }));
+  }
+
+  async getApprovalStatsAdmin(): Promise<Array<{ id: string; fullName: string; party: string | null; approveCount: number; disapproveCount: number; total: number; approvalPct: number }>> {
+    const rows = await db
+      .select({
+        id: politicianProfiles.id,
+        fullName: politicianProfiles.fullName,
+        party: politicianProfiles.party,
+        vote: candidateApprovalVotes.vote,
+        cnt: count(),
+      })
+      .from(politicianProfiles)
+      .innerJoin(candidateApprovalVotes, eq(candidateApprovalVotes.politicianProfileId, politicianProfiles.id))
+      .groupBy(politicianProfiles.id, politicianProfiles.fullName, politicianProfiles.party, candidateApprovalVotes.vote);
+
+    const map = new Map<string, { id: string; fullName: string; party: string | null; approveCount: number; disapproveCount: number }>();
+    for (const row of rows) {
+      if (!map.has(row.id)) map.set(row.id, { id: row.id, fullName: row.fullName, party: row.party, approveCount: 0, disapproveCount: 0 });
+      const entry = map.get(row.id)!;
+      if (row.vote === 'approve') entry.approveCount += Number(row.cnt);
+      else entry.disapproveCount += Number(row.cnt);
+    }
+    return Array.from(map.values()).map(e => {
+      const total = e.approveCount + e.disapproveCount;
+      return { ...e, total, approvalPct: total > 0 ? Math.round((e.approveCount / total) * 100) : 0 };
+    }).sort((a, b) => b.total - a.total);
+>>>>>>> 3f13987 (feat: Candidate Approval Rating system (Task #56))
   }
 }
 

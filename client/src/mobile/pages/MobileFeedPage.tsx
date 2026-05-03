@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 import { useScrollLight } from "../hooks/useScrollLight";
 import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
@@ -74,6 +76,81 @@ type FeedItem =
   | { type: 'event'; data: PostWithAuthor; event?: Event }
   | { type: 'petition'; data: Petition }
   | { type: 'blog'; data: PostWithAuthor };
+
+function MobileApprovalPrompt() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [voted, setVoted] = useState<Record<string, { vote: string; approvalPct: number; total: number }>>({});
+
+  const { data: prompts = [] } = useQuery<Array<{ id: string; fullName: string; party: string | null; photoUrl: string | null; office: string | null }>>({
+    queryKey: ["/api/approval/feed-prompts"],
+    enabled: !!user,
+  });
+
+  const voteMutation = useMutation({
+    mutationFn: async ({ id, vote }: { id: string; vote: string }) => {
+      const res = await apiRequest("POST", "/api/approval/vote", { politicianProfileId: id, vote });
+      return res.json();
+    },
+    onSuccess: (data, variables) => {
+      setVoted(prev => ({ ...prev, [variables.id]: { vote: data.userVote, approvalPct: data.stats.approvalPct, total: data.stats.total } }));
+      queryClient.invalidateQueries({ queryKey: ["/api/approval/feed-prompts"] });
+    },
+  });
+
+  const visible = prompts.filter(p => !dismissed.has(p.id));
+  if (!user || visible.length === 0) return null;
+
+  return (
+    <div className="glass-card p-3 mb-2">
+      <p className="text-white/90 text-xs font-semibold mb-2">Community Approval Ratings</p>
+      <div className="space-y-2">
+        {visible.map(p => {
+          const result = voted[p.id];
+          const initials = p.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+          if (result) {
+            return (
+              <div key={p.id} className="flex items-center gap-2 bg-white/10 rounded-lg p-2">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                  {p.photoUrl ? <img src={p.photoUrl} alt={p.fullName} className="w-full h-full rounded-full object-cover" /> : initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-xs font-medium truncate">{p.fullName}</p>
+                  <div className="flex h-1.5 rounded-full overflow-hidden bg-white/20 mt-1">
+                    <div className="bg-green-400 transition-all" style={{ width: `${result.approvalPct}%` }} />
+                    <div className="bg-red-400 transition-all" style={{ width: `${100 - result.approvalPct}%` }} />
+                  </div>
+                </div>
+                <span className="text-green-400 text-xs font-semibold">{result.approvalPct}%</span>
+              </div>
+            );
+          }
+          return (
+            <div key={p.id} className="flex items-center gap-2 bg-white/10 rounded-lg p-2">
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 overflow-hidden">
+                {p.photoUrl ? <img src={p.photoUrl} alt={p.fullName} className="w-full h-full object-cover" /> : initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-xs font-medium truncate">{p.fullName}</p>
+                <p className="text-white/50 text-[10px] truncate">Do you approve?</p>
+              </div>
+              <button onClick={() => voteMutation.mutate({ id: p.id, vote: "approve" })} className="text-green-400 hover:text-green-300 p-1" title="Approve">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" /></svg>
+              </button>
+              <button onClick={() => voteMutation.mutate({ id: p.id, vote: "disapprove" })} className="text-red-400 hover:text-red-300 p-1" title="Disapprove">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" /></svg>
+              </button>
+              <button onClick={() => setDismissed(prev => new Set([...prev, p.id]))} className="text-white/40 hover:text-white/70 p-1" title="Dismiss">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function MobileFeedPage() {
   useScrollLight();
@@ -408,14 +485,21 @@ export function MobileFeedPage() {
             </div>
           </div>
         ) : (
-          displayItems.map((item) => (
-            <div
-              key={`${item.type}-${item.data.id}`}
-              className="glass-card p-3 cursor-pointer hover:scale-[1.02] transition-transform"
-              onClick={() => setExpandedItem(item)}
-              data-testid={`card-${item.type}-${item.data.id}`}
-            >
-              {getCardPreview(item)}
+          displayItems.map((item, index) => (
+            <div key={`mobile-wrap-${item.type}-${item.data.id}`}>
+              {index > 0 && index % 10 === 0 && (
+                <div className="col-span-2">
+                  <MobileApprovalPrompt />
+                </div>
+              )}
+              <div
+                key={`${item.type}-${item.data.id}`}
+                className="glass-card p-3 cursor-pointer hover:scale-[1.02] transition-transform"
+                onClick={() => setExpandedItem(item)}
+                data-testid={`card-${item.type}-${item.data.id}`}
+              >
+                {getCardPreview(item)}
+              </div>
             </div>
           ))
         )}

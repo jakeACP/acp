@@ -10579,6 +10579,53 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  // ─── Candidate Approval Voting ──────────────────────────────────────────────
+  app.post("/api/approval/vote", async (req: any, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const { politicianProfileId, vote } = req.body;
+    if (!politicianProfileId || !['approve', 'disapprove'].includes(vote)) {
+      return res.status(400).json({ message: "Invalid vote. Must be 'approve' or 'disapprove'." });
+    }
+    try {
+      await storage.upsertApprovalVote(req.user.id, politicianProfileId, vote);
+      const stats = await storage.getApprovalStats(politicianProfileId);
+      res.json({ success: true, stats, userVote: vote });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      res.status(500).json({ message: msg });
+    }
+  });
+
+  app.get("/api/approval/feed-prompts", async (req: any, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const prompts = await storage.getFeedApprovalPrompts(req.user.id);
+      res.json(prompts);
+    } catch (e) {
+      res.status(500).json({ message: "Error fetching prompts" });
+    }
+  });
+
+  app.get("/api/approval/:politicianProfileId", async (req: any, res) => {
+    const { politicianProfileId } = req.params;
+    try {
+      const stats = await storage.getApprovalStats(politicianProfileId);
+      const userVote = req.isAuthenticated() ? await storage.getUserApprovalVote(req.user.id, politicianProfileId) : null;
+      res.json({ stats, userVote });
+    } catch (e) {
+      res.status(500).json({ message: "Error fetching approval stats" });
+    }
+  });
+
+  app.get("/api/admin/approval-stats", ensureAdmin, async (req: any, res) => {
+    try {
+      const stats = await storage.getApprovalStatsAdmin();
+      res.json(stats);
+    } catch (e) {
+      res.status(500).json({ message: "Error fetching admin approval stats" });
+    }
+  });
+
   return httpServer;
 }
 
@@ -10713,4 +10760,5 @@ async function transformDivisionsToRepresentatives(divisionsData: any, address: 
     message: 'Showing federal representatives + guidance for state/local officials'
   };
 }
+
 

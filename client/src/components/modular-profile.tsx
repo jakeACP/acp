@@ -54,6 +54,8 @@ import {
   Flame,
   Vote,
   ThumbsUp,
+  ThumbsDown,
+  Lock,
   UsersRound,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -62,6 +64,7 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { FriendButton } from "@/components/friend-button";
 import { FollowButton } from "@/components/follow-button";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 import type { Post } from "@shared/schema";
 import { PLEDGE_DEFINITIONS } from "@shared/schema";
 import { POLICY_ISSUES, RESPONSE_LABELS } from "@/lib/issue-data";
@@ -381,15 +384,90 @@ function RepresentativesModuleContent({ profileUserId }: { profileUserId?: strin
   );
 }
 
+function ApprovalRatingModuleInline({ politicianProfileId }: { politicianProfileId: string }) {
+  const { user } = useAuth();
+  const [localVote, setLocalVote] = React.useState<string | null>(null);
+  const [localStats, setLocalStats] = React.useState<{ approveCount: number; disapproveCount: number; total: number; approvalPct: number } | null>(null);
+
+  const { data } = useQuery<{ stats: { approveCount: number; disapproveCount: number; total: number; approvalPct: number }; userVote: string | null }>({
+    queryKey: ["/api/approval", politicianProfileId],
+    queryFn: async () => {
+      const res = await fetch(`/api/approval/${politicianProfileId}`, { credentials: "include" });
+      if (!res.ok) return { stats: { approveCount: 0, disapproveCount: 0, total: 0, approvalPct: 0 }, userVote: null };
+      return res.json();
+    },
+  });
+
+  const voteMutation = useMutation({
+    mutationFn: async (vote: string) => {
+      const res = await apiRequest("POST", "/api/approval/vote", { politicianProfileId, vote });
+      return res.json();
+    },
+    onSuccess: (result: any) => {
+      setLocalVote(result.userVote);
+      setLocalStats(result.stats);
+      queryClient.invalidateQueries({ queryKey: ["/api/approval", politicianProfileId] });
+    },
+  });
+
+  const stats = localStats ?? data?.stats ?? { approveCount: 0, disapproveCount: 0, total: 0, approvalPct: 0 };
+  const userVote = localVote ?? data?.userVote ?? null;
+  const pct = stats.approvalPct;
+
+  return (
+    <div className="space-y-3">
+      {stats.total > 0 ? (
+        <>
+          <div className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+              <ThumbsUp className="h-3.5 w-3.5" />{stats.approveCount.toLocaleString()} ({pct}%)
+            </span>
+            <span className="text-base font-bold">{pct}% Approval</span>
+            <span className="flex items-center gap-1 text-red-600 dark:text-red-400 font-medium">
+              {100 - pct}% ({stats.disapproveCount.toLocaleString()})<ThumbsDown className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
+            <div className="bg-green-500 transition-all duration-700" style={{ width: `${pct}%` }} />
+            <div className="bg-red-500 transition-all duration-700" style={{ width: `${100 - pct}%` }} />
+          </div>
+          <p className="text-xs text-gray-400 text-center">{stats.total.toLocaleString()} community {stats.total === 1 ? "vote" : "votes"}</p>
+        </>
+      ) : (
+        <p className="text-sm text-gray-500 text-center py-2">No votes yet. Be the first to rate.</p>
+      )}
+      {user && (
+        <div className="flex gap-2 mt-2">
+          <Button
+            size="sm" variant={userVote === "approve" ? "default" : "outline"}
+            className={`flex-1 text-xs h-8 ${userVote === "approve" ? "bg-green-600 hover:bg-green-700 border-green-600" : "border-green-500/40 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30"}`}
+            onClick={() => voteMutation.mutate("approve")} disabled={voteMutation.isPending}
+          >
+            <ThumbsUp className="h-3 w-3 mr-1" />Approve
+          </Button>
+          <Button
+            size="sm" variant={userVote === "disapprove" ? "default" : "outline"}
+            className={`flex-1 text-xs h-8 ${userVote === "disapprove" ? "bg-red-600 hover:bg-red-700 border-red-600 text-white" : "border-red-500/40 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"}`}
+            onClick={() => voteMutation.mutate("disapprove")} disabled={voteMutation.isPending}
+          >
+            <ThumbsDown className="h-3 w-3 mr-1" />Disapprove
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ProfileModule {
   id: string;
   name: string;
-  type: "bio" | "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "political-compass" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "representatives" | "custom";
+  type: "bio" | "photos" | "feed" | "friends" | "following" | "music" | "background" | "youtube" | "badges" | "issues" | "civic-tracker" | "pinned-post" | "debate-history" | "events" | "political-compass" | "analytics" | "campaign-hub" | "verified-badge" | "civic-scorecard" | "media-hub" | "widgets" | "supporter-wall" | "democracy-wrapped" | "legacy-timeline" | "representatives" | "approval-rating" | "custom";
   isPremium: boolean;
   isEnabled: boolean;
   position: number;
   itemCount: number;
   customData?: any;
+  isLocked?: boolean;
 }
 
 interface UserProfile {
@@ -410,7 +488,7 @@ interface UserProfile {
   createdAt?: string;
 }
 
-export function ModularProfile({ userId, isOwner = false }: { userId?: string; isOwner?: boolean }) {
+export function ModularProfile({ userId, isOwner = false, politicianProfileId }: { userId?: string; isOwner?: boolean; politicianProfileId?: string }) {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const [editMode, setEditMode] = useState(false);
@@ -966,13 +1044,36 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
       ];
 
       // Load saved modules or use defaults
-      if (user.profileLayout && Array.isArray(user.profileLayout)) {
-        setProfileModules(user.profileLayout);
+      const baseModules = (user.profileLayout && Array.isArray(user.profileLayout))
+        ? user.profileLayout
+        : defaultModules;
+
+      // Auto-inject locked approval-rating module for politician profiles
+      if (politicianProfileId) {
+        const alreadyHas = baseModules.some((m: ProfileModule) => m.type === "approval-rating");
+        if (!alreadyHas) {
+          const approvalModule: ProfileModule = {
+            id: "approval-rating-locked",
+            name: "Community Approval Rating",
+            type: "approval-rating",
+            isPremium: false,
+            isEnabled: true,
+            position: 0,
+            itemCount: 1,
+            customData: { politicianProfileId },
+            isLocked: true,
+          };
+          setProfileModules([approvalModule, ...baseModules]);
+        } else {
+          setProfileModules(baseModules.map((m: ProfileModule) =>
+            m.type === "approval-rating" ? { ...m, isLocked: true, customData: { ...(m.customData || {}), politicianProfileId } } : m
+          ));
+        }
       } else {
-        setProfileModules(defaultModules);
+        setProfileModules(baseModules);
       }
     }
-  }, [user]);
+  }, [user, politicianProfileId]);
 
   const [customization, setCustomization] = useState({
     theme: "blue",
@@ -2172,6 +2273,11 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
             </div>
           );
         }
+        case "approval-rating": {
+          const pid = module.customData?.politicianProfileId || politicianProfileId;
+          if (!pid) return <p className="text-gray-500 text-sm">No politician linked.</p>;
+          return <ApprovalRatingModuleInline politicianProfileId={pid} />;
+        }
         default:
           return <p className="text-gray-500">Module content coming soon...</p>;
       }
@@ -2184,6 +2290,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
             <span className="flex items-center gap-1">
               {module.name}
               {module.isPremium && <Crown className="h-3 w-3 text-yellow-500" />}
+              {module.isLocked && <Lock className="h-3 w-3 text-muted-foreground" title="This module is locked" />}
             </span>
             <div className="flex items-center gap-2">
               {isOwner && (
@@ -2705,6 +2812,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                       <div className="flex justify-between pt-4">
                         <Button 
                           onClick={() => {
+                            if (module.isLocked) return;
                             const updatedModules = profileModules.filter(m => m.id !== module.id);
                             setProfileModules(updatedModules);
                             setEditingModule(null);
@@ -2712,8 +2820,10 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
                           }}
                           variant="destructive"
                           size="sm"
+                          disabled={module.isLocked}
+                          title={module.isLocked ? "This module is locked and cannot be removed" : undefined}
                         >
-                          Delete Module
+                          {module.isLocked ? <><Lock className="h-3 w-3 mr-1" />Locked</> : "Delete Module"}
                         </Button>
                         <Button 
                           onClick={() => setEditingModule(null)}

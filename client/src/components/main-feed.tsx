@@ -11,6 +11,7 @@ import { CharityCard } from "@/components/charity-card";
 
 import { CreatePostForm } from "@/components/create-post-form";
 import { BlockchainTransparency } from "@/components/blockchain-transparency";
+import { ApprovalPromptCard } from "@/components/approval-prompt-card";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -868,10 +869,17 @@ export function MainFeed() {
           {/* Feed Content */}
           <div className="md:space-y-6 space-y-0">
             {visibleItems.map((item, index) => (
-              <div 
-                key={`${item.type}-${item.data.id || index}`}
-                className="md:mb-0 mb-4 md:rounded-lg rounded-none md:mx-0 mx-0"
-              >
+              <div key={`feed-wrap-${item.type}-${item.data.id || index}`}>
+                {/* Approval prompt after every 10th item */}
+                {index > 0 && index % 10 === 0 && (
+                  <div className="md:mb-6 mb-4">
+                    <ApprovalPromptCard />
+                  </div>
+                )}
+                <div 
+                  key={`${item.type}-${item.data.id || index}`}
+                  className="md:mb-0 mb-4 md:rounded-lg rounded-none md:mx-0 mx-0"
+                >
                 {item.type === 'post' ? (
                   <div className="floating-card bg-card border border-border">
                     <PostCard post={item.data as PostWithAuthor} />
@@ -899,6 +907,7 @@ export function MainFeed() {
                 ) : item.type === 'initiative' ? (
                   <InitiativeFeedCard initiative={item.data} />
                 ) : null}
+                </div>
               </div>
             ))}
             
