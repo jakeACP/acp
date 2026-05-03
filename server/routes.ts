@@ -10388,6 +10388,35 @@ Only include people you are confident about. Return empty arrays/null if unknown
     }
   });
 
+  // Issue Survey Routes
+  app.get("/api/issues/responses", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const responses = await storage.getIssueResponses(req.user.id);
+      res.json(responses);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/issues/responses", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const schema = z.object({
+        responses: z.array(z.object({
+          issueId: z.string(),
+          response: z.number().int().min(1).max(5).nullable(),
+          priority: z.boolean(),
+        })),
+      });
+      const { responses } = schema.parse(req.body);
+      await storage.upsertIssueResponses(req.user.id, responses);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   return httpServer;
 }
 
@@ -10522,3 +10551,4 @@ async function transformDivisionsToRepresentatives(divisionsData: any, address: 
     message: 'Showing federal representatives + guidance for state/local officials'
   };
 }
+

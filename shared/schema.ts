@@ -2726,3 +2726,20 @@ export const agentApps = pgTable("agent_apps", {
 export const insertAgentAppSchema = createInsertSchema(agentApps).omit({ id: true, createdAt: true, updatedAt: true });
 export type AgentApp = typeof agentApps.$inferSelect;
 export type InsertAgentApp = z.infer<typeof insertAgentAppSchema>;
+
+// Issue Survey Responses - stores user positions on 30 U.S. policy issues
+export const issueResponses = pgTable("issue_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  issueId: text("issue_id").notNull(),
+  response: integer("response"), // 1-5 (nullable means skipped)
+  priority: boolean("priority").notNull().default(false),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIssueUnique: sql`UNIQUE(${table.userId}, ${table.issueId})`,
+  userIdIndex: index("issue_responses_user_id_idx").on(table.userId),
+}));
+
+export const insertIssueResponseSchema = createInsertSchema(issueResponses).omit({ id: true, updatedAt: true });
+export type IssueResponse = typeof issueResponses.$inferSelect;
+export type InsertIssueResponse = z.infer<typeof insertIssueResponseSchema>;

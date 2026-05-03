@@ -62,6 +62,7 @@ import { FriendButton } from "@/components/friend-button";
 import { apiRequest } from "@/lib/queryClient";
 import type { Post } from "@shared/schema";
 import { PLEDGE_DEFINITIONS } from "@shared/schema";
+import { POLICY_ISSUES, RESPONSE_LABELS } from "@/lib/issue-data";
 
 interface ExtendedProfileData {
   issueInterests?: string[];
@@ -155,6 +156,97 @@ function FeedModule({ userId, itemCount, username }: { userId: string; itemCount
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function IssuesSurveyModule({ profileUserId, isOwner, itemCount }: { profileUserId?: string; isOwner: boolean; itemCount: number }) {
+  const { data: issueResponses = [] } = useQuery<any[]>({
+    queryKey: ["/api/issues/responses"],
+    enabled: !!profileUserId && isOwner,
+  });
+
+  const priorityIssues = issueResponses.filter((r: any) => r.priority && r.response !== null);
+  const answered = issueResponses.filter((r: any) => r.response !== null);
+  const leansMore = answered.filter((r: any) => r.response >= 4).length;
+  const leansLess = answered.filter((r: any) => r.response <= 2).length;
+
+  const topIssues = priorityIssues.slice(0, Math.min(itemCount, 3));
+
+  if (!isOwner && issueResponses.length === 0) {
+    return (
+      <div className="p-4 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
+        No issue survey completed yet.
+      </div>
+    );
+  }
+
+  if (issueResponses.length === 0) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground text-center py-2">
+          Share your policy preferences with the Issue Survey.
+        </p>
+        <a href="/issues" className="block">
+          <div className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-sm font-medium">
+            <Flag className="h-4 w-4" />
+            Take the Issue Survey
+          </div>
+        </a>
+      </div>
+    );
+  }
+
+  const getResponseColor = (val: number) => {
+    if (val <= 2) return "text-red-500";
+    if (val === 3) return "text-gray-500";
+    return "text-blue-500";
+  };
+
+  return (
+    <div className="space-y-3">
+      {answered.length > 0 && (
+        <div className="flex gap-2 text-xs">
+          {leansMore > 0 && (
+            <span className="px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">
+              ↑ More involvement: {leansMore}
+            </span>
+          )}
+          {leansLess > 0 && (
+            <span className="px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-medium">
+              ↓ Less involvement: {leansLess}
+            </span>
+          )}
+        </div>
+      )}
+
+      {topIssues.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+            Top Priorities
+          </p>
+          {topIssues.map((r: any) => {
+            const issue = POLICY_ISSUES.find(i => i.id === r.issueId);
+            if (!issue) return null;
+            return (
+              <div key={r.issueId} className="flex items-center justify-between p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+                <span className="text-sm font-medium truncate">{issue.title}</span>
+                <span className={`text-xs font-semibold ml-2 flex-shrink-0 ${getResponseColor(r.response)}`}>
+                  {RESPONSE_LABELS[r.response as number] || "—"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <a href="/issues" className="block">
+        <div className="flex items-center justify-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-xs text-muted-foreground font-medium">
+          <ExternalLink className="h-3 w-3" />
+          {isOwner ? "View / Edit Full Survey" : "View Full Survey"}
+        </div>
+      </a>
     </div>
   );
 }
@@ -1293,23 +1385,7 @@ export function ModularProfile({ userId, isOwner = false }: { userId?: string; i
           );
         }
         case "issues": {
-          const savedIssues: string[] = extendedData?.issueInterests || [];
-          return (
-            <div className="space-y-2">
-              {savedIssues.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-4">
-                  {isOwner ? "Click edit to select your top issues." : "No issue interests set."}
-                </p>
-              ) : (
-                savedIssues.slice(0, module.itemCount).map((issue: string, i: number) => (
-                  <div key={i} className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <Flag className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium">{issue}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          );
+          return <IssuesSurveyModule profileUserId={profileUserId} isOwner={isOwner} itemCount={module.itemCount} />;
         }
         case "civic-tracker": {
           const engScore =

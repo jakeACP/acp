@@ -116,6 +116,26 @@ Users can create personalized SVG avatars instead of uploading photos. Clicking 
 - API: `PUT /api/profile/avatar-config` saves the config; `/api/user` returns `avatarConfig`
 - Profile photo area auto-detects `avatarConfig` and renders `AvatarSVG`; falls back to uploaded photo, then initials
 
+## Issue Survey Feature
+
+### Overview
+A full policy issue survey at `/issues` lets logged-in users record their positions on 30 U.S. policy issues using a 5-point government-involvement scale (Much Less → Much More), with priority toggles per issue.
+
+### Architecture
+- **Static data**: 30 issues across 10 categories defined in `client/src/lib/issue-data.ts` (id, category, title, prompt, description, tags)
+- **Database**: `issue_responses` table (user_id, issue_id, response 1–5 nullable, priority boolean, updated_at) with unique constraint on (user_id, issue_id)
+- **API**: `GET /api/issues/responses` and `POST /api/issues/responses` (batch upsert) — both require authentication
+- **Storage**: `getIssueResponses(userId)` and `upsertIssueResponses(userId, responses[])` in `server/storage.ts`
+- **Survey page**: `client/src/pages/issues-page.tsx` — three internal views (Intro → Survey → Results) with progress bar, skip/back/next navigation, auto-save on every response change
+- **Profile module**: `IssuesSurveyModule` component in `client/src/components/modular-profile.tsx` renders as a compact glass card showing top priority issues and lean direction with a link to `/issues`
+- **Route**: `/issues` registered as a ProtectedRoute in `client/src/App.tsx`
+
+### Key design choices
+- No left/right political labeling; all language is neutral and centered on government involvement
+- Responses auto-save via mutation on each answer change
+- Users can return and resume/edit (data pre-populated from API)
+- Disclaimer shown on both intro and results screens
+
 ## ACP Agent API Gateway
 
 ### Overview

@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp } from "@shared/schema";
+import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, composeJobs, pledgeRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest, type ComposeJob, type SignalComment, type InsertSignalComment } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
@@ -618,6 +618,10 @@ export interface IStorage {
   getApprovedPledges(userId: string): Promise<any[]>;
   getPledgeRequests(status?: string): Promise<any[]>;
   reviewPledgeRequest(id: string, status: string, reviewedBy: string, reviewNote: string): Promise<void>;
+
+  // Issue Survey
+  getIssueResponses(userId: string): Promise<IssueResponse[]>;
+  upsertIssueResponses(userId: string, responses: Array<{ issueId: string; response: number | null; priority: boolean }>): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -9446,6 +9450,23 @@ export class DatabaseStorage implements IStorage {
 
   async reviewPledgeRequest(id: string, status: string, reviewedBy: string, reviewNote: string): Promise<void> {
     await db.update(pledgeRequests).set({ status, reviewedBy, reviewNote, updatedAt: new Date() }).where(eq(pledgeRequests.id, id));
+  }
+
+  async getIssueResponses(userId: string): Promise<IssueResponse[]> {
+    return db.select().from(issueResponses).where(eq(issueResponses.userId, userId));
+  }
+
+  async upsertIssueResponses(userId: string, responses: Array<{ issueId: string; response: number | null; priority: boolean }>): Promise<void> {
+    if (responses.length === 0) return;
+    for (const r of responses) {
+      await db
+        .insert(issueResponses)
+        .values({ userId, issueId: r.issueId, response: r.response ?? null, priority: r.priority, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: [issueResponses.userId, issueResponses.issueId],
+          set: { response: r.response ?? null, priority: r.priority, updatedAt: new Date() },
+        });
+    }
   }
 }
 

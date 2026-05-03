@@ -75,6 +75,7 @@ import PublicLandingPage from "@/pages/public-landing-page";
 import PublicArticlePage from "@/pages/public-article-page";
 import DeveloperPage from "@/pages/developer-page";
 import RunForOfficePage from "@/pages/run-for-office-page";
+import IssuesPage from "@/pages/issues-page";
 import NotFound from "@/pages/not-found";
 import { useScrollLight } from "./hooks/useScrollLight";
 import { useAuth } from "./hooks/use-auth";
@@ -171,6 +172,7 @@ function Router() {
       <ProtectedRoute path="/initiatives/edit/:id" component={InitiativeFormPage} />
       <ProtectedRoute path="/initiatives/:id" component={InitiativeDetailPage} />
       <ProtectedRoute path="/run-for-office" component={RunForOfficePage} />
+      <ProtectedRoute path="/issues" component={IssuesPage} />
       <ProtectedRoute path="/political-profile" component={CandidateEditProfilePage} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
