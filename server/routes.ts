@@ -28,11 +28,12 @@ import { redactAgentData } from "./agentRedact";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, type InsertAgentApp, type AgentApiKey } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, politicalPositions, candidates, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, type InsertAgentApp, type AgentApiKey } from "@shared/schema";
 import archiver from "archiver";
 import multer from "multer";
 import unzipper from "unzipper";
 import { eq, inArray, or, sql, asc, and, ilike } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
 import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle } from "./openai";
@@ -121,6 +122,62 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       console.error("YouTube URL normalization error:", err);
     }
   })();
+
+  // Public Candidates Running API (no auth required)
+  app.get("/api/public/candidates-running", async (req, res) => {
+    try {
+      const targetPositions = alias(politicalPositions, "target_positions");
+      const rows = await db
+        .select({
+          id: politicianProfiles.id,
+          fullName: politicianProfiles.fullName,
+          party: politicianProfiles.party,
+          photoUrl: politicianProfiles.photoUrl,
+          claimRequestStatus: politicianProfiles.claimRequestStatus,
+          isVerified: politicianProfiles.isVerified,
+          notes: politicianProfiles.notes,
+          targetPositionTitle: targetPositions.title,
+          targetPositionLevel: targetPositions.level,
+          targetPositionJurisdiction: targetPositions.jurisdiction,
+        })
+        .from(politicianProfiles)
+        .leftJoin(targetPositions, eq(politicianProfiles.targetPositionId, targetPositions.id))
+        .where(
+          and(
+            eq(politicianProfiles.profileType, "candidate"),
+            or(
+              eq(politicianProfiles.claimRequestStatus, "pending"),
+              eq(politicianProfiles.claimRequestStatus, "approved")
+            )
+          )
+        )
+        .orderBy(politicianProfiles.fullName);
+
+      const results = rows.map(r => {
+        // Derive officeSought: prefer targetPosition title, fall back to "Office:" entry in notes
+        let officeSought: string | null = r.targetPositionTitle || null;
+        if (!officeSought && r.notes) {
+          const match = r.notes.match(/Office:\s*([^;]+)/i);
+          if (match) officeSought = match[1].trim();
+        }
+        return {
+          id: r.id,
+          fullName: r.fullName,
+          party: r.party,
+          photoUrl: r.photoUrl,
+          claimRequestStatus: r.claimRequestStatus,
+          isVerified: r.isVerified,
+          officeSought,
+          targetPositionLevel: r.targetPositionLevel,
+          targetPositionJurisdiction: r.targetPositionJurisdiction,
+        };
+      });
+      res.json(results);
+    } catch (error: any) {
+      console.error("Error fetching candidates running:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
 
   // Public Articles API (no auth required)
   app.get("/api/public/articles", async (req, res) => {
@@ -10094,12 +10151,13 @@ Only include people you are confident about. Return empty arrays/null if unknown
           : officeDetails?.officeTitle || "Candidate";
 
       if (matchedProfileId) {
-        // Link to existing profile — update claim fields and mark as wizard submission
+        // Link to existing profile — update claim fields and mark as candidate
         await storage.updatePoliticianProfile(matchedProfileId, {
           claimedByUserId: userId,
           claimRequestStatus: "pending",
           claimRequestDate: new Date(),
           claimRequestUserId: userId,
+          profileType: "candidate",
         });
         // Build structured metadata parts for review context (same format as new profiles)
         const matchedNotesParts = [

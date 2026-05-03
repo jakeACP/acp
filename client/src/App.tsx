@@ -141,13 +141,13 @@ function Router() {
       <ProtectedRoute path="/groups" component={GroupsPage} />
       <ProtectedRoute path="/polls" component={PollsPage} />
       <ProtectedRoute path="/polls/:id" component={PollDetailPage} />
-      <ProtectedRoute path="/elections" component={ElectionsPage} />
+      <Route path="/elections" component={ElectionsPage} />
       <ProtectedRoute path="/elections/positions" component={ElectionPositionsPage} />
       <ProtectedRoute path="/elections/race" component={ElectionRacePage} />
       <ProtectedRoute path="/candidates" component={CandidatesPage} />
       <ProtectedRoute path="/candidates/:id" component={CandidateProfilePage} />
       <ProtectedRoute path="/politicians/handle/:handle" component={PoliticianHandleRedirect} />
-      <ProtectedRoute path="/politicians/:id" component={PoliticianProfilePage} />
+      <Route path="/politicians/:id" component={PoliticianProfilePage} />
       <ProtectedRoute path="/representatives" component={RepresentativesPage} />
       <ProtectedRoute path="/events" component={EventsPage} />
       <ProtectedRoute path="/signals/edit" component={SignalEditorPage} />
