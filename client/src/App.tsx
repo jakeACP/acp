@@ -67,6 +67,9 @@ import AdminScannerPage from "@/pages/admin-scanner-page";
 import AdminAgenticAiPage from "@/pages/admin-agentic-ai-page";
 import BudgetSimulatorPage from "@/pages/budget-simulator-page";
 import AdminBudgetBaselinesPage from "@/pages/admin-budget-baselines-page";
+import AdminDistrictsPage from "@/pages/admin-districts-page";
+import AdminDistrictFormPage from "@/pages/admin-district-form-page";
+import AdminDistrictDetailPage from "@/pages/admin-district-detail-page";
 import SigsDirectoryPage from "@/pages/sigs-directory-page";
 import SigProfilePage from "@/pages/sig-profile-page";
 import PartiesPage from "@/pages/parties-page";
@@ -215,6 +218,10 @@ function Router() {
       <ProtectedRoute path="/admin/pledge-requests" component={AdminPledgeRequestsPage} />
       <ProtectedRoute path="/budget-simulator" component={BudgetSimulatorPage} />
       <ProtectedRoute path="/admin/budget-baselines" component={AdminBudgetBaselinesPage} />
+      <ProtectedRoute path="/admin/districts" component={AdminDistrictsPage} />
+      <ProtectedRoute path="/admin/districts/new" component={AdminDistrictFormPage} />
+      <ProtectedRoute path="/admin/districts/:districtId/edit" component={AdminDistrictFormPage} />
+      <ProtectedRoute path="/admin/districts/:districtId" component={AdminDistrictDetailPage} />
       <Route path="/political-compass" component={PoliticalCompassPage} />
       <Route path="/developer" component={DeveloperPage} />
       <Route path="/auth" component={AuthPage} />

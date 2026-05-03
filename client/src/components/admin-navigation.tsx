@@ -29,6 +29,7 @@ import {
   SlidersHorizontal,
   Palette,
   MapPin,
+  Map,
 } from "lucide-react";
 
 interface SubItem {
@@ -71,6 +72,7 @@ const navCategories: NavCategory[] = [
       { name: "Trading Flags", href: "/admin/trading-flags", icon: Flag },
       { name: "State Data", href: "/admin/state-data", icon: MapPin },
       { name: "Budget Baselines", href: "/admin/budget-baselines", icon: Database },
+      { name: "Districts", href: "/admin/districts", icon: Map },
     ],
   },
   {

@@ -2973,3 +2973,82 @@ export type PartyUserRating = typeof partyUserRatings.$inferSelect;
 export type InsertPartyUserRating = z.infer<typeof insertPartyUserRatingSchema>;
 export type PartyControversy = typeof partyControversies.$inferSelect;
 export type InsertPartyControversy = z.infer<typeof insertPartyControversySchema>;
+
+// ─── Districts System ────────────────────────────────────────────────────────
+
+export const districts = pgTable("districts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  districtType: text("district_type").notNull(), // congressional, state_senate, state_house, county, city, school, judicial, special
+  state: text("state").notNull(), // 2-letter code
+  county: text("county"),
+  city: text("city"),
+  description: text("description"),
+  geojsonBoundary: json("geojson_boundary"), // GeoJSON FeatureCollection or Feature
+  centroidLat: real("centroid_lat"),
+  centroidLng: real("centroid_lng"),
+  confidenceScore: real("confidence_score"), // 0.0–1.0
+  status: text("status").notNull().default("draft"), // draft | needs_review | confirmed | archived
+  sourceUrl: text("source_url"),
+  sourceName: text("source_name"),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  confirmedAt: timestamp("confirmed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  statusIndex: index("districts_status_idx").on(table.status),
+  stateIndex: index("districts_state_idx").on(table.state),
+  typeIndex: index("districts_type_idx").on(table.districtType),
+}));
+
+export const insertDistrictSchema = createInsertSchema(districts).omit({ id: true, createdAt: true, updatedAt: true });
+export type District = typeof districts.$inferSelect;
+export type InsertDistrict = z.infer<typeof insertDistrictSchema>;
+
+export const districtVersions = pgTable("district_versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  districtId: varchar("district_id").notNull().references(() => districts.id, { onDelete: "cascade" }),
+  versionNumber: integer("version_number").notNull().default(1),
+  geojsonBoundary: json("geojson_boundary"),
+  changeNote: text("change_note"),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  districtIndex: index("district_versions_district_idx").on(table.districtId),
+}));
+
+export const insertDistrictVersionSchema = createInsertSchema(districtVersions).omit({ id: true, createdAt: true });
+export type DistrictVersion = typeof districtVersions.$inferSelect;
+export type InsertDistrictVersion = z.infer<typeof insertDistrictVersionSchema>;
+
+export const userDistricts = pgTable("user_districts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  districtId: varchar("district_id").notNull().references(() => districts.id, { onDelete: "cascade" }),
+  matchedAt: timestamp("matched_at").defaultNow(),
+}, (table) => ({
+  userIndex: index("user_districts_user_idx").on(table.userId),
+  districtIndex: index("user_districts_district_idx").on(table.districtId),
+  uniqueUserDistrict: sql`UNIQUE(${table.userId}, ${table.districtId})`,
+}));
+
+export const insertUserDistrictSchema = createInsertSchema(userDistricts).omit({ id: true, matchedAt: true });
+export type UserDistrict = typeof userDistricts.$inferSelect;
+export type InsertUserDistrict = z.infer<typeof insertUserDistrictSchema>;
+
+export const candidateDistricts = pgTable("candidate_districts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  candidateId: varchar("candidate_id").notNull().references(() => politicianProfiles.id, { onDelete: "cascade" }),
+  districtId: varchar("district_id").notNull().references(() => districts.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  candidateIndex: index("candidate_districts_candidate_idx").on(table.candidateId),
+  districtIndex: index("candidate_districts_district_idx").on(table.districtId),
+  uniqueCandidateDistrict: sql`UNIQUE(${table.candidateId}, ${table.districtId})`,
+}));
+
+export const insertCandidateDistrictSchema = createInsertSchema(candidateDistricts).omit({ id: true, createdAt: true });
+export type CandidateDistrict = typeof candidateDistricts.$inferSelect;
+export type InsertCandidateDistrict = z.infer<typeof insertCandidateDistrictSchema>;

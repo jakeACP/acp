@@ -10886,6 +10886,166 @@ Only include people you are confident about. Return empty arrays/null if unknown
 
   registerBudgetRoutes(app);
 
+  // ─── Districts ──────────────────────────────────────────────────────────────
+
+  app.get("/api/admin/districts", ensureAdmin, async (req: any, res) => {
+    try {
+      const filters = {
+        state: req.query.state as string | undefined,
+        districtType: req.query.districtType as string | undefined,
+        status: req.query.status as string | undefined,
+        search: req.query.search as string | undefined,
+        confirmed: req.query.confirmed === "true",
+      };
+      const pagination = {
+        limit: parseInt(req.query.limit as string) || 50,
+        offset: parseInt(req.query.offset as string) || 0,
+      };
+      const result = await storage.listDistricts(filters, pagination);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/admin/districts", ensureAdmin, async (req: any, res) => {
+    try {
+      const district = await storage.createDistrict(req.body, req.user.id);
+      if (district?.geojsonBoundary) {
+        await storage.createDistrictVersion(district.id, district.geojsonBoundary, "Initial boundary", req.user.id);
+      }
+      res.status(201).json(district);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/admin/districts/:id", ensureAdmin, async (req: any, res) => {
+    try {
+      const district = await storage.getDistrictById(req.params.id);
+      if (!district) return res.status(404).json({ message: "District not found" });
+      res.json(district);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.patch("/api/admin/districts/:id", ensureAdmin, async (req: any, res) => {
+    try {
+      const existing = await storage.getDistrictById(req.params.id);
+      if (!existing) return res.status(404).json({ message: "District not found" });
+      // Auto-save version if boundary is changing
+      if (req.body.geojsonBoundary && existing.geojsonBoundary) {
+        await storage.createDistrictVersion(req.params.id, existing.geojsonBoundary, "Auto-saved before update", req.user.id);
+      }
+      const updated = await storage.updateDistrict(req.params.id, req.body, req.user.id);
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/admin/districts/:id/confirm", ensureAdmin, async (req: any, res) => {
+    try {
+      const district = await storage.confirmDistrict(req.params.id, req.user.id);
+      res.json(district);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/admin/districts/:id/archive", ensureAdmin, async (req: any, res) => {
+    try {
+      const district = await storage.archiveDistrict(req.params.id);
+      res.json(district);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/admin/districts/:id/versions", ensureAdmin, async (req: any, res) => {
+    try {
+      const versions = await storage.getDistrictVersions(req.params.id);
+      res.json(versions);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/admin/districts/:id/versions/:versionId/restore", ensureAdmin, async (req: any, res) => {
+    try {
+      const district = await storage.restoreDistrictVersion(req.params.id, req.params.versionId, req.user.id);
+      res.json(district);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/admin/districts/:id/users", ensureAdmin, async (req: any, res) => {
+    try {
+      const users = await storage.getUsersInDistrict(req.params.id);
+      res.json(users);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // AI draft boundary endpoint
+  app.post("/api/admin/districts/ai-draft", ensureAdmin, async (req: any, res) => {
+    try {
+      const { name, districtType, state, county, city } = req.body;
+      if (!name || !districtType || !state) {
+        return res.status(400).json({ message: "name, districtType, and state are required" });
+      }
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const locationDesc = [name, county ? `${county} County` : null, city || null, state].filter(Boolean).join(", ");
+      const prompt = `You are a GIS expert. Generate an approximate GeoJSON FeatureCollection with a single Polygon feature representing the approximate boundary of the following US political/geographic district:
+District name: ${name}
+Type: ${districtType}
+State: ${state}${county ? `\nCounty: ${county}` : ""}${city ? `\nCity: ${city}` : ""}
+
+Return ONLY valid GeoJSON as a JSON object. The polygon should be a rough approximation of the actual boundary. Use real approximate coordinates for ${locationDesc}. Include a "confidence" property in the feature properties (0.0–1.0) indicating how confident you are in the accuracy of this boundary.
+
+Format: { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Polygon", "coordinates": [[[lng,lat],...]] }, "properties": { "name": "${name}", "confidence": 0.3 } }] }`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        max_tokens: 2000,
+      });
+      const raw = completion.choices[0]?.message?.content ?? "{}";
+      const parsed = JSON.parse(raw);
+      const confidenceScore = parsed?.features?.[0]?.properties?.confidence ?? 0.3;
+      res.json({ geojson: parsed, confidenceScore, status: "needs_review" });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // User-district matching
+  app.post("/api/users/:userId/match-districts", ensureAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      // Get confirmed districts
+      const { districts: allDistricts } = await storage.listDistricts({ confirmed: true }, { limit: 500, offset: 0 });
+      const districtsWithBoundary = allDistricts.filter(d => d.geojsonBoundary && d.status === "confirmed");
+      if (!districtsWithBoundary.length || !user.location) {
+        return res.json({ matched: 0, message: "No location or no confirmed districts" });
+      }
+      // Simple geocode via zip from location
+      const booleanPointInPolygon = (await import("@turf/boolean-point-in-polygon")).default;
+      const turfPoint = (await import("@turf/helpers")).point;
+      // We can't geocode here without an API key, so skip if no lat/lng; just return info
+      res.json({ matched: 0, message: "Location geocoding requires user lat/lng data" });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   return httpServer;
 }
 

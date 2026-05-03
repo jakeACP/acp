@@ -677,6 +677,23 @@ export interface IStorage {
   getPartyCrossEndorsements(partyId: string): Promise<any[]>;
   getPartyEndorsementCount(partyId: string): Promise<number>;
   seedParties(): Promise<void>;
+
+  // Districts
+  listDistricts(filters?: { state?: string; districtType?: string; status?: string; search?: string; confirmed?: boolean }, pagination?: { limit: number; offset: number }): Promise<{ districts: any[]; total: number }>;
+  getDistrictById(id: string): Promise<any | undefined>;
+  createDistrict(data: any, createdBy: string): Promise<any>;
+  updateDistrict(id: string, data: any, updatedBy: string): Promise<any>;
+  confirmDistrict(id: string, reviewedBy: string): Promise<any>;
+  archiveDistrict(id: string): Promise<any>;
+  createDistrictVersion(districtId: string, geojson: any, changeNote: string, createdBy: string): Promise<any>;
+  getDistrictVersions(districtId: string): Promise<any[]>;
+  restoreDistrictVersion(districtId: string, versionId: string, restoredBy: string): Promise<any>;
+  getUsersInDistrict(districtId: string): Promise<any[]>;
+  upsertUserDistrict(userId: string, districtId: string): Promise<void>;
+  getUserDistricts(userId: string): Promise<any[]>;
+  listCandidateDistricts(districtId: string): Promise<any[]>;
+  createCandidateDistrict(candidateId: string, districtId: string): Promise<any>;
+  deleteCandidateDistrict(candidateId: string, districtId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -9608,6 +9625,146 @@ export class DatabaseStorage implements IStorage {
       positionTitle: r.positionTitle,
       office: r.positionTitle,
     }));
+  }
+
+  // ─── Districts ───────────────────────────────────────────────────────────────
+
+  async listDistricts(filters?: { state?: string; districtType?: string; status?: string; search?: string; confirmed?: boolean }, pagination?: { limit: number; offset: number }): Promise<{ districts: any[]; total: number }> {
+    const { districts: dt, districtVersions: dv, users: u } = await import("@shared/schema");
+    const conditions: any[] = [];
+    if (filters?.state) conditions.push(eq(dt.state, filters.state));
+    if (filters?.districtType) conditions.push(eq(dt.districtType, filters.districtType));
+    if (filters?.status) conditions.push(eq(dt.status, filters.status));
+    if (filters?.confirmed) conditions.push(eq(dt.status, "confirmed"));
+    if (filters?.search) conditions.push(ilike(dt.name, `%${filters.search}%`));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const limit = pagination?.limit ?? 50;
+    const offset = pagination?.offset ?? 0;
+
+    const [rows, totalRows] = await Promise.all([
+      db.select().from(dt).where(where).orderBy(desc(dt.updatedAt)).limit(limit).offset(offset),
+      db.select({ cnt: count() }).from(dt).where(where),
+    ]);
+
+    // Get candidate counts per district
+    const { candidateDistricts: cd } = await import("@shared/schema");
+    const districtIds = rows.map(r => r.id);
+    let candCounts: Record<string, number> = {};
+    if (districtIds.length > 0) {
+      const candRows = await db.select({ districtId: cd.districtId, cnt: count() }).from(cd).where(inArray(cd.districtId, districtIds)).groupBy(cd.districtId);
+      for (const r of candRows) candCounts[r.districtId] = Number(r.cnt);
+    }
+
+    // Get user counts per district
+    const { userDistricts: ud } = await import("@shared/schema");
+    let userCounts: Record<string, number> = {};
+    if (districtIds.length > 0) {
+      const userRows = await db.select({ districtId: ud.districtId, cnt: count() }).from(ud).where(inArray(ud.districtId, districtIds)).groupBy(ud.districtId);
+      for (const r of userRows) userCounts[r.districtId] = Number(r.cnt);
+    }
+
+    return {
+      districts: rows.map(r => ({ ...r, candidateCount: candCounts[r.id] ?? 0, userCount: userCounts[r.id] ?? 0 })),
+      total: Number(totalRows[0]?.cnt ?? 0),
+    };
+  }
+
+  async getDistrictById(id: string): Promise<any | undefined> {
+    const { districts: dt } = await import("@shared/schema");
+    const [row] = await db.select().from(dt).where(eq(dt.id, id)).limit(1);
+    if (!row) return undefined;
+
+    const { candidateDistricts: cd, userDistricts: ud, politicianProfiles: pp } = await import("@shared/schema");
+    const [candRows, userRows] = await Promise.all([
+      db.select({ id: cd.id, candidateId: cd.candidateId, name: pp.fullName, party: pp.party, photoUrl: pp.photoUrl }).from(cd).leftJoin(pp, eq(cd.candidateId, pp.id)).where(eq(cd.districtId, id)),
+      db.select({ cnt: count() }).from(ud).where(eq(ud.districtId, id)),
+    ]);
+
+    return { ...row, candidates: candRows, userCount: Number(userRows[0]?.cnt ?? 0) };
+  }
+
+  async createDistrict(data: any, createdBy: string): Promise<any> {
+    const { districts: dt } = await import("@shared/schema");
+    const slug = data.slug || `${data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${data.state.toLowerCase()}-${Date.now()}`;
+    const [row] = await db.insert(dt).values({ ...data, slug, createdBy }).returning();
+    return row;
+  }
+
+  async updateDistrict(id: string, data: any, updatedBy: string): Promise<any> {
+    const { districts: dt } = await import("@shared/schema");
+    const [row] = await db.update(dt).set({ ...data, updatedAt: new Date() }).where(eq(dt.id, id)).returning();
+    return row;
+  }
+
+  async confirmDistrict(id: string, reviewedBy: string): Promise<any> {
+    const { districts: dt } = await import("@shared/schema");
+    const [row] = await db.update(dt).set({ status: "confirmed", reviewedBy, confirmedAt: new Date(), updatedAt: new Date() }).where(eq(dt.id, id)).returning();
+    return row;
+  }
+
+  async archiveDistrict(id: string): Promise<any> {
+    const { districts: dt } = await import("@shared/schema");
+    const [row] = await db.update(dt).set({ status: "archived", updatedAt: new Date() }).where(eq(dt.id, id)).returning();
+    return row;
+  }
+
+  async createDistrictVersion(districtId: string, geojson: any, changeNote: string, createdBy: string): Promise<any> {
+    const { districtVersions: dv } = await import("@shared/schema");
+    const existing = await db.select({ versionNumber: dv.versionNumber }).from(dv).where(eq(dv.districtId, districtId)).orderBy(desc(dv.versionNumber)).limit(1);
+    const nextVersion = (existing[0]?.versionNumber ?? 0) + 1;
+    const [row] = await db.insert(dv).values({ districtId, geojsonBoundary: geojson, changeNote, createdBy, versionNumber: nextVersion }).returning();
+    return row;
+  }
+
+  async getDistrictVersions(districtId: string): Promise<any[]> {
+    const { districtVersions: dv } = await import("@shared/schema");
+    return db.select().from(dv).where(eq(dv.districtId, districtId)).orderBy(desc(dv.versionNumber));
+  }
+
+  async restoreDistrictVersion(districtId: string, versionId: string, restoredBy: string): Promise<any> {
+    const { districtVersions: dv, districts: dt } = await import("@shared/schema");
+    const [version] = await db.select().from(dv).where(eq(dv.id, versionId)).limit(1);
+    if (!version) throw new Error("Version not found");
+    // Save current as a new version before restoring
+    const [current] = await db.select().from(dt).where(eq(dt.id, districtId)).limit(1);
+    if (current?.geojsonBoundary) {
+      await this.createDistrictVersion(districtId, current.geojsonBoundary, `Auto-saved before restore to v${version.versionNumber}`, restoredBy);
+    }
+    const [row] = await db.update(dt).set({ geojsonBoundary: version.geojsonBoundary, updatedAt: new Date() }).where(eq(dt.id, districtId)).returning();
+    return row;
+  }
+
+  async getUsersInDistrict(districtId: string): Promise<any[]> {
+    const { userDistricts: ud } = await import("@shared/schema");
+    return db.select({ id: users.id, username: users.username, firstName: users.firstName, lastName: users.lastName, email: users.email, avatar: users.avatar, location: users.location })
+      .from(ud).innerJoin(users, eq(ud.userId, users.id)).where(eq(ud.districtId, districtId)).limit(200);
+  }
+
+  async upsertUserDistrict(userId: string, districtId: string): Promise<void> {
+    const { userDistricts: ud } = await import("@shared/schema");
+    await db.insert(ud).values({ userId, districtId }).onConflictDoNothing();
+  }
+
+  async getUserDistricts(userId: string): Promise<any[]> {
+    const { userDistricts: ud, districts: dt } = await import("@shared/schema");
+    return db.select({ district: dt }).from(ud).innerJoin(dt, eq(ud.districtId, dt.id)).where(eq(ud.userId, userId));
+  }
+
+  async listCandidateDistricts(districtId: string): Promise<any[]> {
+    const { candidateDistricts: cd, politicianProfiles: pp } = await import("@shared/schema");
+    return db.select({ id: cd.id, candidateId: cd.candidateId, name: pp.fullName, party: pp.party, photoUrl: pp.photoUrl }).from(cd).leftJoin(pp, eq(cd.candidateId, pp.id)).where(eq(cd.districtId, districtId));
+  }
+
+  async createCandidateDistrict(candidateId: string, districtId: string): Promise<any> {
+    const { candidateDistricts: cd } = await import("@shared/schema");
+    const [row] = await db.insert(cd).values({ candidateId, districtId }).onConflictDoNothing().returning();
+    return row;
+  }
+
+  async deleteCandidateDistrict(candidateId: string, districtId: string): Promise<void> {
+    const { candidateDistricts: cd } = await import("@shared/schema");
+    await db.delete(cd).where(and(eq(cd.candidateId, candidateId), eq(cd.districtId, districtId)));
   }
 
   async getApprovalStatsAdmin(): Promise<Array<{ id: string; fullName: string; party: string | null; approveCount: number; disapproveCount: number; total: number; approvalPct: number }>> {
