@@ -1081,13 +1081,15 @@ export function PostCard({ post }: PostCardProps) {
                               <WouterLink href={`/profile/${comment.authorId}`}>
                                 <Avatar className="h-6 w-6 cursor-pointer hover:opacity-80 transition-opacity">
                                   <AvatarFallback className="text-xs">
-                                    {comment.authorId.slice(0, 2).toUpperCase()}
+                                    {(comment.authorFirstName?.[0] || comment.authorUsername?.[0] || '?').toUpperCase()}
                                   </AvatarFallback>
                                 </Avatar>
                               </WouterLink>
                               <WouterLink href={`/profile/${comment.authorId}`}>
                                 <span className="text-sm font-medium text-slate-900 dark:text-slate-100 hover:text-primary cursor-pointer transition-colors" data-testid={`link-comment-author-${comment.authorId}`}>
-                                  {comment.authorId}
+                                  {comment.authorFirstName && comment.authorLastName
+                                    ? `${comment.authorFirstName} ${comment.authorLastName}`
+                                    : comment.authorUsername || 'Unknown'}
                                 </span>
                               </WouterLink>
                               <span className="text-xs text-slate-500 dark:text-slate-400">

@@ -2683,10 +2683,22 @@ export class DatabaseStorage implements IStorage {
       .where(sql`${groups.id} NOT IN (SELECT DISTINCT ${groupMembers.groupId} FROM ${groupMembers})`);
   }
 
-  async getCommentsByPost(postId: string): Promise<Comment[]> {
+  async getCommentsByPost(postId: string): Promise<any[]> {
     return await db
-      .select()
+      .select({
+        id: comments.id,
+        postId: comments.postId,
+        pollId: comments.pollId,
+        authorId: comments.authorId,
+        authorUsername: users.username,
+        authorFirstName: users.firstName,
+        authorLastName: users.lastName,
+        content: comments.content,
+        createdAt: comments.createdAt,
+        updatedAt: comments.updatedAt,
+      })
       .from(comments)
+      .leftJoin(users, eq(comments.authorId, users.id))
       .where(eq(comments.postId, postId))
       .orderBy(desc(comments.createdAt));
   }

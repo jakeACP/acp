@@ -61,3 +61,6 @@ GLOBAL_ADMIN_USERNAME = "jox"
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[objectStorage]
+defaultBucketID = "replit-objstore-f755692d-da22-4b00-b461-4675b7f160c7"
