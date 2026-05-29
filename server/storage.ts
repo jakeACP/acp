@@ -4720,6 +4720,14 @@ export class DatabaseStorage implements IStorage {
       ON CONFLICT (sig_id, user_id) DO UPDATE SET vote = ${clamped}, updated_at = NOW()
       RETURNING *
     `);
+    // Sync average community vote back to the lobby's influence_score
+    await db.execute(sql`
+      UPDATE special_interest_groups
+      SET influence_score = (
+        SELECT ROUND(AVG(vote))::int FROM sig_community_votes WHERE sig_id = ${sigId}
+      ), updated_at = NOW()
+      WHERE id = ${sigId}
+    `);
     return (result.rows[0] as any) as SigCommunityVote;
   }
 

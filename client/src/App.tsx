@@ -195,8 +195,10 @@ function Router() {
       <ProtectedRoute path="/admin/invitations" component={AdminInvitationsPage} />
       <ProtectedRoute path="/admin/representatives" component={AdminRepresentativesPage} />
       <ProtectedRoute path="/admin/politicians" component={AdminPoliticiansPage} />
-      <Route path="/sigs" component={SigsDirectoryPage} />
-      <Route path="/sigs/:tag" component={SigProfilePage} />
+      <Route path="/lobbies" component={SigsDirectoryPage} />
+      <Route path="/lobbies/:tag" component={SigProfilePage} />
+      <Route path="/sigs">{() => { window.location.replace("/lobbies"); return null; }}</Route>
+      <Route path="/sigs/:tag">{(params) => { window.location.replace(`/lobbies/${params.tag}`); return null; }}</Route>
       <Route path="/parties" component={PartiesPage} />
       <Route path="/parties/:partyId" component={PartyProfilePage} />
       <ProtectedRoute path="/admin/sigs" component={AdminSigsPage} />

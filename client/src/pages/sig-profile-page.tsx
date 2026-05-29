@@ -5,7 +5,6 @@ import { Navigation } from "@/components/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -192,8 +191,24 @@ function formatMoney(cents: number): string {
 export default function SigProfilePage() {
   const { tag } = useParams<{ tag: string }>();
   const { toast } = useToast();
-  const [sliderValue, setSliderValue] = useState<number>(0);
+  const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
+
+  const GRADE_OPTIONS: Array<{ grade: string; vote: number; label: string; color: string }> = [
+    { grade: "A", vote: 40, label: "Reform Aligned", color: "bg-green-600 hover:bg-green-700 text-white border-green-600" },
+    { grade: "B", vote: 20, label: "Mostly Positive", color: "bg-blue-500 hover:bg-blue-600 text-white border-blue-500" },
+    { grade: "C", vote: 0, label: "Neutral", color: "bg-yellow-400 hover:bg-yellow-500 text-gray-900 border-yellow-400" },
+    { grade: "D", vote: -20, label: "Corrupt Influence", color: "bg-orange-500 hover:bg-orange-600 text-white border-orange-500" },
+    { grade: "F", vote: -40, label: "Highly Corrupt", color: "bg-red-600 hover:bg-red-700 text-white border-red-600" },
+  ];
+
+  function gradeFromVote(v: number): string {
+    if (v >= 30) return "A";
+    if (v >= 10) return "B";
+    if (v >= -10) return "C";
+    if (v >= -30) return "D";
+    return "F";
+  }
 
   const { data, isLoading, error } = useQuery<SigProfileData>({
     queryKey: ["/api/sigs", tag],
@@ -206,7 +221,7 @@ export default function SigProfilePage() {
 
   useEffect(() => {
     if (data?.userVote !== null && data?.userVote !== undefined) {
-      setSliderValue(data.userVote);
+      setSelectedGrade(gradeFromVote(data.userVote));
       setHasVoted(true);
     }
   }, [data?.userVote]);
@@ -217,11 +232,11 @@ export default function SigProfilePage() {
     onSuccess: () => {
       setHasVoted(true);
       queryClient.invalidateQueries({ queryKey: ["/api/sigs", tag] });
-      toast({ title: "Vote submitted", description: "Your community rating has been recorded." });
+      toast({ title: "Grade submitted", description: "Your lobby grade has been recorded and affects politician corruption scores." });
     },
     onError: (err: any) => {
-      const msg = err?.message || "You may need to log in to vote.";
-      toast({ title: "Could not submit vote", description: msg, variant: "destructive" });
+      const msg = err?.message || "You may need to log in to grade.";
+      toast({ title: "Could not submit grade", description: msg, variant: "destructive" });
     },
   });
 
@@ -237,12 +252,12 @@ export default function SigProfilePage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-2">Organization Not Found</h1>
-        <p className="text-muted-foreground mb-6">No special interest group with that identifier exists in our database.</p>
-        <Link href="/sigs">
+        <h1 className="text-2xl font-bold mb-2">Lobby Not Found</h1>
+        <p className="text-muted-foreground mb-6">No lobbying organization with that identifier exists in our database.</p>
+        <Link href="/lobbies">
           <Button variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Influence Map
+            Back to Lobbies
           </Button>
         </Link>
       </div>
@@ -265,10 +280,10 @@ export default function SigProfilePage() {
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
         {/* Back */}
-        <Link href="/sigs">
+        <Link href="/lobbies">
           <Button variant="ghost" size="sm" className="gap-2">
             <ArrowLeft className="h-4 w-4" />
-            Back to Influence Map
+            Back to Lobbies
           </Button>
         </Link>
 
@@ -422,20 +437,21 @@ export default function SigProfilePage() {
           </Card>
         )}
 
-        {/* Community Slide Scale */}
+        {/* Grade This Lobby */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Vote className="h-4 w-4 text-blue-500" />
-              Community Corruption Rating
+              Grade This Lobby
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            {/* Community average bar */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                <span className="flex items-center gap-1"><TrendingDown className="h-3.5 w-3.5 text-red-500" /> Corrupt (-50)</span>
-                <span>Neutral (0)</span>
-                <span className="flex items-center gap-1">Clean (+50) <TrendingUp className="h-3.5 w-3.5 text-green-500" /></span>
+                <span className="flex items-center gap-1"><TrendingDown className="h-3.5 w-3.5 text-red-500" /> Corrupt (F)</span>
+                <span>Neutral (C)</span>
+                <span className="flex items-center gap-1">Clean (A) <TrendingUp className="h-3.5 w-3.5 text-green-500" /></span>
               </div>
               <div className="relative h-4 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500">
                 {displayScore !== null && (
@@ -448,39 +464,57 @@ export default function SigProfilePage() {
               </div>
               {displayScore !== null ? (
                 <p className={`text-sm font-semibold text-center ${scoreColor(displayScore)}`}>
-                  Community Average: {displayScore > 0 ? "+" : ""}{displayScore} — {scoreLabel(displayScore)}
+                  Community Grade: <span className="font-black">{influenceGrade(displayScore)}</span> — {scoreLabel(displayScore)} ({voteCount} {voteCount === 1 ? "vote" : "votes"})
                 </p>
               ) : (
-                <p className="text-sm text-muted-foreground text-center">No community votes yet. Be the first to rate this group.</p>
+                <p className="text-sm text-muted-foreground text-center">No community grades yet. Be the first to grade this lobby.</p>
               )}
             </div>
 
+            {/* A–F Letter Grade Picker */}
             <div className="border rounded-lg p-4 bg-muted/30 space-y-4">
-              <p className="text-sm font-medium text-center">Your Rating: <span className={`font-bold ${scoreColor(sliderValue)}`}>{sliderValue > 0 ? `+${sliderValue}` : sliderValue}</span> — {scoreLabel(sliderValue)}</p>
-              <Slider
-                min={-50}
-                max={50}
-                step={1}
-                value={[sliderValue]}
-                onValueChange={(v) => setSliderValue(v[0])}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Highly Corrupt</span>
-                <span>Neutral</span>
-                <span>Community Trusted</span>
+              <p className="text-sm font-semibold text-center text-foreground">
+                {hasVoted ? `Your current grade: ` : "Pick a grade:"}
+                {hasVoted && selectedGrade && (
+                  <span className={`ml-1 font-black text-base ${
+                    selectedGrade === "A" ? "text-green-600" :
+                    selectedGrade === "B" ? "text-blue-500" :
+                    selectedGrade === "C" ? "text-yellow-600" :
+                    selectedGrade === "D" ? "text-orange-500" : "text-red-600"
+                  }`}>{selectedGrade}</span>
+                )}
+              </p>
+              <div className="grid grid-cols-5 gap-2">
+                {GRADE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.grade}
+                    onClick={() => setSelectedGrade(opt.grade)}
+                    className={`flex flex-col items-center gap-1 py-3 px-1 rounded-lg border-2 font-bold text-lg transition-all ${
+                      selectedGrade === opt.grade
+                        ? `${opt.color} scale-105 shadow-md`
+                        : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                    }`}
+                  >
+                    <span>{opt.grade}</span>
+                    <span className="text-[10px] font-normal leading-tight text-center">{opt.label}</span>
+                  </button>
+                ))}
               </div>
               <Button
-                onClick={() => voteMutation.mutate(sliderValue)}
-                disabled={voteMutation.isPending}
+                onClick={() => {
+                  const opt = GRADE_OPTIONS.find(o => o.grade === selectedGrade);
+                  if (opt) voteMutation.mutate(opt.vote);
+                }}
+                disabled={voteMutation.isPending || !selectedGrade}
                 className="w-full"
                 variant={hasVoted ? "outline" : "default"}
               >
                 {voteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                {hasVoted
-                  ? `Update My Vote (currently ${userVote !== null ? (userVote > 0 ? `+${userVote}` : userVote) : sliderValue})`
-                  : "Submit Community Rating"}
+                {hasVoted ? "Update My Grade" : "Submit Grade"}
               </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Your grade affects the corruption scores of all politicians who received money from this lobby.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -528,7 +562,7 @@ export default function SigProfilePage() {
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {connectedLobbies.map(lobby => (
-                  <Link key={lobby.id} href={`/sigs/${lobby.tag}`}>
+                  <Link key={lobby.id} href={`/lobbies/${lobby.tag}`}>
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 ${lobbySentimentClass(lobby.sentiment)}`}>
                       {lobby.name}
                       <span className="text-xs opacity-60 font-normal">×{lobby.sharedCount}</span>

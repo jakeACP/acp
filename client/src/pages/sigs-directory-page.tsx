@@ -193,7 +193,7 @@ function SigCard({ sig }: { sig: SIG }) {
           </a>
         )}
         <div className="mt-auto">
-          <Link href={`/sigs/${sig.tag || sig.id}`}>
+          <Link href={`/lobbies/${sig.tag || sig.id}`}>
             <Button variant="outline" size="sm" className="w-full">
               View Profile →
             </Button>
@@ -207,7 +207,7 @@ function SigCard({ sig }: { sig: SIG }) {
 function PacRow({ sig }: { sig: SIG }) {
   const effectiveGrade = sig.letterGrade || (sig.influenceScore !== null && sig.influenceScore !== undefined ? influenceGrade(sig.influenceScore) : null);
   return (
-    <Link href={`/sigs/${sig.tag || sig.id}`}>
+    <Link href={`/lobbies/${sig.tag || sig.id}`}>
       <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/60 border border-transparent hover:border-border cursor-pointer transition-all">
         <DollarSign className="h-4 w-4 text-orange-500 shrink-0" />
         <div className="flex-1 min-w-0">
@@ -278,9 +278,9 @@ export default function SigsDirectoryPage() {
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Interest Groups & Lobbies</h1>
+          <h1 className="text-3xl font-bold text-foreground">Lobbies & Interest Groups</h1>
           <p className="text-muted-foreground mt-2 max-w-2xl">
-            Track special interest groups, super PACs, dark money organizations, and the pledges politicians make.
+            Track lobbying organizations, super PACs, dark money groups, and the pledges politicians make.
             Understanding who funds our politicians is essential to holding them accountable.
           </p>
         </div>

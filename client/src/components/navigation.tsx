@@ -38,7 +38,7 @@ export function Navigation() {
     { href: "/messages", label: "Messages" },
     { href: "/representatives", label: "Current Reps" },
     { href: "/parties", label: "Parties" },
-    { href: "/sigs", label: "Interest Groups" },
+    { href: "/lobbies", label: "Lobbies" },
     { href: "/elections", label: "Elections" },
   ];
 

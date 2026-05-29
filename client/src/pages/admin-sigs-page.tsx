@@ -442,10 +442,10 @@ export default function AdminSigsPage() {
             <div>
               <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Building2 className="h-6 w-6" />
-                Special Interest Groups
+                Lobbies & Interest Groups
               </h1>
               <p className="text-slate-600 dark:text-slate-400 mt-1">
-                Manage organizations that sponsor politicians for corruption scorecard tracking
+                Manage lobbying organizations that sponsor politicians for corruption scorecard tracking
               </p>
             </div>
             <div className="flex flex-col gap-2 shrink-0">

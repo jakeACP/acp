@@ -109,6 +109,14 @@ async function setupRoutes() {
       log(`Budget seed skipped: ${e.message}`);
     }
 
+    // Seed top 35 lobbying organizations if not already seeded
+    try {
+      const { seedLobbies } = await import("./lobby-seed");
+      await seedLobbies();
+    } catch (e: any) {
+      log(`Lobby seed skipped: ${e.message}`);
+    }
+
     // Global error handler
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
