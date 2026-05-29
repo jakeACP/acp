@@ -104,14 +104,10 @@ function gradeColor(grade?: string | null) {
 }
 
 function influenceGrade(score: number): string {
-  if (score >= 40) return "A+";
-  if (score >= 25) return "A";
+  if (score >= 30) return "A";
   if (score >= 10) return "B";
-  if (score >= 1) return "B-";
-  if (score === 0) return "C";
-  if (score >= -9) return "D+";
-  if (score >= -24) return "D";
-  if (score >= -39) return "F+";
+  if (score >= -10) return "C";
+  if (score >= -30) return "D";
   return "F";
 }
 

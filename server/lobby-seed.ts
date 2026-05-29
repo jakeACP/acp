@@ -372,17 +372,17 @@ const TOP_35_LOBBIES = [
     dataSourceUrl: "https://www.opensecrets.org/orgs/american-conservative-union",
   },
   {
-    name: "National Association of Manufacturers",
-    acronym: "NAM",
-    tag: "NAM",
-    description: "The largest manufacturing trade association in the United States, NAM advocates for manufacturing-friendly tax and trade policies, opposes environmental regulations, and supports deregulation of industrial activity.",
+    name: "National Governors Association",
+    acronym: "NGA",
+    tag: "NGA",
+    description: "The collective voice of the nation's governors, NGA advocates on behalf of state governments in Washington. It shapes federal policy on healthcare, education, infrastructure, and emergency management, giving governors a direct lobbying presence.",
     category: "lobby",
-    sentiment: "negative",
-    website: "https://www.nam.org",
+    sentiment: "neutral",
+    website: "https://www.nga.org",
     headquarters: "Washington, DC",
-    industry: "manufacturing",
+    industry: "government",
     dataSourceName: "OpenSecrets",
-    dataSourceUrl: "https://www.opensecrets.org/orgs/national-assn-of-manufacturers",
+    dataSourceUrl: "https://www.opensecrets.org/orgs/national-governors-assn",
   },
   {
     name: "American Trucking Associations",
@@ -437,17 +437,17 @@ const TOP_35_LOBBIES = [
     dataSourceUrl: "https://www.opensecrets.org/orgs/national-farmers-union",
   },
   {
-    name: "National Rifle Association Political Victory Fund",
-    acronym: "NRA-PVF",
-    tag: "NRA_PVF",
-    description: "The electoral arm of the NRA, the NRA-PVF rates and funds political candidates based on their gun rights stances. It has spent hundreds of millions on elections since 1994 and is among the most feared electoral forces in Congress.",
+    name: "Boys & Girls Clubs of America",
+    acronym: "BGCA",
+    tag: "BGCA",
+    description: "One of the nation's largest youth development nonprofits, BGCA operates over 4,700 clubs serving 4.6 million young people. It lobbies for after-school funding, youth mental health programs, and juvenile justice reform, maintaining bipartisan support in Congress.",
     category: "lobby",
-    sentiment: "negative",
-    website: "https://www.nrapvf.org",
-    headquarters: "Fairfax, VA",
-    industry: "firearms",
+    sentiment: "positive",
+    website: "https://www.bgca.org",
+    headquarters: "Atlanta, GA",
+    industry: "youth_services",
     dataSourceName: "OpenSecrets",
-    dataSourceUrl: "https://www.opensecrets.org/pacs/lookup2.php?strID=C00053553",
+    dataSourceUrl: "https://www.opensecrets.org/orgs/boys-girls-clubs-of-america",
   },
   {
     name: "National Association of Home Builders",
@@ -469,7 +469,7 @@ export async function seedLobbies(): Promise<void> {
     SELECT COUNT(*) as cnt FROM special_interest_groups WHERE category = 'lobby'
   `);
   const existing = parseInt((countResult.rows[0] as any).cnt as string, 10);
-  if (existing >= 10) {
+  if (existing > 0) {
     log(`Lobby seed skipped — ${existing} lobby records already exist`);
     return;
   }

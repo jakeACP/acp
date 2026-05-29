@@ -137,7 +137,7 @@ export default function AdminSigsPage() {
       if (industryFilter && industryFilter !== "all") params.append("industry", industryFilter);
       const url = `/api/admin/sigs${params.toString() ? `?${params.toString()}` : ""}`;
       const response = await fetch(url, { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch SIGs");
+      if (!response.ok) throw new Error("Failed to fetch lobbies");
       return response.json();
     },
   });
@@ -148,12 +148,12 @@ export default function AdminSigsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
-      toast({ title: "Special Interest Group created successfully" });
+      toast({ title: "Lobby created successfully" });
       setDialogOpen(false);
       setEditingSig(null);
     },
     onError: (error: any) => {
-      toast({ title: "Error creating SIG", description: error.message, variant: "destructive" });
+      toast({ title: "Error creating lobby", description: error.message, variant: "destructive" });
     },
   });
 
@@ -163,12 +163,12 @@ export default function AdminSigsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
-      toast({ title: "Special Interest Group updated successfully" });
+      toast({ title: "Lobby updated successfully" });
       setDialogOpen(false);
       setEditingSig(null);
     },
     onError: (error: any) => {
-      toast({ title: "Error updating SIG", description: error.message, variant: "destructive" });
+      toast({ title: "Error updating lobby", description: error.message, variant: "destructive" });
     },
   });
 
@@ -178,10 +178,10 @@ export default function AdminSigsPage() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
-      toast({ title: `${data?.count ?? 62} SIGs seeded successfully`, description: "All organizations from the XLSX have been added to the database." });
+      toast({ title: `${data?.count ?? 62} lobbies seeded successfully`, description: "All organizations from the XLSX have been added to the database." });
     },
     onError: (error: any) => {
-      toast({ title: "Error seeding SIGs", description: error.message, variant: "destructive" });
+      toast({ title: "Error seeding lobbies", description: error.message, variant: "destructive" });
     },
   });
 
@@ -191,10 +191,10 @@ export default function AdminSigsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
-      toast({ title: "Special Interest Group deleted successfully" });
+      toast({ title: "Lobby deleted successfully" });
     },
     onError: (error: any) => {
-      toast({ title: "Error deleting SIG", description: error.message, variant: "destructive" });
+      toast({ title: "Error deleting lobby", description: error.message, variant: "destructive" });
     },
   });
 
@@ -205,7 +205,7 @@ export default function AdminSigsPage() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
-      toast({ title: "FEC data fetched", description: data?.message ?? "SIG updated from FEC." });
+      toast({ title: "FEC data fetched", description: data?.message ?? "Lobby updated from FEC." });
       if (editingSig && data?.sig) setEditingSig(data.sig);
     },
     onError: (error: any) => {
@@ -231,7 +231,7 @@ export default function AdminSigsPage() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
       setUpdateFecResult({ updated: data.updated, skipped: data.skipped, total: data.total });
-      toast({ title: "SIGs updated from FEC", description: data.message });
+      toast({ title: "Lobbies updated from FEC", description: data.message });
     },
     onError: (error: any) => {
       toast({ title: "Update failed", description: error.message, variant: "destructive" });
@@ -454,7 +454,7 @@ export default function AdminSigsPage() {
                 <Button
                   variant="outline"
                   onClick={() => downloadCsv(TEMPLATES.sigs.filename, TEMPLATES.sigs.headers, TEMPLATES.sigs.sample)}
-                  title="Download blank CSV template for SIG data entry"
+                  title="Download blank CSV template for lobby data entry"
                 >
                   <FileDown className="h-4 w-4 mr-2" />
                   Download Template
@@ -477,7 +477,7 @@ export default function AdminSigsPage() {
                   variant="outline"
                   onClick={() => csvInputRef.current?.click()}
                   disabled={uploadCsvMutation.isPending}
-                  title="Upload a CSV to bulk-create or update SIGs"
+                  title="Upload a CSV to bulk-create or update lobbies"
                 >
                   {uploadCsvMutation.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -503,14 +503,14 @@ export default function AdminSigsPage() {
                     a.href = url; a.download = "sigs-export.csv"; a.click();
                     URL.revokeObjectURL(url);
                   }}
-                  title="Export all current SIGs to a CSV file"
+                  title="Export all current lobbies to a CSV file"
                 >
                   <FileDown className="h-4 w-4 mr-2" />
-                  Export SIGs
+                  Export Lobbies
                 </Button>
                 <Button onClick={openCreateDialog} data-testid="btn-create-sig">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add SIG
+                  Add Lobby
                 </Button>
               </div>
               {/* Row 2: FEC / AI data tools */}
@@ -519,7 +519,7 @@ export default function AdminSigsPage() {
                   variant="outline"
                   onClick={() => { setFindMissingResult(null); findMissingIdsMutation.mutate(); }}
                   disabled={findMissingIdsMutation.isPending}
-                  title="Search FEC for committee IDs on SIGs that don't have one yet"
+                  title="Search FEC for committee IDs on lobbies that don't have one yet"
                 >
                   {findMissingIdsMutation.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -532,20 +532,20 @@ export default function AdminSigsPage() {
                   variant="outline"
                   onClick={() => { setUpdateFecResult(null); updateSigsMutation.mutate(); }}
                   disabled={updateSigsMutation.isPending}
-                  title="Pull fresh name, address, phone, website, and contributions from FEC for all SIGs with an ID"
+                  title="Pull fresh name, address, phone, website, and contributions from FEC for all lobbies with an ID"
                 >
                   {updateSigsMutation.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
                     <Database className="h-4 w-4 mr-2" />
                   )}
-                  Update SIGs
+                  Update Lobbies
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => { setFixCNumbersResult(null); fixCNumbersMutation.mutate(); }}
                   disabled={fixCNumbersMutation.isPending}
-                  title="Find SIGs whose name is a raw FEC committee ID (C00000000) and move it to the FEC ID field"
+                  title="Find lobbies whose name is a raw FEC committee ID (C00000000) and move it to the FEC ID field"
                 >
                   {fixCNumbersMutation.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -558,7 +558,7 @@ export default function AdminSigsPage() {
                   variant="outline"
                   onClick={() => { setAiGradeResult(null); aiGradeMutation.mutate(); }}
                   disabled={aiGradeMutation.isPending}
-                  title="Use AI to assign an initial influence score (-50 to +50) to ungraded SIGs"
+                  title="Use AI to assign an initial influence score (-50 to +50) to ungraded lobbies"
                 >
                   {aiGradeMutation.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -589,7 +589,7 @@ export default function AdminSigsPage() {
         {!findMissingIdsMutation.isPending && findMissingResult && (
           <div className="mb-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 p-4 flex items-center justify-between">
             <div className="text-sm text-green-800 dark:text-green-200">
-              <span className="font-semibold">Scan complete</span> — scanned {findMissingResult.total} SIGs · <span className="font-semibold text-green-700 dark:text-green-300">{findMissingResult.found} IDs assigned</span> · {findMissingResult.skipped} no match
+              <span className="font-semibold">Scan complete</span> — scanned {findMissingResult.total} lobbies · <span className="font-semibold text-green-700 dark:text-green-300">{findMissingResult.found} IDs assigned</span> · {findMissingResult.skipped} no match
             </div>
             <button onClick={() => setFindMissingResult(null)} className="text-green-600 dark:text-green-400 text-xs underline ml-4">dismiss</button>
           </div>
@@ -600,7 +600,7 @@ export default function AdminSigsPage() {
           <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-4">
             <div className="flex items-center gap-2 mb-2 text-sm font-medium text-blue-700 dark:text-blue-300">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Fetching full organization data from FEC for all SIGs…
+              Fetching full organization data from FEC for all lobbies…
             </div>
             <div className="w-full h-2 rounded-full bg-blue-200 dark:bg-blue-800 overflow-hidden">
               <div className="h-full w-2/5 rounded-full bg-blue-500" style={{ animation: "indeterminate 1.5s ease-in-out infinite" }} />
@@ -642,7 +642,7 @@ export default function AdminSigsPage() {
           <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-4">
             <div className="flex items-center gap-2 mb-2 text-sm font-medium text-blue-700 dark:text-blue-300">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Importing SIGs from CSV…
+              Importing lobbies from CSV…
             </div>
             <div className="w-full h-2 rounded-full bg-blue-200 dark:bg-blue-800 overflow-hidden">
               <div className="h-full w-2/5 rounded-full bg-blue-500" style={{ animation: "indeterminate 1.5s ease-in-out infinite" }} />
@@ -665,7 +665,7 @@ export default function AdminSigsPage() {
         {!fixCNumbersMutation.isPending && fixCNumbersResult && (
           <div className="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 flex items-center justify-between">
             <div className="text-sm text-amber-800 dark:text-amber-200">
-              <span className="font-semibold">C-number fix complete</span> — <span className="font-semibold text-amber-700 dark:text-amber-300">{fixCNumbersResult.fixed} FEC IDs populated</span>. Run "Update SIGs" to pull their real names.
+              <span className="font-semibold">C-number fix complete</span> — <span className="font-semibold text-amber-700 dark:text-amber-300">{fixCNumbersResult.fixed} FEC IDs populated</span>. Run "Update Lobbies" to pull their real names.
             </div>
             <button onClick={() => setFixCNumbersResult(null)} className="text-amber-600 dark:text-amber-400 text-xs underline ml-4">dismiss</button>
           </div>
@@ -751,7 +751,7 @@ export default function AdminSigsPage() {
           <CardHeader>
             <CardTitle>Organizations</CardTitle>
             <CardDescription>
-              {displayedSigs.length} of {sigs.length} Special Interest Group{sigs.length !== 1 ? "s" : ""}
+              {displayedSigs.length} of {sigs.length} Lobb{sigs.length !== 1 ? "ies" : "y"}
               {selectedIds.size > 0 && <span className="ml-2 text-blue-600 dark:text-blue-400 font-medium">· {selectedIds.size} selected</span>}
             </CardDescription>
           </CardHeader>
@@ -760,7 +760,7 @@ export default function AdminSigsPage() {
               <div className="text-center py-8 text-slate-500">Loading...</div>
             ) : sigs.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
-                No Special Interest Groups found. Click "Add SIG" to create one.
+                No lobbies found. Click "Add Lobby" to create one.
               </div>
             ) : (
               <>
@@ -1022,7 +1022,7 @@ export default function AdminSigsPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingSig ? "Edit Special Interest Group" : "Create Special Interest Group"}
+              {editingSig ? "Edit Lobby" : "Create Lobby"}
             </DialogTitle>
             <DialogDescription>
               {editingSig 
