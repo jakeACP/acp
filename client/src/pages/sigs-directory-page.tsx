@@ -26,7 +26,7 @@ type SIG = {
   letterGrade?: string | null;
 };
 
-const CATEGORIES = ["All", "Anti-Corruption Endorsement", "Special Interest", "Super PAC", "Dark Money", "Industry PAC", "Pledge", "Labor Union", "Endorsement Org", "PAC / Committee"];
+const CATEGORIES = ["All", "Anti-Corruption Endorsement", "Lobby", "Special Interest", "Super PAC", "Dark Money", "Industry PAC", "Pledge", "Labor Union", "Endorsement Org", "PAC / Committee"];
 const SENTIMENTS = ["all", "negative", "positive", "neutral"];
 
 function isFecId(name: string): boolean {
@@ -248,7 +248,7 @@ export default function SigsDirectoryPage() {
 
   const filteredMain = mainSigs.filter(sig => {
     const matchCat = activeCategory === "All" || activeCategory === "PAC / Committee" ? true :
-      (activeCategory === "Anti-Corruption Endorsement" ? sig.isAce : sig.category === activeCategory);
+      (activeCategory === "Anti-Corruption Endorsement" ? sig.isAce : sig.category?.toLowerCase() === activeCategory.toLowerCase());
     const matchSent = activeSentiment === "all" || sig.sentiment === activeSentiment;
     const matchSearch = !search ||
       sig.name.toLowerCase().includes(search.toLowerCase()) ||
