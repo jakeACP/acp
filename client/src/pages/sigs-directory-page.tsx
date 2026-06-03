@@ -128,29 +128,29 @@ function isPacCategory(cat: string): boolean {
 
 function SigCard({ sig }: { sig: SIG }) {
   const { actualTheme } = useTheme();
-  const effectiveGrade = sig.letterGrade || (sig.influenceScore !== null && sig.influenceScore !== undefined ? influenceGrade(sig.influenceScore) : null);
   const hasInfluence = sig.influenceScore !== null && sig.influenceScore !== undefined;
+  const communityGrade = hasInfluence ? influenceGrade(sig.influenceScore!) : null;
   const scorePct = hasInfluence ? ((sig.influenceScore! + 50) / 100) * 100 : null;
   const isPatriot = actualTheme === "patriot";
   const cardStyle = isPatriot ? patriotCardStyle(sig) : undefined;
 
   return (
     <Card
-      className={`flex flex-col hover:shadow-md transition-shadow ${isPatriot ? "" : cardBgClass(sig)}`}
+      className={`flex flex-col hover:shadow-md transition-shadow relative ${isPatriot ? "" : cardBgClass(sig)}`}
       style={cardStyle}
     >
+      {communityGrade && (
+        <div className={`absolute -top-3 -right-3 z-10 w-12 h-12 rounded-xl flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-800 text-xl font-black ${gradeColor(communityGrade)}`}>
+          {communityGrade}
+        </div>
+      )}
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base leading-tight flex items-center gap-2">
+          <CardTitle className="text-base leading-tight flex items-center gap-2 pr-10">
             {sig.isAce && <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
             {sig.name}
           </CardTitle>
           <div className="flex items-center gap-1.5 shrink-0">
-            {effectiveGrade && (
-              <span className={`text-xs font-black px-1.5 py-0.5 rounded ${gradeColor(effectiveGrade)}`}>
-                {effectiveGrade}
-              </span>
-            )}
             <Badge className={`text-xs ${sentimentBadgeClass(sig.sentiment)}`}>
               {sig.isAce ? "ACE" : sentimentLabel(sig.sentiment)}
             </Badge>
@@ -358,13 +358,13 @@ export default function SigsDirectoryPage() {
           <div className="space-y-10">
             {/* Main SIGs grid */}
             {showPacGrid ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pt-4 pr-4">
                 {filteredPacs.map(sig => <SigCard key={sig.id} sig={sig} />)}
               </div>
             ) : (
               <>
                 {showMainGrid && (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pt-4 pr-4">
                     {filteredMain.map(sig => <SigCard key={sig.id} sig={sig} />)}
                   </div>
                 )}
