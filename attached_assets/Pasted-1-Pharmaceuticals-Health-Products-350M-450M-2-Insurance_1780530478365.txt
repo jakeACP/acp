@@ -1,0 +1,50 @@
+1	Pharmaceuticals & Health Products	$350M–$450M
+2	Insurance	$250M–$350M
+3	Hospitals & Health Systems	$200M–$300M
+4	Tech / Electronics / Software	$200M–$300M
+5	Business Associations / Chamber Groups	$180M–$280M
+6	Finance / Securities / Investment	$175M–$275M
+7	Real Estate / Realtors / Developers	$150M–$250M
+8	Electric Utilities	$140M–$220M
+9	Oil & Gas	$125M–$200M
+10	Defense Contractors / Aerospace	$120M–$200M
+11	Telecom / Broadband / Cable	$100M–$175M
+12	Misc. Manufacturing	$100M–$175M
+13	Transportation / Airlines / Rail / Shipping	$90M–$160M
+14	Automotive / Dealers / EV Policy	$80M–$150M
+15	Agriculture / Farm Bureau / Commodities	$80M–$150M
+16	Lawyers / Legal Industry / Trial Bar	$75M–$140M
+17	Labor Unions	$70M–$140M
+18	Education / Universities / Student Loans	$65M–$125M
+19	Private Equity / Hedge Funds / Venture Capital	$60M–$125M
+20	Construction / Contractors / Infrastructure	$60M–$120M
+21	Food & Beverage	$55M–$110M
+22	Retail / Big Box / E-Commerce	$50M–$100M
+23	Renewable Energy / Solar / Wind / Batteries	$50M–$100M
+24	Crypto / Blockchain / Fintech	$40M–$100M+
+25	AI / Data Centers / Automation	$40M–$100M+
+26	Media / Entertainment / Streaming	$40M–$90M
+27	Alcohol / Beer / Wine / Spirits	$35M–$80M
+28	Tobacco / Vaping / Nicotine	$30M–$75M
+29	Gambling / Casinos / Sports Betting	$30M–$75M
+30	Gun Rights	$25M–$70M
+31	Gun Control	$25M–$70M
+32	Environmental / Climate Advocacy	$25M–$70M
+33	Civil Rights / Civil Liberties	$25M–$70M
+34	Pro-Israel / Middle East Advocacy	$25M–$70M
+35	Foreign Governments / Foreign Policy Interests	$25M–$70M
+36	Senior Citizens / AARP / Retirement Policy	$25M–$65M
+37	Veterans / Military Families	$20M–$60M
+38	Police / Law Enforcement / Prosecutors	$20M–$60M
+39	Corrections / Private Prisons	$15M–$50M
+40	Religious / Faith-Based Advocacy	$15M–$50M
+41	Immigration Advocacy / Border Policy	$15M–$50M
+42	Consumer Protection / Public Interest	$15M–$45M
+43	Housing / Homelessness / Tenant Advocacy	$15M–$45M
+44	Disability Rights	$10M–$40M
+45	Childcare / Family / Foster Care Policy	$10M–$40M
+46	Tribal Governments / Gaming / Sovereignty	$10M–$40M
+47	Data Privacy / Digital Rights	$10M–$40M
+48	Election Reform / Democracy Reform	$10M–$40M
+49	Anti-Corruption / Watchdog Groups	$5M–$30M
+50	Party Infrastructure / Leadership PACs / Consultants	$50M–$500M+
