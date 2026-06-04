@@ -2542,7 +2542,13 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
             if (!alreadyDone) {
               const aiCandidates = await findAllCandidatesByZip(zipCode, undefined, primaryState);
               if (aiCandidates.length > 0) {
-                await storage.queueZipCandidateImports(zipCode, aiCandidates, "background");
+                const result = await storage.queueZipCandidateImports(zipCode, aiCandidates, "background");
+                await storage.logZipLookupRun(zipCode, {
+                  total: result.total,
+                  queued: result.queued,
+                  possibleDup: 0,
+                  inDb: result.duplicates,
+                }, "background");
               }
             }
           } catch (bgErr) {
@@ -2580,7 +2586,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     try {
       const candidates = await findAllCandidatesByZip(zipCode);
       const previewed = await storage.previewZipCandidates(zipCode, candidates);
-      res.json({ zipCode, candidates: previewed, total: previewed.length, newCount: previewed.filter(c => !c.isDuplicate).length });
+      const newCount = previewed.filter(c => c.matchStatus === "new").length;
+      const possibleDupCount = previewed.filter(c => c.matchStatus === "possible_duplicate").length;
+      const inDbCount = previewed.filter(c => c.matchStatus === "in_db").length;
+      // Log the lookup run (preview = "manual" source, no DB writes for candidates yet)
+      await storage.logZipLookupRun(zipCode, { total: previewed.length, queued: newCount, possibleDup: possibleDupCount, inDb: inDbCount }, "manual");
+      res.json({ zipCode, candidates: previewed, total: previewed.length, newCount, possibleDupCount, inDbCount });
     } catch (err: any) {
       console.error("Zip candidate lookup error:", err);
       res.status(500).json({ message: err.message || "Lookup failed" });
@@ -2636,6 +2647,20 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const { zipCode } = req.query as { zipCode?: string };
       const history = await storage.getZipImportHistory(zipCode, 200);
       res.json(history);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Lookup run history (one record per AI call, with found/new/dup counts)
+  app.get("/api/admin/zip-lookup-runs", async (req, res) => {
+    if (!req.isAuthenticated() || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    try {
+      const { zipCode } = req.query as { zipCode?: string };
+      const runs = await storage.getZipLookupRuns(zipCode, 50);
+      res.json(runs);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

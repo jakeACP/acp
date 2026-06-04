@@ -180,10 +180,10 @@ export default function AdminPoliticiansPage() {
     refetchInterval: 30000,
   });
 
-  const { data: zipImportHistory = [] } = useQuery<any[]>({
-    queryKey: ["/api/admin/zip-candidate-history"],
+  const { data: zipLookupRuns = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/zip-lookup-runs"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/zip-candidate-history", { credentials: "include" });
+      const res = await fetch("/api/admin/zip-lookup-runs", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -2324,13 +2324,19 @@ export default function AdminPoliticiansPage() {
                               const isNew = c.matchStatus === "new";
                               const isPossible = c.matchStatus === "possible_duplicate";
                               return (
-                                <div key={i} className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs ${isNew ? "bg-violet-50 dark:bg-violet-950/30" : isPossible ? "bg-amber-50 dark:bg-amber-950/20 opacity-75" : "bg-slate-50 dark:bg-slate-700/40 opacity-50"}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isNew ? "bg-violet-500" : isPossible ? "bg-amber-400" : "bg-slate-400"}`} />
-                                  <span className="font-medium truncate">{c.name}</span>
-                                  <span className="text-slate-500 truncate flex-1 min-w-0">{c.office}</span>
-                                  <Badge variant="outline" className={`text-[10px] py-0 shrink-0 ${c.raceLevel === "federal" ? "border-blue-400 text-blue-600" : c.raceLevel === "state" ? "border-emerald-400 text-emerald-600" : "border-orange-400 text-orange-600"}`}>{c.raceLevel}</Badge>
-                                  {c.matchStatus === "in_db" && <span className="text-[10px] text-slate-400 shrink-0">in DB</span>}
-                                  {c.matchStatus === "possible_duplicate" && <span className="text-[10px] text-amber-500 shrink-0" title={c.matchedProfile ? `Possible match: ${c.matchedProfile}` : "Already queued"}>~dup</span>}
+                                <div key={i} className={`flex flex-col gap-0.5 px-2 py-1.5 rounded text-xs ${isNew ? "bg-violet-50 dark:bg-violet-950/30" : isPossible ? "bg-amber-50 dark:bg-amber-950/20 opacity-75" : "bg-slate-50 dark:bg-slate-700/40 opacity-50"}`}>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isNew ? "bg-violet-500" : isPossible ? "bg-amber-400" : "bg-slate-400"}`} />
+                                    <span className="font-medium truncate flex-1">{c.name}</span>
+                                    <Badge variant="outline" className={`text-[10px] py-0 shrink-0 ${c.raceLevel === "federal" ? "border-blue-400 text-blue-600" : c.raceLevel === "state" ? "border-emerald-400 text-emerald-600" : "border-orange-400 text-orange-600"}`}>{c.raceLevel}</Badge>
+                                    {c.matchStatus === "in_db" && <span className="text-[10px] text-slate-400 shrink-0">in DB</span>}
+                                    {c.matchStatus === "possible_duplicate" && <span className="text-[10px] text-amber-500 shrink-0" title={c.matchedProfile ? `Possible match: ${c.matchedProfile}` : "Already queued"}>~dup</span>}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 pl-3 text-[10px] text-slate-500">
+                                    <span className="truncate flex-1">{c.office}{c.district ? ` · ${c.district}` : ""}</span>
+                                    {c.party && <span className="shrink-0 text-slate-400">{c.party}</span>}
+                                    {(c.city || c.state) && <span className="shrink-0 text-slate-400">{[c.city, c.state].filter(Boolean).join(", ")}</span>}
+                                  </div>
                                 </div>
                               );
                             })}
@@ -2379,35 +2385,24 @@ export default function AdminPoliticiansPage() {
                           </Button>
                         )}
 
-                        {/* History of past lookups grouped by zip */}
-                        {(() => {
-                          if (!zipImportHistory.length) return null;
-                          const byZip: Record<string, { zip: string; total: number; pending: number; approved: number; rejected: number; lastRun: string }> = {};
-                          for (const imp of zipImportHistory) {
-                            if (!byZip[imp.zipCode]) byZip[imp.zipCode] = { zip: imp.zipCode, total: 0, pending: 0, approved: 0, rejected: 0, lastRun: imp.foundAt };
-                            byZip[imp.zipCode].total++;
-                            byZip[imp.zipCode][imp.status as "pending" | "approved" | "rejected"]++;
-                            if (imp.foundAt > byZip[imp.zipCode].lastRun) byZip[imp.zipCode].lastRun = imp.foundAt;
-                          }
-                          const rows = Object.values(byZip).sort((a, b) => b.lastRun.localeCompare(a.lastRun)).slice(0, 8);
-                          return (
-                            <div className="border-t border-slate-100 dark:border-slate-700 pt-2 mt-1">
-                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Recent Lookups</p>
-                              <div className="space-y-1">
-                                {rows.map(r => (
-                                  <div key={r.zip} className="flex items-center gap-2 text-xs">
-                                    <span className="font-mono font-semibold text-slate-700 dark:text-slate-300 w-12 shrink-0">{r.zip}</span>
-                                    <span className="text-slate-400 flex-1">{r.total} found</span>
-                                    {r.pending > 0 && <span className="text-violet-500">{r.pending} pending</span>}
-                                    {r.approved > 0 && <span className="text-emerald-500">{r.approved} approved</span>}
-                                    {r.rejected > 0 && <span className="text-slate-400">{r.rejected} rejected</span>}
-                                    <span className="text-[10px] text-slate-300 dark:text-slate-600 shrink-0">{new Date(r.lastRun).toLocaleDateString()}</span>
-                                  </div>
-                                ))}
-                              </div>
+                        {/* History of past AI lookups from zip_lookup_runs */}
+                        {zipLookupRuns.length > 0 && (
+                          <div className="border-t border-slate-100 dark:border-slate-700 pt-2 mt-1">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Recent Lookups</p>
+                            <div className="space-y-1">
+                              {zipLookupRuns.slice(0, 8).map((r: any) => (
+                                <div key={r.id} className="flex items-center gap-2 text-xs">
+                                  <span className="font-mono font-semibold text-slate-700 dark:text-slate-300 w-12 shrink-0">{r.zipCode}</span>
+                                  <span className="text-slate-400">{r.foundCount} found</span>
+                                  {r.newCount > 0 && <span className="text-violet-500">{r.newCount} new</span>}
+                                  {r.possibleDupCount > 0 && <span className="text-amber-500">{r.possibleDupCount} ~dup</span>}
+                                  {r.inDbCount > 0 && <span className="text-slate-400">{r.inDbCount} in DB</span>}
+                                  <span className="text-[10px] text-slate-300 dark:text-slate-600 shrink-0 ml-auto">{r.source} · {new Date(r.ranAt).toLocaleDateString()}</span>
+                                </div>
+                              ))}
                             </div>
-                          );
-                        })()}
+                          </div>
+                        )}
                       </>)}
                     </div>
 
@@ -2822,6 +2817,7 @@ export default function AdminPoliticiansPage() {
                             <TableHead>Party</TableHead>
                             <TableHead>Location</TableHead>
                             <TableHead>Zip / Source</TableHead>
+                            <TableHead>Queued At</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -2838,6 +2834,7 @@ export default function AdminPoliticiansPage() {
                               <TableCell className="text-sm">{imp.party || <span className="text-slate-400 italic">—</span>}</TableCell>
                               <TableCell className="text-sm text-slate-500">{[imp.city, imp.state].filter(Boolean).join(", ") || "—"}</TableCell>
                               <TableCell className="text-xs text-slate-400">{imp.zipCode} · {imp.source}</TableCell>
+                              <TableCell className="text-xs text-slate-400">{imp.foundAt ? new Date(imp.foundAt).toLocaleDateString() : "—"}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex gap-1.5 justify-end">
                                   <Button
