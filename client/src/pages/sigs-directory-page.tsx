@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, ExternalLink, AlertTriangle, TrendingUp, ShieldCheck, TrendingDown, ChevronDown, ChevronUp, DollarSign, Building2, BarChart3 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Search, ExternalLink, AlertTriangle, TrendingUp, ShieldCheck, TrendingDown, ChevronDown, ChevronUp, DollarSign, Building2, BarChart3, ArrowUpDown } from "lucide-react";
 import { Navigation } from "@/components/navigation";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -349,11 +350,27 @@ function PacRow({ sig }: { sig: SIG }) {
   );
 }
 
+/** Parse the lower bound of a spend range string like "$350M–$450M" → 350 */
+function parseSpendLower(spendRange?: string | null): number {
+  if (!spendRange) return 0;
+  const m = spendRange.match(/\$([\d.]+)([BM]?)/);
+  if (!m) return 0;
+  const val = parseFloat(m[1]);
+  return m[2] === "B" ? val * 1000 : val;
+}
+
+/** Map influenceScore → sort value (higher = better) */
+function gradeSort(sig: SIG): number {
+  return sig.influenceScore ?? -999;
+}
+
 export default function SigsDirectoryPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeSentiment, setActiveSentiment] = useState("all");
   const [search, setSearch] = useState("");
   const [pacsExpanded, setPacsExpanded] = useState(false);
+  const [lobbySort, setLobbySort] = useState("spend");
+  const [lobbyPartyLean, setLobbyPartyLean] = useState("all");
 
   const { data: allSigs = [], isLoading } = useQuery<SIG[]>({
     queryKey: ["/api/sigs"],
@@ -373,7 +390,26 @@ export default function SigsDirectoryPage() {
     return matchSent && matchSearch;
   };
 
-  const filteredLobbies = lobbySectors.filter(filterFn);
+  const filteredLobbies = useMemo(() => {
+    let list = lobbySectors.filter(filterFn);
+
+    // Party-lean filter
+    if (lobbyPartyLean === "dem") list = list.filter(s => (s.partySplitDem ?? 0) > (s.partySplitRep ?? 0));
+    else if (lobbyPartyLean === "rep") list = list.filter(s => (s.partySplitRep ?? 0) > (s.partySplitDem ?? 0));
+    else if (lobbyPartyLean === "split") list = list.filter(s => Math.abs((s.partySplitDem ?? 50) - (s.partySplitRep ?? 50)) <= 10);
+
+    // Sort
+    list = [...list].sort((a, b) => {
+      if (lobbySort === "spend") return parseSpendLower(b.spendRange) - parseSpendLower(a.spendRange);
+      if (lobbySort === "grade") return gradeSort(b) - gradeSort(a);
+      if (lobbySort === "dem") return (b.partySplitDem ?? 0) - (a.partySplitDem ?? 0);
+      if (lobbySort === "rep") return (b.partySplitRep ?? 0) - (a.partySplitRep ?? 0);
+      if (lobbySort === "name") return a.name.localeCompare(b.name);
+      return 0;
+    });
+
+    return list;
+  }, [lobbySectors, filterFn, lobbySort, lobbyPartyLean]);
   const filteredMain = mainSigs.filter(sig => {
     const matchCat = activeCategory === "All" ? true :
       activeCategory === "PAC / Committee" ? false :
@@ -497,19 +533,61 @@ export default function SigsDirectoryPage() {
           <div className="space-y-10">
 
             {/* ── LOBBY SECTORS ── */}
-            {showLobbyGrid && filteredLobbies.length > 0 && (
+            {showLobbyGrid && (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-1 border-b border-amber-200 dark:border-amber-800">
-                  <Building2 className="h-5 w-5 text-amber-500" />
+                {/* Header row */}
+                <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-amber-200 dark:border-amber-800">
+                  <Building2 className="h-5 w-5 text-amber-500 shrink-0" />
                   <h2 className="text-lg font-semibold text-foreground">Industry Lobby Sectors</h2>
                   <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">
-                    {filteredLobbies.length} sectors
+                    {filteredLobbies.length} sector{filteredLobbies.length !== 1 ? "s" : ""}
                   </Badge>
-                  <span className="text-xs text-muted-foreground ml-1">ranked by est. annual lobbying spend</span>
+                  <div className="flex-1" />
+                  {/* Sort control */}
+                  <div className="flex items-center gap-1.5">
+                    <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Sort:</span>
+                    <Select value={lobbySort} onValueChange={setLobbySort}>
+                      <SelectTrigger className="h-7 text-xs w-36 border-amber-200 dark:border-amber-800">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="spend">Spend (high → low)</SelectItem>
+                        <SelectItem value="grade">ACP Grade (best first)</SelectItem>
+                        <SelectItem value="dem">Most Dem-leaning</SelectItem>
+                        <SelectItem value="rep">Most Rep-leaning</SelectItem>
+                        <SelectItem value="name">Name A → Z</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Party-lean filter */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Party lean:</span>
+                    <Select value={lobbyPartyLean} onValueChange={setLobbyPartyLean}>
+                      <SelectTrigger className="h-7 text-xs w-28 border-amber-200 dark:border-amber-800">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="dem">Dem-leaning</SelectItem>
+                        <SelectItem value="rep">Rep-leaning</SelectItem>
+                        <SelectItem value="split">Even split</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {filteredLobbies.map(sig => <LobbyIndustrySectorCard key={sig.id} sig={sig} />)}
-                </div>
+
+                {filteredLobbies.length > 0 ? (
+                  <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {filteredLobbies.map(sig => <LobbyIndustrySectorCard key={sig.id} sig={sig} />)}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Building2 className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                    <p className="font-medium">No sectors match these filters</p>
+                    <p className="text-sm mt-1">Try a different party-lean or sentiment filter</p>
+                  </div>
+                )}
               </div>
             )}
 
