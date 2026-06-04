@@ -398,9 +398,6 @@ export default function SigsDirectoryPage() {
   const [interestSentiment, setInterestSentiment] = useState("all");
   const [interestSort, setInterestSort] = useState("grade");
 
-  const [pacSearch, setPacSearch] = useState("");
-  const [pacSentiment, setPacSentiment] = useState("all");
-
   const [aceSearch, setAceSearch] = useState("");
 
   const { data: allSigs = [], isLoading } = useQuery<SIG[]>({ queryKey: ["/api/sigs"] });
@@ -409,8 +406,7 @@ export default function SigsDirectoryPage() {
 
   // Segment by tab
   const lobbySectors = sigs.filter(s => s.category?.toLowerCase() === "lobby");
-  const interestSigs = sigs.filter(s => s.category?.toLowerCase() !== "lobby" && !isPacCategory(s.category) && !s.isAce);
-  const pacSigs = sigs.filter(s => isPacCategory(s.category));
+  const interestSigs = sigs.filter(s => s.category?.toLowerCase() !== "lobby" && !s.isAce);
   const aceSigs = sigs.filter(s => s.isAce);
 
   // Lobbies — filtered + sorted
@@ -450,15 +446,6 @@ export default function SigsDirectoryPage() {
     );
   }, [interestSigs, interestSearch, interestSentiment, interestSort]);
 
-  // PACs — filtered
-  const filteredPacs = useMemo(() => pacSigs.filter(s => {
-    const matchSent = pacSentiment === "all" || s.sentiment === pacSentiment;
-    const matchSearch = !pacSearch ||
-      s.name.toLowerCase().includes(pacSearch.toLowerCase()) ||
-      s.description?.toLowerCase().includes(pacSearch.toLowerCase());
-    return matchSent && matchSearch;
-  }), [pacSigs, pacSearch, pacSentiment]);
-
   // ACEs — filtered
   const filteredAces = useMemo(() => aceSigs.filter(s =>
     !aceSearch ||
@@ -489,10 +476,7 @@ export default function SigsDirectoryPage() {
             <Building2 className="h-4 w-4" />{lobbySectors.length} lobby sectors
           </span>
           <span className="flex items-center gap-1.5 text-yellow-600 dark:text-yellow-400 font-medium">
-            <AlertTriangle className="h-4 w-4" />{interestSigs.length} interest groups
-          </span>
-          <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400 font-medium">
-            <DollarSign className="h-4 w-4" />{pacSigs.length} PACs tracked
+            <AlertTriangle className="h-4 w-4" />{interestSigs.length} interest groups &amp; PACs
           </span>
           <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
             <ShieldCheck className="h-4 w-4" />{aceSigs.length} ACE endorsements
@@ -516,11 +500,6 @@ export default function SigsDirectoryPage() {
                 <AlertTriangle className="h-4 w-4" />
                 Interest Groups
                 <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0 h-4">{interestSigs.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="pacs" className="gap-1.5">
-                <DollarSign className="h-4 w-4" />
-                PACs
-                <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0 h-4">{pacSigs.length}</Badge>
               </TabsTrigger>
               <TabsTrigger value="aces" className="gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
                 <ShieldCheck className="h-4 w-4" />
@@ -567,25 +546,6 @@ export default function SigsDirectoryPage() {
                 </>
               ) : (
                 <EmptyState icon={AlertTriangle} message="No interest groups match your filters" sub="Try adjusting the search or sentiment" />
-              )}
-            </TabsContent>
-
-            {/* ── PACs TAB ── */}
-            <TabsContent value="pacs" className="space-y-4 pt-2">
-              <FilterBar
-                search={pacSearch} onSearch={setPacSearch}
-                sentiment={pacSentiment} onSentiment={setPacSentiment}
-                placeholder="Search PACs and committees…"
-              />
-              {filteredPacs.length > 0 ? (
-                <>
-                  <p className="text-xs text-muted-foreground">{filteredPacs.length} PAC{filteredPacs.length !== 1 ? "s" : ""} shown</p>
-                  <div className="divide-y divide-border rounded-lg border bg-card">
-                    {filteredPacs.map(sig => <PacRow key={sig.id} sig={sig} />)}
-                  </div>
-                </>
-              ) : (
-                <EmptyState icon={DollarSign} message="No PACs match your filters" sub="Try adjusting the search or sentiment" />
               )}
             </TabsContent>
 
