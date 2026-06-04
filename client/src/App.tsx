@@ -84,6 +84,7 @@ import PublicArticlePage from "@/pages/public-article-page";
 import DeveloperPage from "@/pages/developer-page";
 import RunForOfficePage from "@/pages/run-for-office-page";
 import IssuesPage from "@/pages/issues-page";
+import TermsOfServicePage from "@/pages/terms-of-service-page";
 import NotFound from "@/pages/not-found";
 import { useScrollLight } from "./hooks/useScrollLight";
 import { useAuth } from "./hooks/use-auth";
@@ -148,6 +149,7 @@ function Router() {
     <Switch>
       <Route path="/" component={HomeRoute} />
       <Route path="/news" component={PublicLandingPage} />
+      <Route path="/terms" component={TermsOfServicePage} />
       <Route path="/read/:id" component={PublicArticlePage} />
       <ProtectedRoute path="/groups" component={GroupsPage} />
       <ProtectedRoute path="/polls" component={PollsPage} />
