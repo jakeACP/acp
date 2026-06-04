@@ -2589,8 +2589,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const newCount = previewed.filter(c => c.matchStatus === "new").length;
       const possibleDupCount = previewed.filter(c => c.matchStatus === "possible_duplicate").length;
       const inDbCount = previewed.filter(c => c.matchStatus === "in_db").length;
-      // Log the lookup run (preview = "manual" source, no DB writes for candidates yet)
-      await storage.logZipLookupRun(zipCode, { total: previewed.length, queued: newCount, possibleDup: possibleDupCount, inDb: inDbCount }, "manual");
+      // Log the lookup run — wrapped in try-catch so preview never fails due to logging errors
+      try {
+        await storage.logZipLookupRun(zipCode, { total: previewed.length, queued: newCount, possibleDup: possibleDupCount, inDb: inDbCount }, "manual");
+      } catch (logErr) {
+        console.error("Failed to log zip lookup run:", logErr);
+      }
       res.json({ zipCode, candidates: previewed, total: previewed.length, newCount, possibleDupCount, inDbCount });
     } catch (err: any) {
       console.error("Zip candidate lookup error:", err);

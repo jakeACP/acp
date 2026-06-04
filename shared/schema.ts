@@ -3126,3 +3126,20 @@ export const zipCandidateImports = pgTable("zip_candidate_imports", {
 export const insertZipCandidateImportSchema = createInsertSchema(zipCandidateImports).omit({ id: true, foundAt: true, reviewedAt: true });
 export type ZipCandidateImport = typeof zipCandidateImports.$inferSelect;
 export type InsertZipCandidateImport = z.infer<typeof insertZipCandidateImportSchema>;
+
+// One record per AI lookup call (preview or background), tracks counts for history
+export const zipLookupRuns = pgTable("zip_lookup_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  zipCode: text("zip_code").notNull(),
+  source: text("source").notNull().default("background"), // manual, background
+  foundCount: integer("found_count").notNull().default(0),
+  newCount: integer("new_count").notNull().default(0),
+  possibleDupCount: integer("possible_dup_count").notNull().default(0),
+  inDbCount: integer("in_db_count").notNull().default(0),
+  ranAt: timestamp("ran_at").defaultNow(),
+}, (table) => ({
+  zipIdx: index("zip_lookup_runs_zip_idx").on(table.zipCode),
+  ranAtIdx: index("zip_lookup_runs_ran_at_idx").on(table.ranAt),
+}));
+
+export type ZipLookupRun = typeof zipLookupRuns.$inferSelect;

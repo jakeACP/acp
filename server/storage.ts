@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, politicalParties, partyLeaders, partyBallotAccess, partyPolicyPositions, partyEndorsements, partyUserRatings, partyControversies, zipCandidateImports, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse, type ZipCandidateImport } from "@shared/schema";
+import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, politicalParties, partyLeaders, partyBallotAccess, partyPolicyPositions, partyEndorsements, partyUserRatings, partyControversies, zipCandidateImports, zipLookupRuns, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse, type ZipCandidateImport } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, composeJobs, pledgeRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest, type ComposeJob, type SignalComment, type InsertSignalComment } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
@@ -10616,13 +10616,16 @@ export class DatabaseStorage implements IStorage {
         continue;
       }
 
-      // Dedup guard 1: already in zip_candidate_imports (any zip) with pending/approved status
+      // Dedup guard 1: already in zip_candidate_imports with same name+state+office (pending/approved)
+      const importConditions = [
+        ilike(zipCandidateImports.candidateName, candidateName),
+        or(eq(zipCandidateImports.status, "pending"), eq(zipCandidateImports.status, "approved")),
+      ] as any[];
+      if (c.state) importConditions.push(ilike(zipCandidateImports.state, c.state));
+      if (c.office) importConditions.push(ilike(zipCandidateImports.office, c.office));
       const [existingImport] = await db.select({ id: zipCandidateImports.id })
         .from(zipCandidateImports)
-        .where(and(
-          ilike(zipCandidateImports.candidateName, candidateName),
-          or(eq(zipCandidateImports.status, "pending"), eq(zipCandidateImports.status, "approved"))
-        ))
+        .where(and(...importConditions))
         .limit(1);
 
       if (existingImport) {
@@ -10719,12 +10722,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async hasZipBeenImportedRecently(zipCode: string, days: number = 30): Promise<boolean> {
+    // Check zip_lookup_runs so that even lookups finding zero new candidates suppress re-runs
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const [existing] = await db.select({ id: zipCandidateImports.id })
-      .from(zipCandidateImports)
+    const [existing] = await db.select({ id: zipLookupRuns.id })
+      .from(zipLookupRuns)
       .where(and(
-        eq(zipCandidateImports.zipCode, zipCode),
-        sql`${zipCandidateImports.foundAt} > ${cutoff.toISOString()}`
+        eq(zipLookupRuns.zipCode, zipCode),
+        sql`${zipLookupRuns.ranAt} > ${cutoff.toISOString()}`
       ))
       .limit(1);
     return !!existing;
@@ -10747,7 +10751,7 @@ export class DatabaseStorage implements IStorage {
       let matchedProfile: string | undefined;
 
       if (lastName.length >= 2) {
-        // 1. Exact full-name match in politicianProfiles (no state filter — handles all note formats) → "in_db"
+        // 1. Exact full-name match in politicianProfiles → "in_db" (strong signal regardless of state)
         const [exactMatch] = await db
           .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName })
           .from(politicianProfiles)
@@ -10758,25 +10762,31 @@ export class DatabaseStorage implements IStorage {
           matchStatus = "in_db";
           matchedProfile = exactMatch.fullName;
         } else if (nameParts.length >= 2) {
-          // 2. First + last name match (handles middle names/initials) → "in_db"
+          // 2. First + last name match WITH state constraint (handles middle names/initials) → "in_db"
+          const firstLastConditions: any[] = [
+            ilike(politicianProfiles.fullName, `%${firstName}%`),
+            ilike(politicianProfiles.fullName, `%${lastName}%`),
+          ];
+          if (c.state) firstLastConditions.push(ilike(politicianProfiles.notes, `%${c.state}%`));
+
           const [firstLastMatch] = await db
             .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName })
             .from(politicianProfiles)
-            .where(and(
-              ilike(politicianProfiles.fullName, `%${firstName}%`),
-              ilike(politicianProfiles.fullName, `%${lastName}%`)
-            ))
+            .where(and(...firstLastConditions))
             .limit(1);
 
           if (firstLastMatch) {
             matchStatus = "in_db";
             matchedProfile = firstLastMatch.fullName;
           } else {
-            // 3. Last-name only in politicianProfiles → "possible_duplicate"
+            // 3. Last-name only (with optional state constraint) → "possible_duplicate"
+            const looseConditions: any[] = [ilike(politicianProfiles.fullName, `%${lastName}%`)];
+            if (c.state) looseConditions.push(ilike(politicianProfiles.notes, `%${c.state}%`));
+
             const [looseMatch] = await db
               .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName })
               .from(politicianProfiles)
-              .where(ilike(politicianProfiles.fullName, `%${lastName}%`))
+              .where(and(...looseConditions))
               .limit(1);
 
             if (looseMatch) {
@@ -10809,10 +10819,14 @@ export class DatabaseStorage implements IStorage {
     counts: { total: number; queued: number; possibleDup: number; inDb: number },
     source: string
   ): Promise<void> {
-    await db.execute(sql`
-      INSERT INTO zip_lookup_runs (zip_code, source, found_count, new_count, possible_dup_count, in_db_count)
-      VALUES (${zipCode}, ${source}, ${counts.total}, ${counts.queued}, ${counts.possibleDup}, ${counts.inDb})
-    `);
+    await db.insert(zipLookupRuns).values({
+      zipCode,
+      source,
+      foundCount: counts.total,
+      newCount: counts.queued,
+      possibleDupCount: counts.possibleDup,
+      inDbCount: counts.inDb,
+    });
   }
 
   async getZipLookupRuns(
@@ -10820,17 +10834,17 @@ export class DatabaseStorage implements IStorage {
     limit: number = 50
   ): Promise<Array<{ id: string; zipCode: string; source: string; foundCount: number; newCount: number; possibleDupCount: number; inDbCount: number; ranAt: Date }>> {
     const rows = zipCode
-      ? await db.execute(sql`SELECT id, zip_code, source, found_count, new_count, possible_dup_count, in_db_count, ran_at FROM zip_lookup_runs WHERE zip_code = ${zipCode} ORDER BY ran_at DESC LIMIT ${limit}`)
-      : await db.execute(sql`SELECT id, zip_code, source, found_count, new_count, possible_dup_count, in_db_count, ran_at FROM zip_lookup_runs ORDER BY ran_at DESC LIMIT ${limit}`);
-    return (rows.rows as any[]).map(r => ({
+      ? await db.select().from(zipLookupRuns).where(eq(zipLookupRuns.zipCode, zipCode)).orderBy(desc(zipLookupRuns.ranAt)).limit(limit)
+      : await db.select().from(zipLookupRuns).orderBy(desc(zipLookupRuns.ranAt)).limit(limit);
+    return rows.map(r => ({
       id: r.id,
-      zipCode: r.zip_code,
+      zipCode: r.zipCode,
       source: r.source,
-      foundCount: r.found_count,
-      newCount: r.new_count,
-      possibleDupCount: r.possible_dup_count,
-      inDbCount: r.in_db_count,
-      ranAt: r.ran_at,
+      foundCount: r.foundCount,
+      newCount: r.newCount,
+      possibleDupCount: r.possibleDupCount,
+      inDbCount: r.inDbCount,
+      ranAt: r.ranAt as Date,
     }));
   }
 }
