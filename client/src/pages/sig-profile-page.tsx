@@ -29,8 +29,8 @@ import {
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
-type TopPac = { name: string; amount: string };
-type TopCandidate = { name: string; party: string; state: string; amount: string };
+type TopPac = { name: string; amount: string; partyLean?: "D" | "R" | "Split" };
+type TopCandidate = { name: string; party: string; office?: string; totalReceived?: string; state?: string; amount?: string };
 type InterestBreakdown = { label: string; pct: number };
 
 type SIG = {
@@ -431,13 +431,27 @@ export default function SigProfilePage() {
                     {sig.partySplitRep >= 15 ? `${sig.partySplitRep}%` : ""}
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  {sig.partySplitDem > sig.partySplitRep
-                    ? `This sector leans Democratic, giving ${sig.partySplitDem - sig.partySplitRep}% more to Dems.`
-                    : sig.partySplitRep > sig.partySplitDem
-                    ? `This sector leans Republican, giving ${sig.partySplitRep - sig.partySplitDem}% more to Republicans.`
-                    : "This sector splits evenly between both parties."}
-                </p>
+                <div className="text-center">
+                  {sig.partySplitDem > sig.partySplitRep ? (
+                    <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                      ◀ Democratic-Leaning Sector
+                      <span className="ml-2 font-normal text-xs text-muted-foreground">
+                        ({sig.partySplitDem - sig.partySplitRep}% more to Dems)
+                      </span>
+                    </p>
+                  ) : sig.partySplitRep > sig.partySplitDem ? (
+                    <p className="text-sm font-bold text-red-600 dark:text-red-400">
+                      Republican-Leaning Sector ▶
+                      <span className="ml-2 font-normal text-xs text-muted-foreground">
+                        ({sig.partySplitRep - sig.partySplitDem}% more to Republicans)
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-sm font-bold text-purple-600 dark:text-purple-400">
+                      ◆ Evenly Split Between Parties
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Mini pie chart */}
@@ -528,6 +542,7 @@ export default function SigProfilePage() {
                     <tr className="text-left border-b">
                       <th className="pb-2 font-semibold text-muted-foreground w-8">#</th>
                       <th className="pb-2 font-semibold text-muted-foreground">PAC / Committee Name</th>
+                      <th className="pb-2 font-semibold text-muted-foreground">Party Lean</th>
                       <th className="pb-2 font-semibold text-muted-foreground text-right">Est. Spend</th>
                     </tr>
                   </thead>
@@ -536,6 +551,17 @@ export default function SigProfilePage() {
                       <tr key={i} className="border-b last:border-0 hover:bg-muted/40">
                         <td className="py-2.5 text-muted-foreground font-bold">{i + 1}</td>
                         <td className="py-2.5 font-medium">{pac.name}</td>
+                        <td className="py-2.5">
+                          {pac.partyLean && (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${
+                              pac.partyLean === "D" ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300" :
+                              pac.partyLean === "R" ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" :
+                              "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
+                            }`}>
+                              {pac.partyLean === "D" ? "Dem" : pac.partyLean === "R" ? "Rep" : "Split"}
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2.5 text-right font-bold text-amber-600 dark:text-amber-400">{pac.amount}</td>
                       </tr>
                     ))}
@@ -567,8 +593,8 @@ export default function SigProfilePage() {
                       <th className="pb-2 font-semibold text-muted-foreground w-8">#</th>
                       <th className="pb-2 font-semibold text-muted-foreground">Name</th>
                       <th className="pb-2 font-semibold text-muted-foreground">Party</th>
-                      <th className="pb-2 font-semibold text-muted-foreground">State</th>
-                      <th className="pb-2 font-semibold text-muted-foreground text-right">Amount</th>
+                      <th className="pb-2 font-semibold text-muted-foreground">Office</th>
+                      <th className="pb-2 font-semibold text-muted-foreground text-right">Total Received</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -585,8 +611,10 @@ export default function SigProfilePage() {
                             {cand.party}
                           </span>
                         </td>
-                        <td className="py-2.5 text-muted-foreground text-sm">{cand.state}</td>
-                        <td className="py-2.5 text-right font-bold text-orange-600 dark:text-orange-400">{cand.amount}</td>
+                        <td className="py-2.5 text-muted-foreground text-xs">{cand.office || cand.state || "—"}</td>
+                        <td className="py-2.5 text-right font-bold text-orange-600 dark:text-orange-400">
+                          {cand.totalReceived || cand.amount || "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

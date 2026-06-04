@@ -571,14 +571,22 @@ export default function SigsDirectoryPage() {
               </div>
             )}
 
-            {/* Empty state */}
-            {filteredLobbies.length === 0 && filteredMain.length === 0 && filteredPacs.length === 0 && (
-              <div className="text-center py-20 text-muted-foreground">
-                <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p className="text-lg font-medium">No sectors match your filters</p>
-                <p className="text-sm mt-1">Try adjusting the category or sentiment filter</p>
-              </div>
-            )}
+            {/* Empty state — only shown when the currently visible section has no results */}
+            {(() => {
+              const visibleCount =
+                activeCategory === "Lobby" ? filteredLobbies.length :
+                activeCategory === "PAC / Committee" ? filteredPacs.length :
+                activeCategory === "All"
+                  ? (filteredLobbies.length + filteredMain.length + filteredPacs.length)
+                  : filteredMain.length;
+              return visibleCount === 0 ? (
+                <div className="text-center py-20 text-muted-foreground">
+                  <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-lg font-medium">No {activeCategory === "All" ? "sectors" : activeCategory.toLowerCase() + " sectors"} match your filters</p>
+                  <p className="text-sm mt-1">Try adjusting the category or sentiment filter</p>
+                </div>
+              ) : null;
+            })()}
 
             {!isLoading && allSigs.length === 0 && (
               <div className="text-center py-20 space-y-2 text-muted-foreground">
