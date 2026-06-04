@@ -11557,6 +11557,117 @@ function registerBudgetRoutes(app: Express) {
     }
   });
 
+  // ── Email Template Builder ──────────────────────────────────────────────────
+
+  app.get("/api/admin/email-templates", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any)?.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const templates = await storage.getEmailTemplates();
+      res.json(templates);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/admin/email-templates/:id", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any)?.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const t = await storage.getEmailTemplate(req.params.id);
+      if (!t) return res.status(404).json({ message: "Not found" });
+      res.json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/admin/email-templates", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any)?.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const t = await storage.createEmailTemplate({ ...req.body, createdBy: (req.user as any).id });
+      res.status(201).json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.put("/api/admin/email-templates/:id", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any)?.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const t = await storage.updateEmailTemplate(req.params.id, req.body);
+      if (!t) return res.status(404).json({ message: "Not found" });
+      res.json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/admin/email-templates/:id", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any)?.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      await storage.deleteEmailTemplate(req.params.id);
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Get recipient count for a filter
+  app.get("/api/admin/email-blast-recipients", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any)?.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const filter = (req.query.filter as string) || "all";
+      const allUsers = await storage.getAllUsers(100000, 0);
+      let recipients = allUsers;
+      if (filter === "premium") recipients = allUsers.filter((u: any) => u.subscriptionStatus === "premium");
+      else if (filter === "free") recipients = allUsers.filter((u: any) => !u.subscriptionStatus || u.subscriptionStatus === "free");
+      else if (filter === "admin") recipients = allUsers.filter((u: any) => u.role === "admin");
+      else if (filter === "candidate") recipients = allUsers.filter((u: any) => u.role === "candidate");
+      else if (filter === "citizen") recipients = allUsers.filter((u: any) => u.role === "citizen");
+      res.json({ count: recipients.length });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Send email blast
+  app.post("/api/admin/email-templates/:id/send", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any)?.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const template = await storage.getEmailTemplate(req.params.id);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+
+      const { filter = "all", subjectOverride } = req.body as { filter?: string; subjectOverride?: string };
+      const subject = subjectOverride || template.subject;
+
+      const allUsers = await storage.getAllUsers(100000, 0);
+      let recipients: any[] = allUsers;
+      if (filter === "premium") recipients = allUsers.filter((u: any) => u.subscriptionStatus === "premium");
+      else if (filter === "free") recipients = allUsers.filter((u: any) => !u.subscriptionStatus || u.subscriptionStatus === "free");
+      else if (filter === "admin") recipients = allUsers.filter((u: any) => u.role === "admin");
+      else if (filter === "candidate") recipients = allUsers.filter((u: any) => u.role === "candidate");
+      else if (filter === "citizen") recipients = allUsers.filter((u: any) => u.role === "citizen");
+
+      const emailList = recipients.filter((u: any) => u.email).map((u: any) => ({ email: u.email, username: u.username }));
+
+      const { sendEmailBlast } = await import("./email");
+      const result = await sendEmailBlast(emailList, subject, template.bodyHtml, template.bodyText || undefined);
+
+      await storage.createEmailBlastLog({
+        templateId: template.id,
+        subject,
+        recipientFilter: { filter },
+        sentCount: result.sent,
+        status: result.failed > 0 ? (result.sent > 0 ? "partial" : "failed") : "sent",
+        error: result.errors.length > 0 ? result.errors.slice(0, 5).join("; ") : null,
+        sentBy: (req.user as any).id,
+      });
+
+      if (result.sent > 0) {
+        await storage.incrementTemplateSendCount(template.id, result.sent);
+      }
+
+      res.json({ success: true, sent: result.sent, failed: result.failed, errors: result.errors.slice(0, 10) });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Blast logs
+  app.get("/api/admin/email-blast-logs", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || (req.user as any)?.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const templateId = req.query.templateId as string | undefined;
+      const logs = await storage.getEmailBlastLogs(templateId);
+      res.json(logs);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // Public district aggregate endpoint for profile pages
   app.get("/api/budget/district-aggregate/:state", async (req: Request, res: Response) => {
     try {

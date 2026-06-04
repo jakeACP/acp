@@ -30,6 +30,7 @@ import {
   Palette,
   MapPin,
   Map,
+  Mail,
 } from "lucide-react";
 
 interface SubItem {
@@ -92,6 +93,7 @@ const navCategories: NavCategory[] = [
     icon: Settings,
     items: [
       { name: "Defaults", href: "/admin/settings", icon: SlidersHorizontal },
+      { name: "Email Templates", href: "/admin/email-templates", icon: Mail },
       { name: "Import / Export", href: "/admin/import-export", icon: FileDown },
       { name: "Backup System", href: "#", icon: HardDrive, disabled: true, badge: "Soon" },
     ],

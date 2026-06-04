@@ -85,6 +85,7 @@ import DeveloperPage from "@/pages/developer-page";
 import RunForOfficePage from "@/pages/run-for-office-page";
 import IssuesPage from "@/pages/issues-page";
 import TermsOfServicePage from "@/pages/terms-of-service-page";
+import AdminEmailTemplatesPage from "@/pages/admin-email-templates-page";
 import NotFound from "@/pages/not-found";
 import { useScrollLight } from "./hooks/useScrollLight";
 import { useAuth } from "./hooks/use-auth";
@@ -219,6 +220,7 @@ function Router() {
       <ProtectedRoute path="/admin/acp-plus" component={AdminAcpPlusPage} />
       <ProtectedRoute path="/admin/voter-verification" component={AdminVoterVerificationPage} />
       <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />
+      <ProtectedRoute path="/admin/email-templates" component={AdminEmailTemplatesPage} />
       <ProtectedRoute path="/admin/pledge-requests" component={AdminPledgeRequestsPage} />
       <ProtectedRoute path="/budget-simulator" component={BudgetSimulatorPage} />
       <ProtectedRoute path="/admin/budget-baselines" component={AdminBudgetBaselinesPage} />

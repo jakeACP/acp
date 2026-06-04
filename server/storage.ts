@@ -650,6 +650,16 @@ export interface IStorage {
   getBudgetSimulationById(id: string): Promise<any | undefined>;
   getBudgetSimulationsDistrictAverages(): Promise<any[]>;
 
+  // Email Templates
+  getEmailTemplates(): Promise<any[]>;
+  getEmailTemplate(id: string): Promise<any | undefined>;
+  createEmailTemplate(data: any): Promise<any>;
+  updateEmailTemplate(id: string, patch: any): Promise<any>;
+  deleteEmailTemplate(id: string): Promise<void>;
+  createEmailBlastLog(data: any): Promise<any>;
+  getEmailBlastLogs(templateId?: string): Promise<any[]>;
+  incrementTemplateSendCount(id: string, count: number): Promise<void>;
+
   // Political Parties
   listParties(filters?: { status?: string; sort?: string; minTransparency?: number; minRating?: number; hasBallotAccess?: boolean; economicMin?: number; economicMax?: number; socialMin?: number; socialMax?: number }): Promise<any[]>;
   getPartyByIdOrSlug(idOrSlug: string): Promise<any | undefined>;
@@ -10492,6 +10502,60 @@ export class DatabaseStorage implements IStorage {
   async getPartyEndorsementCount(partyId: string): Promise<number> {
     const [result] = await db.select({ cnt: count() }).from(partyEndorsements).where(and(eq(partyEndorsements.partyId, partyId), eq(partyEndorsements.isActive, true)));
     return result?.cnt ?? 0;
+  }
+
+  // ── Email Templates ──────────────────────────────────────────────────────────
+
+  async getEmailTemplates(): Promise<any[]> {
+    const { emailTemplates } = await import("@shared/schema");
+    return db.select().from(emailTemplates).orderBy(desc(emailTemplates.updatedAt));
+  }
+
+  async getEmailTemplate(id: string): Promise<any | undefined> {
+    const { emailTemplates } = await import("@shared/schema");
+    const [row] = await db.select().from(emailTemplates).where(eq(emailTemplates.id, id)).limit(1);
+    return row;
+  }
+
+  async createEmailTemplate(data: any): Promise<any> {
+    const { emailTemplates } = await import("@shared/schema");
+    const [row] = await db.insert(emailTemplates).values(data).returning();
+    return row;
+  }
+
+  async updateEmailTemplate(id: string, patch: any): Promise<any> {
+    const { emailTemplates } = await import("@shared/schema");
+    const [row] = await db.update(emailTemplates)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(emailTemplates.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteEmailTemplate(id: string): Promise<void> {
+    const { emailTemplates } = await import("@shared/schema");
+    await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
+  }
+
+  async createEmailBlastLog(data: any): Promise<any> {
+    const { emailBlastLogs } = await import("@shared/schema");
+    const [row] = await db.insert(emailBlastLogs).values(data).returning();
+    return row;
+  }
+
+  async getEmailBlastLogs(templateId?: string): Promise<any[]> {
+    const { emailBlastLogs } = await import("@shared/schema");
+    if (templateId) {
+      return db.select().from(emailBlastLogs).where(eq(emailBlastLogs.templateId, templateId)).orderBy(desc(emailBlastLogs.sentAt));
+    }
+    return db.select().from(emailBlastLogs).orderBy(desc(emailBlastLogs.sentAt)).limit(200);
+  }
+
+  async incrementTemplateSendCount(id: string, count: number): Promise<void> {
+    const { emailTemplates } = await import("@shared/schema");
+    await db.update(emailTemplates)
+      .set({ sendCount: sql`${emailTemplates.sendCount} + ${count}`, lastSentAt: new Date() })
+      .where(eq(emailTemplates.id, id));
   }
 
   async seedParties(): Promise<void> {

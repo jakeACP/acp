@@ -3060,3 +3060,41 @@ export const candidateDistricts = pgTable("candidate_districts", {
 export const insertCandidateDistrictSchema = createInsertSchema(candidateDistricts).omit({ id: true, createdAt: true });
 export type CandidateDistrict = typeof candidateDistricts.$inferSelect;
 export type InsertCandidateDistrict = z.infer<typeof insertCandidateDistrictSchema>;
+
+// ── Email Templates ──────────────────────────────────────────────────────────
+
+export const emailTemplates = pgTable("email_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  previewText: text("preview_text"),
+  bodyHtml: text("body_html").notNull().default(""),
+  bodyText: text("body_text"),
+  category: text("category").default("general"),
+  blocks: jsonb("blocks"),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  lastSentAt: timestamp("last_sent_at"),
+  sendCount: integer("send_count").default(0),
+});
+
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({ id: true, createdAt: true, updatedAt: true, lastSentAt: true, sendCount: true });
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
+
+export const emailBlastLogs = pgTable("email_blast_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => emailTemplates.id, { onDelete: "set null" }),
+  subject: text("subject").notNull(),
+  recipientFilter: jsonb("recipient_filter"),
+  sentCount: integer("sent_count").default(0),
+  status: text("status").default("sent"),
+  error: text("error"),
+  sentBy: varchar("sent_by").references(() => users.id, { onDelete: "set null" }),
+  sentAt: timestamp("sent_at").defaultNow(),
+});
+
+export const insertEmailBlastLogSchema = createInsertSchema(emailBlastLogs).omit({ id: true, sentAt: true });
+export type EmailBlastLog = typeof emailBlastLogs.$inferSelect;
+export type InsertEmailBlastLog = z.infer<typeof insertEmailBlastLogSchema>;

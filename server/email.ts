@@ -146,6 +146,47 @@ export async function sendClaimVerificationEmail(toEmail: string, politicianName
   await sgMail.send(msg);
 }
 
+export async function sendEmailBlast(
+  recipients: Array<{ email: string; username?: string }>,
+  subject: string,
+  bodyHtml: string,
+  bodyText?: string
+): Promise<{ sent: number; failed: number; errors: string[] }> {
+  if (!process.env.SENDGRID_API_KEY) {
+    console.warn('[email] sendEmailBlast skipped — no SENDGRID_API_KEY');
+    return { sent: 0, failed: recipients.length, errors: ['No SENDGRID_API_KEY configured'] };
+  }
+
+  let sent = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  // Send in batches of 50 to stay within SendGrid rate limits
+  const BATCH = 50;
+  for (let i = 0; i < recipients.length; i += BATCH) {
+    const batch = recipients.slice(i, i + BATCH);
+    await Promise.allSettled(
+      batch.map(async (r) => {
+        try {
+          await sgMail.send({
+            to: r.email,
+            from: { email: FROM_EMAIL, name: FROM_NAME },
+            subject,
+            html: bodyHtml,
+            text: bodyText || subject,
+          });
+          sent++;
+        } catch (err: any) {
+          failed++;
+          errors.push(`${r.email}: ${err?.message || String(err)}`);
+        }
+      })
+    );
+  }
+
+  return { sent, failed, errors };
+}
+
 export async function sendInviteEmail(
   toEmail: string,
   inviterName: string,
