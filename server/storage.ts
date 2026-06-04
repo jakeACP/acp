@@ -253,6 +253,7 @@ export interface IStorage {
   updatePoliticianSponsorship(id: string, patch: Partial<PoliticianSigSponsorship>): Promise<PoliticianSigSponsorship>;
   recalculateGradeFromSigs(politicianId: string): Promise<string>;
   unlinkSponsorFromPolitician(politicianId: string, sigId: string): Promise<void>;
+  bulkImportSponsorships(rows: Array<{ politicianName: string; lobbyAcronym: string; reportedAmount?: number; relationshipType?: string; contributionPeriod?: string; disclosureSource?: string }>): Promise<{ created: number; updated: number; errors: number; politiciansGraded: number; errorDetails: string[] }>;
   getGradingConfig(): Promise<GradingAlgorithmSettings>;
   updateGradingConfig(patch: Partial<GradingAlgorithmSettings>): Promise<GradingAlgorithmSettings>;
   fetchFecCandidateTotals(fecCandidateId: string): Promise<{ individualShare: number; smallDollarShare: number; committeeShare: number; selfFundingShare: number; receipts: number } | null>;
@@ -4710,6 +4711,8 @@ export class DatabaseStorage implements IStorage {
       SET influence_score = ${influenceScore}, letter_grade = ${letterGrade}, updated_at = NOW()
       WHERE id = ${sigId}
     `);
+    // Propagate: recalculate corruption grades for all politicians linked to this SIG
+    await this._propagateSigGradeChange(sigId);
   }
 
   async submitSigCommunityVote(sigId: string, userId: string, vote: number): Promise<SigCommunityVote> {
@@ -4728,7 +4731,20 @@ export class DatabaseStorage implements IStorage {
       ), updated_at = NOW()
       WHERE id = ${sigId}
     `);
+    // Propagate: recalculate corruption grades for all politicians linked to this SIG
+    await this._propagateSigGradeChange(sigId);
     return (result.rows[0] as any) as SigCommunityVote;
+  }
+
+  private async _propagateSigGradeChange(sigId: string): Promise<void> {
+    try {
+      const linked = await this.getPoliticiansBySig(sigId);
+      await Promise.allSettled(
+        linked.map(p => this.recalculateGradeFromSigs(p.politicianId))
+      );
+    } catch (_) {
+      // Non-fatal: propagation is best-effort
+    }
   }
 
   async seedSigsXlsx(sigs: Array<{ name: string; tag: string; description: string; category: string; sentiment: string; dataSourceName: string; dataSourceUrl: string; disclosureNotes?: string }>): Promise<number> {
@@ -4806,11 +4822,18 @@ export class DatabaseStorage implements IStorage {
     for (const s of sponsorships) {
       if (!s.sig) continue;
       const rankMultiplier = s.sigRank ? 1 / s.sigRank : 1.0;
-      if (s.sig.isAce) {
-        weightedScore -= (s.sig.gradeWeight ?? 1.0) * rankMultiplier * 500_000;
+      const baseWeight = s.sig.gradeWeight ?? 1.0;
+      // Factor in community influenceScore: -50 (very corrupt) → 2x penalty; +50 (good) → 0x penalty
+      const influenceScore = s.sig.influenceScore ?? 0;
+      const clampedScore = Math.max(-50, Math.min(50, influenceScore));
+      const influenceFactor = Math.max(0, (50 - clampedScore) / 50); // 0.0 to 2.0
+      const effectiveWeight = baseWeight * influenceFactor;
+      if (s.sig.isAce || clampedScore >= 40) {
+        // Positive-sentiment lobby: gives a bonus that offsets corruption score
+        weightedScore -= baseWeight * rankMultiplier * 500_000 * Math.max(0, clampedScore / 50);
       } else {
         const amount = s.reportedAmount ?? 0;
-        weightedScore += amount * (s.sig.gradeWeight ?? 1.0) * rankMultiplier;
+        weightedScore += amount * effectiveWeight * rankMultiplier;
       }
     }
     let grade: string;
@@ -5824,6 +5847,97 @@ export class DatabaseStorage implements IStorage {
           eq(politicianSigSponsorships.sigId, sigId)
         )
       );
+  }
+
+  async bulkImportSponsorships(rows: Array<{ politicianName: string; lobbyAcronym: string; reportedAmount?: number; relationshipType?: string; contributionPeriod?: string; disclosureSource?: string }>): Promise<{ created: number; updated: number; errors: number; politiciansGraded: number; errorDetails: string[] }> {
+    // Build lookup maps
+    const allPoliticians = await db.select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName }).from(politicianProfiles);
+    const politicianMap = new Map<string, string>(); // normalised name → id
+    for (const p of allPoliticians) {
+      if (p.fullName) politicianMap.set(p.fullName.toLowerCase().trim(), p.id);
+    }
+
+    const allSigs = await db.select({ id: specialInterestGroups.id, acronym: specialInterestGroups.acronym, tag: specialInterestGroups.tag }).from(specialInterestGroups);
+    const sigMap = new Map<string, string>(); // normalised acronym/tag → id
+    for (const s of allSigs) {
+      if (s.acronym) sigMap.set(s.acronym.toLowerCase().trim(), s.id);
+      if (s.tag) sigMap.set(String(s.tag).toLowerCase().trim(), s.id);
+    }
+
+    let created = 0;
+    let updated = 0;
+    let errors = 0;
+    const errorDetails: string[] = [];
+    const affectedPoliticianIds = new Set<string>();
+
+    for (const row of rows) {
+      const normPolitician = row.politicianName.toLowerCase().trim();
+      const normLobby = row.lobbyAcronym.toLowerCase().trim();
+
+      const politicianId = politicianMap.get(normPolitician);
+      if (!politicianId) {
+        errors++;
+        errorDetails.push(`Politician not found: "${row.politicianName}"`);
+        continue;
+      }
+
+      const sigId = sigMap.get(normLobby);
+      if (!sigId) {
+        errors++;
+        errorDetails.push(`Lobby not found: "${row.lobbyAcronym}"`);
+        continue;
+      }
+
+      try {
+        // Check for existing sponsorship
+        const existing = await db
+          .select()
+          .from(politicianSigSponsorships)
+          .where(and(eq(politicianSigSponsorships.politicianId, politicianId), eq(politicianSigSponsorships.sigId, sigId)))
+          .limit(1);
+
+        if (existing.length > 0) {
+          // Update the existing record
+          await db
+            .update(politicianSigSponsorships)
+            .set({
+              reportedAmount: row.reportedAmount !== undefined ? row.reportedAmount : existing[0].reportedAmount,
+              relationshipType: (row.relationshipType || existing[0].relationshipType) as any,
+              contributionPeriod: row.contributionPeriod || existing[0].contributionPeriod,
+              disclosureSource: row.disclosureSource || existing[0].disclosureSource,
+            })
+            .where(eq(politicianSigSponsorships.id, existing[0].id));
+          updated++;
+        } else {
+          await db.insert(politicianSigSponsorships).values({
+            politicianId,
+            sigId,
+            relationshipType: (row.relationshipType || 'donor') as any,
+            reportedAmount: row.reportedAmount,
+            contributionPeriod: row.contributionPeriod,
+            disclosureSource: row.disclosureSource,
+          });
+          created++;
+        }
+        affectedPoliticianIds.add(politicianId);
+      } catch (e: any) {
+        errors++;
+        errorDetails.push(`Error linking "${row.politicianName}" → "${row.lobbyAcronym}": ${e.message}`);
+      }
+    }
+
+    // Recalculate grades for all affected politicians
+    let politiciansGraded = 0;
+    for (const politicianId of affectedPoliticianIds) {
+      try {
+        await this.recalculateGradeFromSigs(politicianId);
+        politiciansGraded++;
+      } catch (e: any) {
+        errorDetails.push(`Grade recalculate failed for politician ${politicianId}: ${e.message}`);
+      }
+    }
+
+    return { created, updated, errors, politiciansGraded, errorDetails };
   }
 
   async getPoliticiansBySig(sigId: string): Promise<any[]> {

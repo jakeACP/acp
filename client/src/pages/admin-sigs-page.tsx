@@ -121,6 +121,8 @@ export default function AdminSigsPage() {
   const [fixCNumbersResult, setFixCNumbersResult] = useState<{ fixed: number; message: string } | null>(null);
   const [csvUploadResult, setCsvUploadResult] = useState<{ created: number; updated: number; errors: number; message: string } | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const [bulkSponsorResult, setBulkSponsorResult] = useState<{ created: number; updated: number; errors: number; politiciansGraded: number; errorDetails: string[]; message: string } | null>(null);
+  const bulkSponsorInputRef = useRef<HTMLInputElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -284,6 +286,31 @@ export default function AdminSigsPage() {
     },
     onError: (error: any) => {
       toast({ title: "CSV import failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const bulkSponsorMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/sponsorships/bulk-import", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message);
+      }
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      setBulkSponsorResult({ ...data });
+      toast({ title: "Sponsorship import complete", description: data.message });
+    },
+    onError: (error: any) => {
+      toast({ title: "Sponsorship import failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -670,6 +697,115 @@ export default function AdminSigsPage() {
             <button onClick={() => setFixCNumbersResult(null)} className="text-amber-600 dark:text-amber-400 text-xs underline ml-4">dismiss</button>
           </div>
         )}
+
+        {/* Bulk Sponsorship Import */}
+        <Card className="mb-6 border-indigo-200 dark:border-indigo-800">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              Bulk Lobby–Politician Link Import
+            </CardTitle>
+            <CardDescription>
+              Upload a CSV to create or update sponsorship records linking politicians to seeded lobbies.
+              After import, all affected politicians' corruption grades are automatically recalculated.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-3 items-start">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const headers = ["politician_name","lobby_acronym","reported_amount","relationship_type","contribution_period","disclosure_source"];
+                  const sample = [
+                    ["Nancy Pelosi","NRA","500000","donor","2020-2024","OpenSecrets"],
+                    ["Mitch McConnell","AIPAC","750000","primary_sponsor","2022-2024","FEC"],
+                    ["Bernie Sanders","AFL-CIO","0","endorsed","2020-2024","FEC"],
+                  ];
+                  const csv = [headers.join(","), ...sample.map(r => r.join(","))].join("\n");
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "sponsorship-import-template.csv"; a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <FileDown className="h-4 w-4 mr-2" />
+                Download Template
+              </Button>
+              <input
+                ref={bulkSponsorInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setBulkSponsorResult(null);
+                    bulkSponsorMutation.mutate(file);
+                  }
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => bulkSponsorInputRef.current?.click()}
+                disabled={bulkSponsorMutation.isPending}
+              >
+                {bulkSponsorMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileUp className="h-4 w-4 mr-2" />
+                )}
+                {bulkSponsorMutation.isPending ? "Importing…" : "Import CSV"}
+              </Button>
+              <div className="text-xs text-slate-500 dark:text-slate-400 self-center">
+                Required columns: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">politician_name</code>, <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">lobby_acronym</code>.
+                Optional: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">reported_amount</code>, <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">relationship_type</code>, <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">contribution_period</code>, <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">disclosure_source</code>.
+              </div>
+            </div>
+
+            {bulkSponsorMutation.isPending && (
+              <div className="mt-4 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950 p-3">
+                <div className="flex items-center gap-2 text-sm text-indigo-700 dark:text-indigo-300">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Importing sponsorships and recalculating grades…
+                </div>
+              </div>
+            )}
+
+            {!bulkSponsorMutation.isPending && bulkSponsorResult && (
+              <div className={`mt-4 rounded-lg border p-3 ${bulkSponsorResult.errors > 0 ? "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950" : "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-sm space-y-1">
+                    <div className={bulkSponsorResult.errors > 0 ? "text-amber-800 dark:text-amber-200" : "text-green-800 dark:text-green-200"}>
+                      <span className="font-semibold">Import complete</span> —{" "}
+                      <span className="font-semibold">{bulkSponsorResult.created} created</span>,{" "}
+                      <span className="font-semibold">{bulkSponsorResult.updated} updated</span>,{" "}
+                      {bulkSponsorResult.errors > 0 && <span className="text-red-600 dark:text-red-400">{bulkSponsorResult.errors} errors · </span>}
+                      <span className="text-indigo-700 dark:text-indigo-300 font-semibold">{bulkSponsorResult.politiciansGraded} grades recalculated</span>
+                    </div>
+                    {bulkSponsorResult.errorDetails.length > 0 && (
+                      <details className="text-xs text-red-700 dark:text-red-400 mt-1">
+                        <summary className="cursor-pointer select-none">Show {bulkSponsorResult.errorDetails.length} error(s)</summary>
+                        <ul className="mt-1 space-y-0.5 pl-2 list-disc">
+                          {bulkSponsorResult.errorDetails.slice(0, 20).map((e, i) => (
+                            <li key={i}>{e}</li>
+                          ))}
+                          {bulkSponsorResult.errorDetails.length > 20 && (
+                            <li>…and {bulkSponsorResult.errorDetails.length - 20} more</li>
+                          )}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                  <button onClick={() => setBulkSponsorResult(null)} className="text-xs underline text-slate-500 dark:text-slate-400 shrink-0">dismiss</button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="mb-6">
           <CardContent className="pt-6">

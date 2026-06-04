@@ -73,6 +73,22 @@ const upload = multer({
   }
 });
 
+// Multer for CSV/spreadsheet uploads (memory storage, no MIME restriction)
+const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (_req, file, cb) => {
+    const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+    const allowed = ['.csv', '.txt'];
+    const allowedMimes = ['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'];
+    if (allowed.includes(ext) || allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'));
+    }
+  },
+});
+
 // Multer for Signal video uploads (disk storage, up to 500MB)
 const signalsUploadDir = path.resolve(process.cwd(), 'uploads/signals');
 if (!fs.existsSync(signalsUploadDir)) fs.mkdirSync(signalsUploadDir, { recursive: true });
@@ -6425,7 +6441,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // Upload CSV to bulk-create/update SIGs
-  app.post("/api/admin/sigs/upload-csv", ensureAdmin, upload.single("file"), async (req, res) => {
+  app.post("/api/admin/sigs/upload-csv", ensureAdmin, csvUpload.single("file"), async (req, res) => {
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -6897,6 +6913,72 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       res.sendStatus(204);
     } catch (error: any) {
       console.error("Unlink sponsor error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin: Bulk import sponsorships from CSV
+  app.post("/api/admin/sponsorships/bulk-import", ensureAdmin, csvUpload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const text = req.file.buffer.toString("utf-8").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const lines = text.split("\n").filter(l => l.trim());
+      if (lines.length < 2) return res.status(400).json({ message: "CSV must have a header row and at least one data row" });
+
+      function parseCsvRow(line: string): string[] {
+        const fields: string[] = [];
+        let cur = "";
+        let inQuote = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
+            else inQuote = !inQuote;
+          } else if (ch === ',' && !inQuote) {
+            fields.push(cur.trim()); cur = "";
+          } else {
+            cur += ch;
+          }
+        }
+        fields.push(cur.trim());
+        return fields;
+      }
+
+      const headers = parseCsvRow(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, "_"));
+      const rows: Array<{ politicianName: string; lobbyAcronym: string; reportedAmount?: number; relationshipType?: string; contributionPeriod?: string; disclosureSource?: string }> = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const vals = parseCsvRow(lines[i]);
+        const obj: Record<string, string> = {};
+        headers.forEach((h, idx) => { obj[h] = vals[idx] ?? ""; });
+
+        const politicianName = obj["politician_name"] || obj["politician"] || obj["name"] || "";
+        const lobbyAcronym = obj["lobby_acronym"] || obj["lobby"] || obj["sig"] || obj["acronym"] || "";
+        if (!politicianName || !lobbyAcronym) continue;
+
+        const amountRaw = obj["reported_amount"] || obj["amount"] || "";
+        const reportedAmount = amountRaw ? parseInt(amountRaw.replace(/[$,]/g, "")) : undefined;
+
+        rows.push({
+          politicianName,
+          lobbyAcronym,
+          reportedAmount: reportedAmount && !isNaN(reportedAmount) ? reportedAmount : undefined,
+          relationshipType: obj["relationship_type"] || obj["relationship"] || undefined,
+          contributionPeriod: obj["contribution_period"] || obj["period"] || undefined,
+          disclosureSource: obj["disclosure_source"] || obj["source"] || undefined,
+        });
+      }
+
+      if (rows.length === 0) return res.status(400).json({ message: "No valid data rows found in CSV" });
+
+      const result = await storage.bulkImportSponsorships(rows);
+      res.json({
+        ...result,
+        message: `${result.created} created, ${result.updated} updated, ${result.errors} errors · ${result.politiciansGraded} politician grades recalculated`,
+      });
+    } catch (error: any) {
+      console.error("Bulk sponsorship import error:", error);
       res.status(500).json({ message: error.message });
     }
   });
