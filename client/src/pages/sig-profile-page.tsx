@@ -302,6 +302,14 @@ export default function SigProfilePage() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-start gap-3">
             <h1 className="text-3xl font-bold text-foreground">{sig.name}</h1>
+            {displayScore !== null && (
+              <div className="flex flex-col items-center shrink-0">
+                <span className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-black shadow-lg border-2 border-white dark:border-gray-800 ${gradeColor(influenceGrade(displayScore))}`}>
+                  {influenceGrade(displayScore)}
+                </span>
+                <span className="text-[10px] text-muted-foreground mt-0.5 font-medium">Community</span>
+              </div>
+            )}
             {effectiveGrade && (
               <span className={`text-xl font-black px-3 py-1 rounded-lg shrink-0 ${gradeColor(effectiveGrade)}`}>
                 {effectiveGrade}
