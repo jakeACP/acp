@@ -10750,8 +10750,18 @@ export class DatabaseStorage implements IStorage {
       let matchStatus: "in_db" | "possible_duplicate" | "new" = "new";
       let matchedProfile: string | undefined;
 
+      // Extract a short keyword from the office title for loose matching (e.g. "Senator", "Mayor")
+      const officeKeyword = c.office?.split(/\s+/).find(w => w.length >= 4) ?? "";
+      // Map raceLevel to position level values
+      const levelAliases: Record<string, string[]> = {
+        federal: ["federal"],
+        state: ["state"],
+        local: ["county", "city", "local", "municipal"],
+      };
+      const allowedLevels = levelAliases[c.raceLevel ?? "local"] ?? [];
+
       if (lastName.length >= 2) {
-        // 1. Exact full-name match in politicianProfiles → "in_db" (strong signal regardless of state)
+        // Tier 1: Exact full-name match → "in_db" (strongest signal)
         const [exactMatch] = await db
           .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName })
           .from(politicianProfiles)
@@ -10762,24 +10772,61 @@ export class DatabaseStorage implements IStorage {
           matchStatus = "in_db";
           matchedProfile = exactMatch.fullName;
         } else if (nameParts.length >= 2) {
-          // 2. First + last name match WITH state constraint (handles middle names/initials) → "in_db"
-          const firstLastConditions: any[] = [
-            ilike(politicianProfiles.fullName, `%${firstName}%`),
-            ilike(politicianProfiles.fullName, `%${lastName}%`),
-          ];
-          if (c.state) firstLastConditions.push(ilike(politicianProfiles.notes, `%${c.state}%`));
-
-          const [firstLastMatch] = await db
-            .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName })
+          // Tier 2+3: First+last match — fetch candidate profiles and check state+office via linked positions
+          const nameMatches = await db
+            .select({
+              id: politicianProfiles.id,
+              fullName: politicianProfiles.fullName,
+              notes: politicianProfiles.notes,
+              positionId: politicianProfiles.positionId,
+              targetPositionId: politicianProfiles.targetPositionId,
+            })
             .from(politicianProfiles)
-            .where(and(...firstLastConditions))
-            .limit(1);
+            .where(and(
+              ilike(politicianProfiles.fullName, `%${firstName}%`),
+              ilike(politicianProfiles.fullName, `%${lastName}%`)
+            ))
+            .limit(5);
 
-          if (firstLastMatch) {
-            matchStatus = "in_db";
-            matchedProfile = firstLastMatch.fullName;
-          } else {
-            // 3. Last-name only (with optional state constraint) → "possible_duplicate"
+          for (const profile of nameMatches) {
+            // Look up linked position records for state+office verification
+            const posIds = [profile.positionId, profile.targetPositionId].filter(Boolean) as string[];
+            let stateOk = !c.state; // if no state filter, always passes
+            let officeOk = false;
+
+            if (posIds.length > 0) {
+              const positions = await db
+                .select({ title: politicalPositions.title, jurisdiction: politicalPositions.jurisdiction, level: politicalPositions.level })
+                .from(politicalPositions)
+                .where(inArray(politicalPositions.id, posIds));
+
+              for (const pos of positions) {
+                if (c.state && pos.jurisdiction?.toLowerCase().includes(c.state.toLowerCase())) stateOk = true;
+                if (
+                  (officeKeyword && pos.title?.toLowerCase().includes(officeKeyword.toLowerCase())) ||
+                  (allowedLevels.length > 0 && pos.level && allowedLevels.includes(pos.level.toLowerCase()))
+                ) officeOk = true;
+              }
+            } else {
+              // No linked position — fall back to notes for state, can't verify office
+              if (!c.state || profile.notes?.toLowerCase().includes(c.state.toLowerCase())) stateOk = true;
+              officeOk = true; // can't disprove without position data
+            }
+
+            if (stateOk && officeOk) {
+              // name + state + office all align → definitely in DB
+              matchStatus = "in_db";
+              matchedProfile = profile.fullName;
+              break;
+            } else if (stateOk && matchStatus === "new") {
+              // name + state match but office uncertain → possible duplicate
+              matchStatus = "possible_duplicate";
+              matchedProfile = profile.fullName;
+            }
+          }
+
+          // Tier 4: Last name + state (via notes) → possible_duplicate if nothing stronger found
+          if (matchStatus === "new") {
             const looseConditions: any[] = [ilike(politicianProfiles.fullName, `%${lastName}%`)];
             if (c.state) looseConditions.push(ilike(politicianProfiles.notes, `%${c.state}%`));
 
@@ -10797,14 +10844,17 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // 4. Already queued (any zip, pending or approved) with same name → "possible_duplicate"
+      // Tier 5: Already queued (pending/approved) with same name+state+office → "possible_duplicate"
       if (matchStatus === "new") {
+        const queueConditions: any[] = [
+          ilike(zipCandidateImports.candidateName, candidateName),
+          or(eq(zipCandidateImports.status, "pending"), eq(zipCandidateImports.status, "approved")),
+        ];
+        if (c.state) queueConditions.push(ilike(zipCandidateImports.state, c.state));
+        if (c.office) queueConditions.push(ilike(zipCandidateImports.office, c.office));
         const [existingImport] = await db.select({ id: zipCandidateImports.id })
           .from(zipCandidateImports)
-          .where(and(
-            ilike(zipCandidateImports.candidateName, candidateName),
-            or(eq(zipCandidateImports.status, "pending"), eq(zipCandidateImports.status, "approved"))
-          ))
+          .where(and(...queueConditions))
           .limit(1);
         if (existingImport) matchStatus = "possible_duplicate";
       }

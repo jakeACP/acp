@@ -2537,22 +2537,33 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       // Fire-and-forget: AI background candidate lookup for this zip (once per 30 days)
       if (process.env.OPENAI_API_KEY) {
         void (async () => {
+          let foundCount = 0, newCount = 0, possibleDupCount = 0, inDbCount = 0;
           try {
             const alreadyDone = await storage.hasZipBeenImportedRecently(zipCode, 30);
             if (!alreadyDone) {
               const aiCandidates = await findAllCandidatesByZip(zipCode, undefined, primaryState);
-              if (aiCandidates.length > 0) {
-                const result = await storage.queueZipCandidateImports(zipCode, aiCandidates, "background");
-                await storage.logZipLookupRun(zipCode, {
-                  total: result.total,
-                  queued: result.queued,
-                  possibleDup: 0,
-                  inDb: result.duplicates,
-                }, "background");
+              // Always classify via the shared matcher so dedup quality matches the preview path
+              const classified = await storage.previewZipCandidates(zipCode, aiCandidates);
+              foundCount = classified.length;
+              newCount = classified.filter(c => c.matchStatus === "new").length;
+              possibleDupCount = classified.filter(c => c.matchStatus === "possible_duplicate").length;
+              inDbCount = classified.filter(c => c.matchStatus === "in_db").length;
+              if (newCount > 0) {
+                // queueZipCandidateImports respects matchStatus and only inserts "new" rows
+                await storage.queueZipCandidateImports(zipCode, classified, "background");
               }
+            } else {
+              return; // already checked recently — skip logging to avoid inflating history
             }
           } catch (bgErr) {
             console.error("Background zip candidate lookup error:", bgErr);
+          } finally {
+            // Always log the attempt (even zero results) so hasZipBeenImportedRecently works correctly
+            try {
+              await storage.logZipLookupRun(zipCode, { total: foundCount, queued: newCount, possibleDup: possibleDupCount, inDb: inDbCount }, "background");
+            } catch (logErr) {
+              console.error("Failed to log background zip run:", logErr);
+            }
           }
         })();
       }
