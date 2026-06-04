@@ -1,0 +1,312 @@
+# Anti-Corruption Party (ACP) Terms of Service
+
+**Effective Date:** [Insert Date]
+
+Welcome to the Anti-Corruption Party ("ACP," "we," "our," or "us"). These Terms of Service ("Terms") govern your access to and use of the ACP website, mobile applications, services, content, and related features (collectively, the "Platform").
+
+By creating an account, accessing, or using the Platform, you agree to be bound by these Terms.
+
+---
+
+# 1. Mission of the Platform
+
+ACP is a civic engagement platform designed to help citizens:
+
+* Discuss public issues
+* Share information and opinions
+* Participate in polls and petitions
+* Organize events and groups
+* Support candidates and causes
+* Promote government transparency
+* Encourage democratic participation
+
+ACP does not endorse any political ideology, party, candidate, religion, or movement except for its core mission of reducing corruption and increasing transparency in government.
+
+---
+
+# 2. Eligibility
+
+To use the Platform, you must:
+
+* Be at least 13 years old.
+* Comply with all applicable laws.
+* Provide accurate registration information.
+* Not be prohibited from using online services under applicable law.
+
+Certain features may require age verification, identity verification, address verification, or additional eligibility requirements.
+
+---
+
+# 3. Account Responsibilities
+
+You are responsible for:
+
+* Maintaining the security of your account.
+* Protecting your password and authentication credentials.
+* All activity occurring under your account.
+* Providing truthful information.
+
+You may not:
+
+* Impersonate another person.
+* Create fake identities.
+* Create accounts for automated manipulation.
+* Circumvent account restrictions.
+* Share accounts with others.
+
+ACP reserves the right to suspend or terminate accounts that violate these Terms.
+
+---
+
+# 4. User Content
+
+You retain ownership of content you submit, including:
+
+* Posts
+* Comments
+* Videos
+* Images
+* Polls
+* Petitions
+* Messages
+* Group content
+
+By posting content, you grant ACP a worldwide, non-exclusive license to display, distribute, store, and process your content solely for operating and improving the Platform.
+
+You represent that:
+
+* You own the content or have permission to post it.
+* The content does not violate any laws.
+* The content does not infringe intellectual property rights.
+
+---
+
+# 5. Prohibited Conduct
+
+Users may not:
+
+* Harass, threaten, or intimidate others.
+* Promote violence or terrorism.
+* Encourage illegal activity.
+* Publish child exploitation material.
+* Share malware, viruses, or malicious code.
+* Engage in fraud or deceptive practices.
+* Manipulate voting systems.
+* Interfere with Platform operations.
+* Circumvent security measures.
+* Use automated systems to artificially influence engagement, polling, elections, or public perception.
+
+ACP may remove content or restrict accounts at its sole discretion.
+
+---
+
+# 6. Political Transparency
+
+ACP seeks to promote transparency and accountability.
+
+Users may not:
+
+* Misrepresent campaign finance information.
+* Falsify endorsements.
+* Falsify election results.
+* Manipulate constituent feedback systems.
+* Create fake political organizations for deceptive purposes.
+
+Candidates and organizations using ACP tools agree to provide truthful information regarding their identity and public activities.
+
+---
+
+# 7. Polls, Petitions, and Voting
+
+Polls, petitions, and voting mechanisms on ACP are informational tools unless explicitly designated otherwise.
+
+ACP does not guarantee:
+
+* Legal recognition of votes.
+* Election certification.
+* Government adoption of results.
+
+ACP reserves the right to audit, remove, or invalidate activity believed to be fraudulent or manipulated.
+
+---
+
+# 8. Candidate Profiles
+
+Candidates and public officials may create profiles on ACP.
+
+ACP may:
+
+* Verify identities.
+* Request documentation.
+* Display publicly available information.
+* Display campaign finance data obtained from public records.
+
+ACP does not guarantee endorsement, certification, or electoral success.
+
+---
+
+# 9. Donations and Contributions
+
+ACP may facilitate donations, memberships, subscriptions, fundraising campaigns, or political contributions.
+
+Users are responsible for complying with all applicable election, campaign finance, tax, and fundraising laws.
+
+ACP reserves the right to:
+
+* Reject contributions.
+* Refund contributions.
+* Suspend fundraising activities.
+* Verify donor identity.
+
+All payments are subject to the terms of the applicable payment processor.
+
+---
+
+# 10. Artificial Intelligence Features
+
+ACP may offer AI-powered tools.
+
+AI-generated content:
+
+* May be inaccurate.
+* Should not be considered legal, financial, medical, or professional advice.
+* Reflects algorithmic outputs and not official ACP positions.
+
+Users remain solely responsible for content created or published using AI tools.
+
+---
+
+# 11. Moderation
+
+ACP seeks to balance free expression with community safety.
+
+ACP may:
+
+* Remove content.
+* Restrict visibility.
+* Suspend accounts.
+* Permanently ban users.
+
+Moderation decisions may consider:
+
+* Spam
+* Fraud
+* Manipulation
+* Harassment
+* Threats
+* Doxxing
+* Platform integrity
+
+ACP is not obligated to host any particular content.
+
+---
+
+# 12. Privacy
+
+Use of ACP is also governed by our Privacy Policy.
+
+By using the Platform, you consent to the collection, processing, and storage of information as described in the Privacy Policy.
+
+---
+
+# 13. Intellectual Property
+
+The ACP name, logos, branding, software, designs, and Platform features are protected by applicable intellectual property laws.
+
+Users may not:
+
+* Copy ACP software.
+* Reverse engineer proprietary systems.
+* Use ACP trademarks without permission.
+
+---
+
+# 14. Platform Availability
+
+ACP may modify, suspend, or discontinue any portion of the Platform at any time.
+
+ACP does not guarantee:
+
+* Continuous availability
+* Error-free operation
+* Permanent access to content
+
+Users should maintain copies of important information.
+
+---
+
+# 15. Disclaimer of Warranties
+
+The Platform is provided "AS IS" and "AS AVAILABLE."
+
+ACP disclaims all warranties, including:
+
+* Merchantability
+* Fitness for a particular purpose
+* Non-infringement
+* Accuracy of information
+
+Your use of the Platform is at your own risk.
+
+---
+
+# 16. Limitation of Liability
+
+To the fullest extent permitted by law, ACP and its officers, volunteers, employees, affiliates, and partners shall not be liable for:
+
+* Indirect damages
+* Consequential damages
+* Lost profits
+* Lost data
+* Reputational harm
+
+ACP's total liability shall not exceed the amount paid by the user to ACP during the twelve months preceding the claim.
+
+---
+
+# 17. Indemnification
+
+You agree to indemnify and hold harmless ACP from claims, liabilities, damages, losses, and expenses arising from:
+
+* Your use of the Platform.
+* Your content.
+* Your violation of these Terms.
+* Your violation of applicable laws.
+
+---
+
+# 18. Termination
+
+ACP may terminate or suspend accounts at any time for violations of these Terms or conduct harmful to the Platform.
+
+Users may delete their accounts at any time.
+
+Certain information may be retained as required by law or for legitimate operational purposes.
+
+---
+
+# 19. Changes to These Terms
+
+ACP may update these Terms periodically.
+
+Continued use of the Platform after changes become effective constitutes acceptance of the revised Terms.
+
+---
+
+# 20. Governing Law
+
+These Terms shall be governed by the laws of the State of Minnesota, without regard to conflict-of-law principles.
+
+Any disputes shall be resolved in the state or federal courts located in Minnesota.
+
+---
+
+# 21. Contact Information
+
+Anti-Corruption Party (ACP)
+
+Website: https://anticorruptionparty.us
+
+Email: [Insert Contact Email]
+
+By using ACP, you acknowledge that you have read, understood, and agreed to these Terms of Service.
