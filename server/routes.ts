@@ -2537,33 +2537,29 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       // Fire-and-forget: AI background candidate lookup for this zip (once per 30 days)
       if (process.env.OPENAI_API_KEY) {
         void (async () => {
-          let foundCount = 0, newCount = 0, possibleDupCount = 0, inDbCount = 0;
           try {
             const alreadyDone = await storage.hasZipBeenImportedRecently(zipCode, 30);
-            if (!alreadyDone) {
-              const aiCandidates = await findAllCandidatesByZip(zipCode, undefined, primaryState);
-              // Always classify via the shared matcher so dedup quality matches the preview path
-              const classified = await storage.previewZipCandidates(zipCode, aiCandidates);
-              foundCount = classified.length;
-              newCount = classified.filter(c => c.matchStatus === "new").length;
-              possibleDupCount = classified.filter(c => c.matchStatus === "possible_duplicate").length;
-              inDbCount = classified.filter(c => c.matchStatus === "in_db").length;
-              if (newCount > 0) {
-                // queueZipCandidateImports respects matchStatus and only inserts "new" rows
-                await storage.queueZipCandidateImports(zipCode, classified, "background");
-              }
-            } else {
-              return; // already checked recently — skip logging to avoid inflating history
+            if (alreadyDone) return; // skip — don't log, don't refresh the 30-day window
+
+            // Classify via the shared matcher (same quality as admin preview path)
+            const aiCandidates = await findAllCandidatesByZip(zipCode, undefined, primaryState);
+            const classified = await storage.previewZipCandidates(zipCode, aiCandidates);
+            const newCount = classified.filter(c => c.matchStatus === "new").length;
+            const possibleDupCount = classified.filter(c => c.matchStatus === "possible_duplicate").length;
+            const inDbCount = classified.filter(c => c.matchStatus === "in_db").length;
+
+            if (newCount > 0) {
+              // queueZipCandidateImports respects matchStatus and only inserts "new" rows
+              await storage.queueZipCandidateImports(zipCode, classified, "background");
             }
+
+            // Log after a real lookup attempt (even zero results) so 30-day gate works correctly.
+            // Logging is separate from the main work — failure here does not affect queued imports.
+            await storage.logZipLookupRun(zipCode, { total: classified.length, queued: newCount, possibleDup: possibleDupCount, inDb: inDbCount }, "background").catch(logErr => {
+              console.error("Failed to log background zip run:", logErr);
+            });
           } catch (bgErr) {
             console.error("Background zip candidate lookup error:", bgErr);
-          } finally {
-            // Always log the attempt (even zero results) so hasZipBeenImportedRecently works correctly
-            try {
-              await storage.logZipLookupRun(zipCode, { total: foundCount, queued: newCount, possibleDup: possibleDupCount, inDb: inDbCount }, "background");
-            } catch (logErr) {
-              console.error("Failed to log background zip run:", logErr);
-            }
           }
         })();
       }
