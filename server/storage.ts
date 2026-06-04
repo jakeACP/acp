@@ -709,13 +709,13 @@ export interface IStorage {
   deleteCandidateDistrict(candidateId: string, districtId: string): Promise<void>;
 
   // Zip Candidate Imports
-  queueZipCandidateImports(zipCode: string, candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string }>, source?: string): Promise<{ queued: number; duplicates: number }>;
+  queueZipCandidateImports(zipCode: string, candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; district?: string; matchStatus?: "in_db" | "possible_duplicate" | "new" }>, source?: string): Promise<{ queued: number; duplicates: number; total: number }>;
   getPendingZipImports(): Promise<ZipCandidateImport[]>;
   approveZipImport(id: string, reviewedBy: string): Promise<ZipCandidateImport>;
   rejectZipImport(id: string, reviewedBy: string, note?: string): Promise<ZipCandidateImport>;
   getZipImportHistory(zipCode?: string, limit?: number): Promise<ZipCandidateImport[]>;
   hasZipBeenImportedRecently(zipCode: string, days?: number): Promise<boolean>;
-  previewZipCandidates(zipCode: string, candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string }>): Promise<Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; isDuplicate: boolean; matchedProfile?: string }>>;
+  previewZipCandidates(zipCode: string, candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; district?: string }>): Promise<Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; district?: string; matchStatus: "in_db" | "possible_duplicate" | "new"; matchedProfile?: string }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -10597,17 +10597,24 @@ export class DatabaseStorage implements IStorage {
 
   async queueZipCandidateImports(
     zipCode: string,
-    candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string }>,
+    candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; district?: string; matchStatus?: "in_db" | "possible_duplicate" | "new" }>,
     source: string = "background"
-  ): Promise<{ queued: number; duplicates: number }> {
+  ): Promise<{ queued: number; duplicates: number; total: number }> {
     let queued = 0;
     let duplicates = 0;
+    const total = candidates.length;
 
     for (const c of candidates) {
       const candidateName = c.name?.trim();
       if (!candidateName) continue;
 
-      // Dedup: already in zip_candidate_imports (pending or approved) for this zip
+      // If caller provided matchStatus (from preview), respect it — only queue truly new candidates
+      if (c.matchStatus && c.matchStatus !== "new") {
+        duplicates++;
+        continue;
+      }
+
+      // Dedup guard: check zip_candidate_imports for same zip+name with active status
       const [existingImport] = await db.select({ id: zipCandidateImports.id })
         .from(zipCandidateImports)
         .where(and(
@@ -10622,28 +10629,7 @@ export class DatabaseStorage implements IStorage {
         continue;
       }
 
-      // Check if matched to existing politician profile by last name + state
-      const nameParts = candidateName.split(/\s+/);
-      const lastName = nameParts[nameParts.length - 1];
-      let matchedProfileId: string | null = null;
-
-      if (lastName.length >= 3) {
-        const stateFilter = c.state
-          ? ilike(politicianProfiles.notes, `%${c.state}%`)
-          : sql`1=1`;
-        const [matchedProfile] = await db.select({ id: politicianProfiles.id })
-          .from(politicianProfiles)
-          .where(and(
-            ilike(politicianProfiles.fullName, `%${lastName}%`),
-            stateFilter
-          ))
-          .limit(1);
-        if (matchedProfile) matchedProfileId = matchedProfile.id;
-      }
-
-      // If matched to existing profile, mark auto-approved (no admin action needed)
-      const status = matchedProfileId ? "approved" : "pending";
-
+      // All new candidates go to pending status — admin must review every import
       await db.insert(zipCandidateImports).values({
         zipCode,
         city: c.city ?? null,
@@ -10652,16 +10638,14 @@ export class DatabaseStorage implements IStorage {
         office: c.office,
         raceLevel: c.raceLevel ?? "local",
         party: c.party ?? null,
-        status,
+        status: "pending",
         source,
-        politicianId: matchedProfileId,
       });
 
-      if (!matchedProfileId) queued++;
-      else duplicates++; // already matched, not a net-new import needing review
+      queued++;
     }
 
-    return { queued, duplicates };
+    return { queued, duplicates, total };
   }
 
   async getPendingZipImports(): Promise<ZipCandidateImport[]> {
@@ -10736,47 +10720,65 @@ export class DatabaseStorage implements IStorage {
 
   async previewZipCandidates(
     zipCode: string,
-    candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string }>
-  ): Promise<Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; isDuplicate: boolean; matchedProfile?: string }>> {
+    candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; district?: string }>
+  ): Promise<Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; district?: string; matchStatus: "in_db" | "possible_duplicate" | "new"; matchedProfile?: string }>> {
     const results = [];
     for (const c of candidates) {
       const candidateName = c.name?.trim();
       if (!candidateName) continue;
 
-      // Check existing import
-      const [existingImport] = await db.select({ id: zipCandidateImports.id })
-        .from(zipCandidateImports)
-        .where(and(
-          eq(zipCandidateImports.zipCode, zipCode),
-          ilike(zipCandidateImports.candidateName, candidateName),
-          or(eq(zipCandidateImports.status, "pending"), eq(zipCandidateImports.status, "approved"))
-        ))
-        .limit(1);
-
-      // Check existing politician profile by last name
       const nameParts = candidateName.split(/\s+/);
       const lastName = nameParts[nameParts.length - 1];
+
+      // 1. Check for exact full-name match in politician_profiles → "in_db"
+      let matchStatus: "in_db" | "possible_duplicate" | "new" = "new";
       let matchedProfile: string | undefined;
 
       if (lastName.length >= 3) {
+        // Exact full-name match (case-insensitive) with optional state filter
         const stateFilter = c.state
-          ? ilike(politicianProfiles.notes, `%${c.state}%`)
+          ? ilike(politicianProfiles.notes, `%State: ${c.state}%`)
           : sql`1=1`;
-        const [mp] = await db.select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName })
+        const [exactMatch] = await db
+          .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName })
           .from(politicianProfiles)
-          .where(and(
-            ilike(politicianProfiles.fullName, `%${lastName}%`),
-            stateFilter
-          ))
+          .where(and(ilike(politicianProfiles.fullName, candidateName), stateFilter))
           .limit(1);
-        if (mp) matchedProfile = mp.fullName;
+
+        if (exactMatch) {
+          matchStatus = "in_db";
+          matchedProfile = exactMatch.fullName;
+        } else {
+          // Loose last-name match → "possible_duplicate"
+          const loosestateFilter = c.state
+            ? ilike(politicianProfiles.notes, `%${c.state}%`)
+            : sql`1=1`;
+          const [looseMatch] = await db
+            .select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName })
+            .from(politicianProfiles)
+            .where(and(ilike(politicianProfiles.fullName, `%${lastName}%`), loosestateFilter))
+            .limit(1);
+          if (looseMatch) {
+            matchStatus = "possible_duplicate";
+            matchedProfile = looseMatch.fullName;
+          }
+        }
       }
 
-      results.push({
-        ...c,
-        isDuplicate: !!existingImport || !!matchedProfile,
-        matchedProfile,
-      });
+      // 2. Already queued for this zip (pending or approved) → "possible_duplicate" (or keep in_db)
+      if (matchStatus === "new") {
+        const [existingImport] = await db.select({ id: zipCandidateImports.id })
+          .from(zipCandidateImports)
+          .where(and(
+            eq(zipCandidateImports.zipCode, zipCode),
+            ilike(zipCandidateImports.candidateName, candidateName),
+            or(eq(zipCandidateImports.status, "pending"), eq(zipCandidateImports.status, "approved"))
+          ))
+          .limit(1);
+        if (existingImport) matchStatus = "possible_duplicate";
+      }
+
+      results.push({ ...c, matchStatus, matchedProfile });
     }
     return results;
   }

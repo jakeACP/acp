@@ -573,6 +573,7 @@ interface CandidateZipResponse {
     party?: string;
     city?: string;
     state?: string;
+    district?: string;
   }>;
 }
 
@@ -592,12 +593,30 @@ export async function findAllCandidatesByZip(
     messages: [
       {
         role: "system",
-        content: `You are a political data assistant. Return a JSON object with a "candidates" array listing all known political candidates and current officeholders in or near the given US location. Include ALL levels: federal (US Senate, US House of Representatives), state (Governor, Lt. Governor, Attorney General, state Senate/House, Secretary of State, etc.), and local (mayor, city council, school board, county commissioner, sheriff, judge, etc.). For each entry include: name (full name), office (specific official title), raceLevel ("federal", "state", or "local"), party (party affiliation or "Independent"), city (city name), state (2-letter state code). Only include real, verifiable people — do NOT invent names. Return up to 30 results ordered from federal to local.`,
+        content: `You are a political data assistant specializing in the current 2025-2026 US election cycle. Return a JSON object with a "candidates" array listing all known political candidates and current officeholders for the given US zip code location. Include ALL levels:
+- federal: US Senate and US House of Representatives (include the specific congressional district number)
+- state: Governor, Lt. Governor, Attorney General, Secretary of State, state Senate, state House/Assembly, and other statewide offices
+- local: mayor, city council, school board, county commissioner, county clerk, sheriff, judge, and other municipal/county offices — list the specific municipality and district where applicable
+
+For each candidate include ALL of these fields:
+  name (string, full legal name),
+  office (string, specific official title e.g. "U.S. Representative, 12th District" or "City Council Member, District 4"),
+  raceLevel (string, exactly "federal", "state", or "local"),
+  party (string, full party name or "Independent"),
+  city (string, city or municipality name),
+  state (string, 2-letter state code e.g. "CA"),
+  district (string or null, district/ward number if applicable e.g. "12th Congressional District" or "Ward 3")
+
+Rules:
+- Only include real, verifiable people — do NOT invent or hallucinate names.
+- For local offices, list positions specific to the municipality or county that covers zip code ${zipCode} first.
+- Return up to 40 results, ordered federal → state → local.
+- If a field is unknown, use null — never omit the field key.`,
       },
       { role: "user", content: prompt },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.2,
+    temperature: 0.1,
   });
 
   const content = response.choices[0]?.message?.content;

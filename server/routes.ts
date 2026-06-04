@@ -2587,22 +2587,22 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Queue new candidates from a zip lookup (admin-initiated manual import)
+  // Queue new candidates from a zip lookup — accepts previewed candidates from the client
+  // so we never call OpenAI a second time and only queue candidates with matchStatus "new"
   app.post("/api/admin/zip-candidate-queue", async (req, res) => {
     if (!req.isAuthenticated() || req.user.role !== "admin") {
       return res.status(403).json({ message: "Admin access required" });
     }
-    const { zipCode } = req.body;
+    const { zipCode, candidates } = req.body;
     if (!zipCode || !/^\d{5}$/.test(zipCode)) {
       return res.status(400).json({ message: "Valid 5-digit zip code required" });
     }
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ message: "OpenAI API key not configured" });
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return res.status(400).json({ message: "candidates array required (from preview results)" });
     }
     try {
-      const candidates = await findAllCandidatesByZip(zipCode);
       const result = await storage.queueZipCandidateImports(zipCode, candidates, "manual");
-      res.json({ zipCode, ...result, total: candidates.length });
+      res.json({ zipCode, ...result });
     } catch (err: any) {
       console.error("Zip candidate queue error:", err);
       res.status(500).json({ message: err.message || "Queue failed" });
@@ -2620,6 +2620,20 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         const pending = await storage.getPendingZipImports();
         return res.json(pending);
       }
+      const history = await storage.getZipImportHistory(zipCode, 200);
+      res.json(history);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // History of all zip candidate lookups (any status, optionally filtered by zip)
+  app.get("/api/admin/zip-candidate-history", async (req, res) => {
+    if (!req.isAuthenticated() || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    try {
+      const { zipCode } = req.query as { zipCode?: string };
       const history = await storage.getZipImportHistory(zipCode, 200);
       res.json(history);
     } catch (err: any) {
