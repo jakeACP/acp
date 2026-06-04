@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, politicalParties, partyLeaders, partyBallotAccess, partyPolicyPositions, partyEndorsements, partyUserRatings, partyControversies, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse } from "@shared/schema";
+import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, politicalParties, partyLeaders, partyBallotAccess, partyPolicyPositions, partyEndorsements, partyUserRatings, partyControversies, zipCandidateImports, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse, type ZipCandidateImport } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, composeJobs, pledgeRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest, type ComposeJob, type SignalComment, type InsertSignalComment } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
@@ -707,6 +707,15 @@ export interface IStorage {
   listCandidateDistricts(districtId: string): Promise<any[]>;
   createCandidateDistrict(candidateId: string, districtId: string): Promise<any>;
   deleteCandidateDistrict(candidateId: string, districtId: string): Promise<void>;
+
+  // Zip Candidate Imports
+  queueZipCandidateImports(zipCode: string, candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string }>, source?: string): Promise<{ queued: number; duplicates: number }>;
+  getPendingZipImports(): Promise<ZipCandidateImport[]>;
+  approveZipImport(id: string, reviewedBy: string): Promise<ZipCandidateImport>;
+  rejectZipImport(id: string, reviewedBy: string, note?: string): Promise<ZipCandidateImport>;
+  getZipImportHistory(zipCode?: string, limit?: number): Promise<ZipCandidateImport[]>;
+  hasZipBeenImportedRecently(zipCode: string, days?: number): Promise<boolean>;
+  previewZipCandidates(zipCode: string, candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string }>): Promise<Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; isDuplicate: boolean; matchedProfile?: string }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -10582,6 +10591,194 @@ export class DatabaseStorage implements IStorage {
         await db.insert(politicalParties).values(party);
       }
     }
+  }
+
+  // ── Zip Candidate Imports ──────────────────────────────────────────────────
+
+  async queueZipCandidateImports(
+    zipCode: string,
+    candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string }>,
+    source: string = "background"
+  ): Promise<{ queued: number; duplicates: number }> {
+    let queued = 0;
+    let duplicates = 0;
+
+    for (const c of candidates) {
+      const candidateName = c.name?.trim();
+      if (!candidateName) continue;
+
+      // Dedup: already in zip_candidate_imports (pending or approved) for this zip
+      const [existingImport] = await db.select({ id: zipCandidateImports.id })
+        .from(zipCandidateImports)
+        .where(and(
+          eq(zipCandidateImports.zipCode, zipCode),
+          ilike(zipCandidateImports.candidateName, candidateName),
+          or(eq(zipCandidateImports.status, "pending"), eq(zipCandidateImports.status, "approved"))
+        ))
+        .limit(1);
+
+      if (existingImport) {
+        duplicates++;
+        continue;
+      }
+
+      // Check if matched to existing politician profile by last name + state
+      const nameParts = candidateName.split(/\s+/);
+      const lastName = nameParts[nameParts.length - 1];
+      let matchedProfileId: string | null = null;
+
+      if (lastName.length >= 3) {
+        const stateFilter = c.state
+          ? ilike(politicianProfiles.notes, `%${c.state}%`)
+          : sql`1=1`;
+        const [matchedProfile] = await db.select({ id: politicianProfiles.id })
+          .from(politicianProfiles)
+          .where(and(
+            ilike(politicianProfiles.fullName, `%${lastName}%`),
+            stateFilter
+          ))
+          .limit(1);
+        if (matchedProfile) matchedProfileId = matchedProfile.id;
+      }
+
+      // If matched to existing profile, mark auto-approved (no admin action needed)
+      const status = matchedProfileId ? "approved" : "pending";
+
+      await db.insert(zipCandidateImports).values({
+        zipCode,
+        city: c.city ?? null,
+        state: c.state ?? null,
+        candidateName,
+        office: c.office,
+        raceLevel: c.raceLevel ?? "local",
+        party: c.party ?? null,
+        status,
+        source,
+        politicianId: matchedProfileId,
+      });
+
+      if (!matchedProfileId) queued++;
+      else duplicates++; // already matched, not a net-new import needing review
+    }
+
+    return { queued, duplicates };
+  }
+
+  async getPendingZipImports(): Promise<ZipCandidateImport[]> {
+    return db.select().from(zipCandidateImports)
+      .where(eq(zipCandidateImports.status, "pending"))
+      .orderBy(desc(zipCandidateImports.foundAt));
+  }
+
+  async approveZipImport(id: string, reviewedBy: string): Promise<ZipCandidateImport> {
+    const [imp] = await db.select().from(zipCandidateImports)
+      .where(eq(zipCandidateImports.id, id)).limit(1);
+    if (!imp) throw new Error("Import not found");
+
+    // Create a new politician profile for this candidate
+    const [profile] = await db.insert(politicianProfiles).values({
+      fullName: imp.candidateName,
+      party: imp.party ?? null,
+      profileType: "candidate",
+      isCurrent: true,
+      notes: `Office: ${imp.office}; State: ${imp.state ?? ""}; City: ${imp.city ?? ""}; Source: AI zip lookup (${imp.zipCode})`,
+    } as any).returning();
+
+    const [updated] = await db.update(zipCandidateImports)
+      .set({
+        status: "approved",
+        reviewedBy,
+        reviewedAt: new Date(),
+        politicianId: profile.id,
+      })
+      .where(eq(zipCandidateImports.id, id))
+      .returning();
+    return updated;
+  }
+
+  async rejectZipImport(id: string, reviewedBy: string, note?: string): Promise<ZipCandidateImport> {
+    const [updated] = await db.update(zipCandidateImports)
+      .set({
+        status: "rejected",
+        reviewedBy,
+        reviewedAt: new Date(),
+        reviewNote: note ?? null,
+      })
+      .where(eq(zipCandidateImports.id, id))
+      .returning();
+    if (!updated) throw new Error("Import not found");
+    return updated;
+  }
+
+  async getZipImportHistory(zipCode?: string, limit: number = 100): Promise<ZipCandidateImport[]> {
+    if (zipCode) {
+      return db.select().from(zipCandidateImports)
+        .where(eq(zipCandidateImports.zipCode, zipCode))
+        .orderBy(desc(zipCandidateImports.foundAt))
+        .limit(limit);
+    }
+    return db.select().from(zipCandidateImports)
+      .orderBy(desc(zipCandidateImports.foundAt))
+      .limit(limit);
+  }
+
+  async hasZipBeenImportedRecently(zipCode: string, days: number = 30): Promise<boolean> {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const [existing] = await db.select({ id: zipCandidateImports.id })
+      .from(zipCandidateImports)
+      .where(and(
+        eq(zipCandidateImports.zipCode, zipCode),
+        sql`${zipCandidateImports.foundAt} > ${cutoff.toISOString()}`
+      ))
+      .limit(1);
+    return !!existing;
+  }
+
+  async previewZipCandidates(
+    zipCode: string,
+    candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string }>
+  ): Promise<Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; isDuplicate: boolean; matchedProfile?: string }>> {
+    const results = [];
+    for (const c of candidates) {
+      const candidateName = c.name?.trim();
+      if (!candidateName) continue;
+
+      // Check existing import
+      const [existingImport] = await db.select({ id: zipCandidateImports.id })
+        .from(zipCandidateImports)
+        .where(and(
+          eq(zipCandidateImports.zipCode, zipCode),
+          ilike(zipCandidateImports.candidateName, candidateName),
+          or(eq(zipCandidateImports.status, "pending"), eq(zipCandidateImports.status, "approved"))
+        ))
+        .limit(1);
+
+      // Check existing politician profile by last name
+      const nameParts = candidateName.split(/\s+/);
+      const lastName = nameParts[nameParts.length - 1];
+      let matchedProfile: string | undefined;
+
+      if (lastName.length >= 3) {
+        const stateFilter = c.state
+          ? ilike(politicianProfiles.notes, `%${c.state}%`)
+          : sql`1=1`;
+        const [mp] = await db.select({ id: politicianProfiles.id, fullName: politicianProfiles.fullName })
+          .from(politicianProfiles)
+          .where(and(
+            ilike(politicianProfiles.fullName, `%${lastName}%`),
+            stateFilter
+          ))
+          .limit(1);
+        if (mp) matchedProfile = mp.fullName;
+      }
+
+      results.push({
+        ...c,
+        isDuplicate: !!existingImport || !!matchedProfile,
+        matchedProfile,
+      });
+    }
+    return results;
   }
 }
 

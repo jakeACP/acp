@@ -562,3 +562,50 @@ Generate the response as JSON with this exact structure:
     throw error;
   }
 }
+
+// ── AI Zip Code Candidate Lookup ──────────────────────────────────────────────
+
+interface CandidateZipResponse {
+  candidates: Array<{
+    name: string;
+    office: string;
+    raceLevel: "federal" | "state" | "local";
+    party?: string;
+    city?: string;
+    state?: string;
+  }>;
+}
+
+export async function findAllCandidatesByZip(
+  zipCode: string,
+  city?: string,
+  state?: string
+): Promise<CandidateZipResponse["candidates"]> {
+  const openai = getOpenAIClient();
+  const locationContext = [city, state].filter(Boolean).join(", ");
+  const prompt = locationContext
+    ? `Find all political candidates and current officeholders for zip code ${zipCode} (${locationContext}).`
+    : `Find all political candidates and current officeholders for US zip code ${zipCode}.`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-5",
+    messages: [
+      {
+        role: "system",
+        content: `You are a political data assistant. Return a JSON object with a "candidates" array listing all known political candidates and current officeholders in or near the given US location. Include ALL levels: federal (US Senate, US House of Representatives), state (Governor, Lt. Governor, Attorney General, state Senate/House, Secretary of State, etc.), and local (mayor, city council, school board, county commissioner, sheriff, judge, etc.). For each entry include: name (full name), office (specific official title), raceLevel ("federal", "state", or "local"), party (party affiliation or "Independent"), city (city name), state (2-letter state code). Only include real, verifiable people — do NOT invent names. Return up to 30 results ordered from federal to local.`,
+      },
+      { role: "user", content: prompt },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.2,
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) return [];
+  try {
+    const parsed = JSON.parse(content) as CandidateZipResponse;
+    return Array.isArray(parsed.candidates) ? parsed.candidates : [];
+  } catch {
+    return [];
+  }
+}

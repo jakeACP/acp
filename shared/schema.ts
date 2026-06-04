@@ -3098,3 +3098,31 @@ export const emailBlastLogs = pgTable("email_blast_logs", {
 export const insertEmailBlastLogSchema = createInsertSchema(emailBlastLogs).omit({ id: true, sentAt: true });
 export type EmailBlastLog = typeof emailBlastLogs.$inferSelect;
 export type InsertEmailBlastLog = z.infer<typeof insertEmailBlastLogSchema>;
+
+// ── Zip Candidate Imports ─────────────────────────────────────────────────────
+
+export const zipCandidateImports = pgTable("zip_candidate_imports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  zipCode: text("zip_code").notNull(),
+  city: text("city"),
+  state: text("state"),
+  candidateName: text("candidate_name").notNull(),
+  office: text("office").notNull(),
+  raceLevel: text("race_level").notNull().default("local"), // federal, state, local
+  party: text("party"),
+  status: text("status").notNull().default("pending"), // pending, approved, rejected
+  source: text("source").notNull().default("background"), // manual, background
+  politicianId: varchar("politician_id").references(() => politicianProfiles.id, { onDelete: "set null" }),
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewNote: text("review_note"),
+  foundAt: timestamp("found_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+}, (table) => ({
+  zipCodeIndex: index("zip_candidate_imports_zip_idx").on(table.zipCode),
+  statusIndex: index("zip_candidate_imports_status_idx").on(table.status),
+  foundAtIndex: index("zip_candidate_imports_found_at_idx").on(table.foundAt),
+}));
+
+export const insertZipCandidateImportSchema = createInsertSchema(zipCandidateImports).omit({ id: true, foundAt: true, reviewedAt: true });
+export type ZipCandidateImport = typeof zipCandidateImports.$inferSelect;
+export type InsertZipCandidateImport = z.infer<typeof insertZipCandidateImportSchema>;

@@ -36,7 +36,7 @@ import { eq, inArray, or, sql, asc, and, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
-import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle } from "./openai";
+import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle, findAllCandidatesByZip } from "./openai";
 import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
@@ -2534,6 +2534,23 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         ? "At-Large"
         : `${toOrdinal(primaryDistrict.districtNum)} Congressional District`;
 
+      // Fire-and-forget: AI background candidate lookup for this zip (once per 30 days)
+      if (process.env.OPENAI_API_KEY) {
+        void (async () => {
+          try {
+            const alreadyDone = await storage.hasZipBeenImportedRecently(zipCode, 30);
+            if (!alreadyDone) {
+              const aiCandidates = await findAllCandidatesByZip(zipCode, undefined, primaryState);
+              if (aiCandidates.length > 0) {
+                await storage.queueZipCandidateImports(zipCode, aiCandidates, "background");
+              }
+            }
+          } catch (bgErr) {
+            console.error("Background zip candidate lookup error:", bgErr);
+          }
+        })();
+      }
+
       res.json({
         state: primaryState,
         districtLabel,
@@ -2543,6 +2560,97 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     } catch (error: any) {
       console.error("ZIP district lookup error:", error);
       res.status(500).json({ message: error.message || "Lookup failed" });
+    }
+  });
+
+  // ── Admin: Zip Candidate Import endpoints ─────────────────────────────────
+
+  // Preview what AI would find for a zip (no DB writes)
+  app.post("/api/admin/zip-candidate-lookup", async (req, res) => {
+    if (!req.isAuthenticated() || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    const { zipCode } = req.body;
+    if (!zipCode || !/^\d{5}$/.test(zipCode)) {
+      return res.status(400).json({ message: "Valid 5-digit zip code required" });
+    }
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ message: "OpenAI API key not configured" });
+    }
+    try {
+      const candidates = await findAllCandidatesByZip(zipCode);
+      const previewed = await storage.previewZipCandidates(zipCode, candidates);
+      res.json({ zipCode, candidates: previewed, total: previewed.length, newCount: previewed.filter(c => !c.isDuplicate).length });
+    } catch (err: any) {
+      console.error("Zip candidate lookup error:", err);
+      res.status(500).json({ message: err.message || "Lookup failed" });
+    }
+  });
+
+  // Queue new candidates from a zip lookup (admin-initiated manual import)
+  app.post("/api/admin/zip-candidate-queue", async (req, res) => {
+    if (!req.isAuthenticated() || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    const { zipCode } = req.body;
+    if (!zipCode || !/^\d{5}$/.test(zipCode)) {
+      return res.status(400).json({ message: "Valid 5-digit zip code required" });
+    }
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ message: "OpenAI API key not configured" });
+    }
+    try {
+      const candidates = await findAllCandidatesByZip(zipCode);
+      const result = await storage.queueZipCandidateImports(zipCode, candidates, "manual");
+      res.json({ zipCode, ...result, total: candidates.length });
+    } catch (err: any) {
+      console.error("Zip candidate queue error:", err);
+      res.status(500).json({ message: err.message || "Queue failed" });
+    }
+  });
+
+  // Get pending zip imports (for Missing Info tab)
+  app.get("/api/admin/zip-candidate-imports", async (req, res) => {
+    if (!req.isAuthenticated() || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    try {
+      const { status, zipCode } = req.query as { status?: string; zipCode?: string };
+      if (status === "pending") {
+        const pending = await storage.getPendingZipImports();
+        return res.json(pending);
+      }
+      const history = await storage.getZipImportHistory(zipCode, 200);
+      res.json(history);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Approve a pending zip import — creates a politician profile
+  app.post("/api/admin/zip-candidate-imports/:id/approve", async (req, res) => {
+    if (!req.isAuthenticated() || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    try {
+      const updated = await storage.approveZipImport(req.params.id, req.user.id);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Reject a pending zip import
+  app.post("/api/admin/zip-candidate-imports/:id/reject", async (req, res) => {
+    if (!req.isAuthenticated() || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    try {
+      const { note } = req.body;
+      const updated = await storage.rejectZipImport(req.params.id, req.user.id, note);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
     }
   });
 

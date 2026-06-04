@@ -158,9 +158,51 @@ export default function AdminPoliticiansPage() {
   const [superPacElapsed, setSuperPacElapsed] = useState(0);
   const [superPacResult, setSuperPacResult] = useState<{ candidatesScanned: number; newSigs: number; updatedSigs: number; skipped: number; errors: string[] } | null>(null);
 
+  // AI Zip Candidate Import
+  const [zipImportOpen, setZipImportOpen] = useState(false);
+  const [zipImportZip, setZipImportZip] = useState("");
+  const [zipImportStatus, setZipImportStatus] = useState<"idle"|"previewing"|"queuing"|"done">("idle");
+  const [zipPreviewResults, setZipPreviewResults] = useState<any[]>([]);
+  const [zipQueueResult, setZipQueueResult] = useState<{ queued: number; duplicates: number; total: number } | null>(null);
+
 
   const { data: positions = [], isLoading: positionsLoading } = useQuery<PoliticalPosition[]>({
     queryKey: ["/api/admin/political-positions"],
+  });
+
+  const { data: pendingZipImports = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/zip-candidate-imports"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/zip-candidate-imports?status=pending", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  const approveZipImportMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest(`/api/admin/zip-candidate-imports/${id}/approve`, "POST", {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/zip-candidate-imports"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      toast({ title: "Candidate approved", description: "Profile created and added to the politicians database." });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const rejectZipImportMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest(`/api/admin/zip-candidate-imports/${id}/reject`, "POST", {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/zip-candidate-imports"] });
+      toast({ title: "Candidate rejected" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const { data: profiles = [], isLoading: profilesLoading } = useQuery<PoliticianProfile[]>({
@@ -2209,6 +2251,114 @@ export default function AdminPoliticiansPage() {
                       )}
                     </div>
 
+                    {/* AI Zip Code Candidate Import */}
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
+                      <button className="flex items-start justify-between w-full gap-2 text-left" onClick={() => setZipImportOpen(o => !o)}>
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-violet-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">AI Zip Code Import</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Use AI to find candidates at all levels for a zip code</p>
+                          </div>
+                        </div>
+                        {zipImportOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />}
+                      </button>
+                      {zipImportOpen && (<>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="5-digit zip…"
+                            value={zipImportZip}
+                            onChange={e => {
+                              setZipImportZip(e.target.value.replace(/\D/g, "").slice(0, 5));
+                              setZipImportStatus("idle");
+                              setZipPreviewResults([]);
+                              setZipQueueResult(null);
+                            }}
+                            className="text-xs h-8"
+                            maxLength={5}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={zipImportZip.length !== 5 || zipImportStatus === "previewing" || zipImportStatus === "queuing"}
+                            className="text-xs px-2.5 shrink-0"
+                            onClick={async () => {
+                              setZipImportStatus("previewing");
+                              setZipPreviewResults([]);
+                              setZipQueueResult(null);
+                              try {
+                                const data = await apiRequest("/api/admin/zip-candidate-lookup", "POST", { zipCode: zipImportZip }).then(r => r.json());
+                                setZipPreviewResults(data.candidates ?? []);
+                                setZipImportStatus("done");
+                              } catch (err: any) {
+                                toast({ title: "Lookup failed", description: err.message, variant: "destructive" });
+                                setZipImportStatus("idle");
+                              }
+                            }}
+                          >
+                            {zipImportStatus === "previewing" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+                          </Button>
+                        </div>
+
+                        {zipImportStatus === "previewing" && (
+                          <p className="text-xs text-violet-600 dark:text-violet-400 text-center animate-pulse">Asking AI…</p>
+                        )}
+
+                        {zipPreviewResults.length > 0 && (
+                          <div className="space-y-1 max-h-44 overflow-y-auto">
+                            {zipPreviewResults.map((c: any, i: number) => (
+                              <div key={i} className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs ${c.isDuplicate ? "bg-slate-50 dark:bg-slate-700/40 opacity-60" : "bg-violet-50 dark:bg-violet-950/30"}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.isDuplicate ? "bg-slate-400" : "bg-violet-500"}`} />
+                                <span className="font-medium truncate">{c.name}</span>
+                                <span className="text-slate-500 truncate flex-1 min-w-0">{c.office}</span>
+                                <Badge variant="outline" className={`text-[10px] py-0 shrink-0 ${c.raceLevel === "federal" ? "border-blue-400 text-blue-600" : c.raceLevel === "state" ? "border-emerald-400 text-emerald-600" : "border-orange-400 text-orange-600"}`}>{c.raceLevel}</Badge>
+                                {c.isDuplicate && <span className="text-[10px] text-slate-400 shrink-0">exists</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {zipQueueResult && (
+                          <div className="rounded-md bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 p-2 text-xs">
+                            <p className="font-semibold text-violet-700 dark:text-violet-400">Queued for review</p>
+                            <p className="text-slate-600 dark:text-slate-400">{zipQueueResult.queued} new candidate(s) pending · {zipQueueResult.duplicates} duplicate(s) skipped</p>
+                          </div>
+                        )}
+
+                        {zipPreviewResults.length > 0 && !zipQueueResult && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-xs border-violet-400 text-violet-700 dark:text-violet-400 hover:bg-violet-50"
+                            disabled={zipImportStatus === "queuing"}
+                            onClick={async () => {
+                              setZipImportStatus("queuing");
+                              try {
+                                const data = await apiRequest("/api/admin/zip-candidate-queue", "POST", { zipCode: zipImportZip }).then(r => r.json());
+                                setZipQueueResult(data);
+                                setZipImportStatus("done");
+                                queryClient.invalidateQueries({ queryKey: ["/api/admin/zip-candidate-imports"] });
+                                toast({ title: `✅ ${data.queued} candidates queued`, description: `Check the Missing Info tab to review and approve.` });
+                              } catch (err: any) {
+                                toast({ title: "Queue failed", description: err.message, variant: "destructive" });
+                                setZipImportStatus("done");
+                              }
+                            }}
+                          >
+                            {zipImportStatus === "queuing"
+                              ? <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Queuing…</>
+                              : <><MapPin className="h-3 w-3 mr-1.5" />Queue {zipPreviewResults.filter(c => !c.isDuplicate).length} New Candidates</>}
+                          </Button>
+                        )}
+
+                        {zipImportStatus === "done" && zipQueueResult && (
+                          <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => { setZipImportStatus("idle"); setZipPreviewResults([]); setZipQueueResult(null); setZipImportZip(""); }}>
+                            <RefreshCw className="h-3 w-3 mr-1.5" />New Lookup
+                          </Button>
+                        )}
+                      </>)}
+                    </div>
+
                     {/* Link Party Endorsements */}
                     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 flex flex-col gap-2">
                       <button className="flex items-start justify-between w-full gap-2 text-left" onClick={() => setLinkPartyEndorsementsOpen(o => !o)}>
@@ -2599,6 +2749,73 @@ export default function AdminPoliticiansPage() {
 
               {/* ── MISSING INFO TAB ── */}
               <TabsContent value="missing-info" className="space-y-4">
+
+                {/* Pending AI Zip Imports */}
+                {pendingZipImports.length > 0 && (
+                  <div className="rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-violet-500" />
+                      <p className="text-sm font-semibold text-violet-800 dark:text-violet-300">
+                        Pending AI Candidate Imports ({pendingZipImports.length})
+                      </p>
+                    </div>
+                    <p className="text-xs text-violet-700 dark:text-violet-400">These candidates were found by AI during zip code lookups. Approve to create a politician profile, or reject to dismiss.</p>
+                    <div className="rounded-md border border-violet-200 dark:border-violet-700 overflow-x-auto bg-white dark:bg-slate-900">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Office</TableHead>
+                            <TableHead>Level</TableHead>
+                            <TableHead>Party</TableHead>
+                            <TableHead>Location</TableHead>
+                            <TableHead>Zip / Source</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pendingZipImports.map((imp: any) => (
+                            <TableRow key={imp.id}>
+                              <TableCell className="font-medium text-sm">{imp.candidateName}</TableCell>
+                              <TableCell className="text-sm max-w-[160px] truncate">{imp.office}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={`text-xs ${imp.raceLevel === "federal" ? "border-blue-400 text-blue-600" : imp.raceLevel === "state" ? "border-emerald-400 text-emerald-600" : "border-orange-400 text-orange-600"}`}>
+                                  {imp.raceLevel}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">{imp.party || <span className="text-slate-400 italic">—</span>}</TableCell>
+                              <TableCell className="text-sm text-slate-500">{[imp.city, imp.state].filter(Boolean).join(", ") || "—"}</TableCell>
+                              <TableCell className="text-xs text-slate-400">{imp.zipCode} · {imp.source}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex gap-1.5 justify-end">
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+                                    disabled={approveZipImportMutation.isPending || rejectZipImportMutation.isPending}
+                                    onClick={() => approveZipImportMutation.mutate(imp.id)}
+                                  >
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />Approve
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50"
+                                    disabled={approveZipImportMutation.isPending || rejectZipImportMutation.isPending}
+                                    onClick={() => rejectZipImportMutation.mutate(imp.id)}
+                                  >
+                                    <XCircle className="h-3 w-3 mr-1" />Reject
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center">
                   <div>
                     <h3 className="text-lg font-semibold">Missing Information</h3>
