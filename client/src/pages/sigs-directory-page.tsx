@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, ExternalLink, AlertTriangle, TrendingUp, ShieldCheck, TrendingDown, ChevronDown, ChevronUp, DollarSign } from "lucide-react";
+import { Loader2, Search, ExternalLink, AlertTriangle, TrendingUp, ShieldCheck, TrendingDown, ChevronDown, ChevronUp, DollarSign, Building2, BarChart3 } from "lucide-react";
 import { Navigation } from "@/components/navigation";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -24,6 +24,9 @@ type SIG = {
   isAce?: boolean;
   influenceScore?: number | null;
   letterGrade?: string | null;
+  spendRange?: string | null;
+  partySplitDem?: number | null;
+  partySplitRep?: number | null;
 };
 
 const CATEGORIES = ["All", "Anti-Corruption Endorsement", "Lobby", "Special Interest", "Super PAC", "Dark Money", "Industry PAC", "Pledge", "Labor Union", "Endorsement Org", "PAC / Committee"];
@@ -34,8 +37,8 @@ function isFecId(name: string): boolean {
 }
 
 function sentimentLabel(s?: string) {
-  if (s === "negative") return "Corrupting Influence";
-  if (s === "positive") return "Reform Aligned";
+  if (s === "negative") return "Corrupting";
+  if (s === "positive") return "Reform";
   return "Neutral";
 }
 
@@ -45,7 +48,6 @@ function sentimentBadgeClass(s?: string) {
   return "bg-gray-400 text-white hover:bg-gray-500";
 }
 
-/** Resolve sentiment from the explicit field, falling back to influenceScore sign */
 function resolveSentiment(sig: SIG): "positive" | "negative" | "neutral" | null {
   if (sig.isAce) return "positive";
   if (sig.sentiment === "positive" || sig.sentiment === "negative" || sig.sentiment === "neutral") return sig.sentiment;
@@ -111,19 +113,138 @@ function gradeColor(grade?: string | null) {
 }
 
 function influenceGrade(score: number): string {
-  if (score >= 40) return "A+";
-  if (score >= 25) return "A";
+  if (score >= 30) return "A";
   if (score >= 10) return "B";
-  if (score >= 1) return "B-";
-  if (score === 0) return "C";
-  if (score >= -9) return "D+";
-  if (score >= -24) return "D";
-  if (score >= -39) return "F+";
+  if (score >= -10) return "C";
+  if (score >= -30) return "D";
   return "F";
 }
 
 function isPacCategory(cat: string): boolean {
   return cat === "pac" || cat === "PAC / Committee";
+}
+
+/** Large card for industry lobby sectors */
+function LobbyIndustrySectorCard({ sig }: { sig: SIG }) {
+  const { actualTheme } = useTheme();
+  const hasInfluence = sig.influenceScore !== null && sig.influenceScore !== undefined;
+  const communityGrade = hasInfluence ? influenceGrade(sig.influenceScore!) : null;
+  const displayGrade = sig.letterGrade || communityGrade;
+  const isPatriot = actualTheme === "patriot";
+  const s = resolveSentiment(sig);
+
+  const borderAccent =
+    s === "negative" ? "border-red-300 dark:border-red-700" :
+    s === "positive" ? "border-green-300 dark:border-green-700" :
+    "border-border";
+
+  const headerBg =
+    s === "negative" ? "bg-gradient-to-r from-red-900/80 to-red-800/80" :
+    s === "positive" ? "bg-gradient-to-r from-green-900/80 to-emerald-800/80" :
+    "bg-gradient-to-r from-slate-800/90 to-slate-700/90";
+
+  const cardBg = isPatriot ? "" :
+    s === "negative" ? "bg-red-50/60 dark:bg-red-950/20" :
+    s === "positive" ? "bg-green-50/60 dark:bg-green-950/20" :
+    "bg-background";
+
+  const patriotStyle = isPatriot ? patriotCardStyle(sig) : undefined;
+
+  return (
+    <Card
+      className={`flex flex-col overflow-hidden border ${borderAccent} hover:shadow-lg transition-all ${cardBg}`}
+      style={patriotStyle}
+    >
+      {/* Colored header band */}
+      <div className={`${headerBg} px-4 py-3 flex items-start justify-between gap-2`}>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-bold text-white text-sm leading-tight line-clamp-2">{sig.name}</h3>
+          {sig.acronym && (
+            <span className="text-white/60 text-xs font-mono">{sig.acronym}</span>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {displayGrade && (
+            <span className={`text-base font-black px-2 py-0.5 rounded-lg shadow border-2 border-white/20 ${gradeColor(displayGrade)}`}>
+              {displayGrade}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <CardContent className="flex flex-col flex-1 gap-3 p-4">
+        {/* Spend range + sentiment row */}
+        <div className="flex items-center flex-wrap gap-2">
+          {sig.spendRange && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700">
+              <DollarSign className="h-3 w-3" />
+              {sig.spendRange} / yr
+            </span>
+          )}
+          <Badge className={`text-xs ${sentimentBadgeClass(sig.sentiment)}`}>
+            {sentimentLabel(sig.sentiment)}
+          </Badge>
+          <Badge variant="outline" className="text-xs text-muted-foreground">
+            Lobby Sector
+          </Badge>
+        </div>
+
+        {/* Party split bar */}
+        {sig.partySplitDem != null && sig.partySplitRep != null && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-[10px] font-semibold">
+              <span className="text-blue-600 dark:text-blue-400">Dem {sig.partySplitDem}%</span>
+              <span className="text-red-600 dark:text-red-400">{sig.partySplitRep}% Rep</span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden flex">
+              <div
+                className="h-full bg-blue-500 transition-all"
+                style={{ width: `${sig.partySplitDem}%` }}
+              />
+              <div className="h-full bg-red-500 flex-1" />
+            </div>
+          </div>
+        )}
+
+        {/* Description */}
+        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed flex-1">
+          {sig.description || "No description available."}
+        </p>
+
+        {/* Influence mini-bar */}
+        {hasInfluence && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-0.5"><TrendingDown className="h-2.5 w-2.5 text-red-500" />Corrupt</span>
+              <span className="font-medium text-xs">{sig.influenceScore! > 0 ? "+" : ""}{sig.influenceScore}</span>
+              <span className="flex items-center gap-0.5">Reform<TrendingUp className="h-2.5 w-2.5 text-green-500" /></span>
+            </div>
+            <div className="relative h-1.5 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500">
+              <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: "50%" }} />
+              <div
+                className="absolute top-0 h-full w-1 bg-white border-x border-white/50 shadow-sm"
+                style={{ left: `calc(${((sig.influenceScore! + 50) / 100) * 100}% - 2px)` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {sig.dataSourceName && sig.dataSourceUrl && (
+          <a href={sig.dataSourceUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
+            onClick={e => e.stopPropagation()}>
+            <ExternalLink className="h-3 w-3" />{sig.dataSourceName}
+          </a>
+        )}
+
+        <Link href={`/lobbies/${sig.tag || sig.id}`}>
+          <Button variant="outline" size="sm" className="w-full mt-auto">
+            View Sector Profile →
+          </Button>
+        </Link>
+      </CardContent>
+    </Card>
+  );
 }
 
 function SigCard({ sig }: { sig: SIG }) {
@@ -167,7 +288,6 @@ function SigCard({ sig }: { sig: SIG }) {
           {sig.description || "No description available."}
         </p>
 
-        {/* Influence mini-bar */}
         {hasInfluence && scorePct !== null && (
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -239,36 +359,34 @@ export default function SigsDirectoryPage() {
     queryKey: ["/api/sigs"],
   });
 
-  // Filter out bare FEC committee IDs unless searching explicitly
   const sigs = allSigs.filter(sig => !isFecId(sig.name) || search.length > 0);
 
-  // Split into main SIGs vs PAC committees
-  const mainSigs = sigs.filter(sig => !isPacCategory(sig.category));
+  const lobbySectors = sigs.filter(sig => sig.category?.toLowerCase() === "lobby");
+  const mainSigs = sigs.filter(sig => sig.category?.toLowerCase() !== "lobby" && !isPacCategory(sig.category));
   const pacSigs = sigs.filter(sig => isPacCategory(sig.category));
 
+  const filterFn = (sig: SIG) => {
+    const matchSent = activeSentiment === "all" || sig.sentiment === activeSentiment;
+    const matchSearch = !search ||
+      sig.name.toLowerCase().includes(search.toLowerCase()) ||
+      sig.description?.toLowerCase().includes(search.toLowerCase());
+    return matchSent && matchSearch;
+  };
+
+  const filteredLobbies = lobbySectors.filter(filterFn);
   const filteredMain = mainSigs.filter(sig => {
-    const matchCat = activeCategory === "All" || activeCategory === "PAC / Committee" ? true :
-      (activeCategory === "Anti-Corruption Endorsement" ? sig.isAce : sig.category?.toLowerCase() === activeCategory.toLowerCase());
-    const matchSent = activeSentiment === "all" || sig.sentiment === activeSentiment;
-    const matchSearch = !search ||
-      sig.name.toLowerCase().includes(search.toLowerCase()) ||
-      sig.description?.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSent && matchSearch;
+    const matchCat = activeCategory === "All" ? true :
+      activeCategory === "PAC / Committee" ? false :
+      activeCategory === "Lobby" ? false :
+      activeCategory === "Anti-Corruption Endorsement" ? sig.isAce :
+      sig.category?.toLowerCase() === activeCategory.toLowerCase();
+    return matchCat && filterFn(sig);
   });
+  const filteredPacs = pacSigs.filter(filterFn);
 
-  const filteredPacs = pacSigs.filter(sig => {
-    const matchCat = activeCategory === "All" || activeCategory === "PAC / Committee" || isPacCategory(sig.category);
-    const matchSent = activeSentiment === "all" || sig.sentiment === activeSentiment;
-    const matchSearch = !search ||
-      sig.name.toLowerCase().includes(search.toLowerCase()) ||
-      sig.description?.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSent && matchSearch && (activeCategory === "All" || activeCategory === "PAC / Committee" || isPacCategory(activeCategory));
-  });
-
-  // When category is PAC / Committee, show only PACs in card grid
+  const showLobbyGrid = activeCategory === "All" || activeCategory === "Lobby";
   const showPacGrid = activeCategory === "PAC / Committee";
-  const showPacSection = (activeCategory === "All" || showPacGrid) && filteredPacs.length > 0;
-  const showMainGrid = !showPacGrid && filteredMain.length > 0;
+  const showPacSection = (activeCategory === "All") && filteredPacs.length > 0;
 
   const aceCount = allSigs.filter(s => s.isAce).length;
 
@@ -278,33 +396,40 @@ export default function SigsDirectoryPage() {
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Lobbies & Interest Groups</h1>
-          <p className="text-muted-foreground mt-2 max-w-2xl">
-            Track lobbying organizations, super PACs, dark money groups, and the pledges politicians make.
-            Understanding who funds our politicians is essential to holding them accountable.
+          <div className="flex items-center gap-3 mb-2">
+            <Building2 className="h-8 w-8 text-amber-500" />
+            <h1 className="text-3xl font-bold text-foreground">Lobbies & Industry Sectors</h1>
+          </div>
+          <p className="text-muted-foreground mt-1 max-w-2xl">
+            Track the 50 major industry lobbying sectors ranked by annual Washington spending.
+            Each sector shows estimated annual spend, party funding split, top PACs, and ACP influence grade.
           </p>
         </div>
 
         {/* Stats bar */}
         <div className="flex flex-wrap gap-4 text-sm">
+          <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
+            <Building2 className="h-4 w-4" />
+            {lobbySectors.length} industry sectors tracked
+          </span>
           <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-medium">
             <AlertTriangle className="h-4 w-4" />
-            {allSigs.filter(s => s.sentiment === "negative").length} Corrupting influences tracked
+            {allSigs.filter(s => s.sentiment === "negative").length} corrupting influences
           </span>
           <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400 font-medium">
             <TrendingUp className="h-4 w-4" />
-            {allSigs.filter(s => s.sentiment === "positive").length} Reform-aligned organizations
+            {allSigs.filter(s => s.sentiment === "positive").length} reform-aligned sectors
           </span>
           {aceCount > 0 && (
             <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
               <ShieldCheck className="h-4 w-4" />
-              {aceCount} Anti-Corruption Endorsements
+              {aceCount} ACE endorsements
             </span>
           )}
           {pacSigs.length > 0 && (
             <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400 font-medium">
               <DollarSign className="h-4 w-4" />
-              {pacSigs.length} SuperPAC / Committees tracked
+              {pacSigs.length} SuperPACs tracked
             </span>
           )}
         </div>
@@ -312,7 +437,12 @@ export default function SigsDirectoryPage() {
         {/* Search */}
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search organizations..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input
+            placeholder="Search sectors and organizations..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
 
         {/* Category tabs */}
@@ -323,27 +453,36 @@ export default function SigsDirectoryPage() {
               variant={activeCategory === cat ? "default" : "outline"}
               size="sm"
               onClick={() => setActiveCategory(cat)}
-              className={cat === "Anti-Corruption Endorsement" && activeCategory !== cat
-                ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"
-                : cat === "PAC / Committee" && activeCategory !== cat
-                ? "border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400"
-                : ""}
+              className={
+                cat === "Anti-Corruption Endorsement" && activeCategory !== cat
+                  ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"
+                  : cat === "PAC / Committee" && activeCategory !== cat
+                  ? "border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400"
+                  : cat === "Lobby" && activeCategory !== cat
+                  ? "border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400"
+                  : ""
+              }
             >
               {cat === "Anti-Corruption Endorsement" && <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />}
               {cat === "PAC / Committee" && <DollarSign className="h-3.5 w-3.5 mr-1.5" />}
+              {cat === "Lobby" && <Building2 className="h-3.5 w-3.5 mr-1.5" />}
               {cat}
             </Button>
           ))}
         </div>
 
         {/* Sentiment filter */}
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
           <span className="text-sm text-muted-foreground">Sentiment:</span>
           {SENTIMENTS.map(s => (
-            <Button key={s} variant={activeSentiment === s ? "default" : "outline"} size="sm"
+            <Button
+              key={s}
+              variant={activeSentiment === s ? "default" : "outline"}
+              size="sm"
               className={activeSentiment !== s && s === "negative" ? "border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300" :
                 activeSentiment !== s && s === "positive" ? "border-green-200 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-300" : ""}
-              onClick={() => setActiveSentiment(s)}>
+              onClick={() => setActiveSentiment(s)}
+            >
               {s === "all" ? "All" : s === "negative" ? "Corrupting" : s === "positive" ? "Reform" : "Neutral"}
             </Button>
           ))}
@@ -356,54 +495,89 @@ export default function SigsDirectoryPage() {
           </div>
         ) : (
           <div className="space-y-10">
-            {/* Main SIGs grid */}
-            {showPacGrid ? (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pt-4 pr-4">
-                {filteredPacs.map(sig => <SigCard key={sig.id} sig={sig} />)}
+
+            {/* ── LOBBY SECTORS ── */}
+            {showLobbyGrid && filteredLobbies.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-1 border-b border-amber-200 dark:border-amber-800">
+                  <Building2 className="h-5 w-5 text-amber-500" />
+                  <h2 className="text-lg font-semibold text-foreground">Industry Lobby Sectors</h2>
+                  <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">
+                    {filteredLobbies.length} sectors
+                  </Badge>
+                  <span className="text-xs text-muted-foreground ml-1">ranked by est. annual lobbying spend</span>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {filteredLobbies.map(sig => <LobbyIndustrySectorCard key={sig.id} sig={sig} />)}
+                </div>
               </div>
-            ) : (
-              <>
-                {showMainGrid && (
-                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pt-4 pr-4">
-                    {filteredMain.map(sig => <SigCard key={sig.id} sig={sig} />)}
-                  </div>
-                )}
+            )}
 
-                {/* PAC / Committees collapsible section */}
-                {showPacSection && (
-                  <div className="rounded-xl border border-orange-200 dark:border-orange-900 bg-orange-50/40 dark:bg-orange-950/10 overflow-hidden">
-                    <button
-                      className="w-full flex items-center gap-3 p-4 text-left hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-colors"
-                      onClick={() => setPacsExpanded(v => !v)}
-                    >
-                      <DollarSign className="h-5 w-5 text-orange-500 shrink-0" />
-                      <div className="flex-1">
-                        <p className="font-semibold text-orange-800 dark:text-orange-300">
-                          SuperPAC & Independent Expenditure Committees
-                        </p>
-                        <p className="text-xs text-orange-600 dark:text-orange-500 mt-0.5">
-                          {filteredPacs.length} committee{filteredPacs.length !== 1 ? "s" : ""} tracked via FEC — click to {pacsExpanded ? "collapse" : "expand"}
-                        </p>
-                      </div>
-                      {pacsExpanded
-                        ? <ChevronUp className="h-5 w-5 text-orange-500 shrink-0" />
-                        : <ChevronDown className="h-5 w-5 text-orange-500 shrink-0" />}
-                    </button>
-                    {pacsExpanded && (
-                      <div className="px-4 pb-4 space-y-1 border-t border-orange-200 dark:border-orange-900 pt-3">
-                        {filteredPacs.map(sig => <PacRow key={sig.id} sig={sig} />)}
-                      </div>
-                    )}
-                  </div>
-                )}
+            {/* ── PAC / Committee Grid ── */}
+            {showPacGrid && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-1 border-b border-orange-200 dark:border-orange-800">
+                  <DollarSign className="h-5 w-5 text-orange-500" />
+                  <h2 className="text-lg font-semibold">SuperPAC & Committees</h2>
+                  <Badge variant="outline" className="text-xs">{filteredPacs.length}</Badge>
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pt-2">
+                  {filteredPacs.map(sig => <SigCard key={sig.id} sig={sig} />)}
+                </div>
+              </div>
+            )}
 
-                {!showMainGrid && !showPacSection && (
-                  <div className="text-center py-20 text-muted-foreground">
-                    <p className="text-lg font-medium">No organizations match your filters</p>
-                    <p className="text-sm mt-1">Try adjusting the category or sentiment filter</p>
+            {/* ── Other SIGs grid ── */}
+            {filteredMain.length > 0 && activeCategory !== "PAC / Committee" && activeCategory !== "Lobby" && (
+              <div className="space-y-4">
+                {(showLobbyGrid && filteredLobbies.length > 0) && (
+                  <div className="flex items-center gap-2 pb-1 border-b">
+                    <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                    <h2 className="text-lg font-semibold text-foreground">Other Interest Groups & Organizations</h2>
+                    <Badge variant="outline" className="text-xs">{filteredMain.length}</Badge>
                   </div>
                 )}
-              </>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pt-2">
+                  {filteredMain.map(sig => <SigCard key={sig.id} sig={sig} />)}
+                </div>
+              </div>
+            )}
+
+            {/* ── PAC collapsible section (when viewing All) ── */}
+            {showPacSection && (
+              <div className="rounded-xl border border-orange-200 dark:border-orange-900 bg-orange-50/40 dark:bg-orange-950/10 overflow-hidden">
+                <button
+                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-colors"
+                  onClick={() => setPacsExpanded(v => !v)}
+                >
+                  <DollarSign className="h-5 w-5 text-orange-500 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-orange-800 dark:text-orange-300">
+                      SuperPAC & Independent Expenditure Committees
+                    </p>
+                    <p className="text-xs text-orange-600 dark:text-orange-500 mt-0.5">
+                      {filteredPacs.length} committee{filteredPacs.length !== 1 ? "s" : ""} tracked via FEC — click to {pacsExpanded ? "collapse" : "expand"}
+                    </p>
+                  </div>
+                  {pacsExpanded
+                    ? <ChevronUp className="h-5 w-5 text-orange-500 shrink-0" />
+                    : <ChevronDown className="h-5 w-5 text-orange-500 shrink-0" />}
+                </button>
+                {pacsExpanded && (
+                  <div className="px-4 pb-4 space-y-1 border-t border-orange-200 dark:border-orange-900 pt-3">
+                    {filteredPacs.map(sig => <PacRow key={sig.id} sig={sig} />)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {filteredLobbies.length === 0 && filteredMain.length === 0 && filteredPacs.length === 0 && (
+              <div className="text-center py-20 text-muted-foreground">
+                <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p className="text-lg font-medium">No sectors match your filters</p>
+                <p className="text-sm mt-1">Try adjusting the category or sentiment filter</p>
+              </div>
             )}
 
             {!isLoading && allSigs.length === 0 && (

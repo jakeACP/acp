@@ -23,7 +23,15 @@ import {
   Vote,
   Trophy,
   BarChart3,
+  Building2,
+  PieChart as PieChartIcon,
+  TableProperties,
 } from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
+
+type TopPac = { name: string; amount: string };
+type TopCandidate = { name: string; party: string; state: string; amount: string };
+type InterestBreakdown = { label: string; pct: number };
 
 type SIG = {
   id: string;
@@ -39,6 +47,13 @@ type SIG = {
   website?: string;
   influenceScore?: number | null;
   letterGrade?: string | null;
+  // Sector enrichment
+  spendRange?: string | null;
+  partySplitDem?: number | null;
+  partySplitRep?: number | null;
+  topPacs?: TopPac[] | null;
+  topCandidates?: TopCandidate[] | null;
+  interestBreakdown?: InterestBreakdown[] | null;
 };
 
 type Politician = {
@@ -298,6 +313,12 @@ export default function SigProfilePage() {
                 {sentimentLabel(sig.sentiment)}
               </Badge>
             )}
+            {sig.spendRange && (
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700">
+                <DollarSign className="h-3.5 w-3.5" />
+                {sig.spendRange} / yr
+              </span>
+            )}
           </div>
           <Badge variant="outline" className={`w-fit ${categoryBadgeClass(sig.category)}`}>
             {sig.category === "pac" ? "SuperPAC / Committee" : sig.category}
@@ -368,6 +389,209 @@ export default function SigProfilePage() {
               <p className={`text-sm font-semibold text-center ${scoreColor(sig.influenceScore)}`}>
                 Score: {sig.influenceScore > 0 ? "+" : ""}{sig.influenceScore} — {influenceLabel(sig.influenceScore)}
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── SECTOR ENRICHMENT CARDS (only for lobby sectors with data) ── */}
+
+        {/* Party Split */}
+        {sig.category === "lobby" && sig.partySplitDem != null && sig.partySplitRep != null && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <PieChartIcon className="h-4 w-4 text-blue-500" />
+                Party Funding Split
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Estimated breakdown of this sector's campaign contributions by party affiliation.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Split bar */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-bold">
+                  <span className="text-blue-600 dark:text-blue-400">
+                    Democrat — {sig.partySplitDem}%
+                  </span>
+                  <span className="text-red-600 dark:text-red-400">
+                    {sig.partySplitRep}% — Republican
+                  </span>
+                </div>
+                <div className="h-5 rounded-full overflow-hidden flex shadow-inner border border-border">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-600 to-blue-400 flex items-center justify-center text-[10px] font-bold text-white transition-all"
+                    style={{ width: `${sig.partySplitDem}%` }}
+                  >
+                    {sig.partySplitDem >= 15 ? `${sig.partySplitDem}%` : ""}
+                  </div>
+                  <div
+                    className="h-full bg-gradient-to-r from-red-400 to-red-600 flex items-center justify-center text-[10px] font-bold text-white flex-1"
+                  >
+                    {sig.partySplitRep >= 15 ? `${sig.partySplitRep}%` : ""}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  {sig.partySplitDem > sig.partySplitRep
+                    ? `This sector leans Democratic, giving ${sig.partySplitDem - sig.partySplitRep}% more to Dems.`
+                    : sig.partySplitRep > sig.partySplitDem
+                    ? `This sector leans Republican, giving ${sig.partySplitRep - sig.partySplitDem}% more to Republicans.`
+                    : "This sector splits evenly between both parties."}
+                </p>
+              </div>
+
+              {/* Mini pie chart */}
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: `Democrat ${sig.partySplitDem}%`, value: sig.partySplitDem },
+                        { name: `Republican ${sig.partySplitRep}%`, value: sig.partySplitRep },
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={70}
+                      dataKey="value"
+                      paddingAngle={2}
+                    >
+                      <Cell fill="#3b82f6" />
+                      <Cell fill="#ef4444" />
+                    </Pie>
+                    <Tooltip formatter={(v: number) => `${v}%`} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Interest Breakdown Pie Chart */}
+        {sig.category === "lobby" && sig.interestBreakdown && sig.interestBreakdown.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-purple-500" />
+                Lobbying by Issue Area
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Estimated distribution of this sector's lobbying activity across policy issue areas.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={sig.interestBreakdown.map(b => ({ name: b.label, value: b.pct }))}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      dataKey="value"
+                      paddingAngle={2}
+                    >
+                      {sig.interestBreakdown.map((_, i) => (
+                        <Cell
+                          key={`cell-${i}`}
+                          fill={["#6366f1","#8b5cf6","#a855f7","#ec4899","#f43f5e","#f97316","#eab308","#22c55e","#14b8a6"][i % 9]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => `${v}%`} />
+                    <Legend wrapperStyle={{ fontSize: "11px" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Top PACs in Sector */}
+        {sig.category === "lobby" && sig.topPacs && sig.topPacs.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-amber-500" />
+                Top PACs in This Sector
+                <Badge variant="outline" className="text-xs ml-auto">Top {sig.topPacs.length}</Badge>
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                The largest political action committees operating within this industry sector.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b">
+                      <th className="pb-2 font-semibold text-muted-foreground w-8">#</th>
+                      <th className="pb-2 font-semibold text-muted-foreground">PAC / Committee Name</th>
+                      <th className="pb-2 font-semibold text-muted-foreground text-right">Est. Spend</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sig.topPacs.map((pac, i) => (
+                      <tr key={i} className="border-b last:border-0 hover:bg-muted/40">
+                        <td className="py-2.5 text-muted-foreground font-bold">{i + 1}</td>
+                        <td className="py-2.5 font-medium">{pac.name}</td>
+                        <td className="py-2.5 text-right font-bold text-amber-600 dark:text-amber-400">{pac.amount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Top Candidates Funded */}
+        {sig.category === "lobby" && sig.topCandidates && sig.topCandidates.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TableProperties className="h-4 w-4 text-orange-500" />
+                Top Candidates Funded by Sector
+                <Badge variant="outline" className="text-xs ml-auto">Top {sig.topCandidates.length}</Badge>
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Politicians who have received the most campaign contributions from this industry sector.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b">
+                      <th className="pb-2 font-semibold text-muted-foreground w-8">#</th>
+                      <th className="pb-2 font-semibold text-muted-foreground">Name</th>
+                      <th className="pb-2 font-semibold text-muted-foreground">Party</th>
+                      <th className="pb-2 font-semibold text-muted-foreground">State</th>
+                      <th className="pb-2 font-semibold text-muted-foreground text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sig.topCandidates.map((cand, i) => (
+                      <tr key={i} className="border-b last:border-0 hover:bg-muted/40">
+                        <td className="py-2.5 text-muted-foreground font-bold">{i + 1}</td>
+                        <td className="py-2.5 font-medium">{cand.name}</td>
+                        <td className="py-2.5">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${
+                            cand.party === "D" ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300" :
+                            cand.party === "R" ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" :
+                            "bg-muted text-muted-foreground"
+                          }`}>
+                            {cand.party}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-muted-foreground text-sm">{cand.state}</td>
+                        <td className="py-2.5 text-right font-bold text-orange-600 dark:text-orange-400">{cand.amount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         )}

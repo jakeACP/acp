@@ -1462,6 +1462,13 @@ export const specialInterestGroups = pgTable("special_interest_groups", {
   fecId: text("fec_id"), // FEC committee ID, e.g. C00000935
   contactPhone: text("contact_phone"), // Contact phone number
   isActive: boolean("is_active").default(true),
+  // Sector-level enrichment fields (for industry sector lobbies)
+  spendRange: text("spend_range"), // e.g. "$350M–$450M" annual lobbying spend estimate
+  partySplitDem: integer("party_split_dem"), // % of contributions to Democrats (0-100)
+  partySplitRep: integer("party_split_rep"), // % of contributions to Republicans (0-100)
+  topPacs: json("top_pacs"), // [{name, amount}] top PACs in this sector
+  topCandidates: json("top_candidates"), // [{name, party, state, amount}] top recipients
+  interestBreakdown: json("interest_breakdown"), // [{label, pct}] spending by issue area
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
