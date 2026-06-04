@@ -3151,6 +3151,9 @@ export const canvassingPins = pgTable("canvassing_pins", {
   lat: real("lat").notNull(),
   lng: real("lng").notNull(),
   color: text("color").notNull().default("blue"), // red, white, blue
+  contactName: text("contact_name"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
   note: text("note"),
   inviteToken: text("invite_token"),
   createdBy: varchar("created_by").references(() => users.id, { onDelete: "cascade" }),

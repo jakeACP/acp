@@ -11892,7 +11892,7 @@ function registerBudgetRoutes(app: Express) {
       return res.status(403).json({ message: "Candidates and admins only" });
     }
     try {
-      const { lat, lng, color = "blue", note } = req.body;
+      const { lat, lng, color = "blue", note, contactName, contactEmail, contactPhone } = req.body;
       if (typeof lat !== "number" || typeof lng !== "number") {
         return res.status(400).json({ message: "lat and lng are required numbers" });
       }
@@ -11909,6 +11909,9 @@ function registerBudgetRoutes(app: Express) {
         lat,
         lng,
         color,
+        contactName: contactName ?? null,
+        contactEmail: contactEmail ?? null,
+        contactPhone: contactPhone ?? null,
         note: note ?? null,
         inviteToken,
         createdBy: (req.user as any).id,
