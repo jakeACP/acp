@@ -11900,10 +11900,9 @@ function registerBudgetRoutes(app: Express) {
         return res.status(400).json({ message: "color must be red, white, or blue" });
       }
 
-      // Generate an invite token for this pin
+      // Generate an invite token for this pin (stored on the pin itself, not a DB invitation record)
       const { randomBytes } = await import("crypto");
       const inviteToken = randomBytes(20).toString("hex");
-      await storage.createInvitation({ token: inviteToken, invitedBy: (req.user as any).id, maxUses: 1 });
 
       const pin = await storage.createCanvassingPin({
         lat,
