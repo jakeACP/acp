@@ -11866,4 +11866,70 @@ function registerBudgetRoutes(app: Express) {
       res.status(500).json({ message: err.message });
     }
   });
+
+  // ── Canvassing Pins ──────────────────────────────────────────────────────────
+
+  const canCanvass = (req: Request) => {
+    const role = (req.user as any)?.role;
+    return role === "admin" || role === "candidate" || role === "state_admin";
+  };
+
+  app.get("/api/canvassing/pins", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !canCanvass(req)) {
+      return res.status(403).json({ message: "Candidates and admins only" });
+    }
+    try {
+      const isAdmin = (req.user as any).role === "admin";
+      const pins = await storage.getCanvassingPins((req.user as any).id, isAdmin);
+      res.json(pins);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/canvassing/pins", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !canCanvass(req)) {
+      return res.status(403).json({ message: "Candidates and admins only" });
+    }
+    try {
+      const { lat, lng, color = "blue", note } = req.body;
+      if (typeof lat !== "number" || typeof lng !== "number") {
+        return res.status(400).json({ message: "lat and lng are required numbers" });
+      }
+      if (!["red", "white", "blue"].includes(color)) {
+        return res.status(400).json({ message: "color must be red, white, or blue" });
+      }
+
+      // Generate an invite token for this pin
+      const { randomBytes } = await import("crypto");
+      const inviteToken = randomBytes(20).toString("hex");
+      await storage.createInvitation({ token: inviteToken, invitedBy: (req.user as any).id, maxUses: 1 });
+
+      const pin = await storage.createCanvassingPin({
+        lat,
+        lng,
+        color,
+        note: note ?? null,
+        inviteToken,
+        createdBy: (req.user as any).id,
+      });
+      res.status(201).json(pin);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/canvassing/pins/:id", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !canCanvass(req)) {
+      return res.status(403).json({ message: "Candidates and admins only" });
+    }
+    try {
+      const isAdmin = (req.user as any).role === "admin";
+      const deleted = await storage.deleteCanvassingPin(req.params.id, (req.user as any).id, isAdmin);
+      if (!deleted) return res.status(404).json({ message: "Pin not found or not yours" });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 }

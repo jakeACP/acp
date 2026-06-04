@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, politicalParties, partyLeaders, partyBallotAccess, partyPolicyPositions, partyEndorsements, partyUserRatings, partyControversies, zipCandidateImports, zipLookupRuns, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse, type ZipCandidateImport } from "@shared/schema";
+import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, politicalParties, partyLeaders, partyBallotAccess, partyPolicyPositions, partyEndorsements, partyUserRatings, partyControversies, zipCandidateImports, zipLookupRuns, canvassingPins, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse, type ZipCandidateImport, type CanvassingPin, type InsertCanvassingPin } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, composeJobs, pledgeRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest, type ComposeJob, type SignalComment, type InsertSignalComment } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
@@ -718,6 +718,10 @@ export interface IStorage {
   previewZipCandidates(zipCode: string, candidates: Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; district?: string }>): Promise<Array<{ name: string; office: string; raceLevel: string; party?: string; city?: string; state?: string; district?: string; matchStatus: "in_db" | "possible_duplicate" | "new"; matchedProfile?: string }>>;
   logZipLookupRun(zipCode: string, counts: { total: number; queued: number; possibleDup: number; inDb: number }, source: string): Promise<void>;
   getZipLookupRuns(zipCode?: string, limit?: number): Promise<Array<{ id: string; zipCode: string; source: string; foundCount: number; newCount: number; possibleDupCount: number; inDbCount: number; ranAt: Date }>>;
+  // Canvassing
+  getCanvassingPins(userId: string, isAdmin: boolean): Promise<import("@shared/schema").CanvassingPin[]>;
+  createCanvassingPin(data: import("@shared/schema").InsertCanvassingPin): Promise<import("@shared/schema").CanvassingPin>;
+  deleteCanvassingPin(id: string, userId: string, isAdmin: boolean): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -10896,6 +10900,30 @@ export class DatabaseStorage implements IStorage {
       inDbCount: r.inDbCount,
       ranAt: r.ranAt as Date,
     }));
+  }
+
+  // ── Canvassing Pins ──────────────────────────────────────────────────────────
+
+  async getCanvassingPins(userId: string, isAdmin: boolean): Promise<CanvassingPin[]> {
+    if (isAdmin) {
+      return db.select().from(canvassingPins).orderBy(desc(canvassingPins.createdAt));
+    }
+    return db.select().from(canvassingPins)
+      .where(eq(canvassingPins.createdBy, userId))
+      .orderBy(desc(canvassingPins.createdAt));
+  }
+
+  async createCanvassingPin(data: InsertCanvassingPin): Promise<CanvassingPin> {
+    const [pin] = await db.insert(canvassingPins).values(data).returning();
+    return pin;
+  }
+
+  async deleteCanvassingPin(id: string, userId: string, isAdmin: boolean): Promise<boolean> {
+    const conditions = isAdmin
+      ? [eq(canvassingPins.id, id)]
+      : [eq(canvassingPins.id, id), eq(canvassingPins.createdBy, userId)];
+    const result = await db.delete(canvassingPins).where(and(...conditions)).returning({ id: canvassingPins.id });
+    return result.length > 0;
   }
 }
 

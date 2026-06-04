@@ -30,6 +30,8 @@ export function Navigation() {
   const isOwnerAdmin = user?.role === "admin" && adminUserId && user.id === adminUserId;
   const canAccessAdmin = user?.role === "admin" || user?.role === "moderator";
 
+  const canCanvass = user?.role === "admin" || user?.role === "candidate" || user?.role === "state_admin";
+
   const navItems = [
     { href: "/", label: "Feed" },
     { href: "/signals", label: "Signals" },
@@ -40,6 +42,7 @@ export function Navigation() {
     { href: "/parties", label: "Parties" },
     { href: "/lobbies", label: "Lobbies" },
     { href: "/elections", label: "Elections" },
+    ...(canCanvass ? [{ href: "/canvassing", label: "Canvass" }] : []),
   ];
 
   const handleLogout = () => {

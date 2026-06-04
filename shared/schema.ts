@@ -3143,3 +3143,22 @@ export const zipLookupRuns = pgTable("zip_lookup_runs", {
 }));
 
 export type ZipLookupRun = typeof zipLookupRuns.$inferSelect;
+
+// ── Canvassing Pins ───────────────────────────────────────────────────────────
+
+export const canvassingPins = pgTable("canvassing_pins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  lat: real("lat").notNull(),
+  lng: real("lng").notNull(),
+  color: text("color").notNull().default("blue"), // red, white, blue
+  note: text("note"),
+  inviteToken: text("invite_token"),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  createdByIdx: index("canvassing_pins_user_idx").on(table.createdBy),
+}));
+
+export const insertCanvassingPinSchema = createInsertSchema(canvassingPins).omit({ id: true, createdAt: true });
+export type CanvassingPin = typeof canvassingPins.$inferSelect;
+export type InsertCanvassingPin = z.infer<typeof insertCanvassingPinSchema>;

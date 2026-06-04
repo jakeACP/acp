@@ -86,6 +86,7 @@ import RunForOfficePage from "@/pages/run-for-office-page";
 import IssuesPage from "@/pages/issues-page";
 import TermsOfServicePage from "@/pages/terms-of-service-page";
 import AdminEmailTemplatesPage from "@/pages/admin-email-templates-page";
+import CanvassingMapPage from "@/pages/canvassing-map-page";
 import NotFound from "@/pages/not-found";
 import { useScrollLight } from "./hooks/useScrollLight";
 import { useAuth } from "./hooks/use-auth";
@@ -228,6 +229,7 @@ function Router() {
       <ProtectedRoute path="/admin/districts/new" component={AdminDistrictFormPage} />
       <ProtectedRoute path="/admin/districts/:districtId/edit" component={AdminDistrictFormPage} />
       <ProtectedRoute path="/admin/districts/:districtId" component={AdminDistrictDetailPage} />
+      <ProtectedRoute path="/canvassing" component={CanvassingMapPage} />
       <Route path="/political-compass" component={PoliticalCompassPage} />
       <Route path="/developer" component={DeveloperPage} />
       <Route path="/auth" component={AuthPage} />
