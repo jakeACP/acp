@@ -261,122 +261,119 @@ export default function CanvassingMapPage() {
       </div>
 
       {/* ── Create Pin Sheet ── */}
-      <Sheet open={sheetOpen} onOpenChange={(o) => { if (!o) { setSheetOpen(false); setPendingLatLng(null); } }}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[90dvh] overflow-y-auto pb-10">
-          <SheetHeader className="mb-5">
-            <SheetTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-primary" />
-              New Contact Pin
-            </SheetTitle>
-          </SheetHeader>
-
-          <div className="space-y-5">
-            {/* Color / Lean picker */}
-            <div>
-              <Label className="text-sm font-semibold mb-2 block">Voter Lean</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {PIN_COLORS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setSelectedColor(c.id)}
-                    className={`flex flex-col items-center gap-2 py-3 rounded-xl border-2 transition-all ${
-                      selectedColor === c.id
-                        ? "border-primary bg-primary/5 shadow-sm scale-[1.03]"
-                        : "border-border bg-card"
-                    }`}
-                  >
-                    <span
-                      className="w-8 h-8 rounded-full border-2 shadow"
-                      style={{ background: c.hex, borderColor: c.border }}
-                    />
-                    <span className={`text-xs font-medium ${selectedColor === c.id ? "text-primary" : "text-muted-foreground"}`}>
-                      {c.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
+      <Sheet open={sheetOpen} onOpenChange={(o) => { if (!o) { setSheetOpen(false); setPendingLatLng(null); pendingLatLngRef.current = null; } }}>
+        {/* No overflow-y-auto on the outer SheetContent — iOS Safari drops taps in scrollable containers.
+            Instead the inner fields div scrolls; the action buttons stay outside the scroll zone. */}
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92dvh] flex flex-col pb-0 px-0">
+          <form
+            className="flex flex-col flex-1 min-h-0"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const coords = pendingLatLngRef.current ?? pendingLatLng;
+              if (!coords || createPin.isPending) return;
+              createPin.mutate({
+                lat: coords.lat,
+                lng: coords.lng,
+                color: selectedColor,
+                contactName: contactName || undefined,
+                contactEmail: contactEmail || undefined,
+                contactPhone: contactPhone || undefined,
+                note: note || undefined,
+              });
+            }}
+          >
+            {/* Header — never scrolls */}
+            <div className="px-6 pt-6 pb-4 shrink-0">
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  New Contact Pin
+                </SheetTitle>
+              </SheetHeader>
             </div>
 
-            {/* Contact info */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold block">Contact Info <span className="font-normal text-muted-foreground">(optional)</span></Label>
+            {/* Scrollable fields */}
+            <div className="flex-1 overflow-y-auto px-6 space-y-5 pb-2" style={{ WebkitOverflowScrolling: "touch" } as any}>
+              {/* Color / Lean picker */}
+              <div>
+                <Label className="text-sm font-semibold mb-2 block">Voter Lean</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PIN_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onPointerDown={(e) => { e.stopPropagation(); setSelectedColor(c.id); }}
+                      className={`flex flex-col items-center gap-2 py-3 rounded-xl border-2 transition-all ${
+                        selectedColor === c.id
+                          ? "border-primary bg-primary/5 shadow-sm scale-[1.03]"
+                          : "border-border bg-card"
+                      }`}
+                    >
+                      <span
+                        className="w-8 h-8 rounded-full border-2 shadow"
+                        style={{ background: c.hex, borderColor: c.border }}
+                      />
+                      <span className={`text-xs font-medium ${selectedColor === c.id ? "text-primary" : "text-muted-foreground"}`}>
+                        {c.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Full name"
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                  className="pl-9"
+              {/* Contact info */}
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold block">Contact Info <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Full name" value={contactName} onChange={(e) => setContactName(e.target.value)} className="pl-9" />
+                </div>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input type="email" placeholder="Email address" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className="pl-9" />
+                </div>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input type="tel" placeholder="Phone number" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="pl-9" />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <Label className="text-sm font-semibold mb-1.5 block">Notes <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Textarea
+                  placeholder="e.g. 'Interested in volunteering', 'Left a flyer'"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={2}
+                  className="resize-none"
                 />
               </div>
 
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="email"
-                  placeholder="Email address"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="tel"
-                  placeholder="Phone number"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+              {pendingLatLng && (
+                <p className="text-xs text-muted-foreground text-center pb-1">
+                  📍 {pendingLatLng.lat.toFixed(5)}, {pendingLatLng.lng.toFixed(5)}
+                </p>
+              )}
             </div>
 
-            {/* Notes */}
-            <div>
-              <Label className="text-sm font-semibold mb-1.5 block">Notes <span className="font-normal text-muted-foreground">(optional)</span></Label>
-              <Textarea
-                placeholder="e.g. 'Interested in volunteering', 'Left a flyer'"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={2}
-                className="resize-none"
-              />
-            </div>
-
-            {pendingLatLng && (
-              <p className="text-xs text-muted-foreground text-center">
-                📍 {pendingLatLng.lat.toFixed(5)}, {pendingLatLng.lng.toFixed(5)}
-              </p>
-            )}
-
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <Button variant="outline" onClick={() => { setSheetOpen(false); setPendingLatLng(null); pendingLatLngRef.current = null; }}>
+            {/* Action buttons — always visible at the bottom, never inside a scroll container */}
+            <div className="grid grid-cols-2 gap-3 px-6 py-4 border-t shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onPointerDown={() => { setSheetOpen(false); setPendingLatLng(null); pendingLatLngRef.current = null; }}
+              >
                 Cancel
               </Button>
               <Button
+                type="submit"
                 disabled={createPin.isPending}
-                onClick={() => {
-                  const coords = pendingLatLngRef.current ?? pendingLatLng;
-                  if (!coords) return;
-                  createPin.mutate({
-                    lat: coords.lat,
-                    lng: coords.lng,
-                    color: selectedColor,
-                    contactName: contactName || undefined,
-                    contactEmail: contactEmail || undefined,
-                    contactPhone: contactPhone || undefined,
-                    note: note || undefined,
-                  });
-                }}
               >
                 {createPin.isPending ? "Saving…" : "Drop Pin"}
               </Button>
             </div>
-          </div>
+          </form>
         </SheetContent>
       </Sheet>
 
