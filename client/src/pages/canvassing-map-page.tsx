@@ -38,6 +38,9 @@ export default function CanvassingMapPage() {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressLatLngRef = useRef<{ lat: number; lng: number } | null>(null);
   const touchMovedRef = useRef(false);
+  // Ref mirrors state so the Drop-Pin click handler always reads the real value
+  // even when captured inside a Portal closure before React re-renders.
+  const pendingLatLngRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pendingLatLng, setPendingLatLng] = useState<{ lat: number; lng: number } | null>(null);
@@ -84,6 +87,7 @@ export default function CanvassingMapPage() {
   });
 
   const openCreateSheet = useCallback((lat: number, lng: number) => {
+    pendingLatLngRef.current = { lat, lng }; // always up-to-date regardless of render cycle
     setPendingLatLng({ lat, lng });
     resetForm();
     setSheetOpen(true);
@@ -350,15 +354,17 @@ export default function CanvassingMapPage() {
             )}
 
             <div className="grid grid-cols-2 gap-3 pt-1">
-              <Button variant="outline" onClick={() => { setSheetOpen(false); setPendingLatLng(null); }}>
+              <Button variant="outline" onClick={() => { setSheetOpen(false); setPendingLatLng(null); pendingLatLngRef.current = null; }}>
                 Cancel
               </Button>
               <Button
-                disabled={createPin.isPending || !pendingLatLng}
+                disabled={createPin.isPending}
                 onClick={() => {
-                  if (!pendingLatLng) return;
+                  const coords = pendingLatLngRef.current ?? pendingLatLng;
+                  if (!coords) return;
                   createPin.mutate({
-                    ...pendingLatLng,
+                    lat: coords.lat,
+                    lng: coords.lng,
                     color: selectedColor,
                     contactName: contactName || undefined,
                     contactEmail: contactEmail || undefined,
