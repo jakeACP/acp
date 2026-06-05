@@ -3,8 +3,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Copy, Trash2, X, Link2, User, Mail, Phone } from "lucide-react";
-import { Redirect } from "wouter";
+import { MapPin, Copy, Trash2, X, Link2, User, Mail, Phone, Users } from "lucide-react";
+import { Redirect, Link } from "wouter";
 import type { CanvassingPin } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
 
@@ -236,7 +236,11 @@ export default function CanvassingMapPage() {
           <span className="font-semibold text-sm">Canvassing Map</span>
           <Badge variant="outline" className="text-xs">{pins.length} contact{pins.length !== 1 ? "s" : ""}</Badge>
         </div>
-        <span className="text-xs text-muted-foreground hidden sm:inline">Right-click or hold to drop a pin</span>
+        <Link href="/canvassing/contacts">
+          <button type="button" className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted font-medium">
+            <Users className="h-4 w-4" /> Contacts
+          </button>
+        </Link>
       </div>
 
       {/* Map */}

@@ -11867,6 +11867,19 @@ function registerBudgetRoutes(app: Express) {
     }
   });
 
+  // ── Canvassing — read-only template list for candidates ──────────────────────
+  app.get("/api/canvassing/email-templates", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+    const role = (req.user as any)?.role;
+    if (!["admin", "candidate", "state_admin"].includes(role)) return res.status(403).json({ message: "Candidates only" });
+    try {
+      const templates = await storage.getEmailTemplates();
+      res.json(templates);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // ── Canvassing Pins ──────────────────────────────────────────────────────────
 
   const canCanvass = (req: Request) => {
@@ -11930,6 +11943,49 @@ function registerBudgetRoutes(app: Express) {
       const deleted = await storage.deleteCanvassingPin(req.params.id, (req.user as any).id, isAdmin);
       if (!deleted) return res.status(404).json({ message: "Pin not found or not yours" });
       res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Canvassing — send template email to selected contacts ────────────────────
+  app.post("/api/canvassing/contacts/email", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated() || !canCanvass(req)) {
+      return res.status(403).json({ message: "Candidates and admins only" });
+    }
+    try {
+      const { pinIds, templateId } = req.body;
+      if (!Array.isArray(pinIds) || pinIds.length === 0) {
+        return res.status(400).json({ message: "pinIds must be a non-empty array" });
+      }
+      if (!templateId) return res.status(400).json({ message: "templateId is required" });
+
+      const template = await storage.getEmailTemplate(templateId);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+
+      const isAdmin = (req.user as any).role === "admin";
+      const allPins = await storage.getCanvassingPins((req.user as any).id, isAdmin);
+      const selected = allPins.filter(p => pinIds.includes(p.id) && p.contactEmail);
+      if (selected.length === 0) {
+        return res.status(400).json({ message: "None of the selected contacts have an email address" });
+      }
+
+      const { sendEmailBlast } = await import("./email");
+      const recipients = selected.map(p => ({ email: p.contactEmail!, username: p.contactName ?? undefined }));
+      const result = await sendEmailBlast(recipients, template.subject, template.bodyHtml, template.bodyText ?? undefined);
+
+      // Log the blast
+      await storage.createEmailBlastLog({
+        templateId,
+        subject: template.subject,
+        recipientFilter: { source: "canvassing_pins", pinIds },
+        sentCount: result.sent,
+        status: result.failed === 0 ? "sent" : "partial",
+        error: result.errors.length ? result.errors.slice(0, 3).join("; ") : null,
+        sentBy: (req.user as any).id,
+      });
+
+      res.json({ sent: result.sent, skipped: selected.length - result.sent + (pinIds.length - selected.length), errors: result.errors });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
