@@ -29,7 +29,9 @@ import {
   Highlighter,
   Undo,
   Redo,
-  Minus
+  Minus,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
@@ -40,7 +42,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 interface RichTextEditorProps {
   content: string;
@@ -57,6 +59,8 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const [linkUrl, setLinkUrl] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -119,6 +123,33 @@ export function RichTextEditor({
       setImageUrl("");
     }
   }, [editor, imageUrl]);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editor) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const resp = await fetch("/api/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ message: "Upload failed" }));
+        throw new Error(err.message ?? "Upload failed");
+      }
+      const { url } = await resp.json();
+      editor.chain().focus().setImage({ src: url }).run();
+    } catch (err: any) {
+      console.error("Image upload error:", err);
+      alert(err.message ?? "Failed to upload image");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [editor]);
 
   if (!editor) {
     return null;
@@ -343,22 +374,56 @@ export function RichTextEditor({
           </PopoverContent>
         </Popover>
 
+        {/* Image — hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileUpload}
+          data-testid="input-image-file"
+        />
+
         {/* Image */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" data-testid="button-image">
-              <ImageIcon className="w-4 h-4" />
+            <Button variant="ghost" size="sm" data-testid="button-image" disabled={uploading}>
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Image URL</label>
+            <div className="space-y-3">
+              {/* Upload from device */}
+              <div>
+                <label className="text-sm font-medium">Upload a photo</label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-1.5 flex gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  data-testid="button-upload-image"
+                >
+                  {uploading
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
+                    : <><Upload className="w-4 h-4" /> Choose file</>}
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex-1 h-px bg-border" />
+                or paste a URL
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
+              {/* URL input */}
               <div className="flex gap-2">
                 <Input
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
                   placeholder="https://example.com/image.jpg"
                   data-testid="input-image-url"
+                  onKeyDown={(e) => e.key === "Enter" && addImage()}
                 />
                 <Button size="sm" onClick={addImage} data-testid="button-add-image">
                   Add
