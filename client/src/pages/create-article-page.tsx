@@ -512,7 +512,7 @@ export default function CreateArticlePage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 items-end">
                   <FormField
                     control={form.control}
                     name="privacy"
@@ -540,77 +540,77 @@ export default function CreateArticlePage() {
                     name="tags"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Tags</FormLabel>
+                        <FormLabel>Tags <span className="text-muted-foreground font-normal text-xs">(press comma or enter to add)</span></FormLabel>
                         <FormControl>
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap gap-2 mb-2 min-h-[32px]">
-                              {field.value?.split(",").map(tag => tag.trim()).filter(Boolean).map((tag, idx) => (
-                                <Badge 
-                                  key={idx} 
-                                  variant="secondary" 
-                                  className="flex items-center gap-1 bg-primary/10 text-primary border-primary/20"
-                                >
-                                  #{tag.replace(/^#/, "")}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const tags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
-                                      const newTags = tags.filter((_, i) => i !== idx);
-                                      field.onChange(newTags.join(", "));
-                                    }}
-                                    className="hover:text-destructive"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </Badge>
-                              ))}
-                            </div>
-                            <div className="relative">
-                              <Input 
-                                placeholder="Add a tag and press comma..."
-                                value={form.watch("tagInput") || ""}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  if (value.endsWith(",")) {
-                                    const newTag = value.slice(0, -1).trim().replace(/^#/, "");
-                                    const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
-                                    if (newTag && currentTags.length < 8 && !currentTags.includes(newTag)) {
-                                      field.onChange([...currentTags, newTag].join(", "));
-                                    }
-                                    form.setValue("tagInput", "");
-                                  } else {
-                                    form.setValue("tagInput", value);
+                          <div className="relative">
+                            <Input 
+                              placeholder="e.g. corruption, housing…"
+                              value={form.watch("tagInput") || ""}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value.endsWith(",")) {
+                                  const newTag = value.slice(0, -1).trim().replace(/^#/, "");
+                                  const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
+                                  if (newTag && currentTags.length < 8 && !currentTags.includes(newTag)) {
+                                    field.onChange([...currentTags, newTag].join(", "));
                                   }
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    const value = (e.target as HTMLInputElement).value.trim().replace(/^#/, "");
-                                    const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
-                                    if (value && currentTags.length < 8 && !currentTags.includes(value)) {
-                                      field.onChange([...currentTags, value].join(", "));
-                                    }
-                                    form.setValue("tagInput", "");
+                                  form.setValue("tagInput", "");
+                                } else {
+                                  form.setValue("tagInput", value);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const value = (e.target as HTMLInputElement).value.trim().replace(/^#/, "");
+                                  const currentTags = field.value?.split(",").map(t => t.trim()).filter(Boolean) || [];
+                                  if (value && currentTags.length < 8 && !currentTags.includes(value)) {
+                                    field.onChange([...currentTags, value].join(", "));
                                   }
-                                }}
-                                data-testid="input-tags"
-                                disabled={generateWithAiMutation.isPending || (field.value?.split(",").filter(Boolean).length || 0) >= 8}
-                                className={generateWithAiMutation.isPending ? "pr-10" : ""}
-                              />
-                              {generateWithAiMutation.isPending && (
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                  <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
-                                </div>
-                              )}
-                            </div>
+                                  form.setValue("tagInput", "");
+                                }
+                              }}
+                              data-testid="input-tags"
+                              disabled={generateWithAiMutation.isPending || (field.value?.split(",").filter(Boolean).length || 0) >= 8}
+                              className={generateWithAiMutation.isPending ? "pr-10" : ""}
+                            />
+                            {generateWithAiMutation.isPending && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                              </div>
+                            )}
                           </div>
                         </FormControl>
-                        <FormDescription>Type a tag and press comma or enter (Limit 8)</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
+
+                {/* Tag badges — full-width below the grid */}
+                {form.watch("tags") && (
+                  <div className="flex flex-wrap gap-2">
+                    {form.watch("tags")?.split(",").map(t => t.trim()).filter(Boolean).map((tag, idx) => (
+                      <Badge
+                        key={idx}
+                        variant="secondary"
+                        className="flex items-center gap-1 bg-primary/10 text-primary border-primary/20"
+                      >
+                        #{tag.replace(/^#/, "")}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const tags = form.getValues("tags")?.split(",").map(t => t.trim()).filter(Boolean) || [];
+                            form.setValue("tags", tags.filter((_, i) => i !== idx).join(", "));
+                          }}
+                          className="hover:text-destructive"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 

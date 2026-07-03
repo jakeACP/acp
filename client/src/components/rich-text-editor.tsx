@@ -374,7 +374,7 @@ export function RichTextEditor({
           </PopoverContent>
         </Popover>
 
-        {/* Image — hidden file input */}
+        {/* Hidden file input — lives outside the Popover so .click() works */}
         <input
           ref={fileInputRef}
           type="file"
@@ -384,39 +384,28 @@ export function RichTextEditor({
           data-testid="input-image-file"
         />
 
-        {/* Image */}
+        {/* Upload photo button — directly triggers file picker, no Popover */}
+        <Button
+          variant="ghost"
+          size="sm"
+          title="Upload photo"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+          data-testid="button-upload-image"
+        >
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+        </Button>
+
+        {/* Image URL button — Popover for pasting a URL */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" data-testid="button-image" disabled={uploading}>
-              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+            <Button variant="ghost" size="sm" title="Insert image from URL" data-testid="button-image">
+              <ImageIcon className="w-4 h-4" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80">
-            <div className="space-y-3">
-              {/* Upload from device */}
-              <div>
-                <label className="text-sm font-medium">Upload a photo</label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-1.5 flex gap-2"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  data-testid="button-upload-image"
-                >
-                  {uploading
-                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
-                    : <><Upload className="w-4 h-4" /> Choose file</>}
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <div className="flex-1 h-px bg-border" />
-                or paste a URL
-                <div className="flex-1 h-px bg-border" />
-              </div>
-
-              {/* URL input */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Insert image from URL</label>
               <div className="flex gap-2">
                 <Input
                   value={imageUrl}
