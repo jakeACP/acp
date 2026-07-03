@@ -43,6 +43,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useState, useCallback, useRef } from "react";
+import { getCsrfToken, fetchCsrfToken } from "@/lib/queryClient";
 
 interface RichTextEditorProps {
   content: string;
@@ -129,15 +130,28 @@ export function RichTextEditor({
     if (!file || !editor) return;
     setUploading(true);
     try {
+      // Ensure we have a CSRF token — /api/upload is CSRF-protected
+      let token = getCsrfToken();
+      if (!token) token = await fetchCsrfToken();
+
       const formData = new FormData();
       formData.append("file", file);
-      const resp = await fetch("/api/upload", {
+
+      const doUpload = (csrf: string | null) => fetch("/api/upload", {
         method: "POST",
         credentials: "include",
+        headers: csrf ? { "x-csrf-token": csrf } : {},
         body: formData,
       });
+
+      let resp = await doUpload(token);
+      // Token may be stale/missing — refresh once and retry
+      if (resp.status === 403) {
+        token = await fetchCsrfToken();
+        resp = await doUpload(token);
+      }
       if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ message: "Upload failed" }));
+        const err = await resp.json().catch(() => ({ message: `Upload failed (${resp.status})` }));
         throw new Error(err.message ?? "Upload failed");
       }
       const { url } = await resp.json();

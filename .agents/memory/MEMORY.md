@@ -1,0 +1,1 @@
+- [CSRF on raw fetch uploads](csrf-uploads.md) — non-apiRequest POST/PUT/DELETE must send x-csrf-token or get 403; use getCsrfToken/fetchCsrfToken
