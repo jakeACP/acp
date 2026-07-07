@@ -98,6 +98,11 @@ export function PostCard({ post }: PostCardProps) {
       queryClient.setQueryData(["/api/feeds/following"], updateFeed);
       queryClient.setQueryData(["/api/feeds/news"], updateFeed);
       
+      // Optimistically update the article/post detail cache (article page)
+      queryClient.setQueryData(["/api/posts", post.id], (old: any) =>
+        old ? { ...old, likesCount: (old.likesCount || 0) + (currentLiked ? -1 : 1) } : old
+      );
+      
       // Return context for rollback
       return { previousLikeStatus, currentLiked };
     },
@@ -119,6 +124,11 @@ export function PostCard({ post }: PostCardProps) {
       queryClient.setQueryData(["/api/feeds/all"], revertFeed);
       queryClient.setQueryData(["/api/feeds/following"], revertFeed);
       queryClient.setQueryData(["/api/feeds/news"], revertFeed);
+      
+      // Revert the article/post detail cache
+      queryClient.setQueryData(["/api/posts", post.id], (old: any) =>
+        old ? { ...old, likesCount: (old.likesCount || 0) + (context?.currentLiked ? 1 : -1) } : old
+      );
     },
     onSettled: () => {
       // Refetch after mutation completes (success or error)
@@ -126,6 +136,7 @@ export function PostCard({ post }: PostCardProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
       queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts", post.id] });
     },
   });
 
