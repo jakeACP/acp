@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import DOMPurify from "dompurify";
@@ -10,15 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { format } from "date-fns";
-import { Loader2, ArrowLeft, Clock, Calendar, Link2, Check } from "lucide-react";
-import { SiFacebook, SiX, SiBluesky } from "react-icons/si";
-import { useToast } from "@/hooks/use-toast";
+import { Loader2, ArrowLeft, Clock, Calendar, Share2 } from "lucide-react";
+import { ShareSheet } from "@/components/share-sheet";
 
 export default function PublicArticlePage() {
   const [, params] = useRoute("/read/:id");
   const articleId = params?.id;
-  const [copied, setCopied] = useState(false);
-  const { toast } = useToast();
 
   const { data: article, isLoading, error } = useQuery<any>({
     queryKey: ["/api/public/articles", articleId],
@@ -34,26 +30,7 @@ export default function PublicArticlePage() {
     ? `${article.author.firstName} ${article.author.lastName || ''}`
     : article?.author?.username || 'ACP Staff';
 
-  const articleUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const encodedUrl = encodeURIComponent(articleUrl);
-  const encodedTitle = encodeURIComponent(article?.title || '');
-  
-  const shareLinks = {
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
-    twitter: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
-    bluesky: `https://bsky.app/intent/compose?text=${encodedTitle}%20${encodedUrl}`,
-  };
-  
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(articleUrl);
-      setCopied(true);
-      toast({ title: "Link copied!", description: "Article link copied to clipboard" });
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      toast({ title: "Failed to copy", variant: "destructive" });
-    }
-  };
+  const articleUrl = articleId ? `${window.location.origin}/read/${articleId}` : window.location.href;
 
   if (isLoading) {
     return (
@@ -145,45 +122,22 @@ export default function PublicArticlePage() {
               )}
               
               <div className="p-6 md:p-10">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={shareLinks.facebook}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2.5 rounded-lg bg-white/10 hover:bg-[#1877F2]/20 text-white/70 hover:text-[#1877F2] transition-all hover:scale-110"
-                      title="Share on Facebook"
-                    >
-                      <SiFacebook className="h-5 w-5" />
-                    </a>
-                    <a
-                      href={shareLinks.twitter}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all hover:scale-110"
-                      title="Share on X"
-                    >
-                      <SiX className="h-5 w-5" />
-                    </a>
-                    <a
-                      href={shareLinks.bluesky}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2.5 rounded-lg bg-white/10 hover:bg-[#0085FF]/20 text-white/70 hover:text-[#0085FF] transition-all hover:scale-110"
-                      title="Share on Bluesky"
-                    >
-                      <SiBluesky className="h-5 w-5" />
-                    </a>
-                  </div>
-                  
-                  <button
-                    onClick={copyLink}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all font-medium"
-                    title="Copy link"
-                  >
-                    {copied ? <Check className="h-5 w-5 text-green-400" /> : <Link2 className="h-5 w-5" />}
-                    <span>{copied ? 'Copied!' : 'Copy Link'}</span>
-                  </button>
+                <div className="flex items-center justify-end mb-6">
+                  <ShareSheet
+                    title={article?.title || "ACP Article"}
+                    text={article?.excerpt || article?.title || ""}
+                    url={articleUrl}
+                    trigger={(open) => (
+                      <button
+                        onClick={open}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all font-medium"
+                        title="Share article"
+                      >
+                        <Share2 className="h-5 w-5" />
+                        <span>Share</span>
+                      </button>
+                    )}
+                  />
                 </div>
                 
                 {article.tags && article.tags.length > 0 && (

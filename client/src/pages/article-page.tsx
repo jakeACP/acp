@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Calendar, Clock, User, Share2, Heart, MessageCircle, Bookmark, Eye, Pencil, Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { ShareSheet } from "@/components/share-sheet";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, formatDistanceToNow } from "date-fns";
 import { Link as WouterLink } from "wouter";
@@ -204,9 +205,16 @@ export default function ArticlePage() {
                 Edit
               </Button>
             )}
-            <Button variant="ghost" size="icon" data-testid="button-share" className="hover:bg-white/20">
-              <Share2 className="w-4 h-4" />
-            </Button>
+            <ShareSheet
+              title={article.title || "ACP Article"}
+              text={article.excerpt || article.title || ""}
+              url={`${window.location.origin}/read/${article.id}`}
+              trigger={(open) => (
+                <Button variant="ghost" size="icon" data-testid="button-share" className="hover:bg-white/20" onClick={open}>
+                  <Share2 className="w-4 h-4" />
+                </Button>
+              )}
+            />
             <Button variant="ghost" size="icon" data-testid="button-bookmark" className="hover:bg-white/20">
               <Bookmark className="w-4 h-4" />
             </Button>
@@ -346,10 +354,17 @@ export default function ArticlePage() {
                   <MessageCircle className="w-4 h-4 mr-2" />
                   {article.commentsCount || 0}
                 </Button>
-                <Button variant="outline" size="sm" data-testid="button-share-footer" className="bg-white/10 border-white/20 hover:bg-white/20">
-                  <Share2 className="w-4 h-4 mr-2" />
-                  Share
-                </Button>
+                <ShareSheet
+                  title={article.title || "ACP Article"}
+                  text={article.excerpt || article.title || ""}
+                  url={`${window.location.origin}/read/${article.id}`}
+                  trigger={(open) => (
+                    <Button variant="outline" size="sm" data-testid="button-share-footer" className="bg-white/10 border-white/20 hover:bg-white/20" onClick={open}>
+                      <Share2 className="w-4 h-4 mr-2" />
+                      Share
+                    </Button>
+                  )}
+                />
               </div>
               <Button 
                 variant="ghost" 

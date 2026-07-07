@@ -6,6 +6,7 @@ import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { SignalWithAuthor } from "@shared/schema";
 import { SignalCommentsOverlay } from "../components/SignalCommentsOverlay";
+import { ShareSheet } from "@/components/share-sheet";
 
 const SWIPE_THRESHOLD = 72;   // px of travel before committing
 const SWIPE_EXIT_PX   = 340;  // how far to animate the screen off before navigating
@@ -347,16 +348,22 @@ export function SignalPlayerPage() {
           <span className="text-white text-xs font-semibold drop-shadow">{fmt(signal.commentsCount ?? 0)}</span>
         </button>
 
-        <button
-          onClick={(e) => { e.stopPropagation(); navigator.share?.({ url: window.location.href, title: signal.title ?? "Signal" }).catch(() => {}); }}
-          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
-          aria-label="Share"
-        >
-          <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-            <Share2 className="w-6 h-6 text-white" />
-          </div>
-          <span className="text-white text-xs font-semibold drop-shadow">{fmt(signal.sharesCount ?? 0)}</span>
-        </button>
+        <ShareSheet
+          title={signal.title ?? "Signal"}
+          url={`${window.location.origin}/signals/${signal.id}`}
+          trigger={(open) => (
+            <button
+              onClick={(e) => { e.stopPropagation(); open(); }}
+              className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+              aria-label="Share"
+            >
+              <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
+                <Share2 className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-white text-xs font-semibold drop-shadow">{fmt(signal.sharesCount ?? 0)}</span>
+            </button>
+          )}
+        />
       </div>
 
       {/* Bottom info */}

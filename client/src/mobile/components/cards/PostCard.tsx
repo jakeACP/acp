@@ -1,8 +1,9 @@
 import { Link } from "wouter";
-import { Heart, MessageCircle, Share2, MoreHorizontal } from "lucide-react";
+import { Heart, MessageCircle, MoreHorizontal } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ShareSheet } from "@/components/share-sheet";
 
 interface PostCardProps {
   post: {
@@ -104,10 +105,20 @@ export function PostCard({ post }: PostCardProps) {
           </button>
         </Link>
         
-        <button className="flex items-center gap-1 text-white/60 hover:text-green-400 transition-colors" data-testid={`share-post-${post.id}`}>
-          <Share2 className="w-4 h-4" />
-          <span className="text-xs">{post.sharesCount || 0}</span>
-        </button>
+        <ShareSheet
+          title={post.content?.slice(0, 80) || "ACP Post"}
+          url={`${window.location.origin}/posts/${post.id}`}
+          trigger={(open) => (
+            <button
+              className="flex items-center gap-1 text-white/60 hover:text-green-400 transition-colors"
+              data-testid={`share-post-${post.id}`}
+              onClick={open}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+              <span className="text-xs">{post.sharesCount || 0}</span>
+            </button>
+          )}
+        />
       </div>
     </article>
   );

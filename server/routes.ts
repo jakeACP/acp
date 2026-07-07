@@ -221,6 +221,118 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // ── Open Graph / social meta tag injection for shareable public pages ─────
+  // These routes must be registered BEFORE the Vite / static catch-all so that
+  // social crawlers receive a fully-formed <head> with og:* tags even though
+  // the app is a SPA.
+
+  async function readHtmlTemplate(): Promise<string> {
+    // In production the built file lives at server/public/index.html
+    const prodPath = path.resolve(import.meta.dirname, "public", "index.html");
+    if (fs.existsSync(prodPath)) {
+      return fs.promises.readFile(prodPath, "utf-8");
+    }
+    // In development, fall back to the source template
+    return fs.promises.readFile(
+      path.resolve(process.cwd(), "client", "index.html"),
+      "utf-8"
+    );
+  }
+
+  function buildOgHtml(
+    template: string,
+    opts: { title: string; description: string; image?: string; url: string }
+  ): string {
+    const escaped = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    const tags = [
+      `<meta property="og:type" content="article" />`,
+      `<meta property="og:site_name" content="ACP Democracy" />`,
+      `<meta property="og:title" content="${escaped(opts.title)}" />`,
+      `<meta property="og:description" content="${escaped(opts.description)}" />`,
+      `<meta property="og:url" content="${escaped(opts.url)}" />`,
+      opts.image ? `<meta property="og:image" content="${escaped(opts.image)}" />` : "",
+      `<meta name="twitter:card" content="${opts.image ? "summary_large_image" : "summary"}" />`,
+      `<meta name="twitter:title" content="${escaped(opts.title)}" />`,
+      `<meta name="twitter:description" content="${escaped(opts.description)}" />`,
+      opts.image ? `<meta name="twitter:image" content="${escaped(opts.image)}" />` : "",
+      `<title>${escaped(opts.title)} | ACP Democracy</title>`,
+    ].filter(Boolean).join("\n    ");
+
+    // Remove any existing <title> tag so we don't end up with two
+    return template
+      .replace(/<title>[^<]*<\/title>/, "")
+      .replace("</head>", `    ${tags}\n  </head>`);
+  }
+
+  // Public post page OG tags: /posts/:id
+  app.get("/posts/:id", async (req, res, next) => {
+    try {
+      const post = await storage.getPostById(req.params.id);
+      if (!post) return next();
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const url = `${origin}/posts/${req.params.id}`;
+      const title = post.title || (post.content || "").slice(0, 80) || "ACP Post";
+      const description = (post.content || "").slice(0, 160).trim() || "Read on ACP Democracy";
+      const image = (post as any).image || undefined;
+
+      const template = await readHtmlTemplate();
+      const html = buildOgHtml(template, { title, description, image, url });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Public article page OG tags: /read/:id
+  app.get("/read/:id", async (req, res, next) => {
+    try {
+      const article = await storage.getPublicArticle(req.params.id);
+      if (!article) return next();
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const url = `${origin}/read/${req.params.id}`;
+      const title = article.title || "ACP Article";
+      const description = article.excerpt
+        || (article.articleBody || article.content || "")
+            .replace(/<[^>]*>/g, "")
+            .slice(0, 160)
+            .trim()
+        || "Read on ACP Democracy";
+      const image = (article as any).featuredImage || undefined;
+
+      const template = await readHtmlTemplate();
+      const html = buildOgHtml(template, { title, description, image, url });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Public signal page OG tags: /signals/:id  (canonical public URL for sharing)
+  async function signalOgHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+      const signal = await storage.getSignalById(req.params.id);
+      // Only serve OG metadata for public signals to prevent metadata leakage
+      if (!signal || !signal.isPublic) return next();
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const url = `${origin}/signals/${req.params.id}`;
+      const title = signal.title || "ACP Signal";
+      const description = signal.description || "Watch this Signal on ACP Democracy";
+      const image = signal.thumbnailUrl || undefined;
+
+      const template = await readHtmlTemplate();
+      const html = buildOgHtml(template, { title, description, image, url });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  app.get("/signals/:id", signalOgHandler);
+  // Keep /mobile/signals/:id as alias so existing mobile deep-links still work
+  app.get("/mobile/signals/:id", signalOgHandler);
+
   // File Upload API
   app.post("/api/upload", upload.single('file'), async (req, res) => {
     if (!req.isAuthenticated()) {

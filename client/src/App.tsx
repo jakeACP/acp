@@ -81,6 +81,8 @@ import CreateArticlePage from "@/pages/create-article-page";
 import ArticlePage from "@/pages/article-page";
 import PublicLandingPage from "@/pages/public-landing-page";
 import PublicArticlePage from "@/pages/public-article-page";
+import PublicPostPage from "@/pages/public-post-page";
+import PublicSignalPage from "@/pages/public-signal-page";
 import DeveloperPage from "@/pages/developer-page";
 import RunForOfficePage from "@/pages/run-for-office-page";
 import IssuesPage from "@/pages/issues-page";
@@ -154,6 +156,8 @@ function Router() {
       <Route path="/news" component={PublicLandingPage} />
       <Route path="/terms" component={TermsOfServicePage} />
       <Route path="/read/:id" component={PublicArticlePage} />
+      <Route path="/posts/:id" component={PublicPostPage} />
+      <Route path="/signals/:id" component={PublicSignalPage} />
       <ProtectedRoute path="/groups" component={GroupsPage} />
       <ProtectedRoute path="/polls" component={PollsPage} />
       <ProtectedRoute path="/polls/:id" component={PollDetailPage} />
