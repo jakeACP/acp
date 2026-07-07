@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Loader2, Search, ExternalLink, AlertTriangle, TrendingUp, ShieldCheck,
-  TrendingDown, DollarSign, Building2, ArrowUpDown,
+  TrendingDown, DollarSign, Building2, ArrowUpDown, ChevronRight,
+  Landmark, Users,
 } from "lucide-react";
 import { Navigation } from "@/components/navigation";
 import { useTheme } from "@/hooks/use-theme";
@@ -32,6 +33,7 @@ type SIG = {
   spendRange?: string | null;
   partySplitDem?: number | null;
   partySplitRep?: number | null;
+  industry?: string | null;
 };
 
 /* ─── helpers ─── */
@@ -199,6 +201,109 @@ function LobbyIndustrySectorCard({ sig }: { sig: SIG }) {
         <Link href={`/lobbies/${sig.tag || sig.id}`}>
           <Button variant="outline" size="sm" className="w-full mt-auto">View Sector Profile →</Button>
         </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── Featured umbrella card (Conservative / Progressive) ─── */
+function FeaturedLobbyCard({ sig, contributingSectors, allLobbies }: {
+  sig: SIG;
+  contributingSectors: SIG[];
+  allLobbies: SIG[];
+}) {
+  const isConservative = sig.industry === "featured_conservative";
+  const partyColor = isConservative
+    ? { bg: "from-red-900 to-red-800", border: "border-red-600", badge: "bg-red-600 text-white", bar: "bg-red-500", accent: "text-red-300" }
+    : { bg: "from-blue-900 to-blue-800", border: "border-blue-600", badge: "bg-blue-600 text-white", bar: "bg-blue-500", accent: "text-blue-300" };
+  const partyLabel = isConservative ? "Republican-Leaning (≥90% R)" : "Democratic-Leaning (≥90% D)";
+  const partyIcon = isConservative ? "🔴" : "🔵";
+
+  const totalLower = contributingSectors.reduce((sum, s) => sum + parseSpendLower(s.spendRange), 0);
+  const umbrellaLabel = totalLower >= 1000
+    ? `~$${(totalLower / 1000).toFixed(1)}B+` : totalLower > 0
+    ? `~$${totalLower.toFixed(0)}M+` : sig.spendRange ?? "—";
+
+  return (
+    <Card className={`overflow-hidden border-2 ${partyColor.border} hover:shadow-xl transition-all`}>
+      <div className={`bg-gradient-to-r ${partyColor.bg} px-5 py-4 flex items-start justify-between gap-4`}>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xl">{partyIcon}</span>
+            <h3 className="text-lg font-black text-white leading-tight">{sig.name}</h3>
+            {sig.acronym && <span className={`text-xs font-mono ${partyColor.accent}`}>({sig.acronym})</span>}
+          </div>
+          <p className="text-white/70 text-xs">{partyLabel}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-2xl font-black text-white">{umbrellaLabel}</div>
+          <div className={`text-[10px] font-semibold ${partyColor.accent}`}>aggregate / yr</div>
+        </div>
+      </div>
+
+      <CardContent className="p-4 space-y-4">
+        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{sig.description}</p>
+
+        {/* Party split bar */}
+        {sig.partySplitDem != null && sig.partySplitRep != null && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-[11px] font-bold">
+              <span className="text-blue-600 dark:text-blue-400">Dem {sig.partySplitDem}%</span>
+              <span className="text-red-600 dark:text-red-400">{sig.partySplitRep}% Rep</span>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden flex shadow-inner">
+              <div className="h-full bg-blue-500" style={{ width: `${sig.partySplitDem}%` }} />
+              <div className="h-full bg-red-500 flex-1" />
+            </div>
+          </div>
+        )}
+
+        {/* Contributing sectors */}
+        {contributingSectors.length > 0 && (
+          <div>
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
+              <Landmark className="h-3 w-3" />
+              {contributingSectors.length} Sectors donating ≥90% to {isConservative ? "Republicans" : "Democrats"}
+            </p>
+            <div className="grid grid-cols-1 gap-1">
+              {contributingSectors.map(s => (
+                <Link key={s.id} href={`/lobbies/${s.tag || s.id}`}>
+                  <div className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-muted/60 transition-colors cursor-pointer group">
+                    <span className="text-xs font-medium group-hover:underline truncate">{s.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {s.spendRange && (
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{s.spendRange}</span>
+                      )}
+                      <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 pt-1">
+          {sig.influenceScore != null && (
+            <div className="flex-1 space-y-1">
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-0.5"><TrendingDown className="h-2.5 w-2.5 text-red-500" />Corrupt</span>
+                <span className="font-medium">{sig.influenceScore > 0 ? "+" : ""}{sig.influenceScore}</span>
+                <span className="flex items-center gap-0.5">Reform<TrendingUp className="h-2.5 w-2.5 text-green-500" /></span>
+              </div>
+              <div className="relative h-1.5 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-500">
+                <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: "50%" }} />
+                <div className="absolute top-0 h-full w-1 bg-white border-x border-white/50 shadow-sm"
+                  style={{ left: `calc(${((sig.influenceScore + 50) / 100) * 100}% - 2px)` }} />
+              </div>
+            </div>
+          )}
+          <Link href={`/lobbies/${sig.tag || sig.id}`}>
+            <Button size="sm" variant="outline" className="shrink-0 text-xs">
+              Full Profile <ChevronRight className="h-3 w-3 ml-1" />
+            </Button>
+          </Link>
+        </div>
       </CardContent>
     </Card>
   );
@@ -409,9 +514,25 @@ export default function SigsDirectoryPage() {
   const interestSigs = sigs.filter(s => s.category?.toLowerCase() !== "lobby" && !s.isAce);
   const aceSigs = sigs.filter(s => s.isAce);
 
-  // Lobbies — filtered + sorted
+  // Featured umbrella cards (Conservative + Progressive)
+  const conservativeSig = lobbySectors.find(s => s.industry === "featured_conservative") ?? null;
+  const progressiveSig = lobbySectors.find(s => s.industry === "featured_progressive") ?? null;
+  const nonFeaturedLobbies = lobbySectors.filter(
+    s => s.industry !== "featured_conservative" && s.industry !== "featured_progressive"
+  );
+
+  const conservativeSectors = useMemo(
+    () => nonFeaturedLobbies.filter(s => (s.partySplitRep ?? 0) >= 90),
+    [nonFeaturedLobbies]
+  );
+  const progressiveSectors = useMemo(
+    () => nonFeaturedLobbies.filter(s => (s.partySplitDem ?? 0) >= 90),
+    [nonFeaturedLobbies]
+  );
+
+  // Lobbies — filtered + sorted (excludes featured umbrella cards from main grid)
   const filteredLobbies = useMemo(() => {
-    let list = lobbySectors.filter(s => {
+    let list = nonFeaturedLobbies.filter(s => {
       const matchSent = lobbySentiment === "all" || s.sentiment === lobbySentiment;
       const matchSearch = !lobbySearch ||
         s.name.toLowerCase().includes(lobbySearch.toLowerCase()) ||
@@ -430,7 +551,7 @@ export default function SigsDirectoryPage() {
       if (lobbySort === "name") return a.name.localeCompare(b.name);
       return 0;
     });
-  }, [lobbySectors, lobbySearch, lobbySentiment, lobbySort, lobbyPartyLean]);
+  }, [nonFeaturedLobbies, lobbySearch, lobbySentiment, lobbySort, lobbyPartyLean]);
 
   // Interest groups — filtered + sorted
   const filteredInterest = useMemo(() => {
@@ -509,7 +630,37 @@ export default function SigsDirectoryPage() {
             </TabsList>
 
             {/* ── LOBBIES TAB ── */}
-            <TabsContent value="lobbies" className="space-y-4 pt-2">
+            <TabsContent value="lobbies" className="space-y-5 pt-2">
+
+              {/* Featured row: Conservative + Progressive umbrella cards */}
+              {(conservativeSig || progressiveSig) && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
+                      Party Umbrella Coalitions — Sectors donating ≥90% to one party
+                    </p>
+                  </div>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    {conservativeSig && (
+                      <FeaturedLobbyCard
+                        sig={conservativeSig}
+                        contributingSectors={conservativeSectors}
+                        allLobbies={nonFeaturedLobbies}
+                      />
+                    )}
+                    {progressiveSig && (
+                      <FeaturedLobbyCard
+                        sig={progressiveSig}
+                        contributingSectors={progressiveSectors}
+                        allLobbies={nonFeaturedLobbies}
+                      />
+                    )}
+                  </div>
+                  <hr className="border-border/50" />
+                </div>
+              )}
+
               <FilterBar
                 search={lobbySearch} onSearch={setLobbySearch}
                 sentiment={lobbySentiment} onSentiment={setLobbySentiment}
