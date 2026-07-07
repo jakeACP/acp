@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { sanitizeUrl } from "@/lib/utils";
 import { Post, PostWithAuthor, Comment, Event } from "@shared/schema";
-import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown, MapPin, Calendar, Users, ExternalLink, FileText, Clock, HandHeart, Briefcase, Mail, Phone, AlertCircle, CheckCircle } from "lucide-react";
+import { Heart, MessageCircle, Share, Flag, Send, Trash2, Link2, Repeat2, ThumbsDown, MapPin, Calendar, Users, ExternalLink, FileText, Clock, HandHeart, Briefcase, Mail, Phone, AlertCircle, CheckCircle, UserPlus, UserCheck } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useState } from "react";
 import { Link as WouterLink } from "wouter";
@@ -48,6 +48,37 @@ export function PostCard({ post }: PostCardProps) {
   const { data: likeStatus } = useQuery<{ liked: boolean }>({
     queryKey: ["/api/likes", post.id, "post"],
     enabled: !!user && !!post.id,
+  });
+
+  const isOwnPost = user?.id === post.authorId;
+  const { data: followStatus } = useQuery<{ isFollowing: boolean; followsYou: boolean }>({
+    queryKey: ["/api/follow/status", post.authorId],
+    enabled: !!user && !isOwnPost && !!post.authorId,
+  });
+
+  const followMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("/api/follow", "POST", { userId: post.authorId });
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["/api/follow/status", post.authorId] });
+      const prev = queryClient.getQueryData(["/api/follow/status", post.authorId]);
+      queryClient.setQueryData(["/api/follow/status", post.authorId], (old: any) =>
+        old ? { ...old, isFollowing: true } : { isFollowing: true, followsYou: false }
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.prev !== undefined) {
+        queryClient.setQueryData(["/api/follow/status", post.authorId], context.prev);
+      }
+      toast({ title: "Error", description: "Could not follow user", variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/follow/status", post.authorId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
+    },
   });
 
   const { data: comments = [] } = useQuery<Comment[]>({
@@ -513,11 +544,32 @@ export function PostCard({ post }: PostCardProps) {
               </Avatar>
             </WouterLink>
             <div>
-              <WouterLink href={`/profile/${post.authorId}`}>
-                <h4 className="font-semibold text-slate-900 dark:text-slate-100 hover:text-primary cursor-pointer transition-colors" data-testid={`link-author-${post.authorId}`}>
-                  {getDisplayName()}
-                </h4>
-              </WouterLink>
+              <div className="flex items-center gap-2">
+                <WouterLink href={`/profile/${post.authorId}`}>
+                  <h4 className="font-semibold text-slate-900 dark:text-slate-100 hover:text-primary cursor-pointer transition-colors" data-testid={`link-author-${post.authorId}`}>
+                    {getDisplayName()}
+                  </h4>
+                </WouterLink>
+                {user && !isOwnPost && followStatus !== undefined && !followStatus.isFollowing && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => followMutation.mutate()}
+                    disabled={followMutation.isPending}
+                    className="h-6 px-2 text-xs text-primary hover:bg-primary/10 gap-1"
+                    data-testid={`button-follow-${post.authorId}`}
+                  >
+                    <UserPlus className="h-3 w-3" />
+                    Follow
+                  </Button>
+                )}
+                {user && !isOwnPost && followStatus?.isFollowing && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <UserCheck className="h-3 w-3" />
+                    Following
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
                 {formattedDate && <span>{formattedDate} · </span>}{timeAgo || "Recently"}
               </p>

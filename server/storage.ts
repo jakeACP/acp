@@ -1659,11 +1659,18 @@ export class DatabaseStorage implements IStorage {
       .from(posts)
       .leftJoin(users, eq(posts.authorId, users.id))
       .leftJoin(polls, eq(posts.id, polls.postId))
+      .leftJoin(userFollows, userId
+        ? and(eq(userFollows.followeeId, posts.authorId), eq(userFollows.followerId, userId))
+        : sql`FALSE`
+      )
       .where(and(
         eq(posts.isDeleted, false),
         privacyFilter
       ))
-      .orderBy(desc(posts.createdAt))
+      .orderBy(
+        sql`CASE WHEN "user_follows"."follower_id" IS NOT NULL THEN 0 ELSE 1 END`,
+        desc(posts.createdAt)
+      )
       .limit(limit)
       .offset(offset);
   }
