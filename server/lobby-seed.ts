@@ -6,7 +6,7 @@ function log(msg: string) {
   console.log(`${time} [lobby-seed] ${msg}`);
 }
 
-type TopPac = { name: string; amount: string; partyLean: "D" | "R" | "Split" };
+type TopPac = { name: string; amount: string; partyLean: "D" | "R" | "Split"; tag?: string };
 type TopCandidate = { name: string; party: string; office: string; totalReceived: string };
 type InterestBreakdown = { label: string; pct: number };
 
@@ -37,10 +37,11 @@ const SECTORS: SectorEntry[] = [
     name: "General Conservative Values",
     tag: "CONSERVATIVE",
     acronym: "Heritage / RNC",
-    description: "The organized conservative movement — Heritage Foundation, AFP, Club for Growth, RNC, and allied PACs — collectively raises and deploys $200M–$400M+ per election cycle to elect Republican candidates and advance free-market, small-government, and social-conservative policy. This umbrella also reflects the combined electoral weight of all sectors that donate ≥90% of their money to Republican candidates.",
+    description: "The organized conservative movement — Heritage Foundation, AFP, Club for Growth, RNC, and allied PACs — collectively raises and deploys $200M–$400M+ per election cycle to elect Republican candidates and advance free-market, small-government, and social-conservative policy. This umbrella aggregates all sectors that donate ≥90% of their contributions to Republican candidates: 2nd Amendment Advocates, Pro-Life Movement, Religious Conservative Movement, Prison Industrial Complex, and Tobacco & Vaping Industry.",
     category: "lobby",
     sentiment: "neutral",
-    spendRange: "$200M–$400M",
+    // Umbrella spend = sum of contributor sector lower bounds: $10M+$15M+$20M+$20M+$50M = $115M (low) / $50M+$30M+$40M+$40M+$80M = $240M (high)
+    spendRange: "$115M–$240M",
     partySplitDem: 4,
     partySplitRep: 96,
     website: "https://www.heritage.org",
@@ -49,12 +50,13 @@ const SECTORS: SectorEntry[] = [
     influenceScore: -20,
     dataSourceName: "OpenSecrets",
     dataSourceUrl: "https://www.opensecrets.org/political-action-committees-pacs/republican/2022",
+    // topPacs stores the explicit contributor sector list (sectors donating ≥90% to Republicans)
     topPacs: [
-      { name: "Republican National Committee", amount: "$320M", partyLean: "R" },
-      { name: "Senate Leadership Fund (McConnell-aligned)", amount: "$246M", partyLean: "R" },
-      { name: "Congressional Leadership Fund", amount: "$220M", partyLean: "R" },
-      { name: "Club for Growth Action", amount: "$64M", partyLean: "R" },
-      { name: "Americans for Prosperity Action", amount: "$52M", partyLean: "R" },
+      { name: "2nd Amendment Advocates", amount: "$10M–$50M", partyLean: "R", tag: "SECOND_AMENDMENT" },
+      { name: "Pro-Life Movement", amount: "$15M–$30M", partyLean: "R", tag: "PRO_LIFE" },
+      { name: "Religious Conservative Movement", amount: "$20M–$40M", partyLean: "R", tag: "RELIGIOUS_CONSERVATIVE" },
+      { name: "Prison Industrial Complex", amount: "$20M–$40M", partyLean: "R", tag: "PRISON_INDUSTRIAL" },
+      { name: "Tobacco & Vaping Industry", amount: "$50M–$80M", partyLean: "R", tag: "TOBACCO" },
     ],
     topCandidates: [
       { name: "Donald Trump", party: "R", office: "President", totalReceived: "$800M+" },
@@ -75,10 +77,13 @@ const SECTORS: SectorEntry[] = [
     name: "General Progressive Values",
     tag: "PROGRESSIVE",
     acronym: "CAP / DNC",
-    description: "The organized progressive movement — Center for American Progress, ActBlue, DNC, MoveOn, and allied PACs — collectively raises and deploys $200M–$400M+ per election cycle to elect Democratic candidates and advance workers' rights, social equity, climate action, and healthcare access. This umbrella also reflects the combined electoral weight of all sectors that donate ≥90% of their money to Democratic candidates.",
+    description: "The organized progressive movement — Center for American Progress, ActBlue, DNC, MoveOn, and allied PACs — collectively raises and deploys $200M–$400M+ per election cycle to elect Democratic candidates and advance workers' rights, social equity, climate action, and healthcare access. This umbrella aggregates all sectors that donate ≥90% of their contributions to Democratic candidates: Labor Unions, Education Unions, Government Worker Unions, Auto Workers, Pro-Choice, LGBTQ+ Rights, Progressive Grassroots, Environmental Protection, Civil Rights, and Gun Control Advocacy.",
     category: "lobby",
     sentiment: "neutral",
-    spendRange: "$200M–$400M",
+    // Umbrella spend = sum of contributor sector lower bounds:
+    // $50M+$40M+$30M+$20M+$30M+$20M+$10M+$30M+$20M+$40M = $290M (low)
+    // $90M+$70M+$50M+$35M+$60M+$40M+$30M+$60M+$40M+$80M = $555M (high)
+    spendRange: "$290M–$555M",
     partySplitDem: 96,
     partySplitRep: 4,
     website: "https://www.americanprogress.org",
@@ -87,12 +92,18 @@ const SECTORS: SectorEntry[] = [
     influenceScore: 20,
     dataSourceName: "OpenSecrets",
     dataSourceUrl: "https://www.opensecrets.org/political-action-committees-pacs/democrat/2022",
+    // topPacs stores the explicit contributor sector list (sectors donating ≥90% to Democrats)
     topPacs: [
-      { name: "Democratic National Committee", amount: "$240M", partyLean: "D" },
-      { name: "Senate Majority PAC (Schumer-aligned)", amount: "$220M", partyLean: "D" },
-      { name: "House Majority PAC", amount: "$180M", partyLean: "D" },
-      { name: "ActBlue (fundraising platform)", amount: "$3.9B", partyLean: "D" },
-      { name: "Priorities USA Action", amount: "$130M", partyLean: "D" },
+      { name: "Labor Unions", amount: "$50M–$90M", partyLean: "D", tag: "LABOR_UNIONS" },
+      { name: "Education Unions", amount: "$40M–$70M", partyLean: "D", tag: "EDUCATION_UNIONS" },
+      { name: "Government Worker Unions", amount: "$30M–$50M", partyLean: "D", tag: "GOVT_WORKER_UNIONS" },
+      { name: "Auto Workers", amount: "$20M–$35M", partyLean: "D", tag: "AUTO_WORKERS" },
+      { name: "Pro-Choice / Reproductive Rights", amount: "$30M–$60M", partyLean: "D", tag: "PRO_CHOICE" },
+      { name: "LGBTQ+ Rights", amount: "$20M–$40M", partyLean: "D", tag: "LGBTQ_RIGHTS" },
+      { name: "Progressive Grassroots Activism", amount: "$10M–$30M", partyLean: "D", tag: "PROGRESSIVE_GRASSROOTS" },
+      { name: "Environmental Protection", amount: "$30M–$60M", partyLean: "D", tag: "ENVIRONMENT" },
+      { name: "Civil Rights & Civil Liberties", amount: "$20M–$40M", partyLean: "D", tag: "CIVIL_RIGHTS" },
+      { name: "Gun Control Advocacy", amount: "$40M–$80M", partyLean: "D", tag: "GUN_CONTROL" },
     ],
     topCandidates: [
       { name: "Joe Biden", party: "D", office: "President", totalReceived: "$1.5B+" },

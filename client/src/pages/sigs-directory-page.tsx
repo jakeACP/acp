@@ -34,6 +34,7 @@ type SIG = {
   partySplitDem?: number | null;
   partySplitRep?: number | null;
   industry?: string | null;
+  topPacs?: { name: string; amount: string; partyLean: string; tag?: string }[] | null;
 };
 
 /* ─── helpers ─── */
@@ -207,11 +208,7 @@ function LobbyIndustrySectorCard({ sig }: { sig: SIG }) {
 }
 
 /* ─── Featured umbrella card (Conservative / Progressive) ─── */
-function FeaturedLobbyCard({ sig, contributingSectors, allLobbies }: {
-  sig: SIG;
-  contributingSectors: SIG[];
-  allLobbies: SIG[];
-}) {
+function FeaturedLobbyCard({ sig }: { sig: SIG }) {
   const isConservative = sig.industry === "featured_conservative";
   const partyColor = isConservative
     ? { bg: "from-red-900 to-red-800", border: "border-red-600", badge: "bg-red-600 text-white", bar: "bg-red-500", accent: "text-red-300" }
@@ -219,10 +216,16 @@ function FeaturedLobbyCard({ sig, contributingSectors, allLobbies }: {
   const partyLabel = isConservative ? "Republican-Leaning (≥90% R)" : "Democratic-Leaning (≥90% D)";
   const partyIcon = isConservative ? "🔴" : "🔵";
 
-  const totalLower = contributingSectors.reduce((sum, s) => sum + parseSpendLower(s.spendRange), 0);
-  const umbrellaLabel = totalLower >= 1000
-    ? `~$${(totalLower / 1000).toFixed(1)}B+` : totalLower > 0
-    ? `~$${totalLower.toFixed(0)}M+` : sig.spendRange ?? "—";
+  // Read umbrella spend directly from seed-stored spendRange; derive display label
+  const storedLower = parseSpendLower(sig.spendRange);
+  const umbrellaLabel = storedLower >= 1000
+    ? `~$${(storedLower / 1000).toFixed(1)}B+`
+    : storedLower > 0
+    ? `~$${storedLower.toFixed(0)}M+`
+    : sig.spendRange ?? "—";
+
+  // Contributor sectors read directly from seed-persisted topPacs (not computed from partySplit threshold)
+  const contributors = sig.topPacs ?? [];
 
   return (
     <Card className={`overflow-hidden border-2 ${partyColor.border} hover:shadow-xl transition-all`}>
@@ -258,21 +261,21 @@ function FeaturedLobbyCard({ sig, contributingSectors, allLobbies }: {
           </div>
         )}
 
-        {/* Contributing sectors */}
-        {contributingSectors.length > 0 && (
+        {/* Contributing sectors — read from seed-persisted topPacs */}
+        {contributors.length > 0 && (
           <div>
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
               <Landmark className="h-3 w-3" />
-              {contributingSectors.length} Sectors donating ≥90% to {isConservative ? "Republicans" : "Democrats"}
+              {contributors.length} Sectors donating ≥90% to {isConservative ? "Republicans" : "Democrats"}
             </p>
             <div className="grid grid-cols-1 gap-1">
-              {contributingSectors.map(s => (
-                <Link key={s.id} href={`/lobbies/${s.tag || s.id}`}>
+              {contributors.map((c, i) => (
+                <Link key={c.tag ?? i} href={`/lobbies/${c.tag ?? ""}`}>
                   <div className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-muted/60 transition-colors cursor-pointer group">
-                    <span className="text-xs font-medium group-hover:underline truncate">{s.name}</span>
+                    <span className="text-xs font-medium group-hover:underline truncate">{c.name}</span>
                     <div className="flex items-center gap-2 shrink-0">
-                      {s.spendRange && (
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{s.spendRange}</span>
+                      {c.amount && (
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{c.amount}</span>
                       )}
                       <ChevronRight className="h-3 w-3 text-muted-foreground" />
                     </div>
@@ -521,15 +524,6 @@ export default function SigsDirectoryPage() {
     s => s.industry !== "featured_conservative" && s.industry !== "featured_progressive"
   );
 
-  const conservativeSectors = useMemo(
-    () => nonFeaturedLobbies.filter(s => (s.partySplitRep ?? 0) >= 90),
-    [nonFeaturedLobbies]
-  );
-  const progressiveSectors = useMemo(
-    () => nonFeaturedLobbies.filter(s => (s.partySplitDem ?? 0) >= 90),
-    [nonFeaturedLobbies]
-  );
-
   // Lobbies — filtered + sorted (excludes featured umbrella cards from main grid)
   const filteredLobbies = useMemo(() => {
     let list = nonFeaturedLobbies.filter(s => {
@@ -642,20 +636,8 @@ export default function SigsDirectoryPage() {
                     </p>
                   </div>
                   <div className="grid gap-5 sm:grid-cols-2">
-                    {conservativeSig && (
-                      <FeaturedLobbyCard
-                        sig={conservativeSig}
-                        contributingSectors={conservativeSectors}
-                        allLobbies={nonFeaturedLobbies}
-                      />
-                    )}
-                    {progressiveSig && (
-                      <FeaturedLobbyCard
-                        sig={progressiveSig}
-                        contributingSectors={progressiveSectors}
-                        allLobbies={nonFeaturedLobbies}
-                      />
-                    )}
+                    {conservativeSig && <FeaturedLobbyCard sig={conservativeSig} />}
+                    {progressiveSig && <FeaturedLobbyCard sig={progressiveSig} />}
                   </div>
                   <hr className="border-border/50" />
                 </div>
