@@ -1,18 +1,34 @@
 import { useRoute, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useRef } from "react";
 import DOMPurify from "dompurify";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Calendar, Clock, User, Share2, Heart, MessageCircle, Bookmark, Eye, Pencil } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, Calendar, Clock, User, Share2, Heart, MessageCircle, Bookmark, Eye, Pencil, Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { format, formatDistanceToNow } from "date-fns";
+import { Link as WouterLink } from "wouter";
 import type { Post, User as UserType } from "@shared/schema";
 
 type PostWithAuthor = Post & {
   author?: UserType;
+};
+
+type ArticleComment = {
+  id: string;
+  authorId: string;
+  content: string;
+  createdAt: string | null;
+  authorUsername?: string;
+  authorFirstName?: string;
+  authorLastName?: string;
+  authorAvatar?: string;
 };
 
 export default function ArticlePage() {
@@ -20,11 +36,112 @@ export default function ArticlePage() {
   const [, navigate] = useLocation();
   const articleId = params?.id;
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [newComment, setNewComment] = useState("");
+  const commentsRef = useRef<HTMLDivElement>(null);
 
   const { data: article, isLoading, error } = useQuery<PostWithAuthor>({
     queryKey: ["/api/posts", articleId],
     enabled: !!articleId,
   });
+
+  const { data: likeStatus } = useQuery<{ liked: boolean }>({
+    queryKey: ["/api/likes", articleId, "post"],
+    enabled: !!user && !!articleId,
+  });
+
+  const { data: comments = [], isLoading: commentsLoading } = useQuery<ArticleComment[]>({
+    queryKey: [`/api/posts/${articleId}/comments`],
+    enabled: !!articleId,
+  });
+
+  const likeMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("/api/likes", "POST", {
+        targetId: articleId,
+        targetType: "post",
+      });
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["/api/likes", articleId, "post"] });
+      const previousLikeStatus = queryClient.getQueryData(["/api/likes", articleId, "post"]);
+      const currentLiked = likeStatus?.liked ?? false;
+      queryClient.setQueryData(["/api/likes", articleId, "post"], { liked: !currentLiked });
+      queryClient.setQueryData(["/api/posts", articleId], (old: any) =>
+        old ? { ...old, likesCount: (old.likesCount || 0) + (currentLiked ? -1 : 1) } : old
+      );
+      return { previousLikeStatus, currentLiked };
+    },
+    onError: (_err, _vars, context: any) => {
+      if (context?.previousLikeStatus !== undefined) {
+        queryClient.setQueryData(["/api/likes", articleId, "post"], context.previousLikeStatus);
+      }
+      queryClient.setQueryData(["/api/posts", articleId], (old: any) =>
+        old ? { ...old, likesCount: (old.likesCount || 0) + (context?.currentLiked ? 1 : -1) } : old
+      );
+      toast({
+        title: "Error",
+        description: "Failed to update like",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/likes", articleId, "post"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts", articleId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
+    },
+  });
+
+  const createCommentMutation = useMutation({
+    mutationFn: async (content: string) => {
+      return await apiRequest("/api/comments", "POST", {
+        postId: articleId,
+        content: content.trim(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/posts/${articleId}/comments`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts", articleId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
+      setNewComment("");
+      toast({
+        title: "Comment Added",
+        description: "Your comment has been posted!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add comment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleLike = () => {
+    if (!user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to like articles",
+        variant: "destructive",
+      });
+      return;
+    }
+    likeMutation.mutate();
+  };
+
+  const handleSubmitComment = () => {
+    if (!newComment.trim() || createCommentMutation.isPending) return;
+    createCommentMutation.mutate(newComment);
+  };
+
+  const scrollToComments = () => {
+    commentsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   if (isLoading) {
     return (
@@ -208,11 +325,24 @@ export default function ArticlePage() {
           <footer className="mt-12 pt-8 border-t border-white/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <Button variant="outline" size="sm" data-testid="button-like" className="bg-white/10 border-white/20 hover:bg-white/20">
-                  <Heart className="w-4 h-4 mr-2" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-testid="button-like"
+                  onClick={handleLike}
+                  disabled={likeMutation.isPending}
+                  className={`bg-white/10 border-white/20 hover:bg-white/20 ${likeStatus?.liked ? "text-red-500" : ""}`}
+                >
+                  <Heart className={`w-4 h-4 mr-2 ${likeStatus?.liked ? "fill-current" : ""}`} />
                   {article.likesCount || 0}
                 </Button>
-                <Button variant="outline" size="sm" data-testid="button-comment" className="bg-white/10 border-white/20 hover:bg-white/20">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-testid="button-comment"
+                  onClick={scrollToComments}
+                  className="bg-white/10 border-white/20 hover:bg-white/20"
+                >
                   <MessageCircle className="w-4 h-4 mr-2" />
                   {article.commentsCount || 0}
                 </Button>
@@ -232,6 +362,102 @@ export default function ArticlePage() {
               </Button>
             </div>
           </footer>
+        </Card>
+
+        {/* Comments Section */}
+        <Card className="mt-8 glass-card" ref={commentsRef}>
+          <CardHeader>
+            <CardTitle className="text-lg text-foreground flex items-center gap-2">
+              <MessageCircle className="w-5 h-5" />
+              Comments ({comments.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* New comment form */}
+            {user ? (
+              <div className="flex gap-3">
+                <Avatar className="h-9 w-9 shrink-0">
+                  <AvatarImage src={user.avatar || undefined} />
+                  <AvatarFallback>
+                    {user.username?.charAt(0).toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 space-y-2">
+                  <Textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Share your thoughts on this article..."
+                    className="min-h-[80px] bg-white/10 border-white/20"
+                    data-testid="input-comment"
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      onClick={handleSubmitComment}
+                      disabled={!newComment.trim() || createCommentMutation.isPending}
+                      data-testid="button-submit-comment"
+                    >
+                      <Send className="w-4 h-4 mr-2" />
+                      {createCommentMutation.isPending ? "Posting..." : "Post Comment"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-2">
+                <WouterLink href="/auth" className="text-blue-500 hover:underline">
+                  Sign in
+                </WouterLink>{" "}
+                to join the conversation
+              </p>
+            )}
+
+            {/* Comment list */}
+            {commentsLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : comments.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4" data-testid="text-no-comments">
+                No comments yet. Be the first to share your thoughts!
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-3" data-testid={`comment-${comment.id}`}>
+                    <WouterLink href={`/profile/${comment.authorId}`}>
+                      <Avatar className="h-9 w-9 shrink-0 cursor-pointer">
+                        <AvatarImage src={comment.authorAvatar || undefined} />
+                        <AvatarFallback>
+                          {(comment.authorFirstName?.[0] || comment.authorUsername?.[0] || "?").toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </WouterLink>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <WouterLink href={`/profile/${comment.authorId}`}>
+                          <span className="text-sm font-medium text-foreground hover:text-blue-500 cursor-pointer transition-colors">
+                            {comment.authorFirstName && comment.authorLastName
+                              ? `${comment.authorFirstName} ${comment.authorLastName}`
+                              : comment.authorUsername || "Unknown"}
+                          </span>
+                        </WouterLink>
+                        {comment.createdAt && (
+                          <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-foreground/90 mt-1 whitespace-pre-wrap break-words">
+                        {comment.content}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
         </Card>
 
         {/* Author Card - Liquid Glass with 3D Glass Effect */}
