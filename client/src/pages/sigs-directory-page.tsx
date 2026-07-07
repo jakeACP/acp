@@ -163,7 +163,7 @@ function LobbyIndustrySectorCard({ sig }: { sig: SIG }) {
       <CardContent className="flex flex-col flex-1 gap-3 p-4">
         <div className="flex items-center flex-wrap gap-2">
           {sig.spendRange && (
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-black border border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700">
               <DollarSign className="h-3 w-3" />{sig.spendRange} / yr
             </span>
           )}
