@@ -1021,6 +1021,8 @@ export function PostCard({ post }: PostCardProps) {
             </div>
           </div>
         )}
+        </>
+        )}
         
         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
           <div className="flex space-x-6">
@@ -1212,8 +1214,6 @@ export function PostCard({ post }: PostCardProps) {
             </Button>
           </div>
         </div>
-        </>
-        )}
       </CardContent>
     </Card>
     {post.type !== "blog" && <VideoEmbedDisplay content={post.content} postId={post.id} />}
