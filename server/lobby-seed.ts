@@ -1398,8 +1398,15 @@ export async function seedLobbies(): Promise<void> {
       )
       ON CONFLICT (tag) DO UPDATE SET
         name = EXCLUDED.name,
+        acronym = EXCLUDED.acronym,
         description = EXCLUDED.description,
+        category = EXCLUDED.category,
         sentiment = EXCLUDED.sentiment,
+        website = EXCLUDED.website,
+        headquarters = EXCLUDED.headquarters,
+        industry = EXCLUDED.industry,
+        data_source_name = EXCLUDED.data_source_name,
+        data_source_url = EXCLUDED.data_source_url,
         spend_range = EXCLUDED.spend_range,
         party_split_dem = EXCLUDED.party_split_dem,
         party_split_rep = EXCLUDED.party_split_rep,
@@ -1407,6 +1414,7 @@ export async function seedLobbies(): Promise<void> {
         top_candidates = EXCLUDED.top_candidates,
         interest_breakdown = EXCLUDED.interest_breakdown,
         influence_score = EXCLUDED.influence_score,
+        is_active = EXCLUDED.is_active,
         updated_at = NOW()
     `);
   }
