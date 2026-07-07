@@ -1469,6 +1469,7 @@ export const specialInterestGroups = pgTable("special_interest_groups", {
   topPacs: jsonb("top_pacs"), // [{name, amount, partyLean}] top PACs in this sector
   topCandidates: jsonb("top_candidates"), // [{name, party, office, totalReceived}] top recipients
   interestBreakdown: jsonb("interest_breakdown"), // [{label, pct}] spending by issue area
+  extendedData: jsonb("extended_data"), // {partyLeanPct:{D,R}, featuredRole?, umbrellaSpend?, umbrellaContributorTags?}
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

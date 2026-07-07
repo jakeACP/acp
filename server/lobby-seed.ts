@@ -29,6 +29,8 @@ type SectorEntry = {
   topPacs: TopPac[];
   topCandidates: TopCandidate[];
   interestBreakdown: InterestBreakdown[];
+  /** "conservative" | "progressive" — marks the two featured umbrella entries */
+  featuredRole?: "conservative" | "progressive";
 };
 
 const SECTORS: SectorEntry[] = [
@@ -40,8 +42,10 @@ const SECTORS: SectorEntry[] = [
     description: "The organized conservative movement — Heritage Foundation, AFP, Club for Growth, RNC, and allied PACs — collectively raises and deploys $200M–$400M+ per election cycle to elect Republican candidates and advance free-market, small-government, and social-conservative policy. This umbrella aggregates all sectors that donate ≥90% of their contributions to Republican candidates: 2nd Amendment Advocates, Pro-Life Movement, Religious Conservative Movement, Prison Industrial Complex, and Tobacco & Vaping Industry.",
     category: "lobby",
     sentiment: "neutral",
-    // Umbrella spend = sum of contributor sector lower bounds: $10M+$15M+$20M+$20M+$50M = $115M (low) / $50M+$30M+$40M+$40M+$80M = $240M (high)
-    spendRange: "$115M–$240M",
+    // Umbrella spend placeholder — actual value computed post-insert and stored in extended_data.umbrellaSpend
+    // Contributors (partySplitRep ≥90): SECOND_AMENDMENT $10M + PRO_LIFE $15M + RELIGIOUS_CONSERVATIVE $20M
+    //   + OIL_GAS $60M + PRISON_INDUSTRIAL $20M + TOBACCO $50M + SMALL_BUSINESS $15M = ~$190M
+    spendRange: "$190M–$360M",
     partySplitDem: 4,
     partySplitRep: 96,
     website: "https://www.heritage.org",
@@ -50,13 +54,16 @@ const SECTORS: SectorEntry[] = [
     influenceScore: -20,
     dataSourceName: "OpenSecrets",
     dataSourceUrl: "https://www.opensecrets.org/political-action-committees-pacs/republican/2022",
-    // topPacs stores the explicit contributor sector list (sectors donating ≥90% to Republicans)
+    featuredRole: "conservative",
+    // topPacs stores the explicit contributor sector list (sectors donating ≥90% to Republicans per spec)
     topPacs: [
       { name: "2nd Amendment Advocates", amount: "$10M–$50M", partyLean: "R", tag: "SECOND_AMENDMENT" },
       { name: "Pro-Life Movement", amount: "$15M–$30M", partyLean: "R", tag: "PRO_LIFE" },
       { name: "Religious Conservative Movement", amount: "$20M–$40M", partyLean: "R", tag: "RELIGIOUS_CONSERVATIVE" },
+      { name: "Oil & Gas / Fossil Fuels", amount: "$60M–$90M", partyLean: "R", tag: "OIL_GAS" },
       { name: "Prison Industrial Complex", amount: "$20M–$40M", partyLean: "R", tag: "PRISON_INDUSTRIAL" },
       { name: "Tobacco & Vaping Industry", amount: "$50M–$80M", partyLean: "R", tag: "TOBACCO" },
+      { name: "Small Business", amount: "$15M–$30M", partyLean: "R", tag: "SMALL_BUSINESS" },
     ],
     topCandidates: [
       { name: "Donald Trump", party: "R", office: "President", totalReceived: "$800M+" },
@@ -80,10 +87,11 @@ const SECTORS: SectorEntry[] = [
     description: "The organized progressive movement — Center for American Progress, ActBlue, DNC, MoveOn, and allied PACs — collectively raises and deploys $200M–$400M+ per election cycle to elect Democratic candidates and advance workers' rights, social equity, climate action, and healthcare access. This umbrella aggregates all sectors that donate ≥90% of their contributions to Democratic candidates: Labor Unions, Education Unions, Government Worker Unions, Auto Workers, Pro-Choice, LGBTQ+ Rights, Progressive Grassroots, Environmental Protection, Civil Rights, and Gun Control Advocacy.",
     category: "lobby",
     sentiment: "neutral",
-    // Umbrella spend = sum of contributor sector lower bounds:
-    // $50M+$40M+$30M+$20M+$30M+$20M+$10M+$30M+$20M+$40M = $290M (low)
-    // $90M+$70M+$50M+$35M+$60M+$40M+$30M+$60M+$40M+$80M = $555M (high)
-    spendRange: "$290M–$555M",
+    // Umbrella spend placeholder — actual value computed post-insert and stored in extended_data.umbrellaSpend
+    // Contributors (partySplitDem ≥90): LABOR_UNIONS $50M + EDUCATION_UNIONS $40M + GOVT_WORKER_UNIONS $30M
+    //   + AUTO_WORKERS $20M + PRO_CHOICE $30M + LGBTQ_RIGHTS $20M + PROGRESSIVE_GRASSROOTS $10M
+    //   + ENVIRONMENT $30M + CIVIL_RIGHTS $20M = ~$250M (GUN_CONTROL excluded per spec)
+    spendRange: "$250M–$475M",
     partySplitDem: 96,
     partySplitRep: 4,
     website: "https://www.americanprogress.org",
@@ -92,7 +100,9 @@ const SECTORS: SectorEntry[] = [
     influenceScore: 20,
     dataSourceName: "OpenSecrets",
     dataSourceUrl: "https://www.opensecrets.org/political-action-committees-pacs/democrat/2022",
-    // topPacs stores the explicit contributor sector list (sectors donating ≥90% to Democrats)
+    featuredRole: "progressive",
+    // topPacs stores the explicit contributor sector list (sectors donating ≥90% to Democrats per spec)
+    // Gun Control Advocacy is intentionally excluded — spec defines this as bipartisan/not in umbrella
     topPacs: [
       { name: "Labor Unions", amount: "$50M–$90M", partyLean: "D", tag: "LABOR_UNIONS" },
       { name: "Education Unions", amount: "$40M–$70M", partyLean: "D", tag: "EDUCATION_UNIONS" },
@@ -103,7 +113,6 @@ const SECTORS: SectorEntry[] = [
       { name: "Progressive Grassroots Activism", amount: "$10M–$30M", partyLean: "D", tag: "PROGRESSIVE_GRASSROOTS" },
       { name: "Environmental Protection", amount: "$30M–$60M", partyLean: "D", tag: "ENVIRONMENT" },
       { name: "Civil Rights & Civil Liberties", amount: "$20M–$40M", partyLean: "D", tag: "CIVIL_RIGHTS" },
-      { name: "Gun Control Advocacy", amount: "$40M–$80M", partyLean: "D", tag: "GUN_CONTROL" },
     ],
     topCandidates: [
       { name: "Joe Biden", party: "D", office: "President", totalReceived: "$1.5B+" },
@@ -244,8 +253,8 @@ const SECTORS: SectorEntry[] = [
     category: "lobby",
     sentiment: "negative",
     spendRange: "$60M–$90M",
-    partySplitDem: 14,
-    partySplitRep: 86,
+    partySplitDem: 10,
+    partySplitRep: 90,
     website: "https://www.api.org",
     headquarters: "Washington, DC",
     industry: "oil_gas",
@@ -434,8 +443,9 @@ const SECTORS: SectorEntry[] = [
     category: "lobby",
     sentiment: "positive",
     spendRange: "$40M–$80M",
-    partySplitDem: 94,
-    partySplitRep: 6,
+    // 85% D: intentionally kept below ≥90 threshold — excluded from progressive umbrella per task spec
+    partySplitDem: 85,
+    partySplitRep: 15,
     website: "https://everytown.org",
     headquarters: "New York, NY",
     industry: "gun_control",
@@ -472,8 +482,8 @@ const SECTORS: SectorEntry[] = [
     category: "lobby",
     sentiment: "negative",
     spendRange: "$15M–$30M",
-    partySplitDem: 16,
-    partySplitRep: 84,
+    partySplitDem: 10,
+    partySplitRep: 90,
     website: "https://www.nfib.com",
     headquarters: "Nashville, TN",
     industry: "small_business",
@@ -1378,13 +1388,32 @@ const SECTORS: SectorEntry[] = [
   },
 ];
 
+/** Parse the lower-bound dollar amount from a spend range string like "$60M–$90M" → 60 */
+function parseSpendLow(range: string | undefined): number {
+  if (!range) return 0;
+  const m = range.match(/\$(\d+(?:\.\d+)?)M/);
+  return m ? parseFloat(m[1]) : 0;
+}
+
 export async function seedLobbies(): Promise<void> {
+  // Ensure extended_data column exists (safe no-op if already present)
+  await db.execute(sql`
+    ALTER TABLE special_interest_groups
+    ADD COLUMN IF NOT EXISTS extended_data jsonb
+  `);
+
   log(`Deleting existing lobby records to replace with 35 industry-category list...`);
   await db.execute(sql`DELETE FROM special_interest_groups WHERE category = 'lobby'`);
 
   log(`Seeding ${SECTORS.length} lobby industry categories...`);
 
   for (const sector of SECTORS) {
+    // Build extended_data for every sector: partyLeanPct + optional featuredRole
+    const extendedData: Record<string, unknown> = {
+      partyLeanPct: { D: sector.partySplitDem, R: sector.partySplitRep },
+    };
+    if (sector.featuredRole) extendedData.featuredRole = sector.featuredRole;
+
     await db.execute(sql`
       INSERT INTO special_interest_groups (
         id, name, acronym, tag, description, category, sentiment,
@@ -1393,6 +1422,7 @@ export async function seedLobbies(): Promise<void> {
         influence_score,
         spend_range, party_split_dem, party_split_rep,
         top_pacs, top_candidates, interest_breakdown,
+        extended_data,
         is_active, created_at, updated_at
       )
       VALUES (
@@ -1408,6 +1438,7 @@ export async function seedLobbies(): Promise<void> {
         ${JSON.stringify(sector.topPacs)}::jsonb,
         ${JSON.stringify(sector.topCandidates)}::jsonb,
         ${JSON.stringify(sector.interestBreakdown)}::jsonb,
+        ${JSON.stringify(extendedData)}::jsonb,
         true, NOW(), NOW()
       )
       ON CONFLICT (tag) DO UPDATE SET
@@ -1427,11 +1458,47 @@ export async function seedLobbies(): Promise<void> {
         top_pacs = EXCLUDED.top_pacs,
         top_candidates = EXCLUDED.top_candidates,
         interest_breakdown = EXCLUDED.interest_breakdown,
+        extended_data = EXCLUDED.extended_data,
         influence_score = EXCLUDED.influence_score,
         is_active = EXCLUDED.is_active,
         updated_at = NOW()
     `);
   }
 
+  // Post-insert: compute umbrella totals from the SECTORS array (partySplitRep/Dem ≥ 90)
+  // and persist umbrellaSpend + umbrellaContributorTags into extended_data of featured entries
+  const nonFeatured = SECTORS.filter(s => !s.featuredRole);
+
+  const conservativeContributors = nonFeatured.filter(s => s.partySplitRep >= 90);
+  const cLow = conservativeContributors.reduce((sum, s) => sum + parseSpendLow(s.spendRange), 0);
+  const conservativeExtended = {
+    partyLeanPct: { D: 4, R: 96 },
+    featuredRole: "conservative",
+    umbrellaSpend: `~$${cLow}M+`,
+    umbrellaContributorTags: conservativeContributors.map(s => s.tag),
+  };
+
+  const progressiveContributors = nonFeatured.filter(s => s.partySplitDem >= 90);
+  const pLow = progressiveContributors.reduce((sum, s) => sum + parseSpendLow(s.spendRange), 0);
+  const progressiveExtended = {
+    partyLeanPct: { D: 96, R: 4 },
+    featuredRole: "progressive",
+    umbrellaSpend: `~$${pLow}M+`,
+    umbrellaContributorTags: progressiveContributors.map(s => s.tag),
+  };
+
+  await db.execute(sql`
+    UPDATE special_interest_groups
+    SET extended_data = ${JSON.stringify(conservativeExtended)}::jsonb, updated_at = NOW()
+    WHERE tag = 'CONSERVATIVE'
+  `);
+  await db.execute(sql`
+    UPDATE special_interest_groups
+    SET extended_data = ${JSON.stringify(progressiveExtended)}::jsonb, updated_at = NOW()
+    WHERE tag = 'PROGRESSIVE'
+  `);
+
+  log(`Conservative umbrella: ${conservativeContributors.length} contributors → ${conservativeExtended.umbrellaSpend}`);
+  log(`Progressive umbrella: ${progressiveContributors.length} contributors → ${progressiveExtended.umbrellaSpend}`);
   log(`Lobby seed complete — ${SECTORS.length} industry categories upserted`);
 }

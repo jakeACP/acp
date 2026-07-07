@@ -35,6 +35,12 @@ type SIG = {
   partySplitRep?: number | null;
   industry?: string | null;
   topPacs?: { name: string; amount: string; partyLean: string; tag?: string }[] | null;
+  extendedData?: {
+    partyLeanPct?: { D: number; R: number };
+    featuredRole?: string;
+    umbrellaSpend?: string;
+    umbrellaContributorTags?: string[];
+  } | null;
 };
 
 /* ─── helpers ─── */
@@ -216,13 +222,13 @@ function FeaturedLobbyCard({ sig }: { sig: SIG }) {
   const partyLabel = isConservative ? "Republican-Leaning (≥90% R)" : "Democratic-Leaning (≥90% D)";
   const partyIcon = isConservative ? "🔴" : "🔵";
 
-  // Read umbrella spend directly from seed-stored spendRange; derive display label
-  const storedLower = parseSpendLower(sig.spendRange);
-  const umbrellaLabel = storedLower >= 1000
-    ? `~$${(storedLower / 1000).toFixed(1)}B+`
-    : storedLower > 0
-    ? `~$${storedLower.toFixed(0)}M+`
-    : sig.spendRange ?? "—";
+  // Prefer post-insert computed umbrellaSpend from extended_data; fall back to spendRange
+  const umbrellaLabel = sig.extendedData?.umbrellaSpend ?? (() => {
+    const lower = parseSpendLower(sig.spendRange);
+    return lower >= 1000
+      ? `~$${(lower / 1000).toFixed(1)}B+`
+      : lower > 0 ? `~$${lower.toFixed(0)}M+` : sig.spendRange ?? "—";
+  })();
 
   // Contributor sectors read directly from seed-persisted topPacs (not computed from partySplit threshold)
   const contributors = sig.topPacs ?? [];
