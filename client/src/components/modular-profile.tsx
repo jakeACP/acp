@@ -161,6 +161,110 @@ function BudgetSimulatorProfileCard({ userId }: { userId?: string }) {
   );
 }
 
+function FeedPostCard({ post, username }: { post: Post; username?: string }) {
+  const [showComments, setShowComments] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const { user: currentUser } = useAuth();
+  const { toast } = useToast();
+
+  const { data: comments = [], isLoading: commentsLoading } = useQuery<any[]>({
+    queryKey: [`/api/posts/${post.id}/comments`],
+    enabled: showComments,
+  });
+
+  const replyMutation = useMutation({
+    mutationFn: async (content: string) =>
+      apiRequest("/api/comments", "POST", { postId: post.id, content }),
+    onSuccess: () => {
+      setReplyText("");
+      queryClient.invalidateQueries({ queryKey: [`/api/posts/${post.id}/comments`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts/user"] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not post reply", variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="p-3 border rounded-lg">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-6 h-6 bg-gray-300 dark:bg-gray-600 rounded-full" />
+        <span className="text-sm font-medium">{username}</span>
+        {post.createdAt && (
+          <span className="text-xs text-gray-400 ml-auto">
+            {new Date(post.createdAt).toLocaleDateString()}
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">{post.content}</p>
+      {((post.likesCount ?? 0) > 0 || (post.commentsCount ?? 0) > 0) && (
+        <div className="flex gap-3 mt-2 text-xs text-gray-400">
+          {(post.likesCount ?? 0) > 0 && <span>{post.likesCount} likes</span>}
+          {(post.commentsCount ?? 0) > 0 && (
+            <button
+              className="hover:text-blue-500 transition-colors cursor-pointer underline-offset-2 hover:underline"
+              onClick={() => setShowComments(v => !v)}
+            >
+              {post.commentsCount} comment{(post.commentsCount ?? 0) !== 1 ? "s" : ""}
+            </button>
+          )}
+          {(post.commentsCount ?? 0) === 0 && currentUser && (
+            <button
+              className="hover:text-blue-500 transition-colors cursor-pointer"
+              onClick={() => setShowComments(v => !v)}
+            >
+              Reply
+            </button>
+          )}
+        </div>
+      )}
+      {showComments && (
+        <div className="mt-3 space-y-2 border-t pt-3">
+          {commentsLoading ? (
+            <div className="text-xs text-gray-400 animate-pulse">Loading…</div>
+          ) : comments.length === 0 ? (
+            <div className="text-xs text-gray-400">No comments yet. Be the first!</div>
+          ) : (
+            comments.map((c: any) => (
+              <div key={c.id} className="text-xs p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                <span className="font-medium mr-1 text-gray-800 dark:text-gray-200">
+                  {c.author?.username || c.authorId}
+                </span>
+                <span className="text-gray-600 dark:text-gray-300">{c.content}</span>
+              </div>
+            ))
+          )}
+          {currentUser && (
+            <div className="flex gap-2 mt-1">
+              <input
+                className="flex-1 text-xs border rounded px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Write a reply…"
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && !e.shiftKey && replyText.trim()) {
+                    e.preventDefault();
+                    replyMutation.mutate(replyText.trim());
+                  }
+                }}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                disabled={!replyText.trim() || replyMutation.isPending}
+                onClick={() => replyMutation.mutate(replyText.trim())}
+              >
+                {replyMutation.isPending ? "…" : "Reply"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FeedModule({ userId, itemCount, username }: { userId: string; itemCount: number; username?: string }) {
   const { data: posts, isLoading, isError } = useQuery<Post[]>({
     queryKey: ["/api/posts/user", userId],
@@ -178,11 +282,11 @@ function FeedModule({ userId, itemCount, username }: { userId: string; itemCount
         {Array.from({ length: itemCount }, (_, i) => (
           <div key={i} className="p-3 border rounded-lg animate-pulse">
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+              <div className="w-6 h-6 bg-gray-200 dark:bg-gray-700 rounded-full" />
+              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24" />
             </div>
-            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-full mb-1"></div>
-            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-full mb-1" />
+            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
           </div>
         ))}
       </div>
@@ -210,24 +314,7 @@ function FeedModule({ userId, itemCount, username }: { userId: string; itemCount
   return (
     <div className="space-y-3">
       {visiblePosts.map(post => (
-        <div key={post.id} className="p-3 border rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
-            <span className="text-sm font-medium">{username}</span>
-            {post.createdAt && (
-              <span className="text-xs text-gray-400 ml-auto">
-                {new Date(post.createdAt).toLocaleDateString()}
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">{post.content}</p>
-          {((post.likesCount ?? 0) > 0 || (post.commentsCount ?? 0) > 0) && (
-            <div className="flex gap-3 mt-2 text-xs text-gray-400">
-              {(post.likesCount ?? 0) > 0 && <span>{post.likesCount} likes</span>}
-              {(post.commentsCount ?? 0) > 0 && <span>{post.commentsCount} comments</span>}
-            </div>
-          )}
-        </div>
+        <FeedPostCard key={post.id} post={post} username={username} />
       ))}
     </div>
   );
@@ -1041,22 +1128,12 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
     if (user) {
       const defaultModules = [
         {
-          id: "bio",
-          name: "About Me",
-          type: "bio" as const,
-          isPremium: false,
-          isEnabled: true,
-          position: 0,
-          itemCount: 1,
-          customData: {}
-        },
-        {
           id: "photos",
           name: "Photo Gallery",
           type: "photos" as const,
           isPremium: false,
           isEnabled: true,
-          position: 1,
+          position: 0,
           itemCount: 6,
           customData: {}
         },
@@ -1066,8 +1143,8 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
           type: "feed" as const, 
           isPremium: false,
           isEnabled: true,
-          position: 2,
-          itemCount: 3,
+          position: 1,
+          itemCount: 5,
           customData: {}
         },
         {
@@ -2404,7 +2481,7 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
     };
 
     return (
-      <Card key={module.id} className="relative" data-testid={`profile-module-${module.type}`}>
+      <Card key={module.id} className={`relative${module.type === "feed" ? " md:col-span-2" : ""}`} data-testid={`profile-module-${module.type}`}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center justify-between">
             <span className="flex items-center gap-1">
