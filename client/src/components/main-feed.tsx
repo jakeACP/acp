@@ -957,7 +957,7 @@ export function MainFeed() {
                     {activeFeed === 'events' && 'No upcoming events. Create the first one!'}
                     {activeFeed === 'charities' && 'No charities to display. Create the first one!'}
                     {activeFeed === 'debates' && 'No debate discussions yet. Start one!'}
-                    {activeFeed === 'my-reps' && 'Follow your representatives on the Current Reps page, then posts tagged @TheirHandle will appear here.'}
+                    {activeFeed === 'my-reps' && 'Follow your representatives on the Politicians page, then posts tagged @TheirHandle will appear here.'}
                     {activeFeed === 'my-candidates' && 'Support candidates to see their posts here. Posts they are tagged in will also appear.'}
                     {activeFeed === 'volunteer' && 'No volunteer posts yet. Create the first opportunity!'}
                     {activeFeed === 'group' && 'Group members have not posted yet. Be the first!'}
