@@ -7086,10 +7086,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     const stripped = s.replace(/\$/g, "");
     const num = parseFloat(stripped);
     if (isNaN(num)) return null;
-    if (stripped.endsWith("B")) return Math.round(num * 1_000_000_000);
-    if (stripped.endsWith("M")) return Math.round(num * 1_000_000);
-    if (stripped.endsWith("K")) return Math.round(num * 1_000);
-    return Math.round(num);
+    // Return value in cents (100 cents per dollar)
+    if (stripped.endsWith("B")) return Math.round(num * 1_000_000_000 * 100);
+    if (stripped.endsWith("M")) return Math.round(num * 1_000_000 * 100);
+    if (stripped.endsWith("K")) return Math.round(num * 1_000 * 100);
+    return Math.round(num * 100);
   }
 
   app.get("/api/admin/lobby-alignment/scan", ensureAdmin, async (req, res) => {
@@ -7105,13 +7106,18 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         .from(specialInterestGroups)
         .where(sql`top_candidates is not null and jsonb_array_length(top_candidates::jsonb) > 0`);
 
-      const linkCounts = await db
-        .select({
-          politicianId: politicianSigSponsorships.politicianId,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(politicianSigSponsorships)
-        .groupBy(politicianSigSponsorships.politicianId);
+      // Count only lobby-SIG sponsorships (SIGs that have topCandidates data)
+      const lobbySigIds = sigsRaw.map((s) => s.id);
+      const linkCounts = lobbySigIds.length > 0
+        ? await db
+            .select({
+              politicianId: politicianSigSponsorships.politicianId,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(politicianSigSponsorships)
+            .where(inArray(politicianSigSponsorships.sigId, lobbySigIds))
+            .groupBy(politicianSigSponsorships.politicianId)
+        : [];
 
       const linkCountMap = new Map(linkCounts.map((e: any) => [e.politicianId, e.count]));
 

@@ -355,7 +355,8 @@ export default function AdminSigsPage() {
 
   const syncAlignmentMutation = useMutation({
     mutationFn: async (politicianId?: string) => {
-      return await apiRequest("/api/admin/lobby-alignment/sync", "POST", politicianId ? { politicianId } : {});
+      const res = await apiRequest("/api/admin/lobby-alignment/sync", "POST", politicianId ? { politicianId } : {});
+      return res.json();
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
