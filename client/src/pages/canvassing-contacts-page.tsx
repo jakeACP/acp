@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Link, Redirect } from "wouter";
+import { Navigation } from "@/components/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -118,6 +119,7 @@ export default function CanvassingContactsPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Navigation />
       {/* Header */}
       <div className="border-b bg-card px-4 py-3 flex items-center gap-3">
         <Link href="/canvassing">

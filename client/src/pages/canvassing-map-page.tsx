@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Copy, Trash2, X, Link2, User, Mail, Phone, Users } from "lucide-react";
 import { Redirect, Link } from "wouter";
 import type { CanvassingPin } from "@shared/schema";
+import { Navigation } from "@/components/navigation";
 import "leaflet/dist/leaflet.css";
 
 const PIN_COLORS = [
@@ -228,6 +229,8 @@ export default function CanvassingMapPage() {
     : null;
 
   return (
+    <>
+    <Navigation />
     <div className="flex flex-col" style={{ height: "calc(100dvh - 64px)" }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-card shrink-0">
@@ -471,5 +474,6 @@ export default function CanvassingMapPage() {
         <span className="ml-auto text-muted-foreground hidden sm:inline">Hold map to drop pin</span>
       </div>
     </div>
+    </>
   );
 }
