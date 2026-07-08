@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, FileUp, ShieldCheck, TrendingDown, TrendingUp, RefreshCw, Sparkles, ChevronUp, ChevronDown, ChevronsUpDown, X } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Search, ExternalLink, Database, Loader2, FileDown, FileUp, ShieldCheck, TrendingDown, TrendingUp, RefreshCw, Sparkles, ChevronUp, ChevronDown, ChevronsUpDown, X, Link2, Unlink, ScanLine } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 
@@ -129,6 +129,13 @@ export default function AdminSigsPage() {
   const [bulkField, setBulkField] = useState<string>("");
   const [bulkValue, setBulkValue] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // Lobby Alignment state
+  type AlignmentMatch = { sigId: string; sigName: string; totalReceived: string; parsedAmount: number | null };
+  type AlignmentRow = { politicianId: string; politicianName: string; party: string | null; existingLinkCount: number; matchCount: number; matches: AlignmentMatch[] };
+  const [alignmentData, setAlignmentData] = useState<{ total: number; politicians: AlignmentRow[] } | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [alignmentSyncResult, setAlignmentSyncResult] = useState<{ created: number; skipped: number; gradesUpdated: number; message: string } | null>(null);
 
   const { data: sigs = [], isLoading } = useQuery<SpecialInterestGroup[]>({
     queryKey: ["/api/admin/sigs", { search: searchQuery, category: categoryFilter, industry: industryFilter }],
@@ -327,6 +334,39 @@ export default function AdminSigsPage() {
     },
     onError: (error: any) => {
       toast({ title: "Bulk update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const scanAlignmentMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/lobby-alignment/scan", { credentials: "include" });
+      if (!res.ok) { const e = await res.json().catch(() => ({ message: res.statusText })); throw new Error(e.message); }
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setAlignmentData(data);
+      setAlignmentSyncResult(null);
+      toast({ title: `Alignment scan complete — ${data.total} politician${data.total !== 1 ? "s" : ""} matched` });
+    },
+    onError: (error: any) => {
+      toast({ title: "Scan failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const syncAlignmentMutation = useMutation({
+    mutationFn: async (politicianId?: string) => {
+      return await apiRequest("/api/admin/lobby-alignment/sync", "POST", politicianId ? { politicianId } : {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sigs"] });
+      setAlignmentSyncResult(data);
+      toast({ title: "Sync complete", description: data.message });
+      setSyncingId(null);
+      scanAlignmentMutation.mutate();
+    },
+    onError: (error: any) => {
+      setSyncingId(null);
+      toast({ title: "Sync failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1152,6 +1192,156 @@ export default function AdminSigsPage() {
             )}
           </CardContent>
         </Card>
+      {/* Lobby Alignment Tool */}
+      <section className="w-full px-4 sm:px-6 lg:px-8 pb-12">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Link2 className="h-5 w-5" />
+                  Lobby Alignment Tool
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Scan politician records against lobby <code>topCandidates</code> data and create missing sponsorship links so corruption grades reflect real donor relationships.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                {alignmentData && (
+                  <Button
+                    variant="default"
+                    disabled={syncAlignmentMutation.isPending || alignmentData.total === 0}
+                    onClick={() => {
+                      setSyncingId("__all__");
+                      syncAlignmentMutation.mutate(undefined);
+                    }}
+                  >
+                    {syncAlignmentMutation.isPending && syncingId === "__all__" ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Link2 className="h-4 w-4 mr-2" />
+                    )}
+                    Sync All Matched
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  disabled={scanAlignmentMutation.isPending}
+                  onClick={() => { setAlignmentData(null); setAlignmentSyncResult(null); scanAlignmentMutation.mutate(); }}
+                >
+                  {scanAlignmentMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <ScanLine className="h-4 w-4 mr-2" />
+                  )}
+                  Scan
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Sync result banner */}
+            {alignmentSyncResult && (
+              <div className="mb-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 p-3 flex items-center justify-between">
+                <span className="text-sm text-green-800 dark:text-green-200">
+                  <span className="font-semibold">Sync complete</span> — {alignmentSyncResult.message}
+                </span>
+                <button onClick={() => setAlignmentSyncResult(null)} className="text-green-600 dark:text-green-400 text-xs underline ml-4">dismiss</button>
+              </div>
+            )}
+
+            {!alignmentData && !scanAlignmentMutation.isPending && (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500 dark:text-slate-400">
+                <ScanLine className="h-10 w-10 mb-3 opacity-30" />
+                <p className="text-sm font-medium">Run a scan to find politicians listed in lobby donor data</p>
+                <p className="text-xs mt-1 max-w-sm">The tool checks each lobby's top recipient list against all politician profiles and shows where sponsorship links are missing.</p>
+              </div>
+            )}
+
+            {scanAlignmentMutation.isPending && (
+              <div className="flex items-center gap-3 py-8 justify-center text-sm text-slate-500">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Scanning {(sigs as any[]).length} lobbies against all politician profiles…
+              </div>
+            )}
+
+            {alignmentData && !scanAlignmentMutation.isPending && (
+              <>
+                <div className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                  Found <span className="font-semibold text-slate-900 dark:text-slate-100">{alignmentData.total}</span> politician{alignmentData.total !== 1 ? "s" : ""} with lobby matches.
+                </div>
+                {alignmentData.politicians.length === 0 ? (
+                  <div className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">No matches found — all lobby-listed politicians may already be linked.</div>
+                ) : (
+                  <div className="rounded-md border overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Politician</TableHead>
+                          <TableHead className="text-center">Lobby Matches</TableHead>
+                          <TableHead className="text-center">Existing Links</TableHead>
+                          <TableHead>Matched Lobbies</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {alignmentData.politicians.map((row) => (
+                          <TableRow key={row.politicianId}>
+                            <TableCell>
+                              <div className="font-medium text-sm">{row.politicianName}</div>
+                              {row.party && <div className="text-xs text-slate-500 dark:text-slate-400">{row.party}</div>}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="text-xs font-semibold">
+                                {row.matchCount}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className={`text-xs font-semibold ${row.existingLinkCount > 0 ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
+                                {row.existingLinkCount}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {row.matches.map((m) => (
+                                  <span key={m.sigId} className="inline-flex items-center gap-1 text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5">
+                                    {m.sigName}
+                                    <span className="text-slate-400">·</span>
+                                    <span className="text-slate-500 dark:text-slate-400">{m.totalReceived}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={syncAlignmentMutation.isPending}
+                                onClick={() => {
+                                  setSyncingId(row.politicianId);
+                                  syncAlignmentMutation.mutate(row.politicianId);
+                                }}
+                              >
+                                {syncAlignmentMutation.isPending && syncingId === row.politicianId ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Link2 className="h-3.5 w-3.5" />
+                                )}
+                                <span className="ml-1.5">Sync</span>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
       </main>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

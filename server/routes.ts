@@ -7076,6 +7076,158 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // ==========================================
+  // Lobby Alignment Tool
+  // ==========================================
+
+  function parseLobbyAmount(raw: string): number | null {
+    if (!raw) return null;
+    const s = raw.trim().replace(/[+,\s]/g, "").toUpperCase();
+    if (s === "UNLIMITED" || s === "N/A" || s === "") return null;
+    const stripped = s.replace(/\$/g, "");
+    const num = parseFloat(stripped);
+    if (isNaN(num)) return null;
+    if (stripped.endsWith("B")) return Math.round(num * 1_000_000_000);
+    if (stripped.endsWith("M")) return Math.round(num * 1_000_000);
+    if (stripped.endsWith("K")) return Math.round(num * 1_000);
+    return Math.round(num);
+  }
+
+  app.get("/api/admin/lobby-alignment/scan", ensureAdmin, async (req, res) => {
+    try {
+      const profiles = await storage.listPoliticianProfiles({});
+
+      const sigsRaw = await db
+        .select({
+          id: specialInterestGroups.id,
+          name: specialInterestGroups.name,
+          topCandidates: specialInterestGroups.topCandidates,
+        })
+        .from(specialInterestGroups)
+        .where(sql`top_candidates is not null and jsonb_array_length(top_candidates::jsonb) > 0`);
+
+      const linkCounts = await db
+        .select({
+          politicianId: politicianSigSponsorships.politicianId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(politicianSigSponsorships)
+        .groupBy(politicianSigSponsorships.politicianId);
+
+      const linkCountMap = new Map(linkCounts.map((e: any) => [e.politicianId, e.count]));
+
+      const results = profiles
+        .map((politician: any) => {
+          const normalizedName = politician.fullName.toLowerCase().trim();
+          const matches: Array<{ sigId: string; sigName: string; totalReceived: string; parsedAmount: number | null }> = [];
+
+          for (const sig of sigsRaw) {
+            const candidates = sig.topCandidates as Array<{ name: string; party: string; office: string; totalReceived: string }> | null;
+            if (!candidates) continue;
+            const match = candidates.find((c) => c.name.toLowerCase().trim() === normalizedName);
+            if (match) {
+              matches.push({
+                sigId: sig.id,
+                sigName: sig.name,
+                totalReceived: match.totalReceived,
+                parsedAmount: parseLobbyAmount(match.totalReceived),
+              });
+            }
+          }
+
+          return {
+            politicianId: politician.id,
+            politicianName: politician.fullName,
+            party: politician.party ?? null,
+            existingLinkCount: (linkCountMap.get(politician.id) as number | undefined) ?? 0,
+            matchCount: matches.length,
+            matches,
+          };
+        })
+        .filter((r: any) => r.matchCount > 0);
+
+      res.json({ total: results.length, politicians: results });
+    } catch (error: any) {
+      console.error("Lobby alignment scan error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/lobby-alignment/sync", ensureAdmin, async (req, res) => {
+    try {
+      const { politicianId } = z.object({ politicianId: z.string().optional() }).parse(req.body);
+
+      const sigsRaw = await db
+        .select({
+          id: specialInterestGroups.id,
+          name: specialInterestGroups.name,
+          topCandidates: specialInterestGroups.topCandidates,
+        })
+        .from(specialInterestGroups)
+        .where(sql`top_candidates is not null and jsonb_array_length(top_candidates::jsonb) > 0`);
+
+      let profiles: any[];
+      if (politicianId) {
+        const profile = await storage.getPoliticianProfile(politicianId);
+        profiles = profile ? [profile] : [];
+      } else {
+        profiles = await storage.listPoliticianProfiles({});
+      }
+
+      let created = 0;
+      let skipped = 0;
+      const gradedIds = new Set<string>();
+
+      for (const politician of profiles) {
+        const normalizedName = politician.fullName.toLowerCase().trim();
+
+        for (const sig of sigsRaw) {
+          const candidates = sig.topCandidates as Array<{ name: string; party: string; office: string; totalReceived: string }> | null;
+          if (!candidates) continue;
+          const match = candidates.find((c) => c.name.toLowerCase().trim() === normalizedName);
+          if (!match) continue;
+
+          const existing = await db
+            .select({ id: politicianSigSponsorships.id })
+            .from(politicianSigSponsorships)
+            .where(and(
+              eq(politicianSigSponsorships.politicianId, politician.id),
+              eq(politicianSigSponsorships.sigId, sig.id),
+            ))
+            .limit(1);
+
+          if (existing.length > 0) {
+            skipped++;
+            continue;
+          }
+
+          await storage.linkSponsorToPolitician({
+            politicianId: politician.id,
+            sigId: sig.id,
+            relationshipType: "donor",
+            reportedAmount: parseLobbyAmount(match.totalReceived) ?? undefined,
+            disclosureSource: "lobby-alignment-tool",
+            contributionPeriod: "lifetime",
+          });
+          created++;
+          gradedIds.add(politician.id);
+        }
+      }
+
+      await Promise.all([...gradedIds].map((id) => storage.recalculateGradeFromSigs(id)));
+
+      res.json({
+        created,
+        skipped,
+        gradesUpdated: gradedIds.size,
+        message: `Created ${created} new link${created !== 1 ? "s" : ""}, skipped ${skipped} existing. Recalculated ${gradedIds.size} grade${gradedIds.size !== 1 ? "s" : ""}.`,
+      });
+    } catch (error: any) {
+      console.error("Lobby alignment sync error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ==========================================
   // Politician SIG Sponsorships API
   // ==========================================
 
