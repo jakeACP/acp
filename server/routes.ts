@@ -1750,7 +1750,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Comments API
   app.get("/api/posts/:postId/comments", async (req, res) => {
     try {
-      const comments = await storage.getCommentsByPost(req.params.postId);
+      const comments = await storage.getCommentsByPost(req.params.postId, req.isAuthenticated() ? req.user.id : undefined);
       res.json(comments);
     } catch (error: any) {
       res.status(500).json({ message: error.message });

@@ -1,10 +1,15 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Heart, MessageCircle, Flag } from "lucide-react";
 import { useScrollLight } from "../hooks/useScrollLight";
 import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { SignalCard } from "../components/cards/SignalCard";
 import { FriendSuggestionsWidget } from "../components/FriendSuggestionsWidget";
+import { PostCommentsOverlay } from "../components/PostCommentsOverlay";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import type { SignalWithAuthor, Poll, Petition } from "@shared/schema";
 
 const TABS = [
@@ -30,6 +35,8 @@ interface PostItem {
   pollId?: string | null;
   targetSignatures?: number | null;
   currentSignatures?: number | null;
+  likesCount?: number;
+  commentsCount?: number;
   createdAt?: string | null;
   author?: {
     username: string;
@@ -60,9 +67,103 @@ function Avatar({ author }: { author?: PostItem["author"] }) {
   );
 }
 
-function PostCard({ post }: { post: PostItem }) {
+function PostActionBar({ post, onOpenComments }: { post: PostItem; onOpenComments: () => void }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [flagged, setFlagged] = useState(false);
+
+  const { data: likeStatus } = useQuery<{ liked: boolean }>({
+    queryKey: ["/api/likes", post.id, "post"],
+    queryFn: async () => {
+      const res = await fetch(`/api/likes/${post.id}/post`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!user,
+    staleTime: 60000,
+  });
+
+  const likeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/likes", "POST", { targetId: post.id, targetType: "post" });
+      return res.json();
+    },
+    onSuccess: (data: { liked: boolean }) => {
+      queryClient.setQueryData(["/api/likes", post.id, "post"], data);
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+    },
+  });
+
+  const flagMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/flags", "POST", { targetId: post.id, targetType: "post", reason: "inappropriate_content" });
+      return res.json();
+    },
+    onSuccess: () => {
+      setFlagged(true);
+      toast({ title: "Reported", description: "Thanks — a moderator will review this post." });
+    },
+    onError: () => {
+      toast({ title: "Could not report", description: "Please try again.", variant: "destructive" });
+    },
+  });
+
+  const liked = likeStatus?.liked ?? false;
+
   return (
-    <div className="glass-card p-4" style={{ height: "auto" }}>
+    <div className="flex items-center gap-6 mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!user) {
+            toast({ title: "Log in required", description: "Log in to like posts." });
+            return;
+          }
+          likeMutation.mutate();
+        }}
+        className="flex items-center gap-1.5 text-white/50 active:scale-110 transition-transform"
+        data-testid={`button-like-post-${post.id}`}
+      >
+        <Heart className={`w-4 h-4 ${liked ? "fill-red-500 text-red-500" : ""}`} />
+        <span className="text-xs">{post.likesCount ?? 0}</span>
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenComments();
+        }}
+        className="flex items-center gap-1.5 text-white/50 active:scale-110 transition-transform"
+        data-testid={`button-comment-post-${post.id}`}
+      >
+        <MessageCircle className="w-4 h-4" />
+        <span className="text-xs">{post.commentsCount ?? 0}</span>
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!user) {
+            toast({ title: "Log in required", description: "Log in to report posts." });
+            return;
+          }
+          if (flagged || flagMutation.isPending) return;
+          flagMutation.mutate();
+        }}
+        className="flex items-center gap-1.5 text-white/50 active:scale-110 transition-transform ml-auto"
+        data-testid={`button-flag-post-${post.id}`}
+      >
+        <Flag className={`w-4 h-4 ${flagged ? "fill-orange-400 text-orange-400" : ""}`} />
+      </button>
+    </div>
+  );
+}
+
+function PostCard({ post, onOpenComments }: { post: PostItem; onOpenComments: (postId: string) => void }) {
+  return (
+    <div
+      className="glass-card p-4 cursor-pointer"
+      style={{ height: "auto" }}
+      onClick={() => onOpenComments(post.id)}
+    >
       <div className="flex items-center gap-2 mb-2">
         <Avatar author={post.author} />
         <span className="text-white/70 text-sm">{authorName(post.author)}</span>
@@ -73,15 +174,20 @@ function PostCard({ post }: { post: PostItem }) {
         </div>
       )}
       <p className="text-white text-sm line-clamp-4">{post.content}</p>
+      <PostActionBar post={post} onOpenComments={() => onOpenComments(post.id)} />
     </div>
   );
 }
 
-function NewsCard({ post }: { post: PostItem }) {
+function NewsCard({ post, onOpenComments }: { post: PostItem; onOpenComments: (postId: string) => void }) {
   const thumb = post.linkPreview?.image || post.image;
   const headline = post.title || post.linkPreview?.title || "Article";
   return (
-    <div className="glass-card p-4" style={{ height: "auto" }}>
+    <div
+      className="glass-card p-4 cursor-pointer"
+      style={{ height: "auto" }}
+      onClick={() => onOpenComments(post.id)}
+    >
       {thumb && (
         <div className="h-36 rounded-xl overflow-hidden mb-3 bg-white/5">
           <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -92,6 +198,7 @@ function NewsCard({ post }: { post: PostItem }) {
       {post.newsSourceName && (
         <p className="text-white/40 text-xs mt-2">{post.newsSourceName}</p>
       )}
+      <PostActionBar post={post} onOpenComments={() => onOpenComments(post.id)} />
     </div>
   );
 }
@@ -171,6 +278,7 @@ function EmptyState({ label }: { label: string }) {
 export function MobileSignalsPage() {
   useScrollLight();
   const [activeTab, setActiveTab] = useState<string>("signals");
+  const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
 
   const { data: signals = [], isLoading: signalsLoading } = useQuery<SignalWithAuthor[]>({
     queryKey: ["/api/mobile/signals"],
@@ -246,8 +354,8 @@ export function MobileSignalsPage() {
               ? <EmptyState label="News Feed" />
               : posts.map((p) =>
                   (p.type === "news" || (!p.articleBody && (p.url || p.linkPreview)))
-                    ? <NewsCard key={p.id} post={p} />
-                    : <PostCard key={p.id} post={p} />
+                    ? <NewsCard key={p.id} post={p} onOpenComments={setCommentsPostId} />
+                    : <PostCard key={p.id} post={p} onOpenComments={setCommentsPostId} />
                 )
           }
         </div>
@@ -272,7 +380,7 @@ export function MobileSignalsPage() {
             ? <SkeletonList />
             : news.length === 0
               ? <EmptyState label="News" />
-              : news.map((p) => <NewsCard key={p.id} post={p} />)
+              : news.map((p) => <NewsCard key={p.id} post={p} onOpenComments={setCommentsPostId} />)
           }
         </div>
       )}
@@ -299,6 +407,10 @@ export function MobileSignalsPage() {
               : petitions.map((p) => <PetitionCard key={(p as any).id} petition={p} />)
           }
         </div>
+      )}
+
+      {commentsPostId && (
+        <PostCommentsOverlay postId={commentsPostId} onClose={() => setCommentsPostId(null)} />
       )}
 
       <MobileBottomNav />

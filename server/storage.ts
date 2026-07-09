@@ -104,7 +104,7 @@ export interface IStorage {
   recalculateGroupMemberCounts(): Promise<void>;
 
   // Comments
-  getCommentsByPost(postId: string): Promise<Comment[]>;
+  getCommentsByPost(postId: string, currentUserId?: string): Promise<any[]>;
   getCommentsByPoll(pollId: string): Promise<Comment[]>;
   getCommentById(commentId: string): Promise<Comment | undefined>;
   createComment(comment: InsertComment): Promise<Comment>;
@@ -2716,8 +2716,8 @@ export class DatabaseStorage implements IStorage {
       .where(sql`${groups.id} NOT IN (SELECT DISTINCT ${groupMembers.groupId} FROM ${groupMembers})`);
   }
 
-  async getCommentsByPost(postId: string): Promise<any[]> {
-    return await db
+  async getCommentsByPost(postId: string, currentUserId?: string): Promise<any[]> {
+    const rows = await db
       .select({
         id: comments.id,
         postId: comments.postId,
@@ -2726,7 +2726,10 @@ export class DatabaseStorage implements IStorage {
         authorUsername: users.username,
         authorFirstName: users.firstName,
         authorLastName: users.lastName,
+        authorAvatar: users.avatar,
         content: comments.content,
+        parentId: comments.parentId,
+        likesCount: comments.likesCount,
         createdAt: comments.createdAt,
         updatedAt: comments.updatedAt,
       })
@@ -2734,6 +2737,22 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(comments.authorId, users.id))
       .where(eq(comments.postId, postId))
       .orderBy(desc(comments.createdAt));
+
+    if (!currentUserId || rows.length === 0) {
+      return rows.map(r => ({ ...r, likedByMe: false }));
+    }
+
+    const commentIds = rows.map(r => r.id);
+    const myLikes = await db
+      .select({ targetId: likes.targetId })
+      .from(likes)
+      .where(and(
+        eq(likes.userId, currentUserId),
+        eq(likes.targetType, "comment"),
+        inArray(likes.targetId, commentIds)
+      ));
+    const likedSet = new Set(myLikes.map(l => l.targetId));
+    return rows.map(r => ({ ...r, likedByMe: likedSet.has(r.id) }));
   }
 
   async getCommentById(commentId: string): Promise<Comment | undefined> {
