@@ -225,9 +225,34 @@ export function PostCommentsOverlay({ postId, onClose }: PostCommentsOverlayProp
                 <div className="w-6 h-6 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
               </div>
             ) : comments.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-2">
+              <div className="flex flex-col items-center justify-center py-10 gap-2 px-2">
                 <p className="text-white/40 text-sm">No comments yet</p>
                 <p className="text-white/25 text-xs">Be the first to comment</p>
+                {user && (
+                  <form onSubmit={handleSubmit} className="w-full flex flex-col gap-2 mt-4">
+                    <textarea
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="Write a comment..."
+                      maxLength={2000}
+                      rows={3}
+                      className="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/30 outline-none border border-white/10 focus:border-white/25 transition-colors resize-none"
+                      style={{ background: "rgba(255,255,255,0.08)" }}
+                      data-testid="input-first-comment"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newComment.trim() || postMutation.isPending}
+                      className="self-end px-5 py-2 rounded-full text-sm font-semibold text-white transition-all disabled:opacity-30"
+                      style={{
+                        background: newComment.trim() ? "rgba(239,68,68,0.8)" : "rgba(255,255,255,0.08)",
+                      }}
+                      data-testid="button-submit-first-comment"
+                    >
+                      {postMutation.isPending ? "Posting..." : "Submit"}
+                    </button>
+                  </form>
+                )}
               </div>
             ) : (
               <div className="flex flex-col gap-3 py-2">
