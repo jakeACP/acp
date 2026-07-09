@@ -9,7 +9,7 @@ import type { SignalWithAuthor, Poll, Petition } from "@shared/schema";
 
 const TABS = [
   { id: "signals",   label: "Signals"   },
-  { id: "posts",     label: "Posts"     },
+  { id: "posts",     label: "News Feed" },
   { id: "polls",     label: "Polls"     },
   { id: "news",      label: "News"      },
   { id: "events",    label: "Events"    },
@@ -195,7 +195,9 @@ export function MobileSignalsPage() {
     enabled: activeTab === "petitions",
   });
 
-  const posts   = feedPosts.filter((p) => p.type === "post" && !p.pollId && !p.articleBody && !p.url && !p.linkPreview);
+  const posts   = feedPosts.filter((p) =>
+    (p.type === "post" && !p.pollId) || p.type === "news" || p.type === "blog" || !!p.articleBody || !!p.url || !!p.linkPreview
+  );
   const news    = feedPosts.filter((p) => p.type === "news" || p.url || p.linkPreview);
   const events  = feedPosts.filter((p) => p.type === "event" && p.eventId);
 
@@ -241,8 +243,12 @@ export function MobileSignalsPage() {
           {postsLoading
             ? <SkeletonList />
             : posts.length === 0
-              ? <EmptyState label="Posts" />
-              : posts.map((p) => <PostCard key={p.id} post={p} />)
+              ? <EmptyState label="News Feed" />
+              : posts.map((p) =>
+                  (p.type === "news" || (!p.articleBody && (p.url || p.linkPreview)))
+                    ? <NewsCard key={p.id} post={p} />
+                    : <PostCard key={p.id} post={p} />
+                )
           }
         </div>
       )}
