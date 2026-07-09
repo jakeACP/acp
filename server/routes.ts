@@ -7949,8 +7949,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Update user role and managed state (owner admin only)
-  app.patch("/api/admin/users/:id/role", ensureOwnerAdmin, async (req, res) => {
+  // Update user role and managed state (any admin)
+  app.patch("/api/admin/users/:id/role", ensureAdminOnly, async (req, res) => {
     try {
       const { id } = req.params;
       const { role, managedState } = req.body;
