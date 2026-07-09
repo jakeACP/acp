@@ -5,7 +5,7 @@ interface FilterTabsProps {
 
 const filters = [
   { id: "all", label: "All" },
-  { id: "posts", label: "Posts" },
+  { id: "news-feed", label: "News Feed" },
   { id: "signals", label: "Signals" },
   { id: "polls", label: "Polls" },
   { id: "news", label: "News" },

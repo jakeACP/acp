@@ -228,7 +228,7 @@ export function MobileFeedPage() {
         if (activeFilter === "polls") return item.type === "poll";
         if (activeFilter === "petitions") return item.type === "petition";
         if (activeFilter === "events") return item.type === "event";
-        if (activeFilter === "posts") return item.type === "post";
+        if (activeFilter === "news-feed") return item.type === "post" || item.type === "news" || item.type === "blog";
         if (activeFilter === "blogs") return item.type === "blog";
         return true;
       });
