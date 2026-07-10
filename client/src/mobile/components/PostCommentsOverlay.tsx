@@ -93,7 +93,8 @@ export function PostCommentsOverlay({ postId, onClose }: PostCommentsOverlayProp
     e.preventDefault();
     const trimmed = newComment.trim();
     if (!trimmed || postMutation.isPending) return;
-    postMutation.mutate({ content: trimmed, parentId: replyTo?.id ?? null });
+    const parentId = replyTo ? (replyTo.parentId ?? replyTo.id) : null;
+    postMutation.mutate({ content: trimmed, parentId });
   };
 
   const timeAgo = (dateStr: string) => {
@@ -140,7 +141,7 @@ export function PostCommentsOverlay({ postId, onClose }: PostCommentsOverlayProp
                 <span className="text-[10px]">{comment.likesCount}</span>
               )}
             </button>
-            {!isReply && user && (
+            {user && (
               <button
                 onClick={() => {
                   setReplyTo(comment);
@@ -169,7 +170,7 @@ export function PostCommentsOverlay({ postId, onClose }: PostCommentsOverlayProp
   return (
     <div
       className="fixed inset-0"
-      style={{ zIndex: 60 }}
+      style={{ zIndex: 120 }}
       onClick={handleClose}
       onTouchStart={(e) => e.stopPropagation()}
       data-testid="post-comments-overlay"
@@ -218,7 +219,11 @@ export function PostCommentsOverlay({ postId, onClose }: PostCommentsOverlayProp
           <div
             ref={listRef}
             className="flex-1 overflow-y-auto px-4 pb-2"
-            style={{ maxHeight: "calc(75vh - 130px)" }}
+            style={{
+              maxHeight: "calc(75vh - 130px)",
+              WebkitOverflowScrolling: "touch",
+              overscrollBehavior: "contain",
+            }}
           >
             {isLoading ? (
               <div className="flex items-center justify-center py-12">

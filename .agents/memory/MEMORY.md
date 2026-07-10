@@ -1,2 +1,3 @@
 - [CSRF on raw fetch uploads](csrf-uploads.md) — non-apiRequest POST/PUT/DELETE must send x-csrf-token or get 403; use getCsrfToken/fetchCsrfToken
 - [apiRequest arg order](apirequest-arg-order.md) — signature is apiRequest(url, method, data?); NOT (method, url). Swapping targets a bogus URL like "POST"
+- [Mobile overlay z-index](mobile-overlay-zindex.md) — fixed bottom nav is z-index:100; any full-screen mobile overlay/sheet must exceed it or it covers the input
