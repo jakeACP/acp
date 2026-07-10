@@ -338,6 +338,36 @@ function UploadProgress({ pct }: { pct: number }) {
 
 function ImagePicker({ preview, onFile }: { preview: string | null; onFile: (f: File) => void }) {
   const ref = useRef<HTMLInputElement>(null);
+
+  const handlePick = async () => {
+    if ((window as any).Capacitor?.isNativePlatform?.()) {
+      try {
+        const { Camera, CameraSource, CameraResultType } = await import('@capacitor/camera');
+        // Request permission JIT — user must have tapped the button
+        await Camera.requestPermissions({ permissions: ['camera', 'photos'] });
+        const photo = await Camera.getPhoto({
+          quality: 90,
+          allowEditing: false,
+          resultType: CameraResultType.DataUrl,
+          source: CameraSource.Prompt, // Let user choose Camera or Photo Library
+        });
+        if (photo.dataUrl) {
+          const res = await fetch(photo.dataUrl);
+          const blob = await res.blob();
+          const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' });
+          onFile(file);
+        }
+      } catch (err: any) {
+        // User cancelled the sheet — not an error worth logging
+        if (!err?.message?.includes('cancel') && !err?.message?.includes('dismiss')) {
+          console.error('[ImagePicker] Camera error:', err);
+        }
+      }
+    } else {
+      ref.current?.click();
+    }
+  };
+
   return (
     <div>
       <input ref={ref} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
@@ -345,14 +375,14 @@ function ImagePicker({ preview, onFile }: { preview: string | null; onFile: (f: 
         <div className="relative w-full aspect-video rounded-2xl overflow-hidden"
           style={{ background: "rgba(0,0,0,0.3)" }}>
           <img src={preview} alt="Preview" className="w-full h-full object-contain" />
-          <button onClick={() => ref.current?.click()}
+          <button onClick={handlePick}
             className="absolute bottom-2 right-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-white"
             style={{ background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.2)" }}>
             Change
           </button>
         </div>
       ) : (
-        <button onClick={() => ref.current?.click()}
+        <button onClick={handlePick}
           className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl transition-all active:scale-[0.98]"
           style={{ background: "rgba(255,255,255,0.04)", border: "2px dashed rgba(255,255,255,0.12)" }}>
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center"

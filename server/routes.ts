@@ -233,6 +233,22 @@ const objectStorageService = new ObjectStorageService();
 export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   setupAuth(app);
 
+  // ── Apple App Site Association (Universal Links for iOS) ─────────────────────
+  // Served before any auth middleware so iOS can verify without credentials.
+  // Replace TEAM_ID below with the 10-char Apple Developer Team ID once known.
+  app.get('/.well-known/apple-app-site-association', (_req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.json({
+      applinks: {
+        apps: [],
+        details: [{
+          appID: 'TEAM_ID.com.acp.democracy',
+          paths: ['/mobile/*', '/mobile'],
+        }],
+      },
+    });
+  });
+
   // Serve uploaded signal videos and built-in audio tracks
   const express = await import("express");
   app.use('/uploads/signals', express.default.static(signalsUploadDir));
@@ -8443,6 +8459,45 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const updated = { ...ext, notificationPrefs: { ...(ext.notificationPrefs ?? {}), ...req.body } };
       await storage.updateUser(req.user!.id, { extendedProfileData: updated } as any);
       res.json(updated.notificationPrefs);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Push notification device-token registration ───────────────────────────────
+  // Tokens are stored in extendedProfileData.deviceTokens (no schema change).
+  // The actual APNs sending is handled server-side when notifications are triggered.
+
+  app.post("/api/push/register", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const { token, platform } = req.body;
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ message: 'token is required' });
+      }
+      const user = await storage.getUser(req.user!.id);
+      const ext = (user?.extendedProfileData as any) ?? {};
+      // Keep up to 5 device tokens per user (newest-first, deduplicated by token string)
+      const existing: Array<{ token: string; platform: string; updatedAt: string }> = ext.deviceTokens ?? [];
+      const filtered = existing.filter((t: any) => t.token !== token);
+      const deviceTokens = [
+        { token, platform: platform ?? 'ios', updatedAt: new Date().toISOString() },
+        ...filtered,
+      ].slice(0, 5);
+      await storage.updateUser(req.user!.id, { extendedProfileData: { ...ext, deviceTokens } } as any);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/push/unregister", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const user = await storage.getUser(req.user!.id);
+      const ext = (user?.extendedProfileData as any) ?? {};
+      await storage.updateUser(req.user!.id, { extendedProfileData: { ...ext, deviceTokens: [] } } as any);
+      res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

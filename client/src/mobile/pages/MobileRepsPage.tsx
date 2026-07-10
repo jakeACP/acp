@@ -540,25 +540,46 @@ function MyRepsTab() {
     }
   };
 
-  const handleLocationAllow = () => {
+  const handleLocationAllow = async () => {
     setShowLocationDialog(false);
-    if (!("geolocation" in navigator)) {
-      toast({ title: "Your browser doesn't support location", variant: "destructive" });
-      return;
-    }
     setLocationLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => handleLocationGranted(pos.coords.latitude, pos.coords.longitude),
-      (err) => {
-        setLocationLoading(false);
-        if (err.code === err.PERMISSION_DENIED) {
-          toast({ title: "Location access denied. Please enter your ZIP code.", variant: "destructive" });
-        } else {
-          toast({ title: "Could not get location. Please enter ZIP manually.", variant: "destructive" });
+    try {
+      let lat: number, lng: number;
+      if ((window as any).Capacitor?.isNativePlatform?.()) {
+        // Capacitor Geolocation — requests iOS/Android permission JIT on first call
+        const { Geolocation } = await import('@capacitor/geolocation');
+        const pos = await Geolocation.getCurrentPosition({
+          timeout: 10_000,
+          maximumAge: 300_000,
+          enableHighAccuracy: false,
+        });
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+      } else {
+        if (!("geolocation" in navigator)) {
+          toast({ title: "Your browser doesn't support location", variant: "destructive" });
+          setLocationLoading(false);
+          return;
         }
-      },
-      { timeout: 10_000, maximumAge: 300_000 }
-    );
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 10_000,
+            maximumAge: 300_000,
+          })
+        );
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+      }
+      await handleLocationGranted(lat, lng);
+    } catch (err: any) {
+      setLocationLoading(false);
+      const code = err?.code;
+      if (code === 1) {
+        toast({ title: "Location access denied. Please enter your ZIP code.", variant: "destructive" });
+      } else {
+        toast({ title: "Could not get location. Please enter ZIP manually.", variant: "destructive" });
+      }
+    }
   };
 
   const handleFollowToggle = (rep: Politician, follow: boolean) => {

@@ -4,3 +4,4 @@
 - [Apple IAP Vite dynamic import](apple-iap-vite-import.md) — @vite-ignore alone doesn't stop pre-transform; must use string concatenation to prevent static resolution
 - [Apple IAP CSRF bypass](apple-iap-csrf.md) — Apple S2S webhook needs CSRF bypass in server/auth.ts; pattern is `req.path === "/api/subscriptions/apple/notify"`
 - [Signal video architecture](signal-video-arch.md) — YouTube/TikTok signals stored as canonical URLs, rendered as iframes; uploads transcoded to H.264/AAC MP4; classify with classifySignalUrl() from signal-video-utils.ts
+- [Capacitor native layer](capacitor-native-layer.md) — all native plugins use dynamic lazy imports in service files; Capacitor.isNativePlatform() guard must precede every plugin call; push tokens stored in extendedProfileData.deviceTokens (no schema change)

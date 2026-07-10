@@ -12,6 +12,7 @@ import {
 import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useHaptics } from "../hooks/useHaptics";
 import { ShareSheet } from "@/components/share-sheet";
 import { SignalCommentsOverlay } from "./SignalCommentsOverlay";
 import type { SignalWithAuthor } from "@shared/schema";
@@ -39,6 +40,7 @@ export function SignalFeedItem({
 }: SignalFeedItemProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { impact } = useHaptics();
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const videoInfo = classifySignalUrl(signal.videoUrl);
@@ -360,6 +362,7 @@ export function SignalFeedItem({
           onClick={(e) => {
             e.stopPropagation();
             if (!user) { toast({ title: "Log in to like" }); return; }
+            impact('light');
             likeMutation.mutate();
           }}
           className="flex flex-col items-center gap-1 active:scale-90 transition-transform"

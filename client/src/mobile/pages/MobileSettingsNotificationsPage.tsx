@@ -1,10 +1,13 @@
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Loader2, UserPlus, MessageCircle, Heart, BarChart2, Calendar, FileSignature, Mail, Shield, Bell } from "lucide-react";
+import { ChevronLeft, Loader2, UserPlus, MessageCircle, Heart, BarChart2, Calendar, FileSignature, Mail, Shield, Bell, CheckCircle, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { MobileBottomNav } from "../components/MobileBottomNav";
+import { getPushPermissionStatus, requestAndRegister } from "../services/push-service";
+import { isNative } from "../services/native";
 import "../mobile-theme.css";
 
 interface NotifPrefs {
@@ -50,6 +53,26 @@ export function MobileSettingsNotificationsPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
+  // ── APNs push permission state ──────────────────────────────────────────────
+  const [pushStatus, setPushStatus] = useState<string>('unavailable');
+  const [pushLoading, setPushLoading] = useState(false);
+
+  useEffect(() => {
+    getPushPermissionStatus().then(setPushStatus);
+  }, []);
+
+  const handleEnablePush = async () => {
+    setPushLoading(true);
+    const status = await requestAndRegister();
+    setPushStatus(status);
+    setPushLoading(false);
+    if (status === 'granted') {
+      toast({ title: 'Push notifications enabled!' });
+    } else if (status === 'denied') {
+      toast({ title: 'Notifications blocked — enable in iPhone Settings', variant: 'destructive' });
+    }
+  };
+
   const { data: prefs, isLoading } = useQuery<NotifPrefs>({
     queryKey: ["/api/user/notification-prefs"],
     staleTime: 30000,
@@ -88,6 +111,51 @@ export function MobileSettingsNotificationsPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4">
+
+        {/* Push Notification Permission — only shown in native iOS/Android app */}
+        {isNative() && (
+          <div className="glass-card p-4" data-testid="push-permission-card">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: pushStatus === 'granted' ? 'rgba(34,197,94,0.15)' : 'rgba(59,130,246,0.15)' }}
+              >
+                <Bell className={`w-5 h-5 ${pushStatus === 'granted' ? 'text-green-400' : 'text-blue-400'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-semibold text-sm">Push Notifications</p>
+                {pushStatus === 'granted' ? (
+                  <p className="text-green-400 text-xs mt-0.5 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Enabled on this device
+                  </p>
+                ) : pushStatus === 'denied' ? (
+                  <p className="text-white/40 text-xs mt-0.5 leading-tight">
+                    Blocked — go to <strong className="text-white/60">iPhone Settings → ACP Democracy</strong> to allow
+                  </p>
+                ) : pushStatus === 'unavailable' ? (
+                  <p className="text-white/30 text-xs mt-0.5">Not available on this device</p>
+                ) : (
+                  <p className="text-white/40 text-xs mt-0.5">
+                    Get real-time alerts for messages, votes &amp; civic updates
+                  </p>
+                )}
+              </div>
+              {pushStatus !== 'granted' && pushStatus !== 'denied' && pushStatus !== 'unavailable' && (
+                <button
+                  onClick={handleEnablePush}
+                  disabled={pushLoading}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white active:bg-blue-700 disabled:opacity-50 flex-shrink-0"
+                  data-testid="enable-push-btn"
+                >
+                  {pushLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Enable'}
+                </button>
+              )}
+              {pushStatus === 'denied' && (
+                <AlertCircle className="w-4 h-4 text-orange-400 flex-shrink-0" />
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Toggle all */}
         <div className="glass-card p-4 flex items-center justify-between">

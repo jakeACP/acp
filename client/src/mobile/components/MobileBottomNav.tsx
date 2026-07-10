@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { Home, Globe, Plus, MessageCircle, User } from "lucide-react";
 import { CreatePostModal } from "./CreatePostModal";
+import { useHaptics } from "../hooks/useHaptics";
 
 interface NavItem {
   href: string;
@@ -21,6 +22,7 @@ const navItems: NavItem[] = [
 export function MobileBottomNav() {
   const [location] = useLocation();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const { selection } = useHaptics();
 
   return (
     <>
@@ -52,6 +54,7 @@ export function MobileBottomNav() {
                 <button
                   className={`nav-button ${isActive ? "active" : ""}`}
                   data-testid={`mobile-nav-${item.label.toLowerCase()}`}
+                  onClick={() => { if (!isActive) selection(); }}
                 >
                   <Icon className="w-5 h-5" />
                   <span className="text-[9px]">{item.label}</span>

@@ -40,10 +40,30 @@ import { MobileSavedCivicPage } from "./pages/MobileSavedCivicPage";
 import { MobileNotFoundPage } from "./pages/MobileNotFoundPage";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
+import { NativeErrorBoundary } from "./components/NativeErrorBoundary";
+import { initNativeApp } from "./services/native";
+import { reRegisterIfGranted } from "./services/push-service";
+import { useDeepLink } from "./hooks/useDeepLink";
+import { startOfflineWatcher } from "./lib/offline-queue";
 import "../mobile/mobile-theme.css";
 
 export function MobileApp() {
   const { user, isLoading } = useAuth();
+
+  // Start the offline queue watcher and re-register for push on startup
+  useEffect(() => {
+    startOfflineWatcher();
+    reRegisterIfGranted();
+  }, []);
+
+  // Hide splash screen and set native status bar once auth resolves
+  useEffect(() => {
+    if (!isLoading) initNativeApp();
+  }, [isLoading]);
+
+  // Route to the correct screen when the app is opened via a deep / universal link
+  useDeepLink();
 
   if (isLoading) {
     return (
@@ -58,6 +78,7 @@ export function MobileApp() {
   }
 
   return (
+    <NativeErrorBoundary>
     <Switch>
       {/* ── Home — Signals / Feed ─────────────────────────────────────── */}
       <Route path="/mobile"           component={MobileSignalsPage} />
@@ -126,5 +147,6 @@ export function MobileApp() {
       {/* ── Mobile 404 — helpful in-app fallback ─────────────────────── */}
       <Route component={MobileNotFoundPage} />
     </Switch>
+    </NativeErrorBoundary>
   );
 }
