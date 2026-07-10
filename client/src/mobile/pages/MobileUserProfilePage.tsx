@@ -5,10 +5,12 @@ import { MobileBottomNav } from "../components/MobileBottomNav";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, UserPlus, UserCheck, MapPin, Calendar, Users } from "lucide-react";
+import { ArrowLeft, UserPlus, UserCheck, MapPin, Calendar, Users, MoreVertical } from "lucide-react";
 import { Link } from "wouter";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { ContentActionSheet } from "../components/ContentActionSheet";
 import type { User } from "@shared/schema";
 
 interface UserProfile extends Partial<User> {
@@ -23,6 +25,7 @@ export function MobileUserProfilePage() {
   const { toast } = useToast();
   const [match, params] = useRoute("/mobile/profile/:userId");
   const userId = params?.userId;
+  const [showActions, setShowActions] = useState(false);
 
   const { data: profile, isLoading } = useQuery<UserProfile>({
     queryKey: ['/api/users', userId],
@@ -107,7 +110,17 @@ export function MobileUserProfilePage() {
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
         </Link>
-        <h1 className="text-white font-bold text-lg tracking-wider">PROFILE</h1>
+        <h1 className="text-white font-bold text-lg tracking-wider flex-1">PROFILE</h1>
+        {currentUser && userId !== currentUser.id && (
+          <button
+            onClick={() => setShowActions(true)}
+            className="p-2 rounded-full hover:bg-white/10 transition-colors"
+            aria-label="More options"
+            data-testid="profile-more-options"
+          >
+            <MoreVertical className="w-5 h-5 text-white" />
+          </button>
+        )}
       </div>
 
       <div className="px-4 pb-8">
@@ -185,6 +198,17 @@ export function MobileUserProfilePage() {
       </div>
 
       <MobileBottomNav />
+
+      {showActions && profile && userId && currentUser && userId !== currentUser.id && (
+        <ContentActionSheet
+          contentType="profile"
+          contentId={userId}
+          authorId={userId}
+          authorUsername={(profile as any).username}
+          shareUrl={`${window.location.origin}/mobile/profile/${userId}`}
+          onClose={() => setShowActions(false)}
+        />
+      )}
     </div>
   );
 }

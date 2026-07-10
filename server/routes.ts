@@ -8128,6 +8128,104 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // ── User-facing Report / Content-Safety Endpoints ─────────────────────────────
+
+  // POST /api/report — Universal content report (reporter identity stored server-side only)
+  app.post("/api/report", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const { contentType, contentId, flagType, reason } = req.body;
+    if (!contentType || !contentId || !flagType) {
+      return res.status(400).json({ message: "contentType, contentId, and flagType are required" });
+    }
+    const validTypes = ["post","comment","signal","profile","group","event","petition","message","poll"];
+    const validFlags = ["spam","hate_speech","harassment","violence","nudity","misinformation","self_harm","crime","other"];
+    if (!validTypes.includes(contentType)) return res.status(400).json({ message: "Invalid contentType" });
+    if (!validFlags.includes(flagType)) return res.status(400).json({ message: "Invalid flagType" });
+    try {
+      await storage.createFlaggedContent({
+        contentType,
+        contentId: String(contentId),
+        flagType,
+        flaggedBy: (req.user as any).id,
+        reason: reason ? String(reason).slice(0, 500) : null,
+        status: "pending",
+      });
+      // Return only a confirmation — never expose who else reported or the flaggedBy field
+      res.status(201).json({ success: true, message: "Report submitted. Thank you for helping keep the community safe." });
+    } catch (err: any) {
+      console.error("Report endpoint error:", err);
+      res.status(500).json({ message: "Failed to submit report" });
+    }
+  });
+
+  // POST /api/content/hide — Add a content item to the user's hidden list (stored in extendedProfileData)
+  app.post("/api/content/hide", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const { contentType, contentId, notInterested } = req.body;
+    if (!contentType || !contentId) return res.status(400).json({ message: "contentType and contentId required" });
+    try {
+      const uid = (req.user as any).id;
+      const ext = (await storage.getExtendedProfile(uid)) ?? {};
+      const hidden: any[] = ext.hiddenContent ?? [];
+      const key = `${contentType}:${contentId}`;
+      if (!hidden.find((h: any) => h.key === key)) {
+        hidden.push({ key, contentType, contentId, notInterested: !!notInterested, hiddenAt: new Date().toISOString() });
+      }
+      await storage.updateExtendedProfile(uid, { ...ext, hiddenContent: hidden });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET /api/content/hidden — Returns the list of content keys the current user has hidden
+  app.get("/api/content/hidden", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const uid = (req.user as any).id;
+      const ext = (await storage.getExtendedProfile(uid)) ?? {};
+      res.json(ext.hiddenContent ?? []);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET /api/user/content-settings — Content sensitivity / age-rating preferences
+  app.get("/api/user/content-settings", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const uid = (req.user as any).id;
+      const ext = (await storage.getExtendedProfile(uid)) ?? {};
+      const defaults = {
+        sensitivityLevel: "standard",   // "all" | "standard" | "conservative"
+        showContentWarnings: true,
+        filterMatureContent: false,
+        filterViolentContent: false,
+        filterPoliticalAds: false,
+      };
+      res.json({ ...defaults, ...(ext.contentSettings ?? {}) });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // PATCH /api/user/content-settings — Save content filter preferences
+  app.patch("/api/user/content-settings", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const uid = (req.user as any).id;
+      const ext = (await storage.getExtendedProfile(uid)) ?? {};
+      const allowed = ["sensitivityLevel","showContentWarnings","filterMatureContent","filterViolentContent","filterPoliticalAds"];
+      const patch: Record<string, any> = {};
+      for (const k of allowed) if (k in req.body) patch[k] = req.body[k];
+      const contentSettings = { ...(ext.contentSettings ?? {}), ...patch };
+      await storage.updateExtendedProfile(uid, { ...ext, contentSettings });
+      res.json(contentSettings);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Admin Analytics APIs
   app.get("/api/admin/analytics", ensureAdmin, async (req, res) => {
     try {

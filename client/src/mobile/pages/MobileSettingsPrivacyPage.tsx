@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Globe, Users, Lock, MessageCircle, UserPlus, Eye, EyeOff, Loader2, UserX, VolumeX, ChevronDown } from "lucide-react";
+import { ChevronLeft, Globe, Users, Lock, MessageCircle, UserPlus, Eye, EyeOff, Loader2, UserX, VolumeX, ChevronDown, Filter, ShieldAlert } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -61,6 +61,21 @@ function ContactPicker({ label, value, onChange }: { label: string; value: Conta
   );
 }
 
+function FilterToggle({ label, sub, checked, onChange, testId }: {
+  label: string; sub: string; checked: boolean;
+  onChange: (v: boolean) => void; testId?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex-1 pr-4">
+        <p className="text-white text-sm">{label}</p>
+        {sub && <p className="text-white/35 text-xs mt-0.5">{sub}</p>}
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} data-testid={testId} />
+    </div>
+  );
+}
+
 function UserChip({ user, onRemove, label }: { user: BlockedUser; onRemove: () => void; label: string }) {
   return (
     <div className="flex items-center gap-3 py-3">
@@ -87,7 +102,7 @@ function UserChip({ user, onRemove, label }: { user: BlockedUser; onRemove: () =
 export function MobileSettingsPrivacyPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [tab, setTab] = useState<"privacy" | "blocked" | "muted">("privacy");
+  const [tab, setTab] = useState<"privacy" | "blocked" | "muted" | "filters">("privacy");
 
   const { data: privacySettings, isLoading: privLoading } = useQuery<PrivacySettings>({
     queryKey: ["/api/user/privacy-settings"],
@@ -111,6 +126,29 @@ export function MobileSettingsPrivacyPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/user/privacy-settings"] }),
     onError: () => toast({ title: "Update failed", variant: "destructive" }),
   });
+
+  const { data: contentSettings, isLoading: filtersLoading } = useQuery<{
+    sensitivityLevel: string; showContentWarnings: boolean;
+    filterMatureContent: boolean; filterViolentContent: boolean; filterPoliticalAds: boolean;
+  }>({
+    queryKey: ["/api/user/content-settings"],
+    staleTime: 30000,
+    enabled: tab === "filters",
+  });
+
+  const filtersMutation = useMutation({
+    mutationFn: (data: Record<string, any>) => apiRequest("/api/user/content-settings", "PATCH", data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/user/content-settings"] }),
+    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
+
+  const filters = contentSettings ?? {
+    sensitivityLevel: "standard",
+    showContentWarnings: true,
+    filterMatureContent: false,
+    filterViolentContent: false,
+    filterPoliticalAds: false,
+  };
 
   const unblockMutation = useMutation({
     mutationFn: (userId: string) => apiRequest(`/api/user/block/${userId}`, "DELETE"),
@@ -140,9 +178,10 @@ export function MobileSettingsPrivacyPage() {
   const updateSetting = (patch: Partial<PrivacySettings>) => privacyMutation.mutate(patch);
 
   const tabs = [
-    { id: "privacy" as const, label: "Privacy" },
-    { id: "blocked" as const, label: `Blocked${blockedUsers.length ? ` (${blockedUsers.length})` : ""}` },
-    { id: "muted" as const,   label: `Muted${mutedUsers.length ? ` (${mutedUsers.length})` : ""}` },
+    { id: "privacy"  as const, label: "Privacy" },
+    { id: "blocked"  as const, label: `Blocked${blockedUsers.length ? ` (${blockedUsers.length})` : ""}` },
+    { id: "muted"    as const, label: `Muted${mutedUsers.length ? ` (${mutedUsers.length})` : ""}` },
+    { id: "filters"  as const, label: "Filters" },
   ];
 
   return (
@@ -266,6 +305,99 @@ export function MobileSettingsPrivacyPage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* Content Filters (age-rating / sensitivity controls) */}
+        {tab === "filters" && (
+          <>
+            {filtersLoading ? (
+              <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-white/40" /></div>
+            ) : (
+              <>
+                {/* Sensitivity level */}
+                <div className="glass-card p-4">
+                  <p className="text-white/45 text-xs font-semibold uppercase tracking-wide mb-3">Content Sensitivity Level</p>
+                  <p className="text-white/50 text-xs mb-3 leading-relaxed">
+                    Choose how much potentially sensitive user-generated content you see in your feed. This applies to posts, signals, and media.
+                  </p>
+                  <div className="space-y-2">
+                    {([
+                      { id: "all",          label: "All content",    sub: "Show everything, including mature-rated content" },
+                      { id: "standard",     label: "Standard",       sub: "Balanced — most content shown, with warnings (recommended)" },
+                      { id: "conservative", label: "Conservative",   sub: "Stricter filtering — suitable for all ages" },
+                    ] as const).map(opt => (
+                      <button key={opt.id} onClick={() => filtersMutation.mutate({ sensitivityLevel: opt.id })}
+                        className="w-full flex items-center gap-3 p-3 rounded-2xl text-left active:opacity-70 transition-all"
+                        style={filters.sensitivityLevel === opt.id
+                          ? { background: "rgba(59,91,169,0.25)", border: "1px solid rgba(59,91,169,0.5)" }
+                          : { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                        data-testid={`sensitivity-${opt.id}`}>
+                        <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                          style={{ borderColor: filters.sensitivityLevel === opt.id ? "#6381d4" : "rgba(255,255,255,0.3)" }}>
+                          {filters.sensitivityLevel === opt.id && (
+                            <div className="w-2 h-2 rounded-full" style={{ background: "#6381d4" }} />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-white text-sm font-medium">{opt.label}</p>
+                          <p className="text-white/35 text-xs mt-0.5">{opt.sub}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Toggle filters */}
+                <div className="glass-card p-4 space-y-4">
+                  <p className="text-white/45 text-xs font-semibold uppercase tracking-wide">Content Warnings &amp; Filters</p>
+
+                  <FilterToggle
+                    label="Show content warnings"
+                    sub="Display a warning overlay before potentially sensitive posts"
+                    checked={filters.showContentWarnings}
+                    onChange={(v) => filtersMutation.mutate({ showContentWarnings: v })}
+                    testId="toggle-content-warnings"
+                  />
+                  <FilterToggle
+                    label="Filter mature content"
+                    sub="Hide posts tagged as adult or explicit"
+                    checked={filters.filterMatureContent}
+                    onChange={(v) => filtersMutation.mutate({ filterMatureContent: v })}
+                    testId="toggle-filter-mature"
+                  />
+                  <FilterToggle
+                    label="Filter violent content"
+                    sub="Hide posts containing graphic or violent imagery"
+                    checked={filters.filterViolentContent}
+                    onChange={(v) => filtersMutation.mutate({ filterViolentContent: v })}
+                    testId="toggle-filter-violent"
+                  />
+                  <FilterToggle
+                    label="Reduce political ads"
+                    sub="Show fewer sponsored political campaign posts"
+                    checked={filters.filterPoliticalAds}
+                    onChange={(v) => filtersMutation.mutate({ filterPoliticalAds: v })}
+                    testId="toggle-filter-political-ads"
+                  />
+                </div>
+
+                {/* Moderation contact info — visible Help/Contact path */}
+                <div className="glass-card p-4">
+                  <div className="flex items-start gap-3">
+                    <ShieldAlert className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-white text-sm font-semibold mb-1">Content moderation help</p>
+                      <p className="text-white/45 text-xs leading-relaxed mb-3">
+                        If you encounter objectionable content that has not been addressed by our automated filters, please use the in-app report feature or contact our moderation team directly.
+                      </p>
+                      <p className="text-blue-400 text-xs font-medium">📧 moderation@acp.example.com</p>
+                      <p className="text-white/30 text-xs mt-1">Our team reviews all reports within 24 hours.</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
         )}
       </div>
 

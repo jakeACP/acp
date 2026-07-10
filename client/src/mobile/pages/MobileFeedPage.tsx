@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useScrollLight } from "../hooks/useScrollLight";
 import { MobileBottomNav } from "../components/MobileBottomNav";
+import { ContentActionSheet } from "../components/ContentActionSheet";
+import { MoreVertical } from "lucide-react";
 import { FilterTabs } from "../components/FilterTabs";
 import { ExpandedCardView } from "../components/ExpandedCardView";
 import { FriendSuggestionsWidget } from "../components/FriendSuggestionsWidget";
@@ -156,6 +158,7 @@ export function MobileFeedPage() {
   const [, navigate] = useLocation();
   const [activeFilter, setActiveFilter] = useState("all");
   const [expandedItem, setExpandedItem] = useState<FeedItem | null>(null);
+  const [actionSheetItem, setActionSheetItem] = useState<{ contentType: string; contentId: string; authorId?: string; authorUsername?: string } | null>(null);
 
   const handleFilterChange = (filter: string) => {
     if (filter === "signals") {
@@ -492,11 +495,32 @@ export function MobileFeedPage() {
               )}
               <div
                 key={`${item.type}-${item.data.id}`}
-                className="glass-card p-3 cursor-pointer hover:scale-[1.02] transition-transform"
+                className="glass-card p-3 cursor-pointer hover:scale-[1.02] transition-transform relative"
                 onClick={() => setExpandedItem(item)}
                 data-testid={`card-${item.type}-${item.data.id}`}
               >
                 {getCardPreview(item)}
+                <button
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center active:bg-white/20"
+                  style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)", zIndex: 5 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const d = item.data as any;
+                    setActionSheetItem({
+                      contentType: item.type === "signal" ? "signal"
+                        : item.type === "petition" ? "petition"
+                        : item.type === "poll" ? "poll"
+                        : "post",
+                      contentId: d.id,
+                      authorId: d.authorId ?? d.author_id,
+                      authorUsername: d.author?.username ?? d.authorUsername,
+                    });
+                  }}
+                  aria-label="More options"
+                  data-testid={`card-more-${item.data.id}`}
+                >
+                  <MoreVertical className="w-3.5 h-3.5 text-white" />
+                </button>
               </div>
             </div>
           ))
@@ -509,6 +533,17 @@ export function MobileFeedPage() {
         <ExpandedCardView 
           item={expandedItem} 
           onClose={() => setExpandedItem(null)} 
+        />
+      )}
+
+      {actionSheetItem && (
+        <ContentActionSheet
+          contentType={actionSheetItem.contentType as any}
+          contentId={actionSheetItem.contentId}
+          authorId={actionSheetItem.authorId}
+          authorUsername={actionSheetItem.authorUsername}
+          onClose={() => setActionSheetItem(null)}
+          onHide={() => setActionSheetItem(null)}
         />
       )}
     </div>

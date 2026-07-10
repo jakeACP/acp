@@ -1,12 +1,13 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Heart, MessageCircle, Share2, Play, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Heart, MessageCircle, Share2, Play, Volume2, VolumeX, MoreVertical } from "lucide-react";
 import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { SignalWithAuthor } from "@shared/schema";
 import { SignalCommentsOverlay } from "../components/SignalCommentsOverlay";
 import { ShareSheet } from "@/components/share-sheet";
+import { ContentActionSheet } from "../components/ContentActionSheet";
 
 const SWIPE_THRESHOLD = 72;   // px of travel before committing
 const SWIPE_EXIT_PX   = 340;  // how far to animate the screen off before navigating
@@ -25,6 +26,7 @@ export function SignalPlayerPage() {
   const [liked,          setLiked]          = useState(false);
   const [localLikeCount, setLocalLikeCount] = useState(0);
   const [showComments,   setShowComments]   = useState(false);
+  const [showActions,    setShowActions]    = useState(false);
 
   // Swipe drag state
   const touchStartY  = useRef<number | null>(null);
@@ -318,6 +320,15 @@ export function SignalPlayerPage() {
         >
           {muted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
         </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowActions(true); }}
+          onTouchEnd={(e) => { e.stopPropagation(); setShowActions(true); }}
+          className="w-9 h-9 rounded-full bg-black/30 flex items-center justify-center backdrop-blur-sm active:bg-black/60 transition-colors"
+          aria-label="More options"
+          data-testid="signal-more-options"
+        >
+          <MoreVertical className="w-5 h-5 text-white" />
+        </button>
       </div>
 
       {/* Right-side action buttons */}
@@ -413,6 +424,18 @@ export function SignalPlayerPage() {
         <SignalCommentsOverlay
           signalId={signal.id}
           onClose={() => setShowComments(false)}
+        />
+      )}
+
+      {showActions && (
+        <ContentActionSheet
+          contentType="signal"
+          contentId={signal.id}
+          authorId={signal.authorId}
+          authorUsername={signal.author?.username}
+          shareUrl={`${window.location.origin}/mobile/signals/${signal.id}`}
+          onClose={() => setShowActions(false)}
+          onHide={() => navigate("/mobile/signals")}
         />
       )}
     </div>
