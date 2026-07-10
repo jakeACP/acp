@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { Home, Landmark, Plus, UserCheck, User } from "lucide-react";
+import { Home, Landmark, Building2, Plus, UserCheck, MessageCircle, User } from "lucide-react";
 import { CreatePostModal } from "./CreatePostModal";
 
 interface NavItem {
@@ -11,10 +11,12 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/mobile", icon: Home, label: "Home" },
+  { href: "/mobile", icon: Home, label: "Feed" },
   { href: "/mobile/reps", icon: Landmark, label: "Reps" },
+  { href: "/mobile/lobbies", icon: Building2, label: "Lobbies" },
   { href: "/mobile/create", icon: Plus, label: "Create", isCreate: true },
   { href: "/mobile/friends", icon: UserCheck, label: "Friends" },
+  { href: "/mobile/messages", icon: MessageCircle, label: "Chat" },
   { href: "/mobile/profile", icon: User, label: "Profile" },
 ];
 
@@ -28,13 +30,13 @@ export function MobileBottomNav() {
         <div className="glass-bottom-nav-inner">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location === item.href || 
+            const isActive = location === item.href ||
               (item.href === "/mobile" && location === "/mobile/") ||
               (item.href !== "/mobile" && location.startsWith(item.href));
 
             if (item.isCreate) {
               return (
-                <button 
+                <button
                   key={item.href}
                   className="create-button"
                   data-testid="mobile-nav-create"
@@ -48,12 +50,12 @@ export function MobileBottomNav() {
 
             return (
               <Link key={item.href} href={item.href}>
-                <button 
+                <button
                   className={`nav-button ${isActive ? 'active' : ''}`}
                   data-testid={`mobile-nav-${item.label.toLowerCase()}`}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="text-[10px]">{item.label}</span>
+                  <span className="text-[9px]">{item.label}</span>
                 </button>
               </Link>
             );
@@ -61,9 +63,9 @@ export function MobileBottomNav() {
         </div>
       </nav>
 
-      <CreatePostModal 
-        isOpen={isCreateModalOpen} 
-        onClose={() => setIsCreateModalOpen(false)} 
+      <CreatePostModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
       />
     </>
   );

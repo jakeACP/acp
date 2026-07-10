@@ -11,6 +11,7 @@ import { SignalChoicePage } from "./pages/SignalChoicePage";
 import { SignalPlayerPage } from "./pages/SignalPlayerPage";
 import MobileEventsPage from "./pages/MobileEventsPage";
 import { MobileRepsPage } from "./pages/MobileRepsPage";
+import { MobileLobbiesPage } from "./pages/MobileLobbiesPage";
 import { MobileMessagesPage } from "./pages/MobileMessagesPage";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
@@ -38,6 +39,7 @@ export function MobileApp() {
       <Route path="/mobile/signals/:id" component={SignalPlayerPage} />
       <Route path="/mobile/events" component={MobileEventsPage} />
       <Route path="/mobile/reps" component={MobileRepsPage} />
+      <Route path="/mobile/lobbies" component={MobileLobbiesPage} />
       <Route path="/mobile/messages" component={MobileMessagesPage} />
       <Route path="/mobile/signal-choice" component={SignalChoicePage} />
       <Route path="/mobile/create" component={SignalRecorderPage} />

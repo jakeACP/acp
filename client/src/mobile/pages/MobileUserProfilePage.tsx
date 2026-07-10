@@ -1,7 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import { useScrollLight } from "../hooks/useScrollLight";
-import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -65,7 +64,6 @@ export function MobileUserProfilePage() {
   if (isLoading) {
     return (
       <div className="mobile-root" data-testid="mobile-user-profile-loading">
-        <MobileTopBar title="PROFILE" />
         <div className="px-4 pt-4">
           <div className="glass-card p-6 animate-pulse">
             <div className="flex items-start gap-4">
@@ -85,7 +83,6 @@ export function MobileUserProfilePage() {
   if (!profile) {
     return (
       <div className="mobile-root" data-testid="mobile-user-profile-not-found">
-        <MobileTopBar title="PROFILE" />
         <div className="px-4 pt-4 text-center">
           <div className="glass-card p-6">
             <p className="text-white/70">User not found</p>

@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useScrollLight } from "../hooks/useScrollLight";
-import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { FilterTabs } from "../components/FilterTabs";
 import { ExpandedCardView } from "../components/ExpandedCardView";
@@ -444,7 +443,6 @@ export function MobileFeedPage() {
 
   return (
     <div className="mobile-root" data-testid="mobile-feed-page">
-      <MobileTopBar title="FEED" subtitle="United Against Corruption" />
       
       <FilterTabs 
         activeFilter={activeFilter} 

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useScrollLight } from "../hooks/useScrollLight";
-import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { 
   Users, 
@@ -180,7 +179,6 @@ export function MobileFriendsPage() {
 
   return (
     <div className="mobile-root" data-testid="mobile-friends-page">
-      <MobileTopBar title="COMMUNITY" subtitle="Friends & Groups" />
 
       {/* Main Tab Switcher */}
       <div className="px-4 mb-4">

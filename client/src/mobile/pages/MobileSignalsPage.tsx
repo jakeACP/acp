@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Heart, MessageCircle, Flag } from "lucide-react";
 import { useScrollLight } from "../hooks/useScrollLight";
-import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { SignalCard } from "../components/cards/SignalCard";
 import { FriendSuggestionsWidget } from "../components/FriendSuggestionsWidget";
@@ -311,7 +310,6 @@ export function MobileSignalsPage() {
 
   return (
     <div className="mobile-root" data-testid="mobile-signals-page">
-      <MobileTopBar title="ACP" subtitle="United Against Corruption" />
 
       {/* Tab bar */}
       <div className="filter-tabs">

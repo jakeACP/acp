@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { useScrollLight } from "../hooks/useScrollLight";
-import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { Users, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
@@ -16,7 +15,6 @@ export function MobileGroupsPage() {
 
   return (
     <div className="mobile-root" data-testid="mobile-groups-page">
-      <MobileTopBar title="GROUPS" subtitle="Find Your Community" />
 
       <div className="px-4 pb-8 space-y-3">
         {isLoading ? (

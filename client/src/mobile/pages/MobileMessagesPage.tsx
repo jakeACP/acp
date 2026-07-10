@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -210,7 +209,6 @@ export function MobileMessagesPage() {
 
   return (
     <div className="mobile-root" data-testid="mobile-messages-page">
-      <MobileTopBar title="MESSAGES" subtitle="DMs & Channels" />
 
       <div className="flex-1 overflow-y-auto pb-24">
         {!authLoading && !user ? (
