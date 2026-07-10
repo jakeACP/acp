@@ -6,6 +6,13 @@ import { MobileGroupDetailPage } from "./pages/MobileGroupDetailPage";
 import { MobileProfilePage } from "./pages/MobileProfilePage";
 import { MobileProfileEditPage } from "./pages/MobileProfileEditPage";
 import { MobileSettingsPage } from "./pages/MobileSettingsPage";
+import { MobileSettingsAccountPage } from "./pages/MobileSettingsAccountPage";
+import { MobileSettingsPrivacyPage } from "./pages/MobileSettingsPrivacyPage";
+import { MobileSettingsNotificationsPage } from "./pages/MobileSettingsNotificationsPage";
+import { MobileSettingsSecurityPage } from "./pages/MobileSettingsSecurityPage";
+import { MobileSettingsSubscriptionPage } from "./pages/MobileSettingsSubscriptionPage";
+import { MobileSettingsHelpPage } from "./pages/MobileSettingsHelpPage";
+import { MobileSettingsDeletePage } from "./pages/MobileSettingsDeletePage";
 import { MobileUserProfilePage } from "./pages/MobileUserProfilePage";
 import { MobileFriendsPage } from "./pages/MobileFriendsPage";
 import { SignalRecorderPage } from "./pages/SignalRecorderPage";
@@ -97,9 +104,18 @@ export function MobileApp() {
 
       {/* ── Profile — IMPORTANT: static paths must come before :userId ─ */}
       <Route path="/mobile/profile/edit" component={MobileProfileEditPage} />
-      <Route path="/mobile/settings"     component={MobileSettingsPage} />
       <Route path="/mobile/profile"      component={MobileProfilePage} />
       <Route path="/mobile/profile/:userId" component={MobileUserProfilePage} />
+
+      {/* ── Settings hub + sub-pages ─────────────────────────────────── */}
+      <Route path="/mobile/settings/account"      component={MobileSettingsAccountPage} />
+      <Route path="/mobile/settings/privacy"      component={MobileSettingsPrivacyPage} />
+      <Route path="/mobile/settings/notifications" component={MobileSettingsNotificationsPage} />
+      <Route path="/mobile/settings/security"     component={MobileSettingsSecurityPage} />
+      <Route path="/mobile/settings/subscription" component={MobileSettingsSubscriptionPage} />
+      <Route path="/mobile/settings/help"         component={MobileSettingsHelpPage} />
+      <Route path="/mobile/settings/delete-account" component={MobileSettingsDeletePage} />
+      <Route path="/mobile/settings"              component={MobileSettingsPage} />
 
       {/* ── Legacy / deep-link retained pages ───────────────────────── */}
       <Route path="/mobile/friends"  component={MobileFriendsPage} />

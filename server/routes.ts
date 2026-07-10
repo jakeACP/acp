@@ -7902,6 +7902,232 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // ─── User account management ─────────────────────────────────────────────
+
+  // Delete account (Apple App Store requirement: must offer in-app deletion)
+  app.delete("/api/user", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const { confirmText } = req.body;
+    if (confirmText !== "DELETE MY ACCOUNT") {
+      return res.status(400).json({ message: "Please type DELETE MY ACCOUNT to confirm" });
+    }
+    try {
+      const uid = req.user!.id;
+      const ts = Date.now();
+      await db.execute(sql`
+        UPDATE users SET
+          username = ${"deleted_" + ts},
+          email = ${"deleted_" + ts + "@deleted.acp"},
+          password = ${"x"},
+          first_name = NULL,
+          last_name = NULL,
+          bio = NULL,
+          avatar = NULL,
+          phone_number = NULL,
+          location = NULL,
+          website = NULL,
+          extended_profile_data = NULL,
+          google_id = NULL,
+          two_factor_enabled = FALSE
+        WHERE id = ${uid}
+      `);
+      await new Promise<void>((resolve) => req.logout(() => resolve()));
+      res.json({ message: "Account deleted successfully" });
+    } catch (err: any) {
+      console.error("Delete account error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Blocked users (via friendships table where this user is requester and status=blocked)
+  app.get("/api/user/blocked", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const uid = req.user!.id;
+      const rows = await db.execute(sql`
+        SELECT u.id, u.username, u.first_name, u.last_name, u.avatar
+        FROM friendships f
+        JOIN users u ON (
+          CASE WHEN f.requester_id = ${uid} THEN f.addressee_id ELSE f.requester_id END = u.id
+        )
+        WHERE (f.requester_id = ${uid} OR f.addressee_id = ${uid})
+          AND f.status = 'blocked'
+          AND f.requester_id = ${uid}
+      `);
+      res.json(rows.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Block a user
+  app.post("/api/user/block/:targetId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const uid = req.user!.id;
+    const tid = req.params.targetId;
+    if (uid === tid) return res.status(400).json({ message: "Cannot block yourself" });
+    try {
+      // Upsert: if friendship exists update status, else insert
+      await db.execute(sql`
+        INSERT INTO friendships (id, requester_id, addressee_id, status)
+        VALUES (gen_random_uuid(), ${uid}, ${tid}, 'blocked')
+        ON CONFLICT DO NOTHING
+      `);
+      await db.execute(sql`
+        UPDATE friendships SET status = 'blocked'
+        WHERE requester_id = ${uid} AND addressee_id = ${tid}
+      `);
+      res.json({ message: "User blocked" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Unblock a user
+  app.delete("/api/user/block/:targetId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const uid = req.user!.id;
+    const tid = req.params.targetId;
+    try {
+      await db.execute(sql`
+        DELETE FROM friendships
+        WHERE requester_id = ${uid} AND addressee_id = ${tid} AND status = 'blocked'
+      `);
+      res.json({ message: "User unblocked" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get / update privacy settings (stored in extendedProfileData)
+  app.get("/api/user/privacy-settings", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const user = await storage.getUser(req.user!.id);
+      const ext = (user?.extendedProfileData as any) ?? {};
+      res.json(ext.privacySettings ?? {
+        profileVisibility: "public",
+        postVisibility: "public",
+        whoCanMessage: "everyone",
+        whoCanFriendRequest: "everyone",
+        showActivityStatus: true,
+        showFollowersCount: true,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/user/privacy-settings", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const user = await storage.getUser(req.user!.id);
+      const ext = (user?.extendedProfileData as any) ?? {};
+      const updated = { ...ext, privacySettings: { ...(ext.privacySettings ?? {}), ...req.body } };
+      await storage.updateUser(req.user!.id, { extendedProfileData: updated } as any);
+      res.json(updated.privacySettings);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Notification preferences
+  app.get("/api/user/notification-prefs", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const user = await storage.getUser(req.user!.id);
+      const ext = (user?.extendedProfileData as any) ?? {};
+      res.json(ext.notificationPrefs ?? {
+        newFollower: true, newComment: true, newLike: true,
+        newMessage: true, pollResults: true, eventReminder: true,
+        petitionUpdate: true, weeklyDigest: true, systemAlerts: true,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/user/notification-prefs", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const user = await storage.getUser(req.user!.id);
+      const ext = (user?.extendedProfileData as any) ?? {};
+      const updated = { ...ext, notificationPrefs: { ...(ext.notificationPrefs ?? {}), ...req.body } };
+      await storage.updateUser(req.user!.id, { extendedProfileData: updated } as any);
+      res.json(updated.notificationPrefs);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Muted users (stored in extendedProfileData.mutedUsers)
+  app.get("/api/user/muted", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const user = await storage.getUser(req.user!.id);
+      const ext = (user?.extendedProfileData as any) ?? {};
+      const mutedIds: string[] = ext.mutedUsers ?? [];
+      if (mutedIds.length === 0) return res.json([]);
+      const rows = await db.execute(sql`
+        SELECT id, username, first_name, last_name, avatar
+        FROM users WHERE id = ANY(${mutedIds})
+      `);
+      res.json(rows.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/user/mute/:targetId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const user = await storage.getUser(req.user!.id);
+      const ext = (user?.extendedProfileData as any) ?? {};
+      const mutedUsers: string[] = ext.mutedUsers ?? [];
+      if (!mutedUsers.includes(req.params.targetId)) {
+        mutedUsers.push(req.params.targetId);
+      }
+      await storage.updateUser(req.user!.id, { extendedProfileData: { ...ext, mutedUsers } } as any);
+      res.json({ message: "User muted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/user/mute/:targetId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const user = await storage.getUser(req.user!.id);
+      const ext = (user?.extendedProfileData as any) ?? {};
+      const mutedUsers = (ext.mutedUsers ?? []).filter((id: string) => id !== req.params.targetId);
+      await storage.updateUser(req.user!.id, { extendedProfileData: { ...ext, mutedUsers } } as any);
+      res.json({ message: "User unmuted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Activity log — last 20 actions across posts, comments, votes, group joins
+  app.get("/api/user/activity-log", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const uid = req.user!.id;
+      const [postsRows, commentsRows, votesRows] = await Promise.all([
+        db.execute(sql`SELECT id, 'post' as type, content as detail, created_at FROM posts WHERE author_id = ${uid} ORDER BY created_at DESC LIMIT 10`),
+        db.execute(sql`SELECT id, 'comment' as type, content as detail, created_at FROM comments WHERE author_id = ${uid} ORDER BY created_at DESC LIMIT 10`),
+        db.execute(sql`SELECT id, 'vote' as type, 'Voted on a poll' as detail, created_at FROM poll_votes WHERE user_id = ${uid} ORDER BY created_at DESC LIMIT 10`),
+      ]);
+      const all = [
+        ...postsRows.rows.map(r => ({ ...r, type: 'post' })),
+        ...commentsRows.rows.map(r => ({ ...r, type: 'comment' })),
+        ...votesRows.rows.map(r => ({ ...r, type: 'vote' })),
+      ].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20);
+      res.json(all);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Admin Analytics APIs
   app.get("/api/admin/analytics", ensureAdmin, async (req, res) => {
     try {
