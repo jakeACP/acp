@@ -2731,7 +2731,6 @@ export class DatabaseStorage implements IStorage {
         parentId: comments.parentId,
         likesCount: comments.likesCount,
         createdAt: comments.createdAt,
-        updatedAt: comments.updatedAt,
       })
       .from(comments)
       .leftJoin(users, eq(comments.authorId, users.id))
