@@ -141,6 +141,59 @@
   margin-bottom: 8px;
 }
 
+/* ─── TikTok-style full-screen signal feed ─────────────────────────────── */
+
+/*
+ * The feed sits in a fixed full-screen layer (below the bottom nav z-index).
+ * Each slide is exactly 100dvh so one signal fills the viewport.
+ * scroll-snap-type: y mandatory gives the native swipe feel.
+ */
+.signal-feed-container {
+  position: fixed;
+  inset: 0;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  scroll-snap-type: y mandatory;
+  /* Smooth momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  z-index: 40; /* below bottom nav (z-100) but above page bg */
+  background: #000;
+}
+
+.signal-feed-container::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * Each slide: exactly one viewport tall, snaps to the top of its own origin.
+ * position: relative so child absolute overlays work correctly.
+ * overflow: hidden clips the video to the slide bounds.
+ */
+.signal-feed-slide {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;          /* modern browsers respect dynamic viewport */
+  scroll-snap-align: start;
+  scroll-snap-stop: always; /* force one-at-a-time snapping */
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/*
+ * The item itself fills its slide parent.
+ */
+.signal-feed-item {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* ─── End signal feed ───────────────────────────────────────────────────── */
+
 /* Glass Bottom Navigation - Enhanced blur and transparency */
 .glass-bottom-nav {
   position: fixed;
