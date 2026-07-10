@@ -89,12 +89,104 @@ const csvUpload = multer({
   },
 });
 
-// Multer for Signal video uploads (disk storage, up to 500MB)
+// ── Signal video helpers (module-level) ──────────────────────────────────────
+
+/** Per-user upload rate limit: max 10 signal uploads per user per hour */
+const signalUploadRateMap = new Map<string, { count: number; resetAt: number }>();
+function checkSignalUploadRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const HOUR_MS = 60 * 60 * 1000;
+  const entry = signalUploadRateMap.get(userId);
+  if (!entry || now >= entry.resetAt) {
+    signalUploadRateMap.set(userId, { count: 1, resetAt: now + HOUR_MS });
+    return true;
+  }
+  if (entry.count >= 10) return false; // rate limited
+  entry.count++;
+  return true;
+}
+
+/**
+ * Classifies a pasted video URL for Signal creation.
+ * Only YouTube, TikTok, and direct video file URLs (.mp4/.webm/.m3u8) are supported.
+ * Arbitrary page URLs that cannot be used as direct <video> sources are rejected.
+ */
+function classifySignalVideoUrl(url: string): { type: 'youtube' | 'tiktok' | 'direct' | 'invalid'; canonicalUrl: string } {
+  if (!url?.trim()) return { type: 'invalid', canonicalUrl: '' };
+  const trimmed = url.trim();
+
+  // YouTube — extract video ID and build canonical URL
+  const ytId = extractYouTubeVideoId(trimmed);
+  if (ytId) return { type: 'youtube', canonicalUrl: `https://www.youtube.com/watch?v=${ytId}` };
+
+  // TikTok full or short link
+  if (/tiktok\.com\/@[\w.-]+\/video\/\d+/.test(trimmed) || /vm\.tiktok\.com\/[a-zA-Z0-9]+/.test(trimmed)) {
+    return { type: 'tiktok', canonicalUrl: trimmed };
+  }
+
+  // Direct video file URL
+  if (/\.(mp4|webm|m3u8)(\?[^#]*)?$/i.test(trimmed)) {
+    return { type: 'direct', canonicalUrl: trimmed };
+  }
+
+  // Everything else (including raw YouTube/TikTok page URLs without a recognised pattern)
+  return { type: 'invalid', canonicalUrl: trimmed };
+}
+
+/**
+ * Re-encodes any video file to an iOS-compatible H.264/AAC MP4 with faststart.
+ * This ensures reliable playback on Safari / iOS WKWebView.
+ * Deletes the original on success. Returns the output path.
+ * On transcode failure, returns the original path as a fallback.
+ */
+async function ensureIosCompatibleMp4(inputPath: string): Promise<string> {
+  const outputPath = path.join(path.dirname(inputPath), randomUUID() + '_ios.mp4');
+  try {
+    await execAsync(
+      `"${FFMPEG_BIN}" -y -i "${inputPath}" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p ` +
+      `-c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "${outputPath}"`,
+      { maxBuffer: 100 * 1024 * 1024 },
+    );
+    try { fs.unlinkSync(inputPath); } catch {}
+    return outputPath;
+  } catch (err) {
+    console.error('[signal-transcode] Transcode failed, using original:', (err as any)?.message);
+    try { fs.unlinkSync(outputPath); } catch {}
+    return inputPath;
+  }
+}
+
+/**
+ * Extracts the first frame of a video as a portrait-scaled JPEG thumbnail.
+ * Returns the absolute path of the thumbnail, or undefined on failure.
+ */
+async function extractSignalThumbnail(videoPath: string, destDir: string): Promise<string | undefined> {
+  const thumbPath = path.join(destDir, randomUUID() + '_thumb.jpg');
+  try {
+    await execAsync(
+      `"${FFMPEG_BIN}" -y -i "${videoPath}" -ss 0.1 -vframes 1 ` +
+      `-vf "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2" ` +
+      `-q:v 3 "${thumbPath}"`,
+      { maxBuffer: 10 * 1024 * 1024 },
+    );
+    return thumbPath;
+  } catch {
+    return undefined;
+  }
+}
+
+// ── Multer for Signal video uploads (disk storage, up to 500MB) ───────────────
 const signalsUploadDir = path.resolve(process.cwd(), 'uploads/signals');
 if (!fs.existsSync(signalsUploadDir)) fs.mkdirSync(signalsUploadDir, { recursive: true });
 const signalVideoStorage = multer.diskStorage({
   destination: signalsUploadDir,
-  filename: (_req, _file, cb) => cb(null, `${randomUUID()}.webm`),
+  filename: (_req, file, cb) => {
+    // Preserve the correct container format so iOS can decode without re-sniffing
+    const ext = file.mimetype === 'video/mp4' ? '.mp4'
+              : file.mimetype === 'video/quicktime' ? '.mov'
+              : '.webm';
+    cb(null, `${randomUUID()}${ext}`);
+  },
 });
 const signalUpload = multer({
   storage: signalVideoStorage,
@@ -8906,6 +8998,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     const files = (req as any).files as Express.Multer.File[] | undefined;
     if (!files || files.length === 0) return res.status(400).json({ message: 'No clips uploaded' });
 
+    // Rate limit: 10 signal uploads per user per hour
+    if (!checkSignalUploadRateLimit(req.user!.id)) {
+      for (const f of files) fs.unlink(f.path, () => {});
+      return res.status(429).json({ message: 'Upload limit reached. You can upload up to 10 Signals per hour.' });
+    }
+
     const clipFiles = files
       .filter(f => /^clip_\d+$/.test(f.fieldname))
       .sort((a, b) => {
@@ -8936,6 +9034,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         concatListPath = null;
       }
 
+      // Transcode to iOS-compatible H.264/AAC MP4 with faststart (WebM/MOV → .mp4)
+      outputPath = await ensureIosCompatibleMp4(outputPath);
+
+      // Extract thumbnail from first frame
+      let thumbnailUrl: string | undefined;
+      const thumbPath = await extractSignalThumbnail(outputPath, signalsUploadDir);
+      if (thumbPath) thumbnailUrl = `/uploads/signals/${path.basename(thumbPath)}`;
+
       const videoUrl = `/uploads/signals/${path.basename(outputPath)}`;
 
       let overlays: any = null;
@@ -8951,7 +9057,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         title: req.body.title || '',
         description: '',
         videoUrl,
-        thumbnailUrl: undefined,
+        thumbnailUrl,
         duration: stitchDuration,
         maxDuration: req.user!.subscriptionStatus === 'premium' ? 600 : 180,
         filter: req.body.filter || 'none',
@@ -8982,10 +9088,42 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     });
   }, async (req, res) => {
     try {
-      let videoUrl = req.body.videoUrl || '';
+      // ── Rate limit check ─────────────────────────────────────────────────────
+      if (!checkSignalUploadRateLimit(req.user!.id)) {
+        if ((req as any).file) fs.unlink((req as any).file.path, () => {});
+        return res.status(429).json({ message: 'Upload limit reached. You can upload up to 10 Signals per hour.' });
+      }
+
+      // ── Resolve video URL ─────────────────────────────────────────────────────
+      let videoUrl = '';
+      let thumbnailUrl: string | undefined = req.body.thumbnailUrl;
+      let videoType: 'upload' | 'youtube' | 'tiktok' | 'direct' = 'upload';
+
       if ((req as any).file) {
-        const filename = (req as any).file.filename;
-        videoUrl = `/uploads/signals/${filename}`;
+        // File upload — transcode to iOS-compatible H.264/AAC MP4
+        let filePath: string = (req as any).file.path;
+        filePath = await ensureIosCompatibleMp4(filePath);
+        videoUrl = `/uploads/signals/${path.basename(filePath)}`;
+
+        // Generate thumbnail from first frame
+        if (!thumbnailUrl) {
+          const thumbPath = await extractSignalThumbnail(filePath, signalsUploadDir);
+          if (thumbPath) thumbnailUrl = `/uploads/signals/${path.basename(thumbPath)}`;
+        }
+        videoType = 'upload';
+      } else if (req.body.videoUrl) {
+        // Pasted URL — validate and classify
+        const classified = classifySignalVideoUrl(req.body.videoUrl);
+        if (classified.type === 'invalid') {
+          return res.status(400).json({
+            message:
+              'Unsupported video URL. Please paste a YouTube link, TikTok link, or direct .mp4/.webm video URL.',
+          });
+        }
+        videoUrl = classified.canonicalUrl;
+        videoType = classified.type as 'youtube' | 'tiktok' | 'direct';
+      } else {
+        return res.status(400).json({ message: 'No video file or URL provided.' });
       }
 
       let overlays: any = null;
@@ -9002,7 +9140,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
       let uploadDuration = parseInt(req.body.duration) || 0;
       if (uploadDuration <= 0 && (req as any).file) {
-        uploadDuration = await getVideoDuration((req as any).file.path);
+        const resolvedPath = path.join(signalsUploadDir, path.basename(videoUrl));
+        uploadDuration = await getVideoDuration(resolvedPath);
       }
 
       const signalData = {
@@ -9010,7 +9149,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         title: req.body.title || '',
         description: req.body.description || '',
         videoUrl,
-        thumbnailUrl: req.body.thumbnailUrl,
+        thumbnailUrl,
         duration: uploadDuration,
         maxDuration: req.user!.subscriptionStatus === 'premium' ? 600 : 180,
         filter: req.body.filter || 'none',
@@ -9020,8 +9159,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       };
 
       const signal = await storage.createSignal(signalData);
-      res.status(201).json(signal);
+      res.status(201).json({ ...signal, videoType });
     } catch (error: any) {
+      if ((req as any).file) fs.unlink((req as any).file.path, () => {});
       console.error("Create signal error:", error);
       res.status(400).json({ message: error.message });
     }

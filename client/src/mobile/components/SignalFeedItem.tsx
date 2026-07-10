@@ -1,12 +1,13 @@
 /**
  * SignalFeedItem — one full-screen snap slide in the TikTok-style feed.
- * Uses IntersectionObserver to autoplay when ≥70% visible, pause otherwise.
+ * Renders self-hosted MP4 uploads as <video>, YouTube/TikTok as <iframe> embeds,
+ * and shows a clear error card when the video cannot play.
  */
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Heart, MessageCircle, Share2, Bookmark, Flag,
-  Play, Volume2, VolumeX, LayoutGrid,
+  Play, Volume2, VolumeX, LayoutGrid, AlertTriangle, ExternalLink, Youtube,
 } from "lucide-react";
 import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -14,12 +15,11 @@ import { useToast } from "@/hooks/use-toast";
 import { ShareSheet } from "@/components/share-sheet";
 import { SignalCommentsOverlay } from "./SignalCommentsOverlay";
 import type { SignalWithAuthor } from "@shared/schema";
+import { classifySignalUrl } from "@/mobile/lib/signal-video-utils";
 
 interface SignalFeedItemProps {
   signal: SignalWithAuthor;
-  /** Whether this item is currently snapped into view (drives play/pause) */
   isActive: boolean;
-  /** Global mute state shared across items */
   muted: boolean;
   onMuteToggle: () => void;
   onGridClick: () => void;
@@ -41,38 +41,39 @@ export function SignalFeedItem({
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const [playing,        setPlaying]        = useState(false);
-  const [progress,       setProgress]       = useState(0);
-  const [liked,          setLiked]          = useState(false);
-  const [saved,          setSaved]          = useState(false);
-  const [likeCount,      setLikeCount]      = useState(signal.likesCount ?? 0);
-  const [showComments,   setShowComments]   = useState(false);
-  const [captionExpanded,setCaptionExpanded] = useState(false);
-  const [flagged,        setFlagged]        = useState(false);
+  const videoInfo = classifySignalUrl(signal.videoUrl);
+
+  const [playing,         setPlaying]         = useState(false);
+  const [progress,        setProgress]        = useState(0);
+  const [liked,           setLiked]           = useState(false);
+  const [saved,           setSaved]           = useState(false);
+  const [likeCount,       setLikeCount]       = useState(signal.likesCount ?? 0);
+  const [showComments,    setShowComments]    = useState(false);
+  const [captionExpanded, setCaptionExpanded] = useState(false);
+  const [flagged,         setFlagged]         = useState(false);
+  const [videoError,      setVideoError]      = useState(false);
   const viewRecorded = useRef(false);
 
-  // Sync mute state
+  // Sync mute state to <video>
   useEffect(() => {
     const v = videoRef.current;
     if (v) v.muted = muted;
   }, [muted]);
 
-  // Autoplay / pause based on active state
+  // Autoplay / pause based on active state (only for self-hosted uploads)
   useEffect(() => {
+    if (videoInfo.type !== 'upload') return;
     const v = videoRef.current;
     if (!v) return;
     if (isActive) {
       v.muted = muted;
       v.play().then(() => setPlaying(true)).catch(() => {});
-      // Record view
       if (!viewRecorded.current) {
         viewRecorded.current = true;
         fetchCsrfToken()
           .then((token) =>
             fetch(`/api/mobile/signals/${signal.id}/view`, {
-              method: "POST",
-              credentials: "include",
-              headers: { "x-csrf-token": token },
+              method: "POST", credentials: "include", headers: { "x-csrf-token": token },
             })
           )
           .catch(() => {});
@@ -83,7 +84,7 @@ export function SignalFeedItem({
       setPlaying(false);
       setProgress(0);
     }
-  }, [isActive, muted, signal.id]);
+  }, [isActive, muted, signal.id, videoInfo.type]);
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -124,16 +125,14 @@ export function SignalFeedItem({
       setLiked((p) => !p);
       setLikeCount((p) => (liked ? p + 1 : p - 1));
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["/api/mobile/signals"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/mobile/signals"] }),
   });
 
   const flagMutation = useMutation({
     mutationFn: async () => {
       const token = await fetchCsrfToken();
       const res = await fetch("/api/flags", {
-        method: "POST",
-        credentials: "include",
+        method: "POST", credentials: "include",
         headers: { "x-csrf-token": token, "Content-Type": "application/json" },
         body: JSON.stringify({ targetId: signal.id, targetType: "signal", reason: "inappropriate_content" }),
       });
@@ -145,132 +144,191 @@ export function SignalFeedItem({
     },
   });
 
-  // ── Caption text ──────────────────────────────────────────────────────────
-  const caption = signal.title ?? "";
-  const description = (signal as any).description ?? "";
+  const caption      = signal.title ?? "";
+  const description  = (signal as any).description ?? "";
   const tags: string[] = signal.tags ?? [];
-  const hasCaptionOverflow = description.length > 80 || tags.length > 3;
-
-  // ── Author ────────────────────────────────────────────────────────────────
-  const authorName = signal.author?.username ?? "anonymous";
+  const authorName   = signal.author?.username ?? "anonymous";
   const authorAvatar = signal.author?.avatar;
   const authorInitial = authorName[0]?.toUpperCase() ?? "?";
+  const bottomOffset  = "calc(56px + env(safe-area-inset-bottom, 0px))";
 
-  // Bottom offset: clear the bottom nav + safe area
-  const bottomOffset = "calc(56px + env(safe-area-inset-bottom, 0px))";
+  // ── Video layer ────────────────────────────────────────────────────────────
+  const renderVideoLayer = () => {
+    // Error fallback
+    if (videoError) {
+      return (
+        <div className="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center gap-3 px-6">
+          <AlertTriangle className="w-10 h-10 text-yellow-400" />
+          <p className="text-white/80 text-sm font-medium text-center">
+            This video could not be played.
+          </p>
+          {signal.videoUrl && (
+            <a
+              href={signal.videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-blue-400 text-sm underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open original link
+            </a>
+          )}
+        </div>
+      );
+    }
 
-  return (
-    <div
-      className="signal-feed-item"
-      data-signal-id={signal.id}
-    >
-      {/* ── Video layer ─────────────────────────────────────────────────────── */}
-      <div
-        className="absolute inset-0 bg-black"
-        onClick={togglePlay}
-      >
-        {signal.videoUrl ? (
-          <video
-            ref={videoRef}
-            src={signal.videoUrl}
-            className="w-full h-full object-cover"
-            loop
-            playsInline
-            muted={muted}
-            onTimeUpdate={handleTimeUpdate}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onLoadedData={() => {
-              if (isActive && videoRef.current) {
-                videoRef.current.muted = muted;
-                videoRef.current.play().then(() => setPlaying(true)).catch(() => {});
-              }
-            }}
-          />
-        ) : (
-          /* Thumbnail-only fallback */
-          <div
-            className="w-full h-full bg-gradient-to-br from-blue-900 via-navy to-red-900"
-            style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
-            {signal.thumbnailUrl && (
-              <img
-                src={signal.thumbnailUrl}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            )}
-          </div>
-        )}
+    // YouTube embed
+    if (videoInfo.type === 'youtube' && videoInfo.embedUrl) {
+      return (
+        <div className="absolute inset-0 bg-black">
+          {!isActive ? (
+            // While not in view: show YouTube thumbnail + play overlay
+            <div className="absolute inset-0">
+              {videoInfo.youtubeThumbnailUrl && (
+                <img
+                  src={videoInfo.youtubeThumbnailUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  onError={() => {/* thumbnail 404 is fine */}}
+                />
+              )}
+              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-lg">
+                  <Youtube className="w-9 h-9 text-white" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            // When active: render the YouTube iframe embed
+            <iframe
+              src={videoInfo.embedUrl}
+              className="w-full h-full border-0"
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+              title={signal.title ?? "Signal"}
+            />
+          )}
+        </div>
+      );
+    }
 
+    // TikTok embed
+    if (videoInfo.type === 'tiktok') {
+      const thumbnail = signal.thumbnailUrl;
+      return (
+        <div className="absolute inset-0 bg-black">
+          {!isActive || !videoInfo.embedUrl ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              {thumbnail ? (
+                <img src={thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-[#010101] to-[#1a1a1a]" />
+              )}
+              <div className="relative z-10 flex flex-col items-center gap-3">
+                <div className="w-16 h-16 rounded-full bg-black/70 flex items-center justify-center">
+                  <span className="text-white text-3xl">🎵</span>
+                </div>
+                <span className="text-white/70 text-sm">TikTok Video</span>
+                {signal.videoUrl && (
+                  <a
+                    href={signal.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-white/80 text-xs underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open in TikTok
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <iframe
+              src={videoInfo.embedUrl}
+              className="w-full h-full border-0"
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+              title={signal.title ?? "Signal"}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // Self-hosted upload (or unknown URL — attempt to play)
+    const thumbnail = signal.thumbnailUrl;
+    return (
+      <div className="absolute inset-0 bg-black" onClick={togglePlay}>
+        <video
+          ref={videoRef}
+          src={signal.videoUrl ?? undefined}
+          className="w-full h-full object-cover"
+          loop
+          playsInline
+          muted={muted}
+          onTimeUpdate={handleTimeUpdate}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onLoadedData={() => {
+            if (isActive && videoRef.current) {
+              videoRef.current.muted = muted;
+              videoRef.current.play().then(() => setPlaying(true)).catch(() => {});
+            }
+          }}
+          onError={() => setVideoError(true)}
+        />
         {/* Thumbnail overlay while paused */}
-        {!playing && signal.thumbnailUrl && (
+        {!playing && thumbnail && (
           <img
-            src={signal.thumbnailUrl}
+            src={thumbnail}
             alt=""
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />
         )}
       </div>
+    );
+  };
 
-      {/* ── Full-screen gradient overlays ───────────────────────────────────── */}
-      {/* Top gradient */}
+  const isNativeVideo = videoInfo.type === 'upload' || videoInfo.type === 'unknown';
+
+  return (
+    <div className="signal-feed-item" data-signal-id={signal.id}>
+      {renderVideoLayer()}
+
+      {/* Gradient overlays */}
       <div
         className="absolute inset-x-0 top-0 pointer-events-none"
-        style={{
-          height: "30%",
-          background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)",
-        }}
+        style={{ height: "30%", background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)" }}
       />
-      {/* Bottom gradient */}
       <div
         className="absolute inset-x-0 bottom-0 pointer-events-none"
-        style={{
-          height: "55%",
-          background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)",
-        }}
+        style={{ height: "55%", background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)" }}
       />
 
-      {/* ── Centre play icon ─────────────────────────────────────────────────── */}
-      {!playing && (
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 5 }}
-        >
-          <div
-            className="w-16 h-16 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
-          >
+      {/* Centre play icon — only for native video, not iframes */}
+      {isNativeVideo && !playing && !videoError && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}>
             <Play className="w-8 h-8 text-white ml-1" fill="white" />
           </div>
         </div>
       )}
 
-      {/* ── Top bar ──────────────────────────────────────────────────────────── */}
+      {/* Top bar */}
       <div
         className="absolute inset-x-0 top-0 flex items-center gap-2 px-4"
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top, 12px) + 10px)",
-          zIndex: 10,
-        }}
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 12px) + 10px)", zIndex: 10 }}
       >
-        {/* ACP badge */}
         <div
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full"
           style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)" }}
         >
-          <span
-            className="text-[10px] font-bold tracking-wider"
-            style={{ color: "#E6393A" }}
-          >
-            ACP
-          </span>
+          <span className="text-[10px] font-bold tracking-wider" style={{ color: "#E6393A" }}>ACP</span>
           <span className="text-white/60 text-[10px]">Signals</span>
         </div>
-
         <div className="flex-1" />
-
-        {/* Grid / Discover toggle */}
         <button
           onClick={(e) => { e.stopPropagation(); onGridClick(); }}
           className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -279,31 +337,25 @@ export function SignalFeedItem({
         >
           <LayoutGrid className="w-4 h-4 text-white" />
         </button>
-
-        {/* Mute toggle */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onMuteToggle(); }}
-          className="w-9 h-9 rounded-full flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)" }}
-          aria-label={muted ? "Unmute" : "Mute"}
-        >
-          {muted
-            ? <VolumeX className="w-4.5 h-4.5 text-white" />
-            : <Volume2 className="w-4.5 h-4.5 text-white" />
-          }
-        </button>
+        {/* Mute — only meaningful for native video */}
+        {isNativeVideo && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onMuteToggle(); }}
+            className="w-9 h-9 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)" }}
+            aria-label={muted ? "Unmute" : "Mute"}
+          >
+            {muted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
+          </button>
+        )}
       </div>
 
-      {/* ── Right-side action rail ────────────────────────────────────────────── */}
+      {/* Right-side action rail */}
       <div
         className="absolute right-3 flex flex-col items-center gap-5"
-        style={{
-          bottom: `calc(${bottomOffset} + 16px)`,
-          zIndex: 10,
-        }}
+        style={{ bottom: `calc(${bottomOffset} + 16px)`, zIndex: 10 }}
         onTouchStart={(e) => e.stopPropagation()}
       >
-        {/* Like */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -315,23 +367,13 @@ export function SignalFeedItem({
         >
           <div
             className="w-11 h-11 rounded-full flex items-center justify-center"
-            style={{
-              background: liked ? "rgba(230,57,58,0.75)" : "rgba(0,0,0,0.45)",
-              backdropFilter: "blur(8px)",
-            }}
+            style={{ background: liked ? "rgba(230,57,58,0.75)" : "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
           >
-            <Heart
-              className="w-6 h-6"
-              style={{ color: liked ? "#fff" : "#fff" }}
-              fill={liked ? "#fff" : "none"}
-            />
+            <Heart className="w-6 h-6" style={{ color: "#fff" }} fill={liked ? "#fff" : "none"} />
           </div>
-          <span className="text-white text-[11px] font-semibold drop-shadow-lg">
-            {fmt(likeCount)}
-          </span>
+          <span className="text-white text-[11px] font-semibold drop-shadow-lg">{fmt(likeCount)}</span>
         </button>
 
-        {/* Comment */}
         <button
           onClick={(e) => { e.stopPropagation(); setShowComments(true); }}
           className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
@@ -343,12 +385,9 @@ export function SignalFeedItem({
           >
             <MessageCircle className="w-6 h-6 text-white" />
           </div>
-          <span className="text-white text-[11px] font-semibold drop-shadow-lg">
-            {fmt(signal.commentsCount ?? 0)}
-          </span>
+          <span className="text-white text-[11px] font-semibold drop-shadow-lg">{fmt(signal.commentsCount ?? 0)}</span>
         </button>
 
-        {/* Share */}
         <ShareSheet
           title={signal.title ?? "Signal"}
           url={`${window.location.origin}/signals/${signal.id}`}
@@ -364,14 +403,11 @@ export function SignalFeedItem({
               >
                 <Share2 className="w-6 h-6 text-white" />
               </div>
-              <span className="text-white text-[11px] font-semibold drop-shadow-lg">
-                {fmt((signal as any).sharesCount ?? 0)}
-              </span>
+              <span className="text-white text-[11px] font-semibold drop-shadow-lg">{fmt((signal as any).sharesCount ?? 0)}</span>
             </button>
           )}
         />
 
-        {/* Save / Bookmark */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -384,19 +420,12 @@ export function SignalFeedItem({
         >
           <div
             className="w-11 h-11 rounded-full flex items-center justify-center"
-            style={{
-              background: saved ? "rgba(59,91,169,0.75)" : "rgba(0,0,0,0.45)",
-              backdropFilter: "blur(8px)",
-            }}
+            style={{ background: saved ? "rgba(59,91,169,0.75)" : "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
           >
-            <Bookmark
-              className="w-6 h-6 text-white"
-              fill={saved ? "#fff" : "none"}
-            />
+            <Bookmark className="w-6 h-6 text-white" fill={saved ? "#fff" : "none"} />
           </div>
         </button>
 
-        {/* Report */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -409,32 +438,19 @@ export function SignalFeedItem({
         >
           <div
             className="w-11 h-11 rounded-full flex items-center justify-center"
-            style={{
-              background: flagged ? "rgba(251,146,60,0.7)" : "rgba(0,0,0,0.45)",
-              backdropFilter: "blur(8px)",
-            }}
+            style={{ background: flagged ? "rgba(251,146,60,0.7)" : "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
           >
-            <Flag
-              className="w-5 h-5"
-              style={{ color: flagged ? "#fff" : "rgba(255,255,255,0.7)" }}
-              fill={flagged ? "#fff" : "none"}
-            />
+            <Flag className="w-5 h-5" style={{ color: flagged ? "#fff" : "rgba(255,255,255,0.7)" }} fill={flagged ? "#fff" : "none"} />
           </div>
         </button>
       </div>
 
-      {/* ── Bottom creator + caption area ──────────────────────────────────────── */}
+      {/* Bottom creator + caption */}
       <div
         className="absolute inset-x-0 flex flex-col"
-        style={{
-          bottom: `calc(${bottomOffset} + 8px)`,
-          paddingLeft: 14,
-          paddingRight: 72, // clear action rail
-          zIndex: 10,
-        }}
+        style={{ bottom: `calc(${bottomOffset} + 8px)`, paddingLeft: 14, paddingRight: 72, zIndex: 10 }}
         onTouchStart={(e) => e.stopPropagation()}
       >
-        {/* Creator row */}
         <div className="flex items-center gap-2 mb-2">
           <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 border-2 border-white/40">
             {authorAvatar ? (
@@ -448,19 +464,13 @@ export function SignalFeedItem({
               </div>
             )}
           </div>
-          <span className="text-white font-semibold text-sm drop-shadow-lg">
-            @{authorName}
-          </span>
+          <span className="text-white font-semibold text-sm drop-shadow-lg">@{authorName}</span>
         </div>
 
-        {/* Title / caption */}
         {caption && (
-          <p className="text-white font-bold text-[15px] leading-snug mb-1 drop-shadow-lg">
-            {caption}
-          </p>
+          <p className="text-white font-bold text-[15px] leading-snug mb-1 drop-shadow-lg">{caption}</p>
         )}
 
-        {/* Description / captions */}
         {description && (
           <p
             className="text-white/85 text-xs leading-relaxed mb-1.5 drop-shadow"
@@ -483,40 +493,32 @@ export function SignalFeedItem({
           </button>
         )}
 
-        {/* Tags */}
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {tags.slice(0, captionExpanded ? undefined : 3).map((tag) => (
-              <span key={tag} className="text-white/75 text-xs drop-shadow">
-                #{tag}
-              </span>
+              <span key={tag} className="text-white/75 text-xs drop-shadow">#{tag}</span>
             ))}
           </div>
         )}
 
-        {/* Progress bar */}
-        <div
-          className="w-full h-[3px] rounded-full cursor-pointer mt-1"
-          style={{ background: "rgba(255,255,255,0.25)" }}
-          onClick={(e) => { e.stopPropagation(); handleSeek(e); }}
-          onTouchStart={(e) => e.stopPropagation()}
-        >
+        {/* Progress bar — only for native video */}
+        {isNativeVideo && !videoError && (
           <div
-            className="h-full rounded-full"
-            style={{
-              width: `${progress * 100}%`,
-              background: "linear-gradient(to right, #E6393A, #fff)",
-            }}
-          />
-        </div>
+            className="w-full h-[3px] rounded-full cursor-pointer mt-1"
+            style={{ background: "rgba(255,255,255,0.25)" }}
+            onClick={(e) => { e.stopPropagation(); handleSeek(e); }}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${progress * 100}%`, background: "linear-gradient(to right, #E6393A, #fff)" }}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Comments overlay */}
       {showComments && (
-        <SignalCommentsOverlay
-          signalId={signal.id}
-          onClose={() => setShowComments(false)}
-        />
+        <SignalCommentsOverlay signalId={signal.id} onClose={() => setShowComments(false)} />
       )}
     </div>
   );

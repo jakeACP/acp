@@ -3,3 +3,4 @@
 - [Mobile overlay z-index](mobile-overlay-zindex.md) — fixed bottom nav is z-index:100; any full-screen mobile overlay/sheet must exceed it or it covers the input
 - [Apple IAP Vite dynamic import](apple-iap-vite-import.md) — @vite-ignore alone doesn't stop pre-transform; must use string concatenation to prevent static resolution
 - [Apple IAP CSRF bypass](apple-iap-csrf.md) — Apple S2S webhook needs CSRF bypass in server/auth.ts; pattern is `req.path === "/api/subscriptions/apple/notify"`
+- [Signal video architecture](signal-video-arch.md) — YouTube/TikTok signals stored as canonical URLs, rendered as iframes; uploads transcoded to H.264/AAC MP4; classify with classifySignalUrl() from signal-video-utils.ts

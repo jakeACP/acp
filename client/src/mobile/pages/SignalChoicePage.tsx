@@ -1,11 +1,12 @@
 import { useLocation } from "wouter";
-import { Camera, Link as LinkIcon, Upload, X } from "lucide-react";
+import { Camera, Link as LinkIcon, Upload, X, CheckCircle2, AlertCircle, Youtube } from "lucide-react";
 import { useRef, useState } from "react";
 import { clearSession, saveClip } from "@/mobile/lib/clipSession";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { validatePastedSignalUrl } from "@/mobile/lib/signal-video-utils";
 
 const DURATION_OPTIONS = [
   { label: '15s', value: 15 },
@@ -51,6 +52,9 @@ export function SignalChoicePage() {
   const isPremium = user?.subscriptionStatus === 'premium';
   const durationOptions = isPremium ? DURATION_OPTIONS_PAID : DURATION_OPTIONS;
 
+  // Live URL validation result
+  const urlValidation = videoUrl.trim() ? validatePastedSignalUrl(videoUrl) : null;
+
   const handleRecordVideo = async () => {
     await clearSession();
     setLocation(`/mobile/signals/record?duration=${duration}`);
@@ -81,13 +85,20 @@ export function SignalChoicePage() {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
+      const validation = validatePastedSignalUrl(videoUrl);
+      if (!validation.valid) throw new Error(validation.error ?? 'Invalid URL');
+
+      const token = await fetchCsrfToken();
       const res = await fetch('/api/mobile/signals', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': token },
         credentials: 'include',
-        body: JSON.stringify({ videoUrl, title }),
+        body: JSON.stringify({ videoUrl: validation.canonicalUrl, title }),
       });
-      if (!res.ok) throw new Error('Failed to post signal');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || 'Failed to post signal');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -95,8 +106,8 @@ export function SignalChoicePage() {
       toast({ title: 'Signal Posted!' });
       setLocation('/mobile/signals');
     },
-    onError: () => {
-      toast({ title: 'Error', description: 'Could not post Signal.', variant: 'destructive' });
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
 
@@ -109,28 +120,87 @@ export function SignalChoicePage() {
           </button>
           <h1 className="text-white font-bold text-lg">Paste Video Link</h1>
         </div>
+
         <div className="flex-1 p-4 space-y-4">
-          <input
-            type="url"
-            value={videoUrl}
-            onChange={e => setVideoUrl(e.target.value)}
-            placeholder="YouTube, TikTok, or video URL..."
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30"
-          />
+          {/* URL input */}
+          <div className="space-y-1.5">
+            <input
+              type="url"
+              value={videoUrl}
+              onChange={e => setVideoUrl(e.target.value)}
+              placeholder="YouTube or TikTok link, or .mp4 URL…"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+            />
+
+            {/* Validation feedback */}
+            {urlValidation && (
+              <div
+                className={`flex items-start gap-2 px-3 py-2 rounded-lg text-sm ${
+                  urlValidation.valid
+                    ? 'bg-green-500/10 text-green-400'
+                    : 'bg-red-500/10 text-red-400'
+                }`}
+              >
+                {urlValidation.valid
+                  ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                  : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                }
+                <span>
+                  {urlValidation.valid
+                    ? urlValidation.type === 'youtube'
+                      ? 'YouTube video detected — will display as an embedded player'
+                      : urlValidation.type === 'tiktok'
+                      ? 'TikTok video detected — will display as an embedded player'
+                      : 'Direct video URL — will play natively'
+                    : urlValidation.error}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* YouTube thumbnail preview */}
+          {urlValidation?.valid && urlValidation.type === 'youtube' && urlValidation.youtubeThumbnailUrl && (
+            <div className="rounded-xl overflow-hidden aspect-video bg-black relative">
+              <img
+                src={urlValidation.youtubeThumbnailUrl}
+                alt="YouTube thumbnail"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center shadow-lg">
+                  <Youtube className="w-8 h-8 text-white" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TikTok note */}
+          {urlValidation?.valid && urlValidation.type === 'tiktok' && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 text-white/60 text-xs">
+              <span>🎵</span>
+              <span>TikTok videos will open inside the Signal feed as an embedded player.</span>
+            </div>
+          )}
+
           <input
             type="text"
             value={title}
             onChange={e => setTitle(e.target.value)}
-            placeholder="Title (optional)..."
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30"
+            placeholder="Title (optional)…"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
           />
+
           <button
             onClick={() => submitMutation.mutate()}
-            disabled={!videoUrl.trim() || submitMutation.isPending}
-            className="w-full py-3 bg-red-500 rounded-xl text-white font-semibold disabled:opacity-50"
+            disabled={!urlValidation?.valid || submitMutation.isPending}
+            className="w-full py-3 bg-red-500 rounded-xl text-white font-semibold disabled:opacity-40 transition-opacity"
           >
-            {submitMutation.isPending ? 'Posting...' : 'Post Signal'}
+            {submitMutation.isPending ? 'Posting…' : 'Post Signal'}
           </button>
+
+          <p className="text-white/30 text-xs text-center">
+            Supported: YouTube links · TikTok links · Direct .mp4 / .webm URLs
+          </p>
         </div>
       </div>
     );
@@ -214,7 +284,7 @@ export function SignalChoicePage() {
           </div>
           <div className="text-left">
             <p className="text-white font-semibold text-lg">Paste Link</p>
-            <p className="text-white/50 text-sm mt-0.5">Share a YouTube, TikTok, or other video link</p>
+            <p className="text-white/50 text-sm mt-0.5">Share a YouTube or TikTok video link</p>
           </div>
         </button>
       </div>
