@@ -105,7 +105,7 @@ function isSenator(rep: Politician) {
 
 function RepCard({ rep }: { rep: Politician }) {
   return (
-    <Link href={`/politicians/${rep.id}`}>
+    <Link href={`/mobile/civic/politician/${rep.id}`}>
       <div className="glass-card p-4 flex items-start gap-3 active:opacity-80 transition-opacity">
         <div className="flex-shrink-0">
           {rep.photoUrl ? (
@@ -344,7 +344,7 @@ function CandidateCard({ candidate }: { candidate: CandidateWithUser }) {
 
   return (
     <div className="glass-card p-4 space-y-3">
-      <Link href={`/candidates/${candidate.id}`}>
+      <Link href={`/mobile/civic/politician/${candidate.userId}`}>
         <div className="flex items-start gap-3 active:opacity-80 transition-opacity">
           <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center border-2 border-white/20 flex-shrink-0">
             <User className="w-6 h-6 text-white/50" />
@@ -395,7 +395,7 @@ function CandidatesTab() {
   return (
     <div className="space-y-4">
       {user && (
-        <Link href="/political-profile">
+        <Link href="/mobile/civic/run">
           <div className="glass-card p-4 flex items-center gap-3 active:opacity-80 transition-opacity border border-white/15">
             <div className="w-10 h-10 rounded-full bg-[#3C3B6E] flex items-center justify-center flex-shrink-0">
               <UserPlus className="w-5 h-5 text-white" />

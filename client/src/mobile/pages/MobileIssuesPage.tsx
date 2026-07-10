@@ -63,7 +63,7 @@ export function MobileIssuesPage() {
               }}
             />
           </div>
-          <Link href="/issues">
+          <Link href="/mobile/civic/issues">
             <button
               className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all active:scale-[0.98]"
               style={{
@@ -83,7 +83,7 @@ export function MobileIssuesPage() {
               (r) => r.issueId?.startsWith(cat.id) && r.response != null
             ).length;
             return (
-              <Link key={cat.id} href="/issues">
+              <Link key={cat.id} href="/mobile/civic/issues">
                 <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/5 last:border-0 active:bg-white/5 transition-colors">
                   <span className="text-xl">{cat.emoji}</span>
                   <div className="flex-1 min-w-0">

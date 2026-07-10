@@ -51,7 +51,7 @@ export function EventCard({ post, event }: EventCardProps) {
             {post.content}
           </p>
           {post.eventId && (
-            <Link href={`/events/${post.eventId}`}>
+            <Link href={`/mobile/events/${post.eventId}`}>
               <button 
                 className="glass-button primary text-xs py-1.5 px-3"
                 data-testid={`view-event-${post.eventId}`}
@@ -121,7 +121,7 @@ export function EventCard({ post, event }: EventCardProps) {
             </span>
           </div>
           
-          <Link href={`/events/${event.id}`}>
+          <Link href={`/mobile/events/${event.id}`}>
             <button 
               className="glass-button primary text-xs py-1.5 px-3"
               data-testid={`rsvp-event-${event.id}`}

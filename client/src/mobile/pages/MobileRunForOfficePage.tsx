@@ -28,10 +28,10 @@ const STEPS = [
 ];
 
 const RESOURCES = [
-  { label: "Candidate Portal",       href: "/run-for-office"          },
-  { label: "ACE Pledge Application", href: "/run-for-office"          },
-  { label: "ACP Platform Principles",href: "/run-for-office"          },
-  { label: "Canvassing Tools",       href: "/run-for-office"          },
+  { label: "Candidate Portal",       href: "/mobile/civic/run"        },
+  { label: "ACE Pledge Application", href: "/mobile/civic/run"        },
+  { label: "ACP Platform Principles",href: "/mobile/civic/run"        },
+  { label: "Canvassing Tools",       href: "/mobile/civic/run"        },
 ];
 
 export function MobileRunForOfficePage() {
@@ -68,7 +68,7 @@ export function MobileRunForOfficePage() {
           <p className="text-white/60 text-sm mb-4 leading-relaxed">
             The ACP supports citizens running for office at every level — local, state, and federal.
           </p>
-          <Link href="/run-for-office">
+          <Link href="/mobile/civic/run">
             <button
               className="px-8 py-3 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.97]"
               style={{
