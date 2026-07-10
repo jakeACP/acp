@@ -8,6 +8,7 @@ function log(msg: string) {
 }
 
 const app = express();
+app.disable('x-powered-by');       // Don't leak "Express" in Server header
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: false, limit: "5mb" }));
 
@@ -17,12 +18,40 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Remove unsafe-eval in production (Vite needs it in dev for HMR, but not at runtime).
+const _isDev = process.env.NODE_ENV !== 'production';
 app.use((_req, res, next) => {
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com https://www.tiktok.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob:; font-src 'self' data: https:; connect-src 'self' wss: https: http:; frame-src https:; frame-ancestors 'none';");
+  // HSTS — 2-year max-age, include subdomains
+  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+
+  // CSP — unsafe-eval only in dev; Stripe script allowed; bare http: removed from connect-src/img-src
+  const scriptSrc = _isDev
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://www.youtube.com https://s.ytimg.com https://www.tiktok.com"
+    : "script-src 'self' 'unsafe-inline' https://js.stripe.com https://www.youtube.com https://s.ytimg.com https://www.tiktok.com";
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    scriptSrc,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",   // https: covers YouTube thumbs, avatars, etc.
+    "media-src 'self' blob:",
+    "font-src 'self' data: https:",
+    "connect-src 'self' wss: https:",      // bare http: removed — all API calls use HTTPS in prod
+    "frame-src https:",
+    "frame-ancestors 'none'",
+    "object-src 'none'",                   // block Flash / legacy plugin execution
+    "base-uri 'self'",                     // prevent <base href> hijacking
+  ].join('; '));
+
+  // Belt-and-suspenders framing protection (honoured by browsers that ignore CSP frame-ancestors)
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Disable unused powerful features; camera/mic allowed (self) for Signal recorder
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(self), microphone=(self), geolocation=(self), payment=(self), ' +
+    'usb=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=()',
+  );
   next();
 });
 

@@ -41,6 +41,7 @@ import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
 import { randomUUID } from "crypto";
+import { RateLimiterMemory } from "rate-limiter-flexible";
 
 function extractYouTubeVideoId(url: string): string | null {
   const patterns = [
@@ -88,6 +89,30 @@ const csvUpload = multer({
     }
   },
 });
+
+// ── API abuse-protection rate limiters (module-level) ────────────────────────
+const likeLimiter    = new RateLimiterMemory({ points: 30, duration: 60 });    // 30 likes / min / user
+const commentLimiter = new RateLimiterMemory({ points: 10, duration: 60 });    // 10 comments / min / user
+const flagLimiter    = new RateLimiterMemory({ points: 5,  duration: 3600 });  // 5 reports / hr / user
+
+/**
+ * Tries to consume one point from `limiter` keyed by `key`.
+ * Returns true if the request should proceed; false (+ sends 429) if the limit is hit.
+ */
+async function consumeRateLimit(
+  limiter: RateLimiterMemory,
+  key: string,
+  res: Response,
+  message = "Too many requests. Please slow down.",
+): Promise<boolean> {
+  try {
+    await limiter.consume(key);
+    return true;
+  } catch {
+    res.status(429).json({ message });
+    return false;
+  }
+}
 
 // ── Signal video helpers (module-level) ──────────────────────────────────────
 
@@ -192,8 +217,14 @@ const signalUpload = multer({
   storage: signalVideoStorage,
   limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const allowed = ['video/webm', 'video/mp4', 'video/quicktime'];
-    cb(null, allowed.includes(file.mimetype) || file.originalname.match(/\.(webm|mp4|mov)$/i) != null);
+    // Require BOTH a recognised MIME type AND a matching extension (AND, not OR).
+    // OR-logic lets an attacker send an .exe with Content-Type: video/mp4.
+    const allowedMimes = new Set(['video/webm', 'video/mp4', 'video/quicktime']);
+    const allowedExts  = /\.(webm|mp4|mov)$/i;
+    if (!allowedMimes.has(file.mimetype) || !allowedExts.test(file.originalname)) {
+      return cb(new Error('Only MP4, WebM, or QuickTime (.mov) video files are accepted'));
+    }
+    cb(null, true);
   },
 });
 
@@ -1853,6 +1884,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
+    if (!await consumeRateLimit(commentLimiter, req.user.id, res)) return;
 
     try {
       const commentData = insertCommentSchema.parse({
@@ -1895,6 +1927,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
+    if (!await consumeRateLimit(likeLimiter, req.user.id, res)) return;
 
     try {
       const { targetId, targetType } = req.body;
@@ -1924,6 +1957,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
+    if (!await consumeRateLimit(flagLimiter, req.user.id, res, "Flag limit reached. You can submit up to 5 reports per hour.")) return;
 
     try {
       const flagData = insertFlagSchema.parse({
@@ -8983,8 +9017,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     limits: { fileSize: 500 * 1024 * 1024, files: MAX_CLIPS },
     fileFilter: (_req, file, cb) => {
       if (!/^clip_\d+$/.test(file.fieldname)) return cb(null, false);
-      const ok = ALLOWED_CLIP_MIMETYPES.has(file.mimetype) || /\.(webm|mp4|mov)$/i.test(file.originalname);
-      cb(null, ok);
+      // AND logic: require both matching MIME and matching extension
+      if (!ALLOWED_CLIP_MIMETYPES.has(file.mimetype) || !/\.(webm|mp4|mov)$/i.test(file.originalname)) {
+        return cb(new Error('Only MP4, WebM, or QuickTime (.mov) video files are accepted'));
+      }
+      cb(null, true);
     },
   });
 
@@ -9171,6 +9208,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
+    if (!await consumeRateLimit(likeLimiter, req.user.id, res)) return;
 
     try {
       await storage.likeSignal(req.params.id, req.user.id);
@@ -9185,6 +9223,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
+    if (!await consumeRateLimit(likeLimiter, req.user.id, res)) return;
 
     try {
       await storage.unlikeSignal(req.params.id, req.user.id);
@@ -9218,6 +9257,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   app.post("/api/mobile/signals/:id/comments", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (!await consumeRateLimit(commentLimiter, req.user.id, res)) return;
     try {
       const content = String(req.body.content || '').trim();
       if (!content || content.length > 2000) {
@@ -9278,6 +9318,13 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (isPhotoField && !/^image\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for photo: ${file.mimetype}`));
       if (isThumbnailField && !/^image\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for thumbnail: ${file.mimetype}`));
       if (isAudioField && !/^audio\//.test(file.mimetype)) return cb(new Error(`Invalid MIME for audio: ${file.mimetype}`));
+      // Video clips in compose: require both MIME and extension match (AND logic)
+      if (isClipField) {
+        const allowedClipMimes = new Set(['video/webm', 'video/mp4', 'video/quicktime']);
+        if (!allowedClipMimes.has(file.mimetype) || !/\.(webm|mp4|mov)$/i.test(file.originalname)) {
+          return cb(new Error('Only MP4, WebM, or QuickTime (.mov) video clips are accepted'));
+        }
+      }
       cb(null, true);
     },
   });
