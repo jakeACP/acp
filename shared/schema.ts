@@ -65,6 +65,7 @@ export const users = pgTable("users", {
   credits: integer("credits").default(0), // User credits for referrals
   // OAuth
   googleId: text("google_id").unique(), // Google OAuth sub ID
+  appleId: text("apple_id").unique(),   // Apple Sign In sub ID
   // Top 8 Friends (ordered list of up to 8 friend user IDs)
   top8FriendIds: text("top8_friend_ids").array(),
   // Profile analytics

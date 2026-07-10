@@ -1,6 +1,7 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import AppleStrategy from "passport-apple";
 import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import cookieParser from "cookie-parser";
@@ -1076,5 +1077,120 @@ export function setupAuth(app: Express) {
     });
   } else {
     console.warn("[auth] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set — Google SSO disabled");
+  }
+
+  // ─── Sign in with Apple (required when any third-party login is offered) ─────
+  // App Store Review Guideline §4.8: if the app includes a third-party login
+  // (Google SSO above), Sign in with Apple must also be offered.
+  //
+  // Required secrets (set in Replit Secrets / production env):
+  //   APPLE_CLIENT_ID   — Services ID from Apple Developer console (e.g. com.acp.democracy.web)
+  //   APPLE_TEAM_ID     — 10-char team ID from Apple Developer account
+  //   APPLE_KEY_ID      — Key ID of the Sign in with Apple private key
+  //   APPLE_PRIVATE_KEY — Contents of the .p8 private key (newlines as \n)
+  if (
+    process.env.APPLE_CLIENT_ID &&
+    process.env.APPLE_TEAM_ID &&
+    process.env.APPLE_KEY_ID &&
+    process.env.APPLE_PRIVATE_KEY
+  ) {
+    passport.use(
+      "apple",
+      new AppleStrategy(
+        {
+          clientID: process.env.APPLE_CLIENT_ID,
+          teamID: process.env.APPLE_TEAM_ID,
+          keyID: process.env.APPLE_KEY_ID,
+          privateKeyString: process.env.APPLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+          callbackURL: "/auth/apple/callback",
+          passReqToCallback: true,
+        },
+        async (
+          req: Request,
+          _accessToken: string,
+          _refreshToken: string,
+          idToken: { sub: string; email?: string },
+          _profile: any,
+          done: any
+        ) => {
+          try {
+            const appleId = idToken.sub;
+            const email = idToken.email;
+
+            // 1. Already linked account
+            let user = await storage.getUserByAppleId(appleId);
+            if (user) return done(null, user);
+
+            // 2. Existing account with same email — link it
+            if (email) {
+              user = await storage.getUserByEmail(email);
+              if (user) {
+                user = await storage.updateUser(user.id, { appleId });
+                return done(null, user);
+              }
+            }
+
+            // 3. Create a brand-new account
+            const registrationIp = getClientIp(req as any);
+            const registrationCountry = await getCountryFromIp(registrationIp);
+            const userCount = await storage.getUserCount();
+
+            const baseUsername = (
+              (email?.split("@")[0] || `acpuser${Date.now()}`)
+                .replace(/[^a-zA-Z0-9_]/g, "")
+                .slice(0, 20) || `acpuser`
+            );
+            let username = baseUsername;
+            let suffix = 1;
+            while (await storage.getUserByUsername(username)) {
+              username = `${baseUsername}${suffix++}`;
+            }
+
+            const newUser = await storage.createUser({
+              username,
+              email: email || `${appleId}@apple-signin.invalid`,
+              password: await hashPassword(randomBytes(32).toString("hex")),
+              firstName: "",
+              lastName: "",
+              appleId,
+              role: userCount === 0 ? "admin" : "citizen",
+              registrationIp,
+              registrationCountry,
+              lastLoginIp: registrationIp,
+              lastLoginCountry: registrationCountry,
+            });
+
+            // Auto-friend with jox
+            try {
+              const joxUserId = await storage.getDefaultFriendUserId();
+              if (joxUserId && joxUserId !== newUser.id) {
+                await storage.createFriendship(joxUserId, newUser.id);
+              }
+            } catch {}
+
+            return done(null, newUser);
+          } catch (err) {
+            return done(err);
+          }
+        }
+      )
+    );
+
+    // GET /auth/apple — initiate Sign in with Apple (redirects to Apple)
+    app.get("/auth/apple", passport.authenticate("apple"));
+
+    // POST /auth/apple/callback — Apple sends the id_token via POST form
+    app.post("/auth/apple/callback", (req: any, res: any, next: any) => {
+      passport.authenticate("apple", {
+        failureRedirect: "/auth?error=apple_failed",
+      })(req, res, (err: any) => {
+        if (err) return next(err);
+        res.redirect("/");
+      });
+    });
+  } else {
+    console.warn(
+      "[auth] APPLE_CLIENT_ID/APPLE_TEAM_ID/APPLE_KEY_ID/APPLE_PRIVATE_KEY not set — Sign in with Apple disabled"
+    );
   }
 }

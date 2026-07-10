@@ -17,13 +17,24 @@ import { ErrorMessage } from "@/components/error-message";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
-import { SiGoogle } from "react-icons/si";
+import { SiGoogle, SiApple } from "react-icons/si";
 
 function GoogleSignInButton({ label = "Continue with Google" }: { label?: string }) {
   return (
     <a href="/auth/google" className="block w-full">
       <Button type="button" variant="outline" className="w-full gap-2 border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
         <SiGoogle className="h-4 w-4 text-[#4285F4]" />
+        {label}
+      </Button>
+    </a>
+  );
+}
+
+function AppleSignInButton({ label = "Continue with Apple" }: { label?: string }) {
+  return (
+    <a href="/auth/apple" className="block w-full">
+      <Button type="button" variant="outline" className="w-full gap-2 border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
+        <SiApple className="h-4 w-4" />
         {label}
       </Button>
     </a>
@@ -356,6 +367,7 @@ export default function AuthPage() {
 
                       <OrDivider />
                       <GoogleSignInButton label="Sign in with Google" />
+                      <AppleSignInButton label="Sign in with Apple" />
                       
                       <div className="mt-4 text-center">
                         <Link href="/forgot-password">
@@ -516,6 +528,7 @@ export default function AuthPage() {
 
                   <OrDivider />
                   <GoogleSignInButton label="Sign up with Google" />
+                  <AppleSignInButton label="Sign up with Apple" />
                 </CardContent>
               </Card>
             </TabsContent>
