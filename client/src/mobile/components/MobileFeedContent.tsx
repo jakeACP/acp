@@ -136,7 +136,9 @@ function ActionBar({
       return res.json();
     },
     enabled: !!user,
-    staleTime: 60000,
+    staleTime: 60_000,
+    gcTime:    5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const likeMutation = useMutation({
@@ -1009,21 +1011,27 @@ export function MobileFeedContent() {
     data: feedPosts = [], isLoading: postsLoading, isError: postsError, refetch: refetchPosts,
   } = useQuery<PostItem[]>({
     queryKey: ["/api/feeds/all"],
-    staleTime: 30000,
+    staleTime: 30_000,
+    gcTime:    5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const {
     data: polls = [], isLoading: pollsLoading,
   } = useQuery<Poll[]>({
     queryKey: ["/api/polls"],
-    staleTime: 30000,
+    staleTime: 30_000,
+    gcTime:    5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const {
     data: petitions = [], isLoading: petitionsLoading,
   } = useQuery<Petition[]>({
     queryKey: ["/api/petitions"],
-    staleTime: 60000,
+    staleTime: 60_000,
+    gcTime:    5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const isLoading = postsLoading || pollsLoading || petitionsLoading;

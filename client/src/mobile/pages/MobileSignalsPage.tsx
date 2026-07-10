@@ -13,27 +13,33 @@ import "../mobile-theme.css";
 function SignalDiscoverGrid() {
   const { data: signals = [], isLoading } = useQuery<SignalWithAuthor[]>({
     queryKey: ["/api/mobile/signals"],
-    staleTime: 60000,
+    staleTime: 60_000,
+    gcTime:    5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   return (
     <>
       <FriendSuggestionsWidget />
-      <div className="feed-grid pb-24">
+      <div className="feed-grid pb-24" role="list" aria-label="Discover signals">
         {isLoading
           ? [1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="glass-card aspect-[9/16] animate-pulse">
-                <div className="w-full h-full bg-white/10 rounded-xl" />
+              <div key={i} className="glass-card aspect-[9/16] skeleton" aria-hidden="true">
+                <div className="w-full h-full rounded-xl" />
               </div>
             ))
           : signals.length === 0
             ? (
-              <div className="col-span-2 flex flex-col items-center justify-center py-20 text-center">
-                <span className="text-5xl mb-4">📹</span>
+              <div className="col-span-2 flex flex-col items-center justify-center py-20 text-center" role="listitem">
+                <span className="text-5xl mb-4" aria-hidden="true">📹</span>
                 <p className="text-white/50 text-sm">No Signals yet — be the first!</p>
               </div>
             )
-            : signals.map((s) => <SignalCard key={s.id} signal={s} />)
+            : signals.map((s) => (
+                <div key={s.id} role="listitem">
+                  <SignalCard signal={s} />
+                </div>
+              ))
         }
       </div>
     </>
@@ -41,12 +47,12 @@ function SignalDiscoverGrid() {
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-type Segment = "signals" | "feed";
+type Segment   = "signals" | "feed";
 type SignalView = "player" | "grid";
 
 export function MobileSignalsPage() {
   useScrollLight();
-  const [segment, setSegment] = useState<Segment>("signals");
+  const [segment,    setSegment]    = useState<Segment>("signals");
   const [signalView, setSignalView] = useState<SignalView>("player");
 
   const isFullscreenFeed = segment === "signals" && signalView === "player";
@@ -63,10 +69,10 @@ export function MobileSignalsPage() {
         <div className="mobile-root" data-testid="mobile-signals-page">
 
           {/* Top bar */}
-          <div className="glass-top-bar">
+          <div className="glass-top-bar" role="banner">
             <div className="flex items-center gap-2">
-              <div className="logo-container">
-                <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none">
+              <div className="logo-container" aria-hidden="true">
+                <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none" aria-hidden="true">
                   <circle cx="16" cy="16" r="14" fill="#E6393A" />
                   <text x="16" y="21" textAnchor="middle" fill="white" fontSize="13" fontWeight="bold">ACP</text>
                 </svg>
@@ -80,17 +86,24 @@ export function MobileSignalsPage() {
             className="sticky top-0 z-10 px-4 pb-2 pt-1"
             style={{
               background: "linear-gradient(to bottom, rgba(5,11,27,0.95) 80%, transparent)",
-              backdropFilter: "blur(16px)",
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
             }}
           >
             {/* Signals | Feed switcher */}
             <div
               className="flex rounded-2xl p-1 gap-1"
+              role="tablist"
+              aria-label="Content type"
               style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}
             >
               {(["signals", "feed"] as Segment[]).map((seg) => (
                 <button
                   key={seg}
+                  role="tab"
+                  aria-selected={segment === seg}
+                  aria-controls={`panel-${seg}`}
+                  id={`tab-${seg}`}
                   onClick={() => {
                     setSegment(seg);
                     if (seg === "signals") setSignalView("player");
@@ -99,7 +112,7 @@ export function MobileSignalsPage() {
                   style={
                     segment === seg
                       ? { background: "rgba(255,255,255,0.16)", color: "#fff", boxShadow: "0 1px 6px rgba(0,0,0,0.25)" }
-                      : { color: "rgba(255,255,255,0.42)" }
+                      : { color: "rgba(255,255,255,0.52)" }
                   }
                 >
                   {seg === "signals" ? "Signals" : "Feed"}
@@ -109,16 +122,22 @@ export function MobileSignalsPage() {
 
             {/* For You | Discover sub-nav (only inside Signals) */}
             {segment === "signals" && (
-              <div className="flex gap-2 mt-2">
+              <div
+                className="flex gap-2 mt-2"
+                role="tablist"
+                aria-label="Signal view"
+              >
                 {(["player", "grid"] as SignalView[]).map((v) => (
                   <button
                     key={v}
+                    role="tab"
+                    aria-selected={signalView === v}
                     onClick={() => setSignalView(v)}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all"
+                    className="text-xs font-semibold px-3 py-2 rounded-full transition-all min-h-[36px]"
                     style={
                       signalView === v
                         ? { background: "rgba(230,57,58,0.3)", color: "#fff", border: "1px solid rgba(230,57,58,0.5)" }
-                        : { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)", border: "1px solid rgba(255,255,255,0.08)" }
+                        : { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.55)", border: "1px solid rgba(255,255,255,0.08)" }
                     }
                   >
                     {v === "player" ? "▶ For You" : "⊞ Discover"}
@@ -129,10 +148,18 @@ export function MobileSignalsPage() {
           </div>
 
           {/* Signals — Discover grid */}
-          {segment === "signals" && signalView === "grid" && <SignalDiscoverGrid />}
+          {segment === "signals" && signalView === "grid" && (
+            <div id="panel-signals" role="tabpanel" aria-labelledby="tab-signals">
+              <SignalDiscoverGrid />
+            </div>
+          )}
 
           {/* Feed — full Facebook-style scrollable list */}
-          {segment === "feed" && <MobileFeedContent />}
+          {segment === "feed" && (
+            <div id="panel-feed" role="tabpanel" aria-labelledby="tab-feed">
+              <MobileFeedContent />
+            </div>
+          )}
         </div>
       )}
 

@@ -12,10 +12,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/mobile",       icon: Home,          label: "Home"   },
-  { href: "/mobile/civic", icon: Globe,         label: "Civic"  },
-  { href: "/mobile/create",icon: Plus,          label: "Create", isCreate: true },
-  { href: "/mobile/messages", icon: MessageCircle, label: "Inbox" },
+  { href: "/mobile",          icon: Home,          label: "Home"    },
+  { href: "/mobile/civic",    icon: Globe,         label: "Civic"   },
+  { href: "/mobile/create",   icon: Plus,          label: "Create",  isCreate: true },
+  { href: "/mobile/messages", icon: MessageCircle, label: "Inbox"   },
   { href: "/mobile/profile",  icon: User,          label: "Profile" },
 ];
 
@@ -26,8 +26,13 @@ export function MobileBottomNav() {
 
   return (
     <>
-      <nav className="glass-bottom-nav" data-testid="mobile-bottom-nav">
-        <div className="glass-bottom-nav-inner">
+      <nav
+        className="glass-bottom-nav"
+        data-testid="mobile-bottom-nav"
+        role="navigation"
+        aria-label="Main navigation"
+      >
+        <div className="glass-bottom-nav-inner" role="tablist">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -41,9 +46,10 @@ export function MobileBottomNav() {
                   <button
                     className="create-button"
                     data-testid="mobile-nav-create"
-                    aria-label="Create"
+                    aria-label="Create new post"
+                    role="tab"
                   >
-                    <Icon className="w-6 h-6" />
+                    <Icon className="w-6 h-6" aria-hidden="true" />
                   </button>
                 </Link>
               );
@@ -54,10 +60,14 @@ export function MobileBottomNav() {
                 <button
                   className={`nav-button ${isActive ? "active" : ""}`}
                   data-testid={`mobile-nav-${item.label.toLowerCase()}`}
+                  aria-label={item.label}
+                  aria-current={isActive ? "page" : undefined}
+                  role="tab"
+                  aria-selected={isActive}
                   onClick={() => { if (!isActive) selection(); }}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-[9px]">{item.label}</span>
+                  <Icon className="w-5 h-5" aria-hidden="true" />
+                  <span className="text-[9px]" aria-hidden="true">{item.label}</span>
                 </button>
               </Link>
             );
