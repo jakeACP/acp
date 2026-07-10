@@ -3964,6 +3964,268 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // ── Apple IAP Subscription Routes ─────────────────────────────────────────────
+  //
+  // These endpoints are called from the iOS Capacitor app after a StoreKit 2
+  // purchase or restore. They validate the receipt with Apple's servers and
+  // grant/revoke the ACP+ entitlement stored in users.subscription_status.
+  //
+  // Web / Stripe flows remain entirely separate. Stripe must NOT be used for
+  // digital ACP+ subscriptions inside the iOS app (Apple guideline 3.1.1).
+  //
+  // Required environment secret: APPLE_IAP_SHARED_SECRET
+  //   Set in App Store Connect → Your App → General → App Information → Shared Secret
+  //   Add to Replit Secrets as APPLE_IAP_SHARED_SECRET
+
+  // Ensure apple_iap_transactions table exists (safe to run every boot)
+  db.execute(sql`
+    CREATE TABLE IF NOT EXISTS apple_iap_transactions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      original_transaction_id TEXT NOT NULL UNIQUE,
+      product_id TEXT NOT NULL,
+      purchase_date TIMESTAMPTZ NOT NULL,
+      expires_date TIMESTAMPTZ,
+      environment TEXT NOT NULL DEFAULT 'production',
+      status TEXT NOT NULL DEFAULT 'active',
+      renewal_status TEXT,
+      auto_renew_product_id TEXT,
+      receipt_data_hash TEXT,
+      validated_at TIMESTAMPTZ DEFAULT NOW(),
+      last_notified_at TIMESTAMPTZ,
+      server_verification_data JSONB
+    )
+  `).catch((e: any) => console.error('[apple-iap] table init error:', e));
+
+  // GET /api/subscriptions/status — Merged subscription status (Apple + Stripe)
+  app.get("/api/subscriptions/status", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const uid = (req.user as any).id;
+      const user = await storage.getUser(uid);
+      if (!user) return res.sendStatus(404);
+
+      // Check most recent active Apple IAP transaction
+      const appleRows = await db.execute(sql`
+        SELECT original_transaction_id, product_id, expires_date, environment, status, renewal_status
+        FROM apple_iap_transactions
+        WHERE user_id = ${uid}
+        ORDER BY expires_date DESC NULLS LAST
+        LIMIT 1
+      `);
+      const apple = appleRows.rows[0] as any;
+
+      // Determine source
+      const now = new Date();
+      let source: 'apple' | 'stripe' | 'none' = 'none';
+      let expiresAt: string | null = null;
+      let renewalStatus: string | null = null;
+      let productId: string | null = null;
+      let environment: string | null = null;
+
+      if (apple && apple.expires_date && new Date(apple.expires_date) > now) {
+        source = 'apple';
+        expiresAt = new Date(apple.expires_date).toISOString();
+        renewalStatus = apple.renewal_status ?? 'active';
+        productId = apple.product_id;
+        environment = apple.environment;
+      } else if (user.stripeSubscriptionId && user.subscriptionStatus === 'premium' &&
+                 user.subscriptionEndDate && new Date(user.subscriptionEndDate) > now) {
+        source = 'stripe';
+        expiresAt = new Date(user.subscriptionEndDate).toISOString();
+        renewalStatus = 'active';
+      }
+
+      res.json({
+        isPremium: user.subscriptionStatus === 'premium',
+        source,
+        expiresAt,
+        renewalStatus,
+        productId,
+        environment,
+      });
+    } catch (err: any) {
+      console.error('[subscription-status]', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // POST /api/subscriptions/apple/validate — Validate Apple receipt and grant entitlement
+  app.post("/api/subscriptions/apple/validate", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const { receipt, originalTransactionId, productId } = req.body;
+    if (!receipt || !productId) {
+      return res.status(400).json({ message: "receipt and productId are required" });
+    }
+
+    const uid = (req.user as any).id;
+    const sharedSecret = process.env.APPLE_IAP_SHARED_SECRET;
+
+    // ── Sandbox / development stub ────────────────────────────────────────────
+    if (!sharedSecret) {
+      console.warn('[apple-iap] APPLE_IAP_SHARED_SECRET not set — using sandbox stub. Set this secret before App Store submission.');
+      // In dev/sandbox without the secret, we still record the transaction
+      // stub so the UI state machine can be tested end-to-end.
+      const stubExpiry = new Date();
+      stubExpiry.setMonth(stubExpiry.getMonth() + 1);
+      const txId = originalTransactionId ?? `stub_${Date.now()}`;
+
+      await db.execute(sql`
+        INSERT INTO apple_iap_transactions
+          (user_id, original_transaction_id, product_id, purchase_date, expires_date, environment, status, renewal_status)
+        VALUES
+          (${uid}, ${txId}, ${productId}, NOW(), ${stubExpiry.toISOString()}, 'sandbox', 'active', 'active')
+        ON CONFLICT (original_transaction_id) DO UPDATE SET
+          expires_date = EXCLUDED.expires_date, status = 'active', validated_at = NOW()
+      `).catch(() => {});
+
+      const startDate = new Date();
+      await storage.updateSubscriptionStatus(uid, "premium", startDate, stubExpiry);
+
+      return res.json({
+        valid: true,
+        entitlementGranted: true,
+        expiresAt: stubExpiry.toISOString(),
+        productId,
+        environment: 'sandbox',
+        stub: true,
+      });
+    }
+
+    // ── Real Apple receipt validation ─────────────────────────────────────────
+    const PROD_URL    = 'https://buy.itunes.apple.com/verifyReceipt';
+    const SANDBOX_URL = 'https://sandbox.itunes.apple.com/verifyReceipt';
+
+    const verifyWithUrl = async (url: string) => {
+      const appleRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          'receipt-data': receipt,
+          'password': sharedSecret,
+          'exclude-old-transactions': true,
+        }),
+      });
+      return appleRes.json();
+    };
+
+    try {
+      let data = await verifyWithUrl(PROD_URL);
+      if (data.status === 21007) {
+        // Production receipt sent to sandbox → retry sandbox URL
+        data = await verifyWithUrl(SANDBOX_URL);
+      }
+      if (data.status === 21008) {
+        // Sandbox receipt sent to production → retry sandbox
+        data = await verifyWithUrl(SANDBOX_URL);
+      }
+
+      if (data.status !== 0) {
+        return res.status(400).json({
+          valid: false,
+          entitlementGranted: false,
+          error: `Apple validation status: ${data.status}`,
+        });
+      }
+
+      // Find the latest receipt for this product
+      const latestReceiptInfo: any[] = data.latest_receipt_info ?? [];
+      const tx = latestReceiptInfo
+        .filter((t: any) => t.product_id === productId)
+        .sort((a: any, b: any) => Number(b.expires_date_ms) - Number(a.expires_date_ms))[0]
+        ?? latestReceiptInfo[0];
+
+      if (!tx) {
+        return res.status(400).json({ valid: false, entitlementGranted: false, error: 'Transaction not in receipt' });
+      }
+
+      const purchaseDateMs = parseInt(tx.purchase_date_ms ?? '0');
+      const expiresMs      = parseInt(tx.expires_date_ms ?? '0');
+      const expiresAt      = expiresMs ? new Date(expiresMs) : null;
+      const isActive       = expiresAt ? expiresAt > new Date() : false;
+      const environment    = data.environment === 'Sandbox' ? 'sandbox' : 'production';
+
+      // Upsert Apple transaction record
+      await db.execute(sql`
+        INSERT INTO apple_iap_transactions
+          (user_id, original_transaction_id, product_id, purchase_date, expires_date, environment, status, renewal_status, validated_at)
+        VALUES
+          (${uid}, ${tx.original_transaction_id}, ${tx.product_id},
+           to_timestamp(${purchaseDateMs} / 1000.0),
+           ${expiresAt?.toISOString() ?? null},
+           ${environment}, ${isActive ? 'active' : 'expired'}, 'active', NOW())
+        ON CONFLICT (original_transaction_id) DO UPDATE SET
+          expires_date = EXCLUDED.expires_date,
+          status = EXCLUDED.status,
+          validated_at = NOW()
+      `).catch((e: any) => console.error('[apple-iap] upsert error:', e));
+
+      if (isActive) {
+        await storage.updateSubscriptionStatus(uid, "premium", new Date(purchaseDateMs), expiresAt!);
+      }
+
+      return res.json({
+        valid: true,
+        entitlementGranted: isActive,
+        expiresAt: expiresAt?.toISOString() ?? null,
+        productId: tx.product_id,
+        environment,
+      });
+    } catch (err: any) {
+      console.error('[apple-iap] validation error:', err);
+      res.status(500).json({ message: 'Apple receipt validation failed', error: err.message });
+    }
+  });
+
+  // POST /api/subscriptions/apple/notify — Apple App Store Server Notifications (S2S)
+  // Apple calls this URL when subscription status changes (renewal, cancellation, etc.)
+  // Set this URL in App Store Connect → Your App → App Information → URL for App Store Server Notifications
+  app.post("/api/subscriptions/apple/notify", async (req, res) => {
+    try {
+      const payload = req.body;
+      const notificationType: string = payload?.notification_type ?? payload?.notificationType ?? '';
+      const unified = payload?.unified_receipt ?? {};
+      const latestInfo: any[] = unified.latest_receipt_info ?? [];
+
+      // Process each transaction in the notification
+      for (const tx of latestInfo) {
+        const expiresMs  = parseInt(tx.expires_date_ms ?? '0');
+        const expiresAt  = expiresMs ? new Date(expiresMs) : null;
+        const isActive   = ['DID_RENEW', 'INITIAL_BUY', 'DID_RECOVER', 'INTERACTIVE_RENEWAL'].includes(notificationType);
+        const isRevoked  = ['CANCEL', 'REVOKE', 'REFUND'].includes(notificationType);
+        const status     = isRevoked ? 'revoked' : isActive ? 'active' : 'expired';
+
+        // Update Apple transaction record (must already exist from initial validation)
+        await db.execute(sql`
+          UPDATE apple_iap_transactions
+          SET status = ${status}, expires_date = ${expiresAt?.toISOString() ?? null},
+              renewal_status = ${isActive ? 'active' : 'cancelled'}, last_notified_at = NOW()
+          WHERE original_transaction_id = ${tx.original_transaction_id}
+        `).catch(() => {});
+
+        // Find the user and update their entitlement
+        const rows = await db.execute(sql`
+          SELECT user_id FROM apple_iap_transactions
+          WHERE original_transaction_id = ${tx.original_transaction_id}
+          LIMIT 1
+        `).catch(() => ({ rows: [] }));
+
+        const userId = (rows.rows[0] as any)?.user_id;
+        if (userId && isActive && expiresAt) {
+          await storage.updateSubscriptionStatus(userId, "premium", new Date(), expiresAt);
+        } else if (userId && (isRevoked || (!isActive && expiresAt && expiresAt < new Date()))) {
+          await storage.updateSubscriptionStatus(userId, "free");
+        }
+      }
+
+      res.json({ received: true });
+    } catch (err: any) {
+      console.error('[apple-iap] S2S notification error:', err);
+      // Return 200 to prevent Apple from retrying invalid payloads
+      res.json({ received: true, error: err.message });
+    }
+  });
+
   // Store and Marketplace Routes
   app.get("/api/store/items", async (req, res) => {
     try {

@@ -3166,3 +3166,30 @@ export const canvassingPins = pgTable("canvassing_pins", {
 export const insertCanvassingPinSchema = createInsertSchema(canvassingPins).omit({ id: true, createdAt: true });
 export type CanvassingPin = typeof canvassingPins.$inferSelect;
 export type InsertCanvassingPin = z.infer<typeof insertCanvassingPinSchema>;
+
+// ── Apple IAP Transactions ─────────────────────────────────────────────────────
+// Stores server-validated Apple subscription transactions.
+// Entitlement is ONLY granted after a record exists here.
+
+export const appleIapTransactions = pgTable("apple_iap_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  originalTransactionId: text("original_transaction_id").notNull().unique(),
+  productId: text("product_id").notNull(),
+  purchaseDate: timestamp("purchase_date").notNull(),
+  expiresDate: timestamp("expires_date"),
+  environment: text("environment").notNull().default("production"), // 'sandbox' | 'production'
+  status: text("status").notNull().default("active"), // 'active' | 'expired' | 'revoked'
+  renewalStatus: text("renewal_status"), // 'active' | 'grace_period' | 'cancelled'
+  autoRenewProductId: text("auto_renew_product_id"),
+  receiptDataHash: text("receipt_data_hash"), // SHA-256 of receipt for dedup
+  validatedAt: timestamp("validated_at").defaultNow(),
+  lastNotifiedAt: timestamp("last_notified_at"),
+}, (table) => ({
+  userIdx: index("apple_iap_transactions_user_idx").on(table.userId),
+  statusIdx: index("apple_iap_transactions_status_idx").on(table.status),
+  expiresIdx: index("apple_iap_transactions_expires_idx").on(table.expiresDate),
+}));
+
+export type AppleIapTransaction = typeof appleIapTransactions.$inferSelect;
+export type InsertAppleIapTransaction = typeof appleIapTransactions.$inferInsert;

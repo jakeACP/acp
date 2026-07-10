@@ -167,6 +167,10 @@ export function setupAuth(app: Express) {
     if (req.path.startsWith("/api/agent/")) {
       return next();
     }
+    // Apple App Store Server Notifications — called from Apple's servers, no CSRF token
+    if (req.path === "/api/subscriptions/apple/notify") {
+      return next();
+    }
     doubleCsrfProtection(req, res, next);
   });
 

@@ -1,3 +1,5 @@
 - [CSRF on raw fetch uploads](csrf-uploads.md) — non-apiRequest POST/PUT/DELETE must send x-csrf-token or get 403; use getCsrfToken/fetchCsrfToken
 - [apiRequest arg order](apirequest-arg-order.md) — signature is apiRequest(url, method, data?); NOT (method, url). Swapping targets a bogus URL like "POST"
 - [Mobile overlay z-index](mobile-overlay-zindex.md) — fixed bottom nav is z-index:100; any full-screen mobile overlay/sheet must exceed it or it covers the input
+- [Apple IAP Vite dynamic import](apple-iap-vite-import.md) — @vite-ignore alone doesn't stop pre-transform; must use string concatenation to prevent static resolution
+- [Apple IAP CSRF bypass](apple-iap-csrf.md) — Apple S2S webhook needs CSRF bypass in server/auth.ts; pattern is `req.path === "/api/subscriptions/apple/notify"`
