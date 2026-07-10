@@ -53,7 +53,7 @@ export function SignalChoicePage() {
 
   const handleRecordVideo = async () => {
     await clearSession();
-    setLocation(`/mobile/create?duration=${duration}`);
+    setLocation(`/mobile/signals/record?duration=${duration}`);
   };
 
   const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,7 +139,7 @@ export function SignalChoicePage() {
   return (
     <div className="mobile-root min-h-screen flex flex-col bg-black">
       <div className="flex items-center gap-3 p-4 border-b border-white/10">
-        <button onClick={() => setLocation('/mobile')} className="text-white/70">
+        <button onClick={() => setLocation('/mobile/create')} className="text-white/70">
           <X className="w-6 h-6" />
         </button>
         <h1 className="text-white font-bold text-lg">Signal Video</h1>

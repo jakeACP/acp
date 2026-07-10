@@ -208,7 +208,7 @@ export function MobilePetitionsPage() {
             <h1 className="text-white font-bold text-lg">Petitions</h1>
             <p className="text-white/50 text-xs">{petitions.length} active · {Array.from(signed).length} signed</p>
           </div>
-          <Link href="/petitions">
+          <Link href="/mobile/create?type=petition">
             <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
               style={{ background: "rgba(59,91,169,0.3)", border: "1px solid rgba(59,91,169,0.4)", color: "#fff" }}>
               <PenLine className="w-3.5 h-3.5" /> Start

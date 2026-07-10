@@ -170,10 +170,19 @@ export default function MobileEventsPage() {
               </p>
             </div>
           </div>
-          <button onClick={() => setViewMode(viewMode === "calendar" ? "list" : "calendar")}
-            className="notification-button" data-testid="toggle-view">
-            {viewMode === "calendar" ? <Users className="w-5 h-5 text-white" /> : <Calendar className="w-5 h-5 text-white" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <Link href="/mobile/create?type=event">
+              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
+                style={{ background: "rgba(249,115,22,0.2)", border: "1px solid rgba(249,115,22,0.35)", color: "#fff" }}
+                data-testid="events-create-btn">
+                <Calendar className="w-3.5 h-3.5" /> Create
+              </button>
+            </Link>
+            <button onClick={() => setViewMode(viewMode === "calendar" ? "list" : "calendar")}
+              className="notification-button" data-testid="toggle-view">
+              {viewMode === "calendar" ? <Users className="w-5 h-5 text-white" /> : <Calendar className="w-5 h-5 text-white" />}
+            </button>
+          </div>
         </div>
       </div>
 

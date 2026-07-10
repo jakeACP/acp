@@ -11,6 +11,7 @@ import { MobileFriendsPage } from "./pages/MobileFriendsPage";
 import { SignalRecorderPage } from "./pages/SignalRecorderPage";
 import { SignalEditorPage } from "./pages/SignalEditorPage";
 import { SignalChoicePage } from "./pages/SignalChoicePage";
+import { MobileComposePage } from "./pages/MobileComposePage";
 import { SignalPlayerPage } from "./pages/SignalPlayerPage";
 import MobileEventsPage from "./pages/MobileEventsPage";
 import { MobileEventDetailPage } from "./pages/MobileEventDetailPage";
@@ -85,10 +86,11 @@ export function MobileApp() {
       <Route path="/mobile/groups"      component={MobileGroupsPage} />
       <Route path="/mobile/groups/:id"  component={MobileGroupDetailPage} />
 
-      {/* ── Create ───────────────────────────────────────────────────── */}
-      <Route path="/mobile/create"        component={SignalRecorderPage} />
-      <Route path="/mobile/signal-choice" component={SignalChoicePage} />
-      <Route path="/mobile/edit"          component={SignalEditorPage} />
+      {/* ── Create — unified composer + signal sub-flow ──────────────── */}
+      <Route path="/mobile/create"           component={MobileComposePage} />
+      <Route path="/mobile/signal-choice"    component={SignalChoicePage} />
+      <Route path="/mobile/signals/record"   component={SignalRecorderPage} />
+      <Route path="/mobile/edit"             component={SignalEditorPage} />
 
       {/* ── Inbox ────────────────────────────────────────────────────── */}
       <Route path="/mobile/messages" component={MobileMessagesPage} />
