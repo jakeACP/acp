@@ -10,15 +10,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import type { SignalWithAuthor, Poll, Petition } from "@shared/schema";
-
-const TABS = [
-  { id: "signals",   label: "Signals"   },
-  { id: "posts",     label: "News Feed" },
-  { id: "polls",     label: "Polls"     },
-  { id: "news",      label: "News"      },
-  { id: "events",    label: "Events"    },
-  { id: "petitions", label: "Petitions" },
-];
+import "../mobile-theme.css";
 
 interface PostItem {
   id: string;
@@ -114,10 +106,7 @@ function PostActionBar({ post, onOpenComments }: { post: PostItem; onOpenComment
       <button
         onClick={(e) => {
           e.stopPropagation();
-          if (!user) {
-            toast({ title: "Log in required", description: "Log in to like posts." });
-            return;
-          }
+          if (!user) { toast({ title: "Log in required" }); return; }
           likeMutation.mutate();
         }}
         className="flex items-center gap-1.5 text-white/50 active:scale-110 transition-transform"
@@ -127,10 +116,7 @@ function PostActionBar({ post, onOpenComments }: { post: PostItem; onOpenComment
         <span className="text-xs">{post.likesCount ?? 0}</span>
       </button>
       <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenComments();
-        }}
+        onClick={(e) => { e.stopPropagation(); onOpenComments(); }}
         className="flex items-center gap-1.5 text-white/50 active:scale-110 transition-transform"
         data-testid={`button-comment-post-${post.id}`}
       >
@@ -140,10 +126,7 @@ function PostActionBar({ post, onOpenComments }: { post: PostItem; onOpenComment
       <button
         onClick={(e) => {
           e.stopPropagation();
-          if (!user) {
-            toast({ title: "Log in required", description: "Log in to report posts." });
-            return;
-          }
+          if (!user) { toast({ title: "Log in required" }); return; }
           if (flagged || flagMutation.isPending) return;
           flagMutation.mutate();
         }}
@@ -202,47 +185,15 @@ function NewsCard({ post, onOpenComments }: { post: PostItem; onOpenComments: (p
   );
 }
 
-function PollCard({ poll }: { poll: Poll }) {
-  const options = (poll as any).options ?? [];
-  const total = (poll as any).totalVotes ?? 0;
+function SkeletonGrid() {
   return (
-    <div className="glass-card p-4" style={{ height: "auto" }}>
-      <span className="type-tag poll text-[10px] px-1.5 py-0.5 mb-2 inline-block">Poll</span>
-      <h4 className="text-white font-semibold text-sm mb-3">{(poll as any).title ?? "Poll"}</h4>
-      <div className="space-y-2">
-        {options.slice(0, 3).map((opt: any, i: number) => (
-          <div key={opt.id ?? i} className="bg-white/5 rounded-lg px-3 py-2 text-white/70 text-sm truncate">
-            {opt.text}
-          </div>
-        ))}
-      </div>
-      <p className="text-white/40 text-xs mt-3">{total} votes</p>
-    </div>
-  );
-}
-
-function EventCard({ post }: { post: PostItem }) {
-  return (
-    <div className="glass-card p-4" style={{ height: "auto" }}>
-      <span className="type-tag event text-[10px] px-1.5 py-0.5 mb-2 inline-block">Event</span>
-      <h4 className="text-white font-semibold text-sm line-clamp-2">{post.title || post.content.slice(0, 80)}</h4>
-    </div>
-  );
-}
-
-function PetitionCard({ petition }: { petition: Petition }) {
-  const target = (petition as any).targetSignatures ?? 0;
-  const current = (petition as any).currentSignatures ?? 0;
-  const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
-  return (
-    <div className="glass-card p-4" style={{ height: "auto" }}>
-      <span className="type-tag petition text-[10px] px-1.5 py-0.5 mb-2 inline-block">Petition</span>
-      <h4 className="text-white font-semibold text-sm line-clamp-2 mb-3">{(petition as any).title}</h4>
-      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden mb-1">
-        <div className="h-full bg-gradient-to-r from-red-500 to-blue-500 transition-all" style={{ width: `${pct}%` }} />
-      </div>
-      <p className="text-white/40 text-xs">{current.toLocaleString()} / {target.toLocaleString()} signatures</p>
-    </div>
+    <>
+      {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div key={i} className="glass-card aspect-[9/16] animate-pulse">
+          <div className="w-full h-full bg-white/10 rounded-xl" />
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -276,7 +227,7 @@ function EmptyState({ label }: { label: string }) {
 
 export function MobileSignalsPage() {
   useScrollLight();
-  const [activeTab, setActiveTab] = useState<string>("signals");
+  const [segment, setSegment] = useState<"signals" | "feed">("signals");
   const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
 
   const { data: signals = [], isLoading: signalsLoading } = useQuery<SignalWithAuthor[]>({
@@ -287,54 +238,74 @@ export function MobileSignalsPage() {
   const { data: feedPosts = [], isLoading: postsLoading } = useQuery<PostItem[]>({
     queryKey: ["/api/feeds/all"],
     staleTime: 30000,
-    enabled: activeTab === "posts" || activeTab === "news" || activeTab === "events",
+    enabled: segment === "feed",
   });
 
-  const { data: polls = [], isLoading: pollsLoading } = useQuery<Poll[]>({
-    queryKey: ["/api/polls"],
-    staleTime: 30000,
-    enabled: activeTab === "polls",
-  });
-
-  const { data: petitions = [], isLoading: petitionsLoading } = useQuery<Petition[]>({
-    queryKey: ["/api/petitions"],
-    staleTime: 60000,
-    enabled: activeTab === "petitions",
-  });
-
-  const posts   = feedPosts.filter((p) =>
-    (p.type === "post" && !p.pollId) || p.type === "news" || p.type === "blog" || !!p.articleBody || !!p.url || !!p.linkPreview
+  const feedItems = feedPosts.filter(
+    (p) => p.type !== "event" || !p.eventId
   );
-  const news    = feedPosts.filter((p) => p.type === "news" || p.url || p.linkPreview);
-  const events  = feedPosts.filter((p) => p.type === "event" && p.eventId);
 
   return (
     <div className="mobile-root" data-testid="mobile-signals-page">
 
-      {/* Tab bar */}
-      <div className="filter-tabs">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            className={`filter-tab ${activeTab === tab.id ? "active" : ""}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Top bar */}
+      <div className="glass-top-bar">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="logo-container">
+              <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none">
+                <circle cx="16" cy="16" r="14" fill="#E6393A" />
+                <text x="16" y="21" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold">ACP</text>
+              </svg>
+            </div>
+            <span className="text-white font-bold text-lg tracking-tight">ACP</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Sticky segmented switch */}
+      <div
+        className="sticky top-0 z-10 px-4 pb-2 pt-1"
+        style={{
+          background: "linear-gradient(to bottom, rgba(5,11,27,0.95) 80%, transparent)",
+          backdropFilter: "blur(16px)",
+        }}
+      >
+        <div
+          className="flex rounded-2xl p-1 gap-1"
+          style={{
+            background: "rgba(255,255,255,0.07)",
+            border: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          {(["signals", "feed"] as const).map((seg) => (
+            <button
+              key={seg}
+              onClick={() => setSegment(seg)}
+              className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={
+                segment === seg
+                  ? {
+                      background: "rgba(255,255,255,0.16)",
+                      color: "#fff",
+                      boxShadow: "0 1px 6px rgba(0,0,0,0.25)",
+                    }
+                  : { color: "rgba(255,255,255,0.42)" }
+              }
+            >
+              {seg === "signals" ? "Signals" : "Feed"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Signals — 2-column grid */}
-      {activeTab === "signals" && (
+      {segment === "signals" && (
         <>
           <FriendSuggestionsWidget />
           <div className="feed-grid pb-20">
             {signalsLoading
-              ? [1,2,3,4,5,6].map((i) => (
-                  <div key={i} className="glass-card aspect-[9/16] animate-pulse">
-                    <div className="w-full h-full bg-white/10 rounded-xl" />
-                  </div>
-                ))
+              ? <SkeletonGrid />
               : signals.length === 0
                 ? <div className="col-span-2"><EmptyState label="Signals" /></div>
                 : signals.map((s) => <SignalCard key={s.id} signal={s} />)
@@ -343,66 +314,18 @@ export function MobileSignalsPage() {
         </>
       )}
 
-      {/* Posts — full-width list */}
-      {activeTab === "posts" && (
-        <div className="flex flex-col gap-3 px-4 pt-3 pb-24">
+      {/* Feed — full-width list */}
+      {segment === "feed" && (
+        <div className="flex flex-col gap-3 px-4 pt-2 pb-24">
           {postsLoading
             ? <SkeletonList />
-            : posts.length === 0
-              ? <EmptyState label="News Feed" />
-              : posts.map((p) =>
-                  (p.type === "news" || (!p.articleBody && (p.url || p.linkPreview)))
+            : feedItems.length === 0
+              ? <EmptyState label="posts" />
+              : feedItems.map((p) =>
+                  p.type === "news" || p.url || p.linkPreview
                     ? <NewsCard key={p.id} post={p} onOpenComments={setCommentsPostId} />
                     : <PostCard key={p.id} post={p} onOpenComments={setCommentsPostId} />
                 )
-          }
-        </div>
-      )}
-
-      {/* Polls */}
-      {activeTab === "polls" && (
-        <div className="flex flex-col gap-3 px-4 pt-3 pb-24">
-          {pollsLoading
-            ? <SkeletonList />
-            : polls.length === 0
-              ? <EmptyState label="Polls" />
-              : polls.map((p) => <PollCard key={(p as any).id} poll={p} />)
-          }
-        </div>
-      )}
-
-      {/* News */}
-      {activeTab === "news" && (
-        <div className="flex flex-col gap-3 px-4 pt-3 pb-24">
-          {postsLoading
-            ? <SkeletonList />
-            : news.length === 0
-              ? <EmptyState label="News" />
-              : news.map((p) => <NewsCard key={p.id} post={p} onOpenComments={setCommentsPostId} />)
-          }
-        </div>
-      )}
-
-      {/* Events */}
-      {activeTab === "events" && (
-        <div className="flex flex-col gap-3 px-4 pt-3 pb-24">
-          {postsLoading
-            ? <SkeletonList />
-            : events.length === 0
-              ? <EmptyState label="Events" />
-              : events.map((p) => <EventCard key={p.id} post={p} />)
-          }
-        </div>
-      )}
-
-      {/* Petitions */}
-      {activeTab === "petitions" && (
-        <div className="flex flex-col gap-3 px-4 pt-3 pb-24">
-          {petitionsLoading
-            ? <SkeletonList />
-            : petitions.length === 0
-              ? <EmptyState label="Petitions" />
-              : petitions.map((p) => <PetitionCard key={(p as any).id} petition={p} />)
           }
         </div>
       )}

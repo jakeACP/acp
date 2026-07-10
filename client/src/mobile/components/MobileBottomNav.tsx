@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { Home, Landmark, Building2, Plus, UserCheck, MessageCircle, User } from "lucide-react";
+import { Home, Globe, Plus, MessageCircle, User } from "lucide-react";
 import { CreatePostModal } from "./CreatePostModal";
 
 interface NavItem {
@@ -11,13 +11,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/mobile", icon: Home, label: "Feed" },
-  { href: "/mobile/reps", icon: Landmark, label: "Reps" },
-  { href: "/mobile/lobbies", icon: Building2, label: "Lobbies" },
-  { href: "/mobile/create", icon: Plus, label: "Create", isCreate: true },
-  { href: "/mobile/friends", icon: UserCheck, label: "Friends" },
-  { href: "/mobile/messages", icon: MessageCircle, label: "Chat" },
-  { href: "/mobile/profile", icon: User, label: "Profile" },
+  { href: "/mobile",       icon: Home,          label: "Home"   },
+  { href: "/mobile/civic", icon: Globe,         label: "Civic"  },
+  { href: "/mobile/create",icon: Plus,          label: "Create", isCreate: true },
+  { href: "/mobile/messages", icon: MessageCircle, label: "Inbox" },
+  { href: "/mobile/profile",  icon: User,          label: "Profile" },
 ];
 
 export function MobileBottomNav() {
@@ -30,28 +28,29 @@ export function MobileBottomNav() {
         <div className="glass-bottom-nav-inner">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location === item.href ||
-              (item.href === "/mobile" && location === "/mobile/") ||
-              (item.href !== "/mobile" && location.startsWith(item.href));
+            const isActive =
+              item.href === "/mobile"
+                ? location === "/mobile" || location === "/mobile/"
+                : location.startsWith(item.href);
 
             if (item.isCreate) {
               return (
-                <button
-                  key={item.href}
-                  className="create-button"
-                  data-testid="mobile-nav-create"
-                  aria-label="Create Post"
-                  onClick={() => setIsCreateModalOpen(true)}
-                >
-                  <Icon className="w-6 h-6" />
-                </button>
+                <Link key={item.href} href={item.href}>
+                  <button
+                    className="create-button"
+                    data-testid="mobile-nav-create"
+                    aria-label="Create"
+                  >
+                    <Icon className="w-6 h-6" />
+                  </button>
+                </Link>
               );
             }
 
             return (
               <Link key={item.href} href={item.href}>
                 <button
-                  className={`nav-button ${isActive ? 'active' : ''}`}
+                  className={`nav-button ${isActive ? "active" : ""}`}
                   data-testid={`mobile-nav-${item.label.toLowerCase()}`}
                 >
                   <Icon className="w-5 h-5" />
