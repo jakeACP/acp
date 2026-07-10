@@ -28,6 +28,7 @@ import { MobileIssuesPage } from "./pages/MobileIssuesPage";
 import { MobileRunForOfficePage } from "./pages/MobileRunForOfficePage";
 import { MobileWhistleblowerPage } from "./pages/MobileWhistleblowerPage";
 import { MobileCharitiesPage } from "./pages/MobileCharitiesPage";
+import { MobileSavedCivicPage } from "./pages/MobileSavedCivicPage";
 import { MobileNotFoundPage } from "./pages/MobileNotFoundPage";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
@@ -65,6 +66,7 @@ export function MobileApp() {
       <Route path="/mobile/civic/whistleblower"           component={MobileWhistleblowerPage} />
       <Route path="/mobile/civic/charities"               component={MobileCharitiesPage} />
       <Route path="/mobile/civic/boycotts"                component={MobileCharitiesPage} />
+      <Route path="/mobile/civic/saved"                   component={MobileSavedCivicPage} />
       {/* Politician detail — must be AFTER the static civic/* routes */}
       <Route path="/mobile/civic/politician/:id"          component={MobilePoliticianDetailPage} />
 

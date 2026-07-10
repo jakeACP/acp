@@ -83,6 +83,13 @@ const TILES: CivicTile[] = [
     description: "Consumer action",
     keywords: ["boycott", "consumer", "action", "protest", "corporate"],
   },
+  {
+    label: "Saved",
+    emoji: "⭐",
+    href: "/mobile/civic/saved",
+    description: "Your saved actions",
+    keywords: ["saved", "following", "rsvp", "signed", "bookmarked", "watchlist"],
+  },
 ];
 
 export function MobileCivicHubPage() {
