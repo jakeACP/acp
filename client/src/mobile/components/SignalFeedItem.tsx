@@ -77,8 +77,12 @@ export function SignalFeedItem({
           .catch(() => {});
       }
     } else {
-      v.pause();
-      v.currentTime = 0;
+      try {
+        v.pause();
+        if (Number.isFinite(v.duration)) v.currentTime = 0;
+      } catch {
+        // A slide can unmount while the media element is still loading.
+      }
       setPlaying(false);
       setProgress(0);
     }
@@ -262,6 +266,7 @@ export function SignalFeedItem({
         <video
           ref={videoRef}
           src={signal.videoUrl ?? undefined}
+          poster={thumbnail || undefined}
           className="w-full h-full object-cover"
           loop
           playsInline
@@ -272,17 +277,29 @@ export function SignalFeedItem({
           onLoadedData={() => {
             if (isActive && videoRef.current) {
               videoRef.current.muted = muted;
-              videoRef.current.play().then(() => setPlaying(true)).catch(() => {});
+              videoRef.current.play().then(() => setPlaying(true)).catch(() => {
+                setPlaying(false);
+              });
             }
           }}
-          onError={() => setVideoError(true)}
+          onError={() => {
+            setPlaying(false);
+            setVideoError(true);
+          }}
         />
         {/* Thumbnail overlay while paused */}
-        {!playing && thumbnail && (
+        {!playing && thumbnail && !videoError && (
           <img
             src={thumbnail}
             alt=""
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          />
+        )}
+        {!playing && !thumbnail && !videoError && (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: "linear-gradient(145deg, rgba(230,57,58,0.72), rgba(7,26,58,0.94) 58%, rgba(59,91,169,0.8))" }}
+            aria-hidden="true"
           />
         )}
       </div>

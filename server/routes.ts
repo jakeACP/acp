@@ -8970,6 +8970,20 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
       const signals = await storage.getSignals(limit, offset);
+
+      // Backfill thumbnails for older uploads created before automatic preview
+      // extraction existed. The feed still returns immediately if extraction fails.
+      await Promise.all(signals.map(async (signal) => {
+        if (signal.thumbnailUrl || !signal.videoUrl?.startsWith('/uploads/signals/')) return;
+        const filename = path.basename(signal.videoUrl);
+        const videoPath = path.join(signalsUploadDir, filename);
+        if (!fs.existsSync(videoPath)) return;
+        const thumbPath = await extractSignalThumbnail(videoPath, signalsUploadDir);
+        if (!thumbPath) return;
+        const thumbnailUrl = `/uploads/signals/${path.basename(thumbPath)}`;
+        signal.thumbnailUrl = thumbnailUrl;
+        await storage.updateSignal(signal.id, { thumbnailUrl });
+      }));
       res.json(signals);
     } catch (error: any) {
       console.error("Get signals error:", error);
