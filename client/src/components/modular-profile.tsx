@@ -439,6 +439,11 @@ function partyBadgeClass(party?: string | null): string {
 }
 
 function RepresentativesModuleContent({ profileUserId }: { profileUserId?: string }) {
+  const [zipInput, setZipInput] = useState("");
+  const [zipError, setZipError] = useState("");
+
+  const { data: currentUser } = useQuery<{ id: string }>({ queryKey: ["/api/user"] });
+
   const { data, isLoading } = useQuery<{ representatives: any[]; hasLocation: boolean; location?: string }>({
     queryKey: ["/api/profile", profileUserId, "representatives"],
     queryFn: async () => {
@@ -449,6 +454,31 @@ function RepresentativesModuleContent({ profileUserId }: { profileUserId?: strin
     },
     enabled: !!profileUserId,
   });
+
+  const locationMutation = useMutation({
+    mutationFn: async (location: string) =>
+      apiRequest("/api/profile/location", "PUT", { location }),
+    onSuccess: () => {
+      setZipInput("");
+      setZipError("");
+      queryClient.invalidateQueries({ queryKey: ["/api/profile", profileUserId, "representatives"] });
+    },
+    onError: () => {
+      setZipError("Could not save zip code. Please try again.");
+    },
+  });
+
+  const handleZipSubmit = () => {
+    const zip = zipInput.trim();
+    if (!/^\d{5}$/.test(zip)) {
+      setZipError("Please enter a valid 5-digit zip code.");
+      return;
+    }
+    setZipError("");
+    locationMutation.mutate(zip);
+  };
+
+  const isOwner = !!currentUser && currentUser.id === profileUserId;
 
   if (isLoading) {
     return (
@@ -476,9 +506,37 @@ function RepresentativesModuleContent({ profileUserId }: { profileUserId?: strin
         </p>
         <p className="text-xs text-gray-400 mt-1">
           {!data?.hasLocation
-            ? "Set your location in your profile settings to see your elected representatives here."
+            ? isOwner
+              ? "Enter your zip code to see your elected representatives."
+              : "This user hasn't set their location yet."
             : "We couldn't match representatives for your location. Try visiting the Representatives page."}
         </p>
+        {!data?.hasLocation && isOwner && (
+          <div className="mt-3">
+            <div className="flex gap-2 justify-center">
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={5}
+                placeholder="Enter zip code"
+                value={zipInput}
+                onChange={e => { setZipInput(e.target.value.replace(/\D/g, "")); setZipError(""); }}
+                onKeyDown={e => { if (e.key === "Enter") handleZipSubmit(); }}
+                className="w-36 text-sm h-8"
+                disabled={locationMutation.isPending}
+              />
+              <Button
+                size="sm"
+                className="h-8 text-xs"
+                onClick={handleZipSubmit}
+                disabled={locationMutation.isPending || zipInput.length !== 5}
+              >
+                {locationMutation.isPending ? "Saving…" : "Find Reps"}
+              </Button>
+            </div>
+            {zipError && <p className="text-xs text-red-500 mt-1">{zipError}</p>}
+          </div>
+        )}
         <a href="/representatives" className="inline-flex items-center gap-1 mt-2 text-xs text-blue-600 hover:underline">
           <ExternalLink className="h-3 w-3" /> Browse all representatives
         </a>

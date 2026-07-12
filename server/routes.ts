@@ -3627,6 +3627,23 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.put("/api/profile/location", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    const { location } = req.body;
+    if (typeof location !== "string" || !location.trim()) {
+      return res.status(400).json({ error: "Location is required" });
+    }
+    try {
+      await storage.updateUser(req.user.id, { location: location.trim() });
+      res.status(200).json({ success: true, location: location.trim() });
+    } catch (error) {
+      console.error("Error updating location:", error);
+      res.status(500).json({ error: "Failed to update location" });
+    }
+  });
+
   app.get("/api/user/volunteer-signups", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
