@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -57,6 +57,9 @@ import {
   ThumbsDown,
   Lock,
   UsersRound,
+  X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -1127,6 +1130,20 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
   const [widgetVoteOptimistic, setWidgetVoteOptimistic] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [followingModuleTab, setFollowingModuleTab] = useState<"following" | "followers">("following");
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxPhotos, setLightboxPhotos] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxOpen(false);
+      if (e.key === "ArrowLeft") setLightboxIndex(i => (i - 1 + lightboxPhotos.length) % lightboxPhotos.length);
+      if (e.key === "ArrowRight") setLightboxIndex(i => (i + 1) % lightboxPhotos.length);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [lightboxOpen, lightboxPhotos.length]);
 
   const handleGalleryUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1635,6 +1652,7 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
           );
         case "photos": {
           const galleryPhotos: string[] = extendedData?.galleryPhotos || [];
+          const visiblePhotos = galleryPhotos.slice(0, module.itemCount);
           return (
             <div className="space-y-3">
               {isOwner && (
@@ -1651,12 +1669,22 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
                 </div>
               )}
               <div className="grid grid-cols-3 gap-2">
-                {galleryPhotos.slice(0, module.itemCount).map((url, i) => (
+                {visiblePhotos.map((url, i) => (
                   <div key={i} className="relative aspect-square rounded-lg overflow-hidden group">
-                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                    <img
+                      src={url}
+                      alt={`Photo ${i + 1}`}
+                      className="w-full h-full object-cover cursor-pointer hover:brightness-90 transition-all"
+                      onClick={() => {
+                        setLightboxPhotos(visiblePhotos);
+                        setLightboxIndex(i);
+                        setLightboxOpen(true);
+                      }}
+                    />
                     {isOwner && (
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           const updated = galleryPhotos.filter((_, idx) => idx !== i);
                           saveExtendedMutation.mutate({ galleryPhotos: updated });
                         }}
@@ -3771,6 +3799,61 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Photo Lightbox */}
+      {lightboxOpen && lightboxPhotos.length > 0 && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            className="absolute top-4 right-4 z-10 text-white bg-black/50 hover:bg-black/80 rounded-full p-2 transition-colors"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+
+          {lightboxPhotos.length > 1 && (
+            <>
+              <button
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-10 text-white bg-black/50 hover:bg-black/80 rounded-full p-2 transition-colors disabled:opacity-30"
+                onClick={(e) => { e.stopPropagation(); setLightboxIndex((lightboxIndex - 1 + lightboxPhotos.length) % lightboxPhotos.length); }}
+                aria-label="Previous photo"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-10 text-white bg-black/50 hover:bg-black/80 rounded-full p-2 transition-colors disabled:opacity-30"
+                onClick={(e) => { e.stopPropagation(); setLightboxIndex((lightboxIndex + 1) % lightboxPhotos.length); }}
+                aria-label="Next photo"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </>
+          )}
+
+          <img
+            src={lightboxPhotos[lightboxIndex]}
+            alt={`Photo ${lightboxIndex + 1} of ${lightboxPhotos.length}`}
+            className="max-w-[92vw] max-h-[88vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {lightboxPhotos.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+              {lightboxPhotos.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={(e) => { e.stopPropagation(); setLightboxIndex(i); }}
+                  className={`w-2 h-2 rounded-full transition-colors ${i === lightboxIndex ? "bg-white" : "bg-white/40 hover:bg-white/70"}`}
+                  aria-label={`Go to photo ${i + 1}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Pledge Detail Dialog (See More) */}
       <Dialog open={!!pledgeDetailDef} onOpenChange={(o) => { if (!o) setPledgeDetailDef(null); }}>
