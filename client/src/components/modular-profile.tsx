@@ -425,6 +425,22 @@ function gradeColors(grade?: string | null) {
   }
 }
 
+const GRADE_DESCRIPTIONS: Record<string, string> = {
+  A: "Least corrupt — minimal special-interest influence",
+  B: "Low corruption — few concerns",
+  C: "Moderate — some special-interest ties",
+  D: "High corruption — significant concerns",
+  F: "Most corrupt — major special-interest influence",
+};
+
+const GRADE_LEGEND = [
+  { grade: "A", classes: "bg-green-600 text-white" },
+  { grade: "B", classes: "bg-green-500 text-white" },
+  { grade: "C", classes: "bg-yellow-400 text-yellow-900" },
+  { grade: "D", classes: "bg-red-500 text-white" },
+  { grade: "F", classes: "bg-red-700 text-white" },
+];
+
 function partyShort(party?: string | null): string {
   if (!party) return "—";
   const p = party.toLowerCase();
@@ -581,19 +597,51 @@ function RepresentativesModuleContent({ profileUserId }: { profileUserId?: strin
                 {rep.position?.title || (rep.isCurrent === false ? "Candidate" : "Representative")}
               </p>
             </div>
-            {rep.corruptionGrade ? (
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${g.badge}`}>
-                {rep.corruptionGrade}
-              </div>
-            ) : (
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-slate-200 dark:bg-slate-700 text-slate-500">
-                ?
-              </div>
-            )}
+            <div className="flex flex-col items-center shrink-0 gap-0.5">
+              {rep.corruptionGrade ? (
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${g.badge}`}
+                  title={`${rep.corruptionGrade}: ${GRADE_DESCRIPTIONS[rep.corruptionGrade] ?? ""}${rep.numericScore != null ? ` (Score: ${rep.numericScore}/100)` : ""}`}
+                >
+                  {rep.corruptionGrade}
+                </div>
+              ) : (
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-500"
+                  title="Corruption grade not yet calculated"
+                >
+                  ?
+                </div>
+              )}
+              {rep.numericScore != null && (
+                <span className="text-[9px] text-slate-400 dark:text-slate-500 leading-none">
+                  {rep.numericScore}/100
+                </span>
+              )}
+            </div>
           </a>
         );
       })}
-      <a href="/representatives" className="flex items-center justify-center gap-1 mt-1 text-xs text-blue-600 hover:underline">
+      <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-1.5">
+          Corruption Grade Scale
+        </p>
+        <div className="flex items-center gap-1 flex-wrap">
+          {GRADE_LEGEND.map(({ grade, classes }) => (
+            <span
+              key={grade}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${classes}`}
+              title={GRADE_DESCRIPTIONS[grade]}
+            >
+              {grade}
+            </span>
+          ))}
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-1">
+            A = least corrupt &rarr; F = most corrupt
+          </span>
+        </div>
+      </div>
+      <a href="/representatives" className="flex items-center justify-center gap-1 mt-2 text-xs text-blue-600 hover:underline">
         <ExternalLink className="h-3 w-3" /> View all on Representatives page
       </a>
     </div>
