@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import * as React from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -169,6 +170,7 @@ function FeedPostCard({ post, username }: { post: Post; username?: string }) {
   const [replyText, setReplyText] = useState("");
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const { data: comments = [], isLoading: commentsLoading } = useQuery<any[]>({
     queryKey: [`/api/posts/${post.id}/comments`],
@@ -189,7 +191,10 @@ function FeedPostCard({ post, username }: { post: Post; username?: string }) {
   });
 
   return (
-    <div className="p-3 border rounded-lg">
+    <div
+      className="p-3 border rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+      onClick={() => navigate(`/posts/${post.id}`)}
+    >
       <div className="flex items-center gap-2 mb-2">
         <div className="w-6 h-6 bg-gray-300 dark:bg-gray-600 rounded-full" />
         <span className="text-sm font-medium">{username}</span>
@@ -206,7 +211,7 @@ function FeedPostCard({ post, username }: { post: Post; username?: string }) {
           {(post.commentsCount ?? 0) > 0 && (
             <button
               className="hover:text-blue-500 transition-colors cursor-pointer underline-offset-2 hover:underline"
-              onClick={() => setShowComments(v => !v)}
+              onClick={e => { e.stopPropagation(); setShowComments(v => !v); }}
             >
               {post.commentsCount} comment{(post.commentsCount ?? 0) !== 1 ? "s" : ""}
             </button>
@@ -214,7 +219,7 @@ function FeedPostCard({ post, username }: { post: Post; username?: string }) {
           {(post.commentsCount ?? 0) === 0 && currentUser && (
             <button
               className="hover:text-blue-500 transition-colors cursor-pointer"
-              onClick={() => setShowComments(v => !v)}
+              onClick={e => { e.stopPropagation(); setShowComments(v => !v); }}
             >
               Reply
             </button>
@@ -222,7 +227,7 @@ function FeedPostCard({ post, username }: { post: Post; username?: string }) {
         </div>
       )}
       {showComments && (
-        <div className="mt-3 space-y-2 border-t pt-3">
+        <div className="mt-3 space-y-2 border-t pt-3" onClick={e => e.stopPropagation()}>
           {commentsLoading ? (
             <div className="text-xs text-gray-400 animate-pulse">Loading…</div>
           ) : comments.length === 0 ? (
