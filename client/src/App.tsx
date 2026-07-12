@@ -99,6 +99,7 @@ import { Loader2 } from "lucide-react";
 import { TwoFactorReminder } from "./components/two-factor-reminder";
 import { ErrorBoundary } from "./components/error-boundary";
 import { installNativeAppHandlers, isNativeApp, normalizeNativeInternalPath } from "./lib/native";
+import { initNativeApp } from "./mobile/services/native";
 
 function PoliticianHandleRedirect({ params }: { params?: { handle?: string } }) {
   const [, navigate] = useLocation();
@@ -258,6 +259,12 @@ function AppContent() {
   useScrollLight();
 
   useEffect(() => installNativeAppHandlers(navigate), [navigate]);
+
+  // Dismiss native launch artwork from the app root. Auth and route loading can
+  // be network-dependent, so the splash must never wait for MobileApp to mount.
+  useEffect(() => {
+    if (isNativeApp()) initNativeApp();
+  }, []);
 
   useEffect(() => {
     if (isNativeApp()) {

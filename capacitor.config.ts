@@ -74,7 +74,7 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 1400,
-      launchAutoHide: false,       // We call SplashScreen.hide() after fonts/auth load
+      launchAutoHide: true,        // JS also hides it early; this is a safety fallback
       backgroundColor: '#0a0c10',
       splashFullScreen: true,
       splashImmersive: true,
