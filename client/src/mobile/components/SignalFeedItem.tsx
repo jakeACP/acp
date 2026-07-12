@@ -7,7 +7,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Heart, MessageCircle, Share2, Bookmark, Flag,
-  Play, Volume2, VolumeX, LayoutGrid, AlertTriangle, ExternalLink, Youtube,
+  Play, AlertTriangle, ExternalLink, Youtube,
 } from "lucide-react";
 import { queryClient, fetchCsrfToken } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -22,8 +22,6 @@ interface SignalFeedItemProps {
   signal: SignalWithAuthor;
   isActive: boolean;
   muted: boolean;
-  onMuteToggle: () => void;
-  onGridClick: () => void;
 }
 
 const fmt = (n: number) =>
@@ -35,8 +33,6 @@ export function SignalFeedItem({
   signal,
   isActive,
   muted,
-  onMuteToggle,
-  onGridClick,
 }: SignalFeedItemProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -317,40 +313,6 @@ export function SignalFeedItem({
           </div>
         </div>
       )}
-
-      {/* Top bar */}
-      <div
-        className="absolute inset-x-0 top-0 flex items-center gap-2 px-4"
-        style={{ paddingTop: "calc(env(safe-area-inset-top, 12px) + 10px)", zIndex: 10 }}
-      >
-        <div
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full"
-          style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)" }}
-        >
-          <span className="text-[10px] font-bold tracking-wider" style={{ color: "#E6393A" }}>ACP</span>
-          <span className="text-white/60 text-[10px]">Signals</span>
-        </div>
-        <div className="flex-1" />
-        <button
-          onClick={(e) => { e.stopPropagation(); onGridClick(); }}
-          className="w-9 h-9 rounded-full flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)" }}
-          aria-label="Grid view"
-        >
-          <LayoutGrid className="w-4 h-4 text-white" />
-        </button>
-        {/* Mute — only meaningful for native video */}
-        {isNativeVideo && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onMuteToggle(); }}
-            className="w-9 h-9 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)" }}
-            aria-label={muted ? "Unmute" : "Mute"}
-          >
-            {muted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
-          </button>
-        )}
-      </div>
 
       {/* Right-side action rail */}
       <div

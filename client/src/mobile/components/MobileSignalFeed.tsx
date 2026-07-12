@@ -23,13 +23,12 @@ import { SignalFeedItem } from "./SignalFeedItem";
 const RENDER_WINDOW = 1;
 
 interface MobileSignalFeedProps {
-  onGridClick: () => void;
+  muted: boolean;
 }
 
-export function MobileSignalFeed({ onGridClick }: MobileSignalFeedProps) {
+export function MobileSignalFeed({ muted }: MobileSignalFeedProps) {
   const scrollRef    = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState<number>(0);
-  const [muted,       setMuted]       = useState(true);
   const observersRef  = useRef<Map<number, IntersectionObserver>>(new Map());
   const prefetchLink  = useRef<HTMLLinkElement | null>(null);
 
@@ -145,8 +144,6 @@ export function MobileSignalFeed({ onGridClick }: MobileSignalFeedProps) {
                 signal={signal}
                 isActive={isActive}
                 muted={muted}
-                onMuteToggle={() => setMuted((p) => !p)}
-                onGridClick={onGridClick}
               />
             ) : (
               /* Placeholder keeps scroll-snap geometry; zero render cost */

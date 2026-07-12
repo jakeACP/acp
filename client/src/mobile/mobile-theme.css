@@ -21,7 +21,7 @@
   min-height: 100vh;
   min-height: 100dvh;
   position: relative;
-  padding-bottom: 80px;
+  padding-bottom: 88px;
   /* Static gradient — no background-attachment:fixed (kills iOS scroll perf) */
   background:
     radial-gradient(circle at 20% 20%, var(--mobile-white-glow), transparent 55%),
@@ -129,6 +129,100 @@
   margin-bottom: 8px;
 }
 
+/* Home controls stay below the Dynamic Island and above full-screen Signals. */
+.mobile-home-top-bar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 80;
+  margin: 0;
+  padding: max(8px, calc(env(safe-area-inset-top, 0px) + 6px)) 10px 8px;
+  border-radius: 0 0 18px 18px;
+  background: linear-gradient(180deg, rgba(5, 11, 27, 0.88), rgba(7, 26, 58, 0.68));
+}
+
+.mobile-home-top-bar-inner {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.mobile-top-logo,
+.mobile-top-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 10px;
+  color: var(--mobile-white);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.mobile-top-logo .logo-container {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+}
+
+.mobile-top-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.mobile-feed-switcher {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.mobile-feed-switcher button {
+  min-width: 0;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 7px;
+  color: rgba(255, 255, 255, 0.62);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mobile-feed-switcher button.active {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(230, 57, 58, 0.82), rgba(59, 91, 169, 0.78));
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.24), inset 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.mobile-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-top-icon:active,
+.mobile-top-logo:active {
+  transform: scale(0.94);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.mobile-home-content {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
+}
+
 /* ─── TikTok-style full-screen signal feed ─────────────────────────────── */
 
 /*
@@ -193,8 +287,8 @@
   left: 0;
   right: 0;
   z-index: 100;
-  padding: 10px 6px;
-  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  padding: 8px 4px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
   background: linear-gradient(
     0deg,
     rgba(7, 26, 58, 0.82) 0%,
@@ -211,7 +305,7 @@
 
 .glass-bottom-nav-inner {
   display: flex;
-  justify-content: space-around;
+  justify-content: space-between;
   align-items: center;
   max-width: 500px;
   margin: 0 auto;
@@ -223,8 +317,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 6px 4px;
+  gap: 1px;
+  padding: 5px 1px;
   min-height: 44px;
   color: var(--mobile-white);
   opacity: 0.7;
@@ -233,8 +327,10 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  flex: 1;
-  min-width: 44px;
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 8px;
+  line-height: 1.1;
 }
 
 .nav-button:hover,
@@ -252,8 +348,9 @@
 
 /* Create Button (center red button) */
 .create-button {
-  width: 56px;
-  height: 56px;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--mobile-red), #c42a2b);
   border: none;
@@ -262,18 +359,18 @@
   justify-content: center;
   color: white;
   box-shadow: 0 4px 20px rgba(230, 57, 58, 0.5);
-  transform: translateY(-8px);
+  transform: translateY(-6px);
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .create-button:hover {
-  transform: translateY(-10px);
+  transform: translateY(-8px);
   box-shadow: 0 6px 28px rgba(230, 57, 58, 0.65);
 }
 
 .create-button:active {
-  transform: translateY(-6px) scale(0.95);
+  transform: translateY(-4px) scale(0.95);
 }
 
 /* Type Tags — flex-shrink with overflow protection prevents text clipping */

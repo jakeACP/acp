@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useScrollLight } from "../hooks/useScrollLight";
 import { MobileBottomNav } from "../components/MobileBottomNav";
+import { MobileTopBar } from "../components/MobileTopBar";
 import { MobileSignalFeed } from "../components/MobileSignalFeed";
 import { SignalCard } from "../components/cards/SignalCard";
 import { FriendSuggestionsWidget } from "../components/FriendSuggestionsWidget";
@@ -54,6 +55,7 @@ export function MobileSignalsPage() {
   useScrollLight();
   const [segment,    setSegment]    = useState<Segment>("signals");
   const [signalView, setSignalView] = useState<SignalView>("player");
+  const [muted,      setMuted]      = useState(true);
 
   const isFullscreenFeed = segment === "signals" && signalView === "player";
 
@@ -61,95 +63,30 @@ export function MobileSignalsPage() {
     <>
       {/* ── Full-screen TikTok snap feed — z-40, bottom nav floats above at z-100 */}
       {isFullscreenFeed && (
-        <MobileSignalFeed onGridClick={() => setSignalView("grid")} />
+        <MobileSignalFeed muted={muted} />
       )}
+
+      <MobileTopBar
+        activeSegment={segment}
+        onSegmentChange={(nextSegment) => {
+          setSegment(nextSegment);
+          if (nextSegment === "signals") setSignalView("player");
+        }}
+        onDiscover={() => {
+          setSegment("signals");
+          setSignalView("grid");
+        }}
+        muted={isFullscreenFeed ? muted : undefined}
+        onMuteToggle={isFullscreenFeed ? () => setMuted((value) => !value) : undefined}
+      />
 
       {/* ── Scrollable page (Discover grid OR Feed segment) ──────────────── */}
       {!isFullscreenFeed && (
-        <div className="mobile-root" data-testid="mobile-signals-page">
-
-          {/* Top bar */}
-          <div className="glass-top-bar" role="banner">
-            <div className="flex items-center gap-2">
-              <div className="logo-container" aria-hidden="true">
-                <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none" aria-hidden="true">
-                  <circle cx="16" cy="16" r="14" fill="#E6393A" />
-                  <text x="16" y="21" textAnchor="middle" fill="white" fontSize="13" fontWeight="bold">ACP</text>
-                </svg>
-              </div>
-              <span className="text-white font-bold text-lg tracking-tight">ACP</span>
-            </div>
-          </div>
-
-          {/* Sticky segmented control */}
-          <div
-            className="sticky top-0 z-10 px-4 pb-2 pt-1"
-            style={{
-              background: "linear-gradient(to bottom, rgba(5,11,27,0.95) 80%, transparent)",
-              backdropFilter: "blur(14px)",
-              WebkitBackdropFilter: "blur(14px)",
-            }}
-          >
-            {/* Signals | Feed switcher */}
-            <div
-              className="flex rounded-2xl p-1 gap-1"
-              role="tablist"
-              aria-label="Content type"
-              style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}
-            >
-              {(["signals", "feed"] as Segment[]).map((seg) => (
-                <button
-                  key={seg}
-                  role="tab"
-                  aria-selected={segment === seg}
-                  aria-controls={`panel-${seg}`}
-                  id={`tab-${seg}`}
-                  onClick={() => {
-                    setSegment(seg);
-                    if (seg === "signals") setSignalView("player");
-                  }}
-                  className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
-                  style={
-                    segment === seg
-                      ? { background: "rgba(255,255,255,0.16)", color: "#fff", boxShadow: "0 1px 6px rgba(0,0,0,0.25)" }
-                      : { color: "rgba(255,255,255,0.52)" }
-                  }
-                >
-                  {seg === "signals" ? "Signals" : "Feed"}
-                </button>
-              ))}
-            </div>
-
-            {/* For You | Discover sub-nav (only inside Signals) */}
-            {segment === "signals" && (
-              <div
-                className="flex gap-2 mt-2"
-                role="tablist"
-                aria-label="Signal view"
-              >
-                {(["player", "grid"] as SignalView[]).map((v) => (
-                  <button
-                    key={v}
-                    role="tab"
-                    aria-selected={signalView === v}
-                    onClick={() => setSignalView(v)}
-                    className="text-xs font-semibold px-3 py-2 rounded-full transition-all min-h-[36px]"
-                    style={
-                      signalView === v
-                        ? { background: "rgba(230,57,58,0.3)", color: "#fff", border: "1px solid rgba(230,57,58,0.5)" }
-                        : { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.55)", border: "1px solid rgba(255,255,255,0.08)" }
-                    }
-                  >
-                    {v === "player" ? "▶ For You" : "⊞ Discover"}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        <div className="mobile-root mobile-home-content" data-testid="mobile-signals-page">
 
           {/* Signals — Discover grid */}
           {segment === "signals" && signalView === "grid" && (
-            <div id="panel-signals" role="tabpanel" aria-labelledby="tab-signals">
+            <div id="panel-signals" role="tabpanel">
               <SignalDiscoverGrid />
             </div>
           )}

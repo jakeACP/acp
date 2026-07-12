@@ -1,7 +1,5 @@
-import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { Home, Globe, Plus, MessageCircle, User } from "lucide-react";
-import { CreatePostModal } from "./CreatePostModal";
+import { Home, Landmark, Building2, Plus, UserCheck, MessageCircle, User } from "lucide-react";
 import { useHaptics } from "../hooks/useHaptics";
 
 interface NavItem {
@@ -12,16 +10,17 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/mobile",          icon: Home,          label: "Home"    },
-  { href: "/mobile/civic",    icon: Globe,         label: "Civic"   },
-  { href: "/mobile/create",   icon: Plus,          label: "Create",  isCreate: true },
-  { href: "/mobile/messages", icon: MessageCircle, label: "Inbox"   },
+  { href: "/mobile",          icon: Home,          label: "Home" },
+  { href: "/mobile/reps",     icon: Landmark,      label: "Reps" },
+  { href: "/mobile/lobbies",  icon: Building2,     label: "Lobbies" },
+  { href: "/mobile/create",   icon: Plus,          label: "Create", isCreate: true },
+  { href: "/mobile/friends",  icon: UserCheck,     label: "Friends" },
+  { href: "/mobile/messages", icon: MessageCircle, label: "Inbox" },
   { href: "/mobile/profile",  icon: User,          label: "Profile" },
 ];
 
 export function MobileBottomNav() {
   const [location] = useLocation();
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const { selection } = useHaptics();
 
   return (
@@ -42,43 +41,38 @@ export function MobileBottomNav() {
 
             if (item.isCreate) {
               return (
-                <Link key={item.href} href={item.href}>
-                  <button
-                    className="create-button"
-                    data-testid="mobile-nav-create"
-                    aria-label="Create new post"
-                    role="tab"
-                  >
-                    <Icon className="w-6 h-6" aria-hidden="true" />
-                  </button>
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="create-button"
+                  data-testid="mobile-nav-create"
+                  aria-label="Create new post"
+                  role="tab"
+                >
+                  <Icon className="w-5 h-5" aria-hidden="true" />
                 </Link>
               );
             }
 
             return (
-              <Link key={item.href} href={item.href}>
-                <button
-                  className={`nav-button ${isActive ? "active" : ""}`}
-                  data-testid={`mobile-nav-${item.label.toLowerCase()}`}
-                  aria-label={item.label}
-                  aria-current={isActive ? "page" : undefined}
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => { if (!isActive) selection(); }}
-                >
-                  <Icon className="w-5 h-5" aria-hidden="true" />
-                  <span className="text-[9px]" aria-hidden="true">{item.label}</span>
-                </button>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`nav-button ${isActive ? "active" : ""}`}
+                data-testid={`mobile-nav-${item.label.toLowerCase()}`}
+                aria-label={item.label}
+                aria-current={isActive ? "page" : undefined}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => { if (!isActive) selection(); }}
+              >
+                <Icon className="w-4 h-4" aria-hidden="true" />
+                <span aria-hidden="true">{item.label}</span>
               </Link>
             );
           })}
         </div>
       </nav>
-
-      <CreatePostModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-      />
     </>
   );
 }
