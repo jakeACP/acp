@@ -57,10 +57,11 @@ export function MobileApp() {
     reRegisterIfGranted();
   }, []);
 
-  // Hide splash screen and set native status bar once auth resolves
+  // Release the native launch screen immediately. Auth can depend on a network
+  // request; it must never keep the app trapped on the launch artwork.
   useEffect(() => {
-    if (!isLoading) initNativeApp();
-  }, [isLoading]);
+    initNativeApp();
+  }, []);
 
   // Route to the correct screen when the app is opened via a deep / universal link
   useDeepLink();
