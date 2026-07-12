@@ -314,6 +314,9 @@ export default function AuthPage() {
                             id="username"
                             {...loginForm.register("username")}
                             placeholder="Enter your username, email, or phone"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
                             disabled={loginMutation.isPending}
                           />
                           {loginForm.formState.errors.username && (
@@ -330,6 +333,9 @@ export default function AuthPage() {
                             type="password"
                             {...loginForm.register("password")}
                             placeholder="Enter your password"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
                             disabled={loginMutation.isPending}
                           />
                           {loginForm.formState.errors.password && (
@@ -472,6 +478,9 @@ export default function AuthPage() {
                         id="regUsername"
                         {...registerForm.register("username")}
                         placeholder="Choose a username"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         disabled={registerMutation.isPending}
                       />
                       {registerForm.formState.errors.username && (
@@ -488,6 +497,9 @@ export default function AuthPage() {
                         type="password"
                         {...registerForm.register("password")}
                         placeholder="Create a password"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         disabled={registerMutation.isPending}
                       />
                       {registerForm.formState.errors.password && (
