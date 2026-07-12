@@ -1157,9 +1157,13 @@ export function PostCard({ post }: PostCardProps) {
                                     : comment.authorUsername || 'Unknown'}
                                 </span>
                               </WouterLink>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">
-                                {comment.createdAt && formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
-                              </span>
+                              {comment.createdAt && (
+                                <span className="text-xs text-slate-500 dark:text-slate-400">
+                                  {format(new Date(comment.createdAt), "MMMM d, yyyy")}
+                                  <span className="mx-1">·</span>
+                                  {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                                </span>
+                              )}
                             </div>
                             
                             {user && (user.id === comment.authorId || user.role === 'admin' || user.role === 'moderator') && (
