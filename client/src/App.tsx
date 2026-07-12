@@ -1,4 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
+import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -97,6 +98,7 @@ import { useAuth } from "./hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { TwoFactorReminder } from "./components/two-factor-reminder";
 import { ErrorBoundary } from "./components/error-boundary";
+import { installNativeAppHandlers, isNativeApp, normalizeNativeInternalPath } from "./lib/native";
 
 function PoliticianHandleRedirect({ params }: { params?: { handle?: string } }) {
   const [, navigate] = useLocation();
@@ -250,10 +252,21 @@ function Router() {
 
 
 function AppContent() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const isMobile = location.startsWith('/mobile');
   
   useScrollLight();
+
+  useEffect(() => installNativeAppHandlers(navigate), [navigate]);
+
+  useEffect(() => {
+    if (isNativeApp()) {
+      const nativePath = normalizeNativeInternalPath(location);
+      if (nativePath !== location) {
+        navigate(nativePath, { replace: true });
+      }
+    }
+  }, [location, navigate]);
 
   if (isMobile) {
     return (

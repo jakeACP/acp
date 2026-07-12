@@ -19,6 +19,7 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { PageLoading } from "@/components/page-loading";
 import { ErrorMessage } from "@/components/error-message";
+import { isNativeApp } from "@/lib/native";
 
 const US_STATES = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", 
@@ -179,6 +180,8 @@ export default function EventsPage() {
     setFilters({ city: "", state: "", tags: [] });
   };
 
+  const feedHref = isNativeApp() ? "/mobile" : "/";
+
   if (isLoading) {
     return <PageLoading title="Loading Events..." description="Fetching community events and registration information" />;
   }
@@ -189,7 +192,7 @@ export default function EventsPage() {
       <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" size="sm" asChild>
-          <a href="/" className="flex items-center gap-2">
+          <a href={feedHref} className="flex items-center gap-2">
             <ArrowLeft className="h-4 w-4" />
             Back to Feed
           </a>

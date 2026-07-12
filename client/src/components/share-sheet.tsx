@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Share2, Link2, Check } from "lucide-react";
 import { SiFacebook, SiX, SiBluesky } from "react-icons/si";
 import { Button } from "@/components/ui/button";
+import { shareNative } from "@/lib/native";
 import {
   Dialog,
   DialogContent,
@@ -44,15 +45,8 @@ export function ShareSheet({ title, text, url, trigger, className }: ShareSheetP
   };
 
   const handleShare = async () => {
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share({ title, text: text || title, url });
-        return;
-      } catch (e: any) {
-        if (e?.name === "AbortError") return;
-      }
-    }
-    setDialogOpen(true);
+    const shared = await shareNative({ title, text, url });
+    if (!shared) setDialogOpen(true);
   };
 
   return (

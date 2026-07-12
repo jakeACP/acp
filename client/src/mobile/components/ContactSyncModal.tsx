@@ -28,6 +28,7 @@ export function ContactSyncModal({ onClose }: ContactSyncModalProps) {
   const { toast } = useToast();
   const [syncState, setSyncState] = useState<SyncState>("consent");
   const [result, setResult] = useState<UploadResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState("We couldn't sync your contacts. Please try again.");
 
   const uploadMutation = useMutation({
     mutationFn: async (contacts: ContactEntry[]) => {
@@ -73,20 +74,15 @@ export function ContactSyncModal({ onClose }: ContactSyncModalProps) {
           toast({ title: "No contacts selected" });
         }
       } else {
-        const sampleContacts: ContactEntry[] = [
-          { name: "Demo Contact 1", phone: "5551234567" },
-          { name: "Demo Contact 2", email: "demo@example.com" },
-        ];
-        
-        uploadMutation.mutate(sampleContacts);
+        setErrorMessage("Contact import is not available on this device yet.");
+        setSyncState("error");
       }
     } catch (error: any) {
       if (error.name === 'TypeError' || error.message?.includes('not supported')) {
-        const sampleContacts: ContactEntry[] = [
-          { name: "Demo Contact", phone: "5550001111" },
-        ];
-        uploadMutation.mutate(sampleContacts);
+        setErrorMessage("Contact import is not available on this device yet.");
+        setSyncState("error");
       } else {
+        setErrorMessage("We couldn't sync your contacts. Please try again.");
         setSyncState("error");
         console.error('Contact sync error:', error);
       }
@@ -237,7 +233,7 @@ export function ContactSyncModal({ onClose }: ContactSyncModalProps) {
             </h2>
             
             <p className="text-white/60 text-sm mb-6">
-              We couldn't sync your contacts. Please try again.
+              {errorMessage}
             </p>
 
             <div className="space-y-3">
