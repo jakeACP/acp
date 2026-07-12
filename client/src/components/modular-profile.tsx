@@ -1710,8 +1710,9 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
           ) : null;
         case "friends": {
           const displayFriends = allProfileFriends.slice(0, module.itemCount);
+          const totalFriends = allProfileFriends.length;
           return (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {displayFriends.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-4">No friends yet.</p>
               ) : (
@@ -1731,6 +1732,19 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
                   ))}
                 </div>
               )}
+              <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {totalFriends === 0
+                    ? "0 friends"
+                    : `${totalFriends} ${totalFriends === 1 ? "friend" : "friends"} total`}
+                </span>
+                <a
+                  href={`/profile/${profileUserId}/friends`}
+                  className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  View all friends →
+                </a>
+              </div>
             </div>
           );
         }

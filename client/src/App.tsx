@@ -24,6 +24,7 @@ import SettingsPage from "@/pages/settings-page";
 import PrivacySettingsPage from "@/pages/privacy-settings-page";
 import EventsPage from "@/pages/events-page";
 import FriendsPage from "@/pages/friends-page";
+import UserFriendsPage from "@/pages/user-friends-page";
 import PollDetailPage from "@/pages/poll-detail-page";
 import ForgotPasswordPage from "@/pages/forgot-password-page";
 import ResetPasswordPage from "@/pages/reset-password-page";
@@ -175,6 +176,7 @@ function Router() {
       <ProtectedRoute path="/live" component={LivePage} />
       <ProtectedRoute path="/my-streams" component={MyStreamsPage} />
       <ProtectedRoute path="/friends" component={FriendsPage} />
+      <Route path="/profile/:userId/friends" component={UserFriendsPage} />
       <ProtectedRoute path="/messages" component={MessagesPage} />
       <ProtectedRoute path="/crypto" component={CryptoDashboardPage} />
       <ProtectedRoute path="/charities" component={CharitiesPage} />
