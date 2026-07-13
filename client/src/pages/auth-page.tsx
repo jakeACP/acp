@@ -314,9 +314,11 @@ export default function AuthPage() {
                             id="username"
                             {...loginForm.register("username")}
                             placeholder="Enter your username, email, or phone"
-                            autoCapitalize="none"
+                            autoCapitalize="off"
                             autoCorrect="off"
                             spellCheck={false}
+                            inputMode="text"
+                            className="normal-case"
                             disabled={loginMutation.isPending}
                           />
                           {loginForm.formState.errors.username && (
@@ -333,9 +335,10 @@ export default function AuthPage() {
                             type="password"
                             {...loginForm.register("password")}
                             placeholder="Enter your password"
-                            autoCapitalize="none"
+                            autoCapitalize="off"
                             autoCorrect="off"
                             spellCheck={false}
+                            className="normal-case"
                             disabled={loginMutation.isPending}
                           />
                           {loginForm.formState.errors.password && (
@@ -478,9 +481,11 @@ export default function AuthPage() {
                         id="regUsername"
                         {...registerForm.register("username")}
                         placeholder="Choose a username"
-                        autoCapitalize="none"
+                        autoCapitalize="off"
                         autoCorrect="off"
                         spellCheck={false}
+                        inputMode="text"
+                        className="normal-case"
                         disabled={registerMutation.isPending}
                       />
                       {registerForm.formState.errors.username && (
@@ -497,9 +502,10 @@ export default function AuthPage() {
                         type="password"
                         {...registerForm.register("password")}
                         placeholder="Create a password"
-                        autoCapitalize="none"
+                        autoCapitalize="off"
                         autoCorrect="off"
                         spellCheck={false}
+                        className="normal-case"
                         disabled={registerMutation.isPending}
                       />
                       {registerForm.formState.errors.password && (
