@@ -9,6 +9,7 @@ import { ThemeProvider } from "./hooks/use-theme";
 import { FloatingVideoProvider } from "./contexts/floating-video-context";
 import { ProtectedRoute } from "./lib/protected-route";
 import { MobileApp } from "./mobile/MobileApp";
+import { MobileAuthPage } from "./mobile/pages/MobileAuthPage";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import GroupsPage from "@/pages/groups-page";
@@ -255,6 +256,7 @@ function Router() {
 function AppContent() {
   const [location, navigate] = useLocation();
   const isMobile = location.startsWith('/mobile');
+  const isNativeAuth = isNativeApp() && location.startsWith('/auth');
   
   useScrollLight();
 
@@ -280,6 +282,15 @@ function AppContent() {
       <>
         <Toaster />
         <MobileApp />
+      </>
+    );
+  }
+
+  if (isNativeAuth) {
+    return (
+      <>
+        <Toaster />
+        <MobileAuthPage />
       </>
     );
   }

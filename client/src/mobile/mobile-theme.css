@@ -34,6 +34,362 @@
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+/* Native sign-in stays deliberately separate from the authenticated app shell. */
+.mobile-auth-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  color: var(--mobile-white);
+  background:
+    linear-gradient(145deg, rgba(230, 57, 58, 0.34), transparent 42%),
+    linear-gradient(215deg, rgba(59, 91, 169, 0.42), transparent 52%),
+    var(--mobile-navy-dark);
+  overflow-x: hidden;
+}
+
+.mobile-auth-content {
+  width: min(100%, 460px);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(22px, env(safe-area-inset-top, 0px)) 20px max(28px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 2px 24px;
+}
+
+.mobile-auth-logo {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 12px rgba(0, 0, 0, 0.3));
+}
+
+.mobile-auth-kicker {
+  margin: 0 0 2px;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.mobile-auth-brand h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.mobile-auth-panel {
+  position: relative;
+  padding: 24px 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.42);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(10, 21, 51, 0.48));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28), inset 0 1px rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.mobile-auth-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-auth-heading {
+  margin-bottom: 21px;
+}
+
+.mobile-auth-heading h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.mobile-auth-heading p {
+  margin: 7px 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.mobile-auth-label {
+  margin: 0 0 7px;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobile-auth-label span {
+  color: rgba(255, 255, 255, 0.42);
+  font-weight: 500;
+}
+
+.mobile-auth-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  background: rgba(4, 13, 34, 0.38);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.mobile-auth-input-wrap:focus-within,
+.mobile-auth-input:focus {
+  outline: 2px solid rgba(147, 197, 253, 0.72);
+  outline-offset: 1px;
+  border-color: rgba(147, 197, 253, 0.6);
+}
+
+.mobile-auth-input-wrap > svg {
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.45);
+  flex: 0 0 auto;
+}
+
+.mobile-auth-input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  color: #fff;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.2;
+  text-transform: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+.mobile-auth-plain-input {
+  margin-bottom: 2px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(4, 13, 34, 0.38);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.mobile-auth-input::placeholder {
+  color: rgba(255, 255, 255, 0.36);
+}
+
+.mobile-auth-input:focus {
+  outline: 2px solid rgba(147, 197, 253, 0.72);
+  outline-offset: 1px;
+}
+
+.mobile-auth-eye {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.64);
+  background: transparent;
+}
+
+.mobile-auth-eye:active {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.mobile-auth-eye svg {
+  width: 18px;
+  height: 18px;
+}
+
+.mobile-auth-error {
+  margin: 5px 0 10px;
+  color: #fecaca;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mobile-auth-forgot,
+.mobile-auth-text-button {
+  align-self: flex-end;
+  margin: 2px 0 18px;
+  padding: 0;
+  border: 0;
+  color: #bfdbfe;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.mobile-auth-primary,
+.mobile-auth-secondary,
+.mobile-auth-social {
+  min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.mobile-auth-primary {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #fff;
+  background: linear-gradient(135deg, #d72d3a, #3b5ba9);
+  box-shadow: 0 10px 22px rgba(10, 21, 51, 0.35), inset 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.mobile-auth-primary:disabled,
+.mobile-auth-secondary:disabled {
+  opacity: 0.55;
+}
+
+.mobile-auth-primary svg {
+  width: 18px;
+  height: 18px;
+}
+
+.mobile-auth-divider {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 19px 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
+
+.mobile-auth-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.13);
+}
+
+.mobile-auth-divider span {
+  position: relative;
+  z-index: 1;
+  padding: 0 12px;
+  background: rgba(13, 28, 59, 0.85);
+}
+
+.mobile-auth-social {
+  margin-bottom: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.19);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mobile-auth-social svg {
+  width: 18px;
+  height: 18px;
+}
+
+.mobile-auth-google {
+  color: #8ab4f8;
+}
+
+.mobile-auth-switch {
+  margin: 18px 0 0;
+  color: rgba(255, 255, 255, 0.56);
+  text-align: center;
+  font-size: 13px;
+}
+
+.mobile-auth-switch button {
+  padding: 0;
+  border: 0;
+  color: #bfdbfe;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+}
+
+.mobile-auth-secondary {
+  margin-top: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.mobile-auth-text-button {
+  align-self: center;
+  margin: 18px 0 0;
+}
+
+.mobile-auth-icon {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  color: #dbeafe;
+  background: rgba(59, 91, 169, 0.26);
+}
+
+.mobile-auth-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.mobile-auth-code {
+  margin-bottom: 14px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  text-align: center;
+  letter-spacing: 0.33em;
+  background: rgba(4, 13, 34, 0.38);
+}
+
+.mobile-auth-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.mobile-auth-check input {
+  width: 17px;
+  height: 17px;
+  accent-color: #5b88e8;
+}
+
+.mobile-auth-two-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mobile-auth-footer {
+  margin: auto 0 0;
+  padding: 22px 0 2px;
+  color: rgba(255, 255, 255, 0.34);
+  text-align: center;
+  font-size: 11px;
+}
+
 /* Liquid Glass Card Base */
 .glass-card {
   position: relative;
