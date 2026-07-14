@@ -33,6 +33,7 @@ import {
   delete2FAChallenge
 } from "./two-factor";
 import { RateLimiterMemory } from "rate-limiter-flexible";
+import * as jwt from "jsonwebtoken";
 
 declare module "express-session" {
   interface SessionData {
@@ -105,6 +106,13 @@ async function comparePasswords(supplied: string, stored: string) {
 export function setupAuth(app: Express) {
   const isProduction = process.env.NODE_ENV === "production";
   const csrfSecret = process.env.CSRF_SECRET || process.env.SESSION_SECRET!;
+  const nativeAuthSecret = process.env.NATIVE_AUTH_SECRET || csrfSecret;
+  const isNativeRequest = (req: Request) => req.get("origin") === "capacitor://localhost";
+  const createNativeAuthToken = (user: SelectUser) => jwt.sign(
+    { sub: user.id, platform: "capacitor" },
+    nativeAuthSecret,
+    { expiresIn: "24h", issuer: "acp", audience: "acp-native" },
+  );
 
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
@@ -128,6 +136,26 @@ export function setupAuth(app: Express) {
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
+  app.use(async (req: Request, _res: Response, next: NextFunction) => {
+    if (!isNativeRequest(req)) return next();
+
+    const token = req.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!token) return next();
+
+    try {
+      const payload = jwt.verify(token, nativeAuthSecret, {
+        issuer: "acp",
+        audience: "acp-native",
+      }) as jwt.JwtPayload;
+      if (payload.platform === "capacitor" && typeof payload.sub === "string") {
+        const user = await storage.getUser(payload.sub);
+        if (user) req.user = user;
+      }
+    } catch {
+      // An expired native token is treated as unauthenticated.
+    }
+    next();
+  });
 
   const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
     getSecret: () => csrfSecret,
@@ -168,7 +196,7 @@ export function setupAuth(app: Express) {
     // Origin header, and CORS only admits this packaged-app origin, so it is
     // safe to exempt those native requests while keeping CSRF protection for
     // every web request.
-    if (req.get("origin") === "capacitor://localhost") {
+    if (isNativeRequest(req)) {
       return next();
     }
     if (req.path.startsWith("/api/webhooks/")) {
@@ -344,7 +372,7 @@ export function setupAuth(app: Express) {
               // Skip 2FA for trusted device
               return req.login(user, (loginErr) => {
                 if (loginErr) return next(loginErr);
-                res.status(200).json(user);
+                res.status(200).json(isNativeRequest(req) ? { ...user, nativeAuthToken: createNativeAuthToken(user) } : user);
               });
             }
           }
@@ -364,7 +392,7 @@ export function setupAuth(app: Express) {
         // No 2FA - proceed with normal login
         req.login(user, (loginErr) => {
           if (loginErr) return next(loginErr);
-          res.status(200).json(user);
+          res.status(200).json(isNativeRequest(req) ? { ...user, nativeAuthToken: createNativeAuthToken(user) } : user);
         });
       } catch (error) {
         console.error("Error during login:", error);

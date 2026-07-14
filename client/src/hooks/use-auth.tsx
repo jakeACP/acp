@@ -5,7 +5,7 @@ import {
   UseMutationResult,
 } from "@tanstack/react-query";
 import { insertUserSchema, User as SelectUser, UserWithClaim, InsertUser } from "@shared/schema";
-import { getQueryFn, apiRequest, queryClient, fetchCsrfToken } from "../lib/queryClient";
+import { getQueryFn, apiRequest, queryClient, fetchCsrfToken, setNativeAuthToken } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export type TwoFactorRequirement = {
@@ -16,6 +16,7 @@ export type TwoFactorRequirement = {
 };
 
 export type LoginResponse = SelectUser | TwoFactorRequirement;
+type AuthenticatedLoginResponse = SelectUser & { nativeAuthToken?: string };
 
 type AuthContextType = {
   user: UserWithClaim | null;
@@ -64,7 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if ('requiresTwoFactor' in response && response.requiresTwoFactor) {
         return;
       }
-      queryClient.setQueryData(["/api/user"], response);
+      const { nativeAuthToken, ...user } = response as AuthenticatedLoginResponse;
+      setNativeAuthToken(nativeAuthToken ?? null);
+      queryClient.setQueryData(["/api/user"], user);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
     },
     onError: (error: Error) => {
@@ -122,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("/api/logout", "POST");
     },
     onSuccess: () => {
+      setNativeAuthToken(null);
       queryClient.setQueryData(["/api/user"], null);
     },
     onError: (error: Error) => {
