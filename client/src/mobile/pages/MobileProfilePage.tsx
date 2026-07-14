@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useScrollLight } from "../hooks/useScrollLight";
 import { MobileBottomNav } from "../components/MobileBottomNav";
+import { MobileAvatarPicker } from "../components/MobileAvatarPicker";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -20,17 +21,6 @@ function isAdminRole(role?: string | null) {
 }
 
 type ContentTab = "signals" | "posts" | "liked" | "saved";
-
-function Avatar({ user, size = 20 }: { user: any; size?: number }) {
-  if (user?.avatar) {
-    return <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />;
-  }
-  return (
-    <span className="text-white font-bold" style={{ fontSize: size * 0.45 }}>
-      {user?.username?.[0]?.toUpperCase() ?? "?"}
-    </span>
-  );
-}
 
 function StatPill({ value, label }: { value: number | string; label: string }) {
   return (
@@ -202,9 +192,7 @@ export function MobileProfilePage() {
           <div className="flex items-start gap-4">
             {/* Avatar */}
             <div className="relative flex-shrink-0">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-red-500 to-blue-600 flex items-center justify-center overflow-hidden">
-                <Avatar user={user} size={80} />
-              </div>
+              <MobileAvatarPicker avatar={user?.avatar} username={user?.username} />
               {isPremium && (
                 <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-yellow-500 flex items-center justify-center border-2 border-gray-900">
                   <Crown className="w-4 h-4 text-white" />

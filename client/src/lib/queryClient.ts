@@ -12,7 +12,7 @@ let nativeAuthToken: string | null =
 // testing with VITE_API_ORIGIN.
 const NATIVE_API_ORIGIN = "https://anticorruptionparty.us";
 
-function resolveApiUrl(path: string): string {
+export function resolveApiUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
   if (!Capacitor.isNativePlatform()) return path;
 
@@ -42,7 +42,7 @@ export function setNativeAuthToken(token: string | null) {
   else localStorage.removeItem(NATIVE_AUTH_TOKEN_KEY);
 }
 
-function getAuthHeaders(): Record<string, string> {
+export function getAuthHeaders(): Record<string, string> {
   return nativeAuthToken ? { Authorization: `Bearer ${nativeAuthToken}` } : {};
 }
 

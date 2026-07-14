@@ -3,7 +3,7 @@ import { useRoute } from "wouter";
 import { useScrollLight } from "../hooks/useScrollLight";
 import { MobileBottomNav } from "../components/MobileBottomNav";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, resolveApiUrl } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, UserPlus, UserCheck, MapPin, Calendar, Users, MoreVertical } from "lucide-react";
 import { Link } from "wouter";
@@ -127,7 +127,7 @@ export function MobileUserProfilePage() {
         <div className="glass-card p-6 mb-4">
           <div className="flex items-start gap-4">
             <Avatar className="w-20 h-20 border-2 border-white/20">
-              <AvatarImage src={profile.avatar || undefined} />
+              <AvatarImage src={profile.avatar ? resolveApiUrl(profile.avatar) : undefined} />
               <AvatarFallback className="bg-gradient-to-br from-red-500 to-blue-600 text-white text-2xl font-bold">
                 {getInitials()}
               </AvatarFallback>
