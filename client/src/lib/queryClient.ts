@@ -1,9 +1,24 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
 
 let csrfToken: string | null = null;
 
+// The packaged Capacitor app is loaded from capacitor://localhost, which has
+// no backend of its own. Keep web requests same-origin, but give native builds
+// an explicit API origin. This can be overridden for staging/local device
+// testing with VITE_API_ORIGIN.
+const NATIVE_API_ORIGIN = "https://anticorruptionparty.us";
+
+function resolveApiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  if (!Capacitor.isNativePlatform()) return path;
+
+  const origin = String(import.meta.env.VITE_API_ORIGIN || NATIVE_API_ORIGIN).replace(/\/$/, "");
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export async function fetchCsrfToken(): Promise<string> {
-  const res = await fetch("/api/csrf-token", { credentials: "include" });
+  const res = await fetch(resolveApiUrl("/api/csrf-token"), { credentials: "include" });
   if (!res.ok) {
     throw new Error("Failed to fetch CSRF token");
   }
@@ -40,7 +55,8 @@ export async function apiRequest(
     headers["x-csrf-token"] = csrfToken;
   }
 
-  const res = await fetch(url, {
+  const requestUrl = resolveApiUrl(url);
+  const res = await fetch(requestUrl, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
@@ -51,7 +67,7 @@ export async function apiRequest(
     const text = await res.clone().text();
     if (text.toLowerCase().includes("csrf") || text.toLowerCase().includes("forbidden")) {
       await fetchCsrfToken();
-      const retryRes = await fetch(url, {
+      const retryRes = await fetch(requestUrl, {
         method,
         headers: {
           ...(data ? { "Content-Type": "application/json" } : {}),
@@ -75,7 +91,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const res = await fetch(resolveApiUrl(queryKey.join("/") as string), {
       credentials: "include",
     });
 

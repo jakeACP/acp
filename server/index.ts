@@ -12,6 +12,21 @@ app.disable('x-powered-by');       // Don't leak "Express" in Server header
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: false, limit: "5mb" }));
 
+// Capacitor's packaged WebView is served from capacitor://localhost rather
+// than the public website origin. Allow it to call the API with its session
+// cookie. Browser traffic remains same-origin unless explicitly allowed here.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin === "capacitor://localhost" || origin === "http://localhost") {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-csrf-token");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+  }
+  next();
+});
+
 // Health check — first thing registered, responds immediately regardless of
 // whether routes have finished loading.
 app.get('/health', (_req, res) => {

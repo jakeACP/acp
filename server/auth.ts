@@ -114,7 +114,11 @@ export function setupAuth(app: Express) {
     cookie: {
       httpOnly: true,
       secure: isProduction,
-      sameSite: "lax",
+      // The native Capacitor client calls the API from capacitor://localhost.
+      // In production it needs SameSite=None for the session cookie to be
+      // accepted on credentialed API requests; CSRF protection still applies
+      // to every state-changing request.
+      sameSite: isProduction ? "none" : "lax",
       maxAge: 24 * 60 * 60 * 1000,
     },
   };
@@ -131,7 +135,7 @@ export function setupAuth(app: Express) {
     cookieName: "__csrf",
     cookieOptions: {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: isProduction ? "none" : "lax",
       secure: isProduction,
       path: "/",
     },

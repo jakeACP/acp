@@ -8,6 +8,7 @@ import { Eye, EyeOff, KeyRound, Loader2, LockKeyhole, ShieldCheck, Smartphone, U
 import { insertUserSchema } from "@shared/schema";
 import { useAuth, type TwoFactorRequirement } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
+import { toPublicWebUrl } from "@/lib/native";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import "../mobile-theme.css";
 
@@ -219,8 +220,8 @@ export function MobileAuthPage() {
                 Sign in
               </button>
               <div className="mobile-auth-divider"><span>or</span></div>
-              <a className="mobile-auth-social" href="/auth/apple"><SiApple /> Continue with Apple</a>
-              <a className="mobile-auth-social" href="/auth/google"><SiGoogle className="mobile-auth-google" /> Continue with Google</a>
+              <a className="mobile-auth-social" href={toPublicWebUrl("/auth/apple")}><SiApple /> Continue with Apple</a>
+              <a className="mobile-auth-social" href={toPublicWebUrl("/auth/google")}><SiGoogle className="mobile-auth-google" /> Continue with Google</a>
               <p className="mobile-auth-switch">New to ACP? <button type="button" onClick={() => switchMode("register")}>Create an account</button></p>
             </form>
           ) : (
