@@ -163,6 +163,14 @@ export function setupAuth(app: Express) {
     if (safeMethods.includes(req.method)) {
       return next();
     }
+    // WKWebView does not reliably retain the double-submit CSRF cookie across
+    // requests from Capacitor's custom origin. A browser cannot forge this
+    // Origin header, and CORS only admits this packaged-app origin, so it is
+    // safe to exempt those native requests while keeping CSRF protection for
+    // every web request.
+    if (req.get("origin") === "capacitor://localhost") {
+      return next();
+    }
     if (req.path.startsWith("/api/webhooks/")) {
       return next();
     }
