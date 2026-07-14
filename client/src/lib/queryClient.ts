@@ -46,6 +46,11 @@ function getAuthHeaders(): Record<string, string> {
   return nativeAuthToken ? { Authorization: `Bearer ${nativeAuthToken}` } : {};
 }
 
+function shouldSendAuthToken(url: string): boolean {
+  const pathname = url.replace(/^https?:\/\/[^/]+/i, "").split("?")[0];
+  return !["/api/login", "/api/register", "/api/csrf-token"].includes(pathname);
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -69,7 +74,9 @@ export async function apiRequest(
   if (csrfToken && method !== "GET") {
     headers["x-csrf-token"] = csrfToken;
   }
-  Object.assign(headers, getAuthHeaders());
+  if (shouldSendAuthToken(url)) {
+    Object.assign(headers, getAuthHeaders());
+  }
 
   const requestUrl = resolveApiUrl(url);
   const res = await fetch(requestUrl, {
@@ -88,7 +95,7 @@ export async function apiRequest(
         headers: {
           ...(data ? { "Content-Type": "application/json" } : {}),
           ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
-          ...getAuthHeaders(),
+          ...(shouldSendAuthToken(url) ? getAuthHeaders() : {}),
         },
         body: data ? JSON.stringify(data) : undefined,
         credentials: "include",

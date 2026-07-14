@@ -81,9 +81,11 @@ export function PostCard({ post }: PostCardProps) {
     },
   });
 
-  const { data: comments = [] } = useQuery<Comment[]>({
+  const { data: comments = [], isLoading: commentsLoading, isError: commentsError } = useQuery<any[]>({
     queryKey: [`/api/posts/${post.id}/comments`],
     enabled: showComments && !!post.id,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const { data: userVoteData } = useQuery<{ optionId: string } | null>({
@@ -180,8 +182,11 @@ export function PostCard({ post }: PostCardProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/posts/${post.id}/comments`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/following"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feeds/news"] });
       setNewComment("");
+      setShowComments(false);
       toast({
         title: "Comment Added",
         description: "Your comment has been posted successfully!",
@@ -399,8 +404,12 @@ export function PostCard({ post }: PostCardProps) {
     }
   };
 
-  const handleComment = () => {
+  const handleCommentsOpenChange = (open: boolean) => {
     if (!user) {
+      if (!open) {
+        setShowComments(false);
+        return;
+      }
       toast({
         title: "Login Required",
         description: "Please log in to comment on posts",
@@ -408,7 +417,7 @@ export function PostCard({ post }: PostCardProps) {
       });
       return;
     }
-    setShowComments(true);
+    setShowComments(open);
   };
 
   const handleCopyLink = async () => {
@@ -1091,12 +1100,11 @@ export function PostCard({ post }: PostCardProps) {
               <span>{post.likesCount || 0}</span>
             </Button>
             
-            <Dialog open={showComments} onOpenChange={setShowComments}>
+            <Dialog open={showComments} onOpenChange={handleCommentsOpenChange}>
               <DialogTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleComment}
                   className="flex items-center gap-2 hover:text-primary"
                   data-testid="button-comment"
                 >
@@ -1136,7 +1144,11 @@ export function PostCard({ post }: PostCardProps) {
                   )}
                   
                   <div className="space-y-3">
-                    {comments.length === 0 ? (
+                    {commentsLoading ? (
+                      <p className="text-center text-slate-500 dark:text-slate-400 py-4">Loading comments…</p>
+                    ) : commentsError ? (
+                      <p className="text-center text-red-500 py-4">Comments could not be loaded. Please try again.</p>
+                    ) : comments.length === 0 ? (
                       <p className="text-center text-slate-500 dark:text-slate-400 py-4">No comments yet</p>
                     ) : (
                       comments.map((comment) => (

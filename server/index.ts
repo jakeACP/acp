@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   if (origin === "capacitor://localhost" || origin === "http://localhost") {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-csrf-token");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-csrf-token, Authorization");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
     if (req.method === "OPTIONS") return res.sendStatus(204);
   }
