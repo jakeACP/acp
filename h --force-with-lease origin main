@@ -1,0 +1,35 @@
+[33m< af45fa9[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Show formatted date + relative time on post comments
+[33m< eb0d449[m feat: make Recent Posts module cards clickable, navigate to /posts/:id
+[33m< 5763515[m Sync Replit workspace with GitHub origin/main (Task #119)
+[33m< dbb968b[m Git commit prior to merge
+[33m< 14833f9[m feat: show corruption grade color legend and numeric score in My Representatives module
+[33m< 6d85519[m Show friend count and a link to all friends on the profile
+[33m< 781c212[m Add photo detail lightbox viewer for the Photo Gallery profile module
+[33m< 0c542da[m Task #49: Let users set their zip code directly from the My Representatives module
+[33m> bb85e29[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Serve Apple universal link association
+[33m> 8bcd9a1[m Enable iOS release capabilities
+[33m> 1f1b179[m Prepare ACP mobile app for iOS release
+[33m< 964b586[m[33m ([m[1;31mgitsafe-backup/main[m[33m, [m[1;31mgitsafe-backup/HEAD[m[33m)[m Add Sign in with Apple functionality to the platform
+[33m< c637837[m Optimize mobile app performance, accessibility, and layout for iPhones
+[33m< 0ec5fad[m Add mobile app integration and push notification features
+[33m< a229331[m Harden platform security by improving upload validation and API abuse protection
+[33m< b85b5ff[m Enhance video signal functionality with improved URL handling and playback
+[33m< 80c7f3b[m Add Apple IAP integration and subscription management
+[33m< 14b2e51[m Add mobile safety and moderation features for user content reporting and filtering
+[33m< ce4b34a[m Add comprehensive mobile settings and user management features
+[33m< 1cc3dd5[m Unify mobile post creation into a single composer flow
+[33m< c4811ab[m Enhance mobile experience for civic engagement features
+[33m< d8cf9a6[m Add mobile experience for representatives and elections
+[33m< f25bf50[m Organize mobile application routes and fix broken internal links
+[33m< 84d0bf5[m Update mobile feed to use full-width cards with rich content
+[33m< ab5696d[m Add full-screen swipeable feed for mobile signals
+[33m< 83a94a8[m Organize the mobile app with a new 5-item bottom navigation structure
+[33m< 3a9be9b[m Improve mobile comments view to allow scrolling and replying
+[33m< 30c99f4[m Update mobile navigation and fix API request parameter order
+[33m< 10951ed[m Fix error preventing comments from appearing on posts
+[33m< deddc01[m Published your App
+[33m< 12d2ceb[m Add a text box and submit button below the "Be the first to comment" prompt
+[33m< b8bf66d[m Add ability to view and interact with post comments on mobile
+[33m< e570735[m Update the mobile signals page to combine posts, news, and articles into a single feed
+[33m< 24478a4[m Published your App
+[33m< 7655cd8[m Update mobile feed to show posts, articles, and news under one tab
