@@ -53,7 +53,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     staleTime: 30 * 1000,
-    refetchOnWindowFocus: true,
+    // Avoid turning a transient background session check into an apparent
+    // login failure while the user is actively using the app.
+    refetchOnWindowFocus: false,
   });
 
   const loginMutation = useMutation({
@@ -71,6 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
     },
     onError: (error: Error) => {
+      // A stale login request can finish after a successful login (for
+      // example after a slow network retry). Do not show a misleading error
+      // over an already-authenticated session.
+      if (queryClient.getQueryData(["/api/user"])) return;
       toast({
         title: "Login failed",
         description: error.message,

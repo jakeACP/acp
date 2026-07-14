@@ -113,6 +113,19 @@ export function setupAuth(app: Express) {
     nativeAuthSecret,
     { expiresIn: "24h", issuer: "acp", audience: "acp-native" },
   );
+  const updateLastLoginMetadata = async (userId: string, req: Request) => {
+    try {
+      const lastLoginIp = getClientIp(req);
+      const lastLoginCountry = await getCountryFromIp(lastLoginIp);
+      await storage.updateUser(userId, {
+        lastLoginIp,
+        lastLoginCountry,
+      });
+    } catch (error) {
+      // Login must not fail because optional audit metadata is unavailable.
+      console.error("Failed to update login metadata:", error);
+    }
+  };
 
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
@@ -353,14 +366,8 @@ export function setupAuth(app: Express) {
       }
       
       try {
-        // Update last login IP and country
-        const lastLoginIp = getClientIp(req);
-        const lastLoginCountry = await getCountryFromIp(lastLoginIp);
-        
-        await storage.updateUser(user.id, {
-          lastLoginIp,
-          lastLoginCountry,
-        });
+        // Record optional audit metadata without blocking authentication.
+        void updateLastLoginMetadata(user.id, req);
         
         // Check if 2FA is enabled
         if (user.twoFactorEnabled) {
