@@ -68,7 +68,10 @@ const config: CapacitorConfig = {
     // Allow WKWebView to scroll — needed for the feed
     scrollEnabled: true,
     // Liminal safe-area insets handled by CSS env(safe-area-inset-*)
-    limitsNavigationsToAppBoundDomains: true,
+    // Do not enable App-Bound Domain enforcement unless Info.plist also
+    // declares WKAppBoundDomains. Enabling it without that list prevents the
+    // packaged WebView from loading on current iOS runtimes.
+    limitsNavigationsToAppBoundDomains: false,
   },
 
   plugins: {
