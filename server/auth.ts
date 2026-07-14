@@ -33,7 +33,7 @@ import {
   delete2FAChallenge
 } from "./two-factor";
 import { RateLimiterMemory } from "rate-limiter-flexible";
-import * as jwt from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 
 declare module "express-session" {
   interface SessionData {
