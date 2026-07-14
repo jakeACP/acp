@@ -2,6 +2,9 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 
 let csrfToken: string | null = null;
+const NATIVE_AUTH_TOKEN_KEY = "acp-native-auth-token";
+let nativeAuthToken: string | null =
+  Capacitor.isNativePlatform() ? localStorage.getItem(NATIVE_AUTH_TOKEN_KEY) : null;
 
 // The packaged Capacitor app is loaded from capacitor://localhost, which has
 // no backend of its own. Keep web requests same-origin, but give native builds
@@ -31,6 +34,18 @@ export function getCsrfToken(): string | null {
   return csrfToken;
 }
 
+export function setNativeAuthToken(token: string | null) {
+  nativeAuthToken = token;
+  if (!Capacitor.isNativePlatform()) return;
+
+  if (token) localStorage.setItem(NATIVE_AUTH_TOKEN_KEY, token);
+  else localStorage.removeItem(NATIVE_AUTH_TOKEN_KEY);
+}
+
+function getAuthHeaders(): Record<string, string> {
+  return nativeAuthToken ? { Authorization: `Bearer ${nativeAuthToken}` } : {};
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -54,6 +69,7 @@ export async function apiRequest(
   if (csrfToken && method !== "GET") {
     headers["x-csrf-token"] = csrfToken;
   }
+  Object.assign(headers, getAuthHeaders());
 
   const requestUrl = resolveApiUrl(url);
   const res = await fetch(requestUrl, {
@@ -72,6 +88,7 @@ export async function apiRequest(
         headers: {
           ...(data ? { "Content-Type": "application/json" } : {}),
           ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
+          ...getAuthHeaders(),
         },
         body: data ? JSON.stringify(data) : undefined,
         credentials: "include",
@@ -92,6 +109,7 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const res = await fetch(resolveApiUrl(queryKey.join("/") as string), {
+      headers: getAuthHeaders(),
       credentials: "include",
     });
 
