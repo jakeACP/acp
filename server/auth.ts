@@ -33,7 +33,7 @@ import {
   delete2FAChallenge
 } from "./two-factor";
 import { RateLimiterMemory } from "rate-limiter-flexible";
-import * as jwt from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 
 declare module "express-session" {
   interface SessionData {
@@ -376,10 +376,16 @@ export function setupAuth(app: Express) {
           if (trustedDeviceToken) {
             const isTrusted = await verifyTrustedDevice(user.id, trustedDeviceToken);
             if (isTrusted) {
+              // Native clients authenticate subsequent requests with the JWT
+              // returned here, so they must not wait on the web session store.
+              if (isNativeRequest(req)) {
+                return res.status(200).json({ ...user, nativeAuthToken: createNativeAuthToken(user) });
+              }
+
               // Skip 2FA for trusted device
               return req.login(user, (loginErr) => {
                 if (loginErr) return next(loginErr);
-                res.status(200).json(isNativeRequest(req) ? { ...user, nativeAuthToken: createNativeAuthToken(user) } : user);
+                res.status(200).json(user);
               });
             }
           }
@@ -397,9 +403,13 @@ export function setupAuth(app: Express) {
         }
         
         // No 2FA - proceed with normal login
+        if (isNativeRequest(req)) {
+          return res.status(200).json({ ...user, nativeAuthToken: createNativeAuthToken(user) });
+        }
+
         req.login(user, (loginErr) => {
           if (loginErr) return next(loginErr);
-          res.status(200).json(isNativeRequest(req) ? { ...user, nativeAuthToken: createNativeAuthToken(user) } : user);
+          res.status(200).json(user);
         });
       } catch (error) {
         console.error("Error during login:", error);
