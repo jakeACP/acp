@@ -28,7 +28,7 @@ import { redactAgentData } from "./agentRedact";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, politicianProfiles, politicalPositions, candidates, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, PLEDGE_DEFINITIONS, type InsertAgentApp, type AgentApiKey } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertElectionRaceSchema, insertRaceCandidateSchema, politicianProfiles, politicalPositions, candidates, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, PLEDGE_DEFINITIONS, type InsertAgentApp, type AgentApiKey } from "@shared/schema";
 import archiver from "archiver";
 import multer from "multer";
 import unzipper from "unzipper";
@@ -11254,10 +11254,11 @@ Only include people you are confident about. Return empty arrays/null if unknown
     pr_agency: { label: "PR Agency", permissions: { "articles:create": true, "articles:edit": true } },
     lobbyist: { label: "Lobbyist", permissions: { "articles:create": true } },
     data_provider: { label: "Data Provider", permissions: { "politicians:write": true, "elections:write": true } },
+    dba: { label: "Database Agent (DBA)", permissions: { "candidates:read": true, "candidates:write": true, "elections:read": true, "elections:write": true, "politicians:write": true, "logs:read": true } },
     ai_vendor: { label: "AI Vendor / Integrator", permissions: { "sandbox:use": true, "testing:run": true }, sandboxMode: true },
   };
   const agentRoles = Object.keys(AGENT_ROLE_DEFAULTS);
-  const agentPermissions = ["articles:create", "articles:edit", "moderation:flag", "users:ban", "politicians:write", "elections:write", "testing:run", "security:scan", "sandbox:use", "logs:read", "system:admin"];
+  const agentPermissions = ["articles:create", "articles:edit", "moderation:flag", "users:ban", "politicians:write", "elections:write", "elections:read", "candidates:write", "candidates:read", "testing:run", "security:scan", "sandbox:use", "logs:read", "system:admin"];
   const agentPermissionLabels: Record<string, string> = {
     "articles:create": "Create public posts/articles",
     "articles:edit": "Edit existing posts/articles",
@@ -11265,6 +11266,9 @@ Only include people you are confident about. Return empty arrays/null if unknown
     "users:ban": "Ban user accounts",
     "politicians:write": "Import or update politician profiles",
     "elections:write": "Submit election sync reports",
+    "elections:read": "Search and read election race records",
+    "candidates:write": "Create and update race candidate records",
+    "candidates:read": "Search and read race candidate records",
     "testing:run": "Run QA/testing reports",
     "security:scan": "Submit security scan reports",
     "sandbox:use": "Use sandbox test endpoints",
@@ -11696,6 +11700,317 @@ Only include people you are confident about. Return empty arrays/null if unknown
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) return agentResponse(agentReq, res, "security:scan:sandbox", 400, null, [{ message: "Invalid security scan payload", details: parsed.error.flatten() }]);
     return agentResponse(agentReq, res, "security:scan:sandbox", 202, { accepted: true, sandbox: true, report: parsed.data });
+  });
+
+  // ============================================================
+  // DBA API — Election Races  (elections:read / elections:write)
+  // ============================================================
+
+  app.get("/api/agent/elections/search", agentApiAuth, requireAgentPermission("elections:read"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    try {
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const offset = Number(req.query.offset) || 0;
+      const races = await storage.searchElectionRaces({
+        state: req.query.state as string | undefined,
+        year: req.query.year ? Number(req.query.year) : undefined,
+        phase: req.query.phase as string | undefined,
+        jurisdictionLevel: req.query.jurisdictionLevel as string | undefined,
+        county: req.query.county as string | undefined,
+        municipality: req.query.municipality as string | undefined,
+        district: req.query.district as string | undefined,
+        officeTitle: req.query.officeTitle as string | undefined,
+        externalId: req.query.externalId as string | undefined,
+        limit,
+        offset,
+      });
+      return agentResponse(agentReq, res, "elections:read", 200, { races, pagination: { limit, offset, hasMore: races.length === limit } });
+    } catch {
+      return agentResponse(agentReq, res, "elections:read", 500, null, [{ message: "Failed to search election races" }]);
+    }
+  });
+
+  app.get("/api/agent/elections/:id", agentApiAuth, requireAgentPermission("elections:read"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    try {
+      const race = await storage.getElectionRaceById(req.params.id);
+      if (!race) return agentResponse(agentReq, res, "elections:read", 404, null, [{ message: "Election race not found" }]);
+      return agentResponse(agentReq, res, "elections:read", 200, { race });
+    } catch {
+      return agentResponse(agentReq, res, "elections:read", 500, null, [{ message: "Failed to get election race" }]);
+    }
+  });
+
+  app.post("/api/agent/elections/create", agentApiAuth, requireAgentPermission("elections:write"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    const parsed = insertElectionRaceSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "elections:write", 400, null, [{ message: "Invalid election race payload", details: parsed.error.flatten() }]);
+    if (agentReq.agentSandbox) return agentResponse(agentReq, res, "elections:write", 200, { sandbox: true, wouldCreate: parsed.data });
+    try {
+      const race = await storage.createElectionRace(parsed.data);
+      return agentResponse(agentReq, res, "elections:write", 201, { race });
+    } catch {
+      return agentResponse(agentReq, res, "elections:write", 500, null, [{ message: "Failed to create election race" }]);
+    }
+  });
+
+  app.put("/api/agent/elections/:id", agentApiAuth, requireAgentPermission("elections:write"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    const patchSchema = insertElectionRaceSchema.partial();
+    const parsed = patchSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "elections:write", 400, null, [{ message: "Invalid election race update payload", details: parsed.error.flatten() }]);
+    if (agentReq.agentSandbox) return agentResponse(agentReq, res, "elections:write", 200, { sandbox: true, wouldUpdate: { id: req.params.id, ...parsed.data } });
+    try {
+      const race = await storage.updateElectionRace(req.params.id, parsed.data);
+      return agentResponse(agentReq, res, "elections:write", 200, { race });
+    } catch {
+      return agentResponse(agentReq, res, "elections:write", 500, null, [{ message: "Failed to update election race" }]);
+    }
+  });
+
+  app.post("/api/agent/elections/upsert", agentApiAuth, requireAgentPermission("elections:write"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    const parsed = insertElectionRaceSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "elections:write", 400, null, [{ message: "Invalid election race payload", details: parsed.error.flatten() }]);
+    if (agentReq.agentSandbox) return agentResponse(agentReq, res, "elections:write", 200, { sandbox: true, wouldUpsert: parsed.data });
+    try {
+      const result = await storage.upsertElectionRace(parsed.data);
+      return agentResponse(agentReq, res, "elections:write", result.created ? 201 : 200, result);
+    } catch {
+      return agentResponse(agentReq, res, "elections:write", 500, null, [{ message: "Failed to upsert election race" }]);
+    }
+  });
+
+  // ============================================================
+  // DBA API — Race Candidates  (candidates:read / candidates:write)
+  // ============================================================
+
+  app.get("/api/agent/candidates/search", agentApiAuth, requireAgentPermission("candidates:read"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    try {
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const offset = Number(req.query.offset) || 0;
+      const candidates = await storage.searchRaceCandidates({
+        state: req.query.state as string | undefined,
+        electionYear: req.query.electionYear ? Number(req.query.electionYear) : undefined,
+        electionPhase: req.query.electionPhase as string | undefined,
+        officeTitle: req.query.officeTitle as string | undefined,
+        party: req.query.party as string | undefined,
+        filingStatus: req.query.filingStatus as string | undefined,
+        county: req.query.county as string | undefined,
+        municipality: req.query.municipality as string | undefined,
+        district: req.query.district as string | undefined,
+        normalizedName: req.query.normalizedName as string | undefined,
+        electionRaceId: req.query.electionRaceId as string | undefined,
+        politicianProfileId: req.query.politicianProfileId as string | undefined,
+        externalId: req.query.externalId as string | undefined,
+        limit,
+        offset,
+      });
+      return agentResponse(agentReq, res, "candidates:read", 200, { candidates, pagination: { limit, offset, hasMore: candidates.length === limit } });
+    } catch {
+      return agentResponse(agentReq, res, "candidates:read", 500, null, [{ message: "Failed to search race candidates" }]);
+    }
+  });
+
+  app.get("/api/agent/candidates/:id", agentApiAuth, requireAgentPermission("candidates:read"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    try {
+      const candidate = await storage.getRaceCandidateById(req.params.id);
+      if (!candidate) return agentResponse(agentReq, res, "candidates:read", 404, null, [{ message: "Race candidate not found" }]);
+      return agentResponse(agentReq, res, "candidates:read", 200, { candidate });
+    } catch {
+      return agentResponse(agentReq, res, "candidates:read", 500, null, [{ message: "Failed to get race candidate" }]);
+    }
+  });
+
+  app.post("/api/agent/candidates/create", agentApiAuth, requireAgentPermission("candidates:write"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    const parsed = insertRaceCandidateSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "candidates:write", 400, null, [{ message: "Invalid race candidate payload", details: parsed.error.flatten() }]);
+    if (agentReq.agentSandbox) return agentResponse(agentReq, res, "candidates:write", 200, { sandbox: true, wouldCreate: parsed.data });
+    try {
+      const candidate = await storage.createRaceCandidate(parsed.data);
+      return agentResponse(agentReq, res, "candidates:write", 201, { candidate });
+    } catch {
+      return agentResponse(agentReq, res, "candidates:write", 500, null, [{ message: "Failed to create race candidate" }]);
+    }
+  });
+
+  app.put("/api/agent/candidates/:id", agentApiAuth, requireAgentPermission("candidates:write"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    const patchSchema = insertRaceCandidateSchema.partial();
+    const parsed = patchSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "candidates:write", 400, null, [{ message: "Invalid race candidate update payload", details: parsed.error.flatten() }]);
+    if (agentReq.agentSandbox) return agentResponse(agentReq, res, "candidates:write", 200, { sandbox: true, wouldUpdate: { id: req.params.id, ...parsed.data } });
+    try {
+      const candidate = await storage.updateRaceCandidate(req.params.id, parsed.data);
+      return agentResponse(agentReq, res, "candidates:write", 200, { candidate });
+    } catch {
+      return agentResponse(agentReq, res, "candidates:write", 500, null, [{ message: "Failed to update race candidate" }]);
+    }
+  });
+
+  app.post("/api/agent/candidates/upsert", agentApiAuth, requireAgentPermission("candidates:write"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    const parsed = insertRaceCandidateSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "candidates:write", 400, null, [{ message: "Invalid race candidate payload", details: parsed.error.flatten() }]);
+    if (agentReq.agentSandbox) return agentResponse(agentReq, res, "candidates:write", 200, { sandbox: true, wouldUpsert: parsed.data });
+    try {
+      const result = await storage.upsertRaceCandidate(parsed.data);
+      return agentResponse(agentReq, res, "candidates:write", result.created ? 201 : 200, result);
+    } catch {
+      return agentResponse(agentReq, res, "candidates:write", 500, null, [{ message: "Failed to upsert race candidate" }]);
+    }
+  });
+
+  app.post("/api/agent/candidates/compare", agentApiAuth, requireAgentPermission("candidates:read"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    const bodySchema = z.object({
+      idA: z.string().uuid().optional(),
+      idB: z.string().uuid().optional(),
+      a: z.object({ normalizedName: z.string().optional(), electionYear: z.number().optional(), state: z.string().optional(), officeTitle: z.string().optional(), externalId: z.string().optional() }).optional(),
+      b: z.object({ normalizedName: z.string().optional(), electionYear: z.number().optional(), state: z.string().optional(), officeTitle: z.string().optional(), externalId: z.string().optional() }).optional(),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "candidates:read", 400, null, [{ message: "Invalid compare payload", details: parsed.error.flatten() }]);
+    try {
+      let candidateA = parsed.data.idA ? await storage.getRaceCandidateById(parsed.data.idA) : undefined;
+      let candidateB = parsed.data.idB ? await storage.getRaceCandidateById(parsed.data.idB) : undefined;
+      // Look up by search params if direct IDs not provided
+      if (!candidateA && parsed.data.a) {
+        const results = await storage.searchRaceCandidates({
+          normalizedName: parsed.data.a.normalizedName,
+          electionYear: parsed.data.a.electionYear,
+          state: parsed.data.a.state,
+          officeTitle: parsed.data.a.officeTitle,
+          externalId: parsed.data.a.externalId,
+          limit: 1,
+        });
+        candidateA = results[0];
+      }
+      if (!candidateB && parsed.data.b) {
+        const results = await storage.searchRaceCandidates({
+          normalizedName: parsed.data.b.normalizedName,
+          electionYear: parsed.data.b.electionYear,
+          state: parsed.data.b.state,
+          officeTitle: parsed.data.b.officeTitle,
+          externalId: parsed.data.b.externalId,
+          limit: 1,
+        });
+        candidateB = results[0];
+      }
+      if (!candidateA || !candidateB) return agentResponse(agentReq, res, "candidates:read", 404, null, [{ message: "One or both candidates not found" }]);
+      // Build diff
+      const diffFields = ["fullName", "normalizedName", "state", "county", "municipality", "district", "officeTitle", "electionYear", "electionDate", "electionPhase", "party", "filingStatus", "externalId", "politicianProfileId"] as const;
+      const diff: Record<string, { a: unknown; b: unknown }> = {};
+      for (const field of diffFields) {
+        if (candidateA[field] !== candidateB[field]) diff[field] = { a: candidateA[field], b: candidateB[field] };
+      }
+      const likelySamePerson = candidateA.normalizedName === candidateB.normalizedName ||
+        (candidateA.state === candidateB.state && candidateA.electionYear === candidateB.electionYear && candidateA.officeTitle === candidateB.officeTitle &&
+         (candidateA.normalizedName ?? "").split(" ").some((w: string) => w.length > 3 && (candidateB.normalizedName ?? "").includes(w)));
+      return agentResponse(agentReq, res, "candidates:read", 200, { candidateA, candidateB, diff, likelySamePerson, diffCount: Object.keys(diff).length });
+    } catch {
+      return agentResponse(agentReq, res, "candidates:read", 500, null, [{ message: "Failed to compare candidates" }]);
+    }
+  });
+
+  // ============================================================
+  // DBA API — Political Offices  (candidates:read / politicians:write)
+  // ============================================================
+
+  app.get("/api/agent/offices/search", agentApiAuth, requireAgentPermission("candidates:read"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    try {
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const offset = Number(req.query.offset) || 0;
+      const allPositions = await storage.listPoliticalPositions?.() ?? [];
+      let filtered = allPositions;
+      if (req.query.level) filtered = filtered.filter((p: any) => p.level === req.query.level);
+      if (req.query.jurisdiction) filtered = filtered.filter((p: any) => p.jurisdiction?.toLowerCase().includes((req.query.jurisdiction as string).toLowerCase()));
+      if (req.query.title) filtered = filtered.filter((p: any) => p.title?.toLowerCase().includes((req.query.title as string).toLowerCase()));
+      if (req.query.district) filtered = filtered.filter((p: any) => p.district?.toLowerCase().includes((req.query.district as string).toLowerCase()));
+      if (req.query.isElected !== undefined) filtered = filtered.filter((p: any) => String(p.isElected) === req.query.isElected);
+      const page = filtered.slice(offset, offset + limit);
+      return agentResponse(agentReq, res, "candidates:read", 200, { offices: page, pagination: { limit, offset, hasMore: offset + limit < filtered.length } });
+    } catch {
+      return agentResponse(agentReq, res, "candidates:read", 500, null, [{ message: "Failed to search offices" }]);
+    }
+  });
+
+  app.post("/api/agent/offices/create", agentApiAuth, requireAgentPermission("politicians:write"), async (req: Request, res) => {
+    const agentReq = req as AgentRequest;
+    const parsed = insertPoliticalPositionSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "politicians:write", 400, null, [{ message: "Invalid political position payload", details: parsed.error.flatten() }]);
+    if (agentReq.agentSandbox) return agentResponse(agentReq, res, "politicians:write", 200, { sandbox: true, wouldCreate: parsed.data });
+    try {
+      const office = await storage.createPoliticalPosition(parsed.data);
+      return agentResponse(agentReq, res, "politicians:write", 201, { office });
+    } catch {
+      return agentResponse(agentReq, res, "politicians:write", 500, null, [{ message: "Failed to create political position" }]);
+    }
+  });
+
+  // ============================================================
+  // DBA API — Sandbox mirrors
+  // ============================================================
+
+  app.get("/api/agent/sandbox/elections/search", agentApiAuth, requireAgentPermission("elections:read"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    return agentResponse(agentReq, res, "elections:read:sandbox", 200, { sandbox: true, note: "Live search also available in production mode", query: req.query });
+  });
+
+  app.post("/api/agent/sandbox/elections/create", agentApiAuth, requireAgentPermission("elections:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = insertElectionRaceSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "elections:write:sandbox", 400, null, [{ message: "Invalid election race payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "elections:write:sandbox", 200, { sandbox: true, wouldCreate: parsed.data });
+  });
+
+  app.put("/api/agent/sandbox/elections/:id", agentApiAuth, requireAgentPermission("elections:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = insertElectionRaceSchema.partial().safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "elections:write:sandbox", 400, null, [{ message: "Invalid election race update payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "elections:write:sandbox", 200, { sandbox: true, wouldUpdate: { id: req.params.id, ...parsed.data } });
+  });
+
+  app.post("/api/agent/sandbox/elections/upsert", agentApiAuth, requireAgentPermission("elections:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = insertElectionRaceSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "elections:write:sandbox", 400, null, [{ message: "Invalid election race payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "elections:write:sandbox", 200, { sandbox: true, wouldUpsert: parsed.data });
+  });
+
+  app.get("/api/agent/sandbox/candidates/search", agentApiAuth, requireAgentPermission("candidates:read"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    return agentResponse(agentReq, res, "candidates:read:sandbox", 200, { sandbox: true, note: "Live search also available in production mode", query: req.query });
+  });
+
+  app.post("/api/agent/sandbox/candidates/create", agentApiAuth, requireAgentPermission("candidates:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = insertRaceCandidateSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "candidates:write:sandbox", 400, null, [{ message: "Invalid race candidate payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "candidates:write:sandbox", 200, { sandbox: true, wouldCreate: parsed.data });
+  });
+
+  app.put("/api/agent/sandbox/candidates/:id", agentApiAuth, requireAgentPermission("candidates:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = insertRaceCandidateSchema.partial().safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "candidates:write:sandbox", 400, null, [{ message: "Invalid race candidate update payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "candidates:write:sandbox", 200, { sandbox: true, wouldUpdate: { id: req.params.id, ...parsed.data } });
+  });
+
+  app.post("/api/agent/sandbox/candidates/upsert", agentApiAuth, requireAgentPermission("candidates:write"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    const parsed = insertRaceCandidateSchema.safeParse(req.body);
+    if (!parsed.success) return agentResponse(agentReq, res, "candidates:write:sandbox", 400, null, [{ message: "Invalid race candidate payload", details: parsed.error.flatten() }]);
+    return agentResponse(agentReq, res, "candidates:write:sandbox", 200, { sandbox: true, wouldUpsert: parsed.data });
+  });
+
+  app.post("/api/agent/sandbox/candidates/compare", agentApiAuth, requireAgentPermission("candidates:read"), async (req: Request, res) => {
+    const agentReq = forceSandbox(req);
+    return agentResponse(agentReq, res, "candidates:read:sandbox", 200, { sandbox: true, note: "Compare validates payload structure only in sandbox mode", received: redactAgentPayload(req.body) });
   });
 
   app.all("/api/agent/sandbox/*", agentApiAuth, requireAgentPermission("sandbox:use"), async (req: Request, res) => {

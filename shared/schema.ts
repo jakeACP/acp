@@ -3194,3 +3194,91 @@ export const appleIapTransactions = pgTable("apple_iap_transactions", {
 
 export type AppleIapTransaction = typeof appleIapTransactions.$inferSelect;
 export type InsertAppleIapTransaction = typeof appleIapTransactions.$inferInsert;
+
+// ── DBA / Election Data Layer ────────────────────────────────────────────────
+// Designed for ClawMACHINE DBA agents (Dan Adams, Fiona Gallagher) to ingest,
+// verify, and manage candidate and election records across Minnesota and other
+// states at every jurisdiction level.
+
+// Election Races — a single ballot race or election contest
+export const electionRaces = pgTable("election_races", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  year: integer("year").notNull(),
+  electionDate: text("election_date"),           // ISO 8601 date string e.g. "2026-08-11"
+  state: varchar("state", { length: 2 }).notNull(),
+  phase: text("phase").notNull().default("unknown"),
+  // Jurisdiction
+  jurisdictionLevel: text("jurisdiction_level").notNull().default("unknown"),
+  jurisdictionName: text("jurisdiction_name"),
+  county: text("county"),
+  municipality: text("municipality"),
+  district: text("district"),
+  officeTitle: text("office_title"),
+  // Source
+  sourceUrl: text("source_url"),
+  sourceName: text("source_name"),
+  externalId: text("external_id"),              // external race/election ID from SoS or other source
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  yearStateIdx: index("election_races_year_state_idx").on(table.year, table.state),
+  phaseIdx: index("election_races_phase_idx").on(table.phase),
+  stateYearPhaseIdx: index("election_races_state_year_phase_idx").on(table.state, table.year, table.phase),
+  externalIdIdx: index("election_races_external_id_idx").on(table.externalId),
+  phaseCheck: sql`CHECK (${table.phase} IN ('primary','general','special','runoff','unknown'))`,
+  jurisdictionCheck: sql`CHECK (${table.jurisdictionLevel} IN ('federal','state','county','municipal','school_board','judicial','township','district','special','unknown'))`,
+}));
+
+export const insertElectionRaceSchema = createInsertSchema(electionRaces).omit({ id: true, createdAt: true, updatedAt: true });
+export type ElectionRace = typeof electionRaces.$inferSelect;
+export type InsertElectionRace = z.infer<typeof insertElectionRaceSchema>;
+
+// Race Candidates — rich candidate records per race
+export const raceCandidates = pgTable("race_candidates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  electionRaceId: varchar("election_race_id").references(() => electionRaces.id, { onDelete: "set null" }),
+  // Identity
+  fullName: text("full_name").notNull(),
+  normalizedName: text("normalized_name"),       // auto-computed: lowercase, stripped punctuation
+  // Geography
+  state: varchar("state", { length: 2 }).notNull(),
+  county: text("county"),
+  municipality: text("municipality"),
+  district: text("district"),
+  // Race / office
+  officeTitle: text("office_title").notNull(),
+  electionYear: integer("election_year").notNull(),
+  electionDate: text("election_date"),
+  electionPhase: text("election_phase").notNull().default("unknown"),
+  // Party / nonpartisan
+  party: text("party"),
+  isNonpartisan: boolean("is_nonpartisan").default(false),
+  // Filing status
+  filingStatus: text("filing_status").notNull().default("unknown"),
+  // Source tracking
+  sourceUrl: text("source_url"),
+  sourceName: text("source_name"),
+  sourceRetrievalDate: text("source_retrieval_date"),
+  // External identifier (SoS ID, BallotPedia ID, FEC ID, etc.)
+  externalId: text("external_id"),
+  // Optional link to existing politician profile
+  politicianProfileId: varchar("politician_profile_id").references(() => politicianProfiles.id, { onDelete: "set null" }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  raceIdx: index("race_candidates_race_idx").on(table.electionRaceId),
+  stateYearIdx: index("race_candidates_state_year_idx").on(table.state, table.electionYear),
+  normalizedNameIdx: index("race_candidates_normalized_name_idx").on(table.normalizedName),
+  externalIdIdx: index("race_candidates_external_id_idx").on(table.externalId),
+  filingStatusIdx: index("race_candidates_filing_status_idx").on(table.filingStatus),
+  phaseIdx: index("race_candidates_phase_idx").on(table.electionPhase),
+  politicianProfileIdx: index("race_candidates_politician_profile_idx").on(table.politicianProfileId),
+  phaseCheck: sql`CHECK (${table.electionPhase} IN ('primary','general','special','runoff','unknown'))`,
+  filingStatusCheck: sql`CHECK (${table.filingStatus} IN ('announced','filed','on_ballot','withdrawn','write_in','disqualified','unknown'))`,
+}));
+
+export const insertRaceCandidateSchema = createInsertSchema(raceCandidates).omit({ id: true, createdAt: true, updatedAt: true });
+export type RaceCandidate = typeof raceCandidates.$inferSelect;
+export type InsertRaceCandidate = z.infer<typeof insertRaceCandidateSchema>;

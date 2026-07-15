@@ -1,6 +1,6 @@
 import { users, posts, polls, pollVotes, groups, groupMembers, comments, likes, candidates, candidateSupports, messages, channels, channelMembers, channelMessages, followedRepresentatives, userAddresses, passwordResetTokens, flags, events, eventAttendees, volunteerSignups, charities, charityDonations, acpTransactions, acpBlocks, storeItems, userPurchases, subscriptionRewards, representatives, zipCodeLookups, politicalPositions, politicianProfiles, politicianCorruptionRatings, specialInterestGroups, politicianSigSponsorships, boycotts, boycottSubscriptions, jurisdictions, rulesets, initiatives, initiativeVersions, petitions, signatures, validationEvents, sponsors, auditLogs, userFollows, reactions, biasVotes, invitations, whistleblowingPosts, whistleblowingVotes, type User, type InsertUser, type Post, type InsertPost, type PostWithAuthor, type Poll, type InsertPoll, type Group, type InsertGroup, type Comment, type InsertComment, type WhistleblowingPost, type InsertWhistleblowingPost, type WhistleblowingVote, type InsertWhistleblowingVote, type Candidate, type InsertCandidate, type CandidateSupport, type InsertCandidateSupport, type Message, type InsertMessage, type Channel, type InsertChannel, type ChannelMember, type InsertChannelMember, type ChannelMessage, type InsertChannelMessage, type FollowedRepresentative, type InsertFollowedRepresentative, type UserAddress, type InsertUserAddress, type PasswordResetToken, type InsertPasswordResetToken, type Flag, type InsertFlag, type Event, type InsertEvent, type EventAttendee, type InsertEventAttendee, type VolunteerSignup, type InsertVolunteerSignup, type Charity, type InsertCharity, type CharityDonation, type InsertCharityDonation, type ACPTransaction, type InsertACPTransaction, type StoreItem, type InsertStoreItem, type UserPurchase, type SubscriptionReward, type InsertSubscriptionReward, type ACPBlock, type Representative, type InsertRepresentative, type ZipCodeLookup, type InsertZipCodeLookup, type PoliticalPosition, type InsertPoliticalPosition, type PoliticianProfile, type InsertPoliticianProfile, type PoliticianCorruptionRating, type InsertPoliticianCorruptionRating, type SpecialInterestGroup, type InsertSpecialInterestGroup, type PoliticianSigSponsorship, type InsertPoliticianSigSponsorship, type Boycott, type InsertBoycott, type BoycottSubscription, type InsertBoycottSubscription, type Jurisdiction, type InsertJurisdiction, type Ruleset, type InsertRuleset, type Initiative, type InsertInitiative, type InitiativeVersion, type InsertInitiativeVersion, type Petition, type InsertPetition, type Signature, type InsertSignature, type ValidationEvent, type InsertValidationEvent, type Sponsor, type InsertSponsor, type AuditLog, type InsertAuditLog, type Invitation, type InsertInvitation, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema } from "@shared/schema";
 import { FEED_CONFIG } from "@shared/feed-config";
-import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, politicalParties, partyLeaders, partyBallotAccess, partyPolicyPositions, partyEndorsements, partyUserRatings, partyControversies, zipCandidateImports, zipLookupRuns, canvassingPins, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse, type ZipCandidateImport, type CanvassingPin, type InsertCanvassingPin } from "@shared/schema";
+import { gradingAlgorithmSettings, fecCandidateTotals, sigCommunityVotes, apiKeys, agentApiKeys, agentLogs, agentApps, issueResponses, candidateApprovalVotes, politicalParties, partyLeaders, partyBallotAccess, partyPolicyPositions, partyEndorsements, partyUserRatings, partyControversies, zipCandidateImports, zipLookupRuns, canvassingPins, electionRaces, raceCandidates, type GradingAlgorithmSettings, type FecCandidateTotals, type SigCommunityVote, type ApiKey, type AgentApiKey, type InsertAgentApiKey, type AgentLog, type InsertAgentLog, type AgentApp, type InsertAgentApp, type IssueResponse, type InsertIssueResponse, type ZipCandidateImport, type CanvassingPin, type InsertCanvassingPin, type ElectionRace, type InsertElectionRace, type RaceCandidate, type InsertRaceCandidate } from "@shared/schema";
 import { friendships, friendGroups, friendGroupMembers, friendSuggestions, friendSuggestionDismissals, userReferrals, liveStreams, liveStreamViewers, notifications, flaggedContent, bannedUsers, blockedIps, voterVerificationRequests, signals, signalLikes, signalComments, aiArticleParameters, tradingFlags, politicianDemerits, acePledgeRequests, composeJobs, pledgeRequests, type Friendship, type InsertFriendship, type FriendGroup, type InsertFriendGroup, type FriendGroupMember, type InsertFriendGroupMember, type FriendSuggestion, type InsertFriendSuggestion, type FriendSuggestionDismissal, type InsertFriendSuggestionDismissal, type UserReferral, type InsertUserReferral, type LiveStream, type InsertLiveStream, type LiveStreamWithOwner, type LiveStreamViewer, type InsertLiveStreamViewer, type Notification, type InsertNotification, type FlaggedContent, type InsertFlaggedContent, type BannedUser, type InsertBannedUser, type BlockedIp, type InsertBlockedIp, type VoterVerificationRequest, type InsertVoterVerificationRequest, type Signal, type InsertSignal, type SignalWithAuthor, type SignalLike, type InsertSignalLike, type AiArticleParameters, type TradingFlag, type InsertTradingFlag, type PoliticianDemerit, type InsertPoliticianDemerit, type AcePledgeRequest, type InsertAcePledgeRequest, type ComposeJob, type SignalComment, type InsertSignalComment } from "@shared/schema";
 import * as cheerio from "cheerio";
 import { db } from "./db";
@@ -398,6 +398,20 @@ export interface IStorage {
   touchAgentApiKey(id: string): Promise<void>;
   createAgentLog(data: InsertAgentLog): Promise<AgentLog>;
   listAgentLogs(options?: { limit?: number; offset?: number; apiKeyId?: string }): Promise<AgentLog[]>;
+
+  // DBA Election Races
+  createElectionRace(data: InsertElectionRace): Promise<ElectionRace>;
+  getElectionRaceById(id: string): Promise<ElectionRace | undefined>;
+  updateElectionRace(id: string, data: Partial<InsertElectionRace>): Promise<ElectionRace>;
+  searchElectionRaces(params: { state?: string; year?: number; phase?: string; jurisdictionLevel?: string; county?: string; municipality?: string; district?: string; officeTitle?: string; externalId?: string; limit?: number; offset?: number }): Promise<ElectionRace[]>;
+  upsertElectionRace(data: InsertElectionRace): Promise<{ race: ElectionRace; created: boolean }>;
+
+  // DBA Race Candidates
+  createRaceCandidate(data: InsertRaceCandidate): Promise<RaceCandidate>;
+  getRaceCandidateById(id: string): Promise<RaceCandidate | undefined>;
+  updateRaceCandidate(id: string, data: Partial<InsertRaceCandidate>): Promise<RaceCandidate>;
+  searchRaceCandidates(params: { state?: string; electionYear?: number; electionPhase?: string; officeTitle?: string; party?: string; filingStatus?: string; county?: string; municipality?: string; district?: string; normalizedName?: string; electionRaceId?: string; politicianProfileId?: string; externalId?: string; limit?: number; offset?: number }): Promise<RaceCandidate[]>;
+  upsertRaceCandidate(data: InsertRaceCandidate): Promise<{ candidate: RaceCandidate; created: boolean }>;
 
   // Agent Apps
   listAgentApps(): Promise<AgentApp[]>;
@@ -10955,6 +10969,139 @@ export class DatabaseStorage implements IStorage {
       : [eq(canvassingPins.id, id), eq(canvassingPins.createdBy, userId)];
     const result = await db.delete(canvassingPins).where(and(...conditions)).returning({ id: canvassingPins.id });
     return result.length > 0;
+  }
+
+  // ── DBA Election Races ────────────────────────────────────────────────────
+
+  async createElectionRace(data: InsertElectionRace): Promise<ElectionRace> {
+    const [race] = await db.insert(electionRaces).values({ ...data, updatedAt: new Date() }).returning();
+    return race;
+  }
+
+  async getElectionRaceById(id: string): Promise<ElectionRace | undefined> {
+    const [race] = await db.select().from(electionRaces).where(eq(electionRaces.id, id));
+    return race;
+  }
+
+  async updateElectionRace(id: string, data: Partial<InsertElectionRace>): Promise<ElectionRace> {
+    const [race] = await db.update(electionRaces).set({ ...data, updatedAt: new Date() }).where(eq(electionRaces.id, id)).returning();
+    return race;
+  }
+
+  async searchElectionRaces(params: { state?: string; year?: number; phase?: string; jurisdictionLevel?: string; county?: string; municipality?: string; district?: string; officeTitle?: string; externalId?: string; limit?: number; offset?: number }): Promise<ElectionRace[]> {
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (params.state) conditions.push(eq(electionRaces.state, params.state.toUpperCase()) as any);
+    if (params.year) conditions.push(eq(electionRaces.year, params.year) as any);
+    if (params.phase) conditions.push(eq(electionRaces.phase, params.phase) as any);
+    if (params.jurisdictionLevel) conditions.push(eq(electionRaces.jurisdictionLevel, params.jurisdictionLevel) as any);
+    if (params.county) conditions.push(ilike(electionRaces.county!, `%${params.county}%`) as any);
+    if (params.municipality) conditions.push(ilike(electionRaces.municipality!, `%${params.municipality}%`) as any);
+    if (params.district) conditions.push(ilike(electionRaces.district!, `%${params.district}%`) as any);
+    if (params.officeTitle) conditions.push(ilike(electionRaces.officeTitle!, `%${params.officeTitle}%`) as any);
+    if (params.externalId) conditions.push(eq(electionRaces.externalId!, params.externalId) as any);
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    return db.select().from(electionRaces)
+      .where(whereClause)
+      .orderBy(desc(electionRaces.year), asc(electionRaces.officeTitle))
+      .limit(params.limit ?? 50)
+      .offset(params.offset ?? 0);
+  }
+
+  async upsertElectionRace(data: InsertElectionRace): Promise<{ race: ElectionRace; created: boolean }> {
+    if (data.externalId) {
+      const [existing] = await db.select().from(electionRaces).where(eq(electionRaces.externalId!, data.externalId));
+      if (existing) {
+        const [updated] = await db.update(electionRaces).set({ ...data, updatedAt: new Date() }).where(eq(electionRaces.id, existing.id)).returning();
+        return { race: updated, created: false };
+      }
+    }
+    const matchConditions: any[] = [
+      eq(electionRaces.year, data.year),
+      eq(electionRaces.state, data.state),
+      eq(electionRaces.phase, data.phase ?? "unknown"),
+    ];
+    if (data.officeTitle) matchConditions.push(eq(electionRaces.officeTitle!, data.officeTitle));
+    if (data.district) matchConditions.push(eq(electionRaces.district!, data.district));
+    if (data.municipality) matchConditions.push(eq(electionRaces.municipality!, data.municipality));
+    const [existing] = await db.select().from(electionRaces).where(and(...matchConditions));
+    if (existing) {
+      const [updated] = await db.update(electionRaces).set({ ...data, updatedAt: new Date() }).where(eq(electionRaces.id, existing.id)).returning();
+      return { race: updated, created: false };
+    }
+    const [created] = await db.insert(electionRaces).values({ ...data, updatedAt: new Date() }).returning();
+    return { race: created, created: true };
+  }
+
+  // ── DBA Race Candidates ───────────────────────────────────────────────────
+
+  private normalizeCandidateName(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  async createRaceCandidate(data: InsertRaceCandidate): Promise<RaceCandidate> {
+    const normalizedName = data.normalizedName ?? this.normalizeCandidateName(data.fullName);
+    const [candidate] = await db.insert(raceCandidates).values({ ...data, normalizedName, updatedAt: new Date() }).returning();
+    return candidate;
+  }
+
+  async getRaceCandidateById(id: string): Promise<RaceCandidate | undefined> {
+    const [candidate] = await db.select().from(raceCandidates).where(eq(raceCandidates.id, id));
+    return candidate;
+  }
+
+  async updateRaceCandidate(id: string, data: Partial<InsertRaceCandidate>): Promise<RaceCandidate> {
+    const patch: any = { ...data, updatedAt: new Date() };
+    if (data.fullName && !data.normalizedName) patch.normalizedName = this.normalizeCandidateName(data.fullName);
+    const [candidate] = await db.update(raceCandidates).set(patch).where(eq(raceCandidates.id, id)).returning();
+    return candidate;
+  }
+
+  async searchRaceCandidates(params: { state?: string; electionYear?: number; electionPhase?: string; officeTitle?: string; party?: string; filingStatus?: string; county?: string; municipality?: string; district?: string; normalizedName?: string; electionRaceId?: string; politicianProfileId?: string; externalId?: string; limit?: number; offset?: number }): Promise<RaceCandidate[]> {
+    const conditions: any[] = [];
+    if (params.state) conditions.push(eq(raceCandidates.state, params.state.toUpperCase()));
+    if (params.electionYear) conditions.push(eq(raceCandidates.electionYear, params.electionYear));
+    if (params.electionPhase) conditions.push(eq(raceCandidates.electionPhase, params.electionPhase));
+    if (params.officeTitle) conditions.push(ilike(raceCandidates.officeTitle, `%${params.officeTitle}%`));
+    if (params.party) conditions.push(ilike(raceCandidates.party!, `%${params.party}%`));
+    if (params.filingStatus) conditions.push(eq(raceCandidates.filingStatus, params.filingStatus));
+    if (params.county) conditions.push(ilike(raceCandidates.county!, `%${params.county}%`));
+    if (params.municipality) conditions.push(ilike(raceCandidates.municipality!, `%${params.municipality}%`));
+    if (params.district) conditions.push(ilike(raceCandidates.district!, `%${params.district}%`));
+    if (params.normalizedName) conditions.push(ilike(raceCandidates.normalizedName!, `%${params.normalizedName.toLowerCase()}%`));
+    if (params.electionRaceId) conditions.push(eq(raceCandidates.electionRaceId!, params.electionRaceId));
+    if (params.politicianProfileId) conditions.push(eq(raceCandidates.politicianProfileId!, params.politicianProfileId));
+    if (params.externalId) conditions.push(eq(raceCandidates.externalId!, params.externalId));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    return db.select().from(raceCandidates)
+      .where(whereClause)
+      .orderBy(asc(raceCandidates.fullName))
+      .limit(params.limit ?? 50)
+      .offset(params.offset ?? 0);
+  }
+
+  async upsertRaceCandidate(data: InsertRaceCandidate): Promise<{ candidate: RaceCandidate; created: boolean }> {
+    const normalizedName = data.normalizedName ?? this.normalizeCandidateName(data.fullName);
+    if (data.externalId) {
+      const [existing] = await db.select().from(raceCandidates).where(eq(raceCandidates.externalId!, data.externalId));
+      if (existing) {
+        const [updated] = await db.update(raceCandidates).set({ ...data, normalizedName, updatedAt: new Date() }).where(eq(raceCandidates.id, existing.id)).returning();
+        return { candidate: updated, created: false };
+      }
+    }
+    const matchConditions: any[] = [
+      eq(raceCandidates.normalizedName!, normalizedName),
+      eq(raceCandidates.electionYear, data.electionYear),
+      eq(raceCandidates.state, data.state),
+      eq(raceCandidates.officeTitle, data.officeTitle),
+    ];
+    if (data.electionRaceId) matchConditions.push(eq(raceCandidates.electionRaceId!, data.electionRaceId));
+    const [existing] = await db.select().from(raceCandidates).where(and(...matchConditions));
+    if (existing) {
+      const [updated] = await db.update(raceCandidates).set({ ...data, normalizedName, updatedAt: new Date() }).where(eq(raceCandidates.id, existing.id)).returning();
+      return { candidate: updated, created: false };
+    }
+    const [created] = await db.insert(raceCandidates).values({ ...data, normalizedName, updatedAt: new Date() }).returning();
+    return { candidate: created, created: true };
   }
 }
 
