@@ -9,15 +9,30 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { Vote, Users, Shield, Megaphone, AlertCircle, Smartphone, Key } from "lucide-react";
+import { Vote, Users, Shield, Megaphone, AlertCircle, Smartphone, Key, MapPin, CheckCircle2, Loader2 } from "lucide-react";
 import logoPath from "@assets/logo-tpb_1763998990798.png";
 import { Redirect, Link, useLocation } from "wouter";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { ErrorMessage } from "@/components/error-message";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { SiGoogle, SiApple } from "react-icons/si";
+
+const US_STATES = [
+  ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
+  ["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["FL","Florida"],["GA","Georgia"],
+  ["HI","Hawaii"],["ID","Idaho"],["IL","Illinois"],["IN","Indiana"],["IA","Iowa"],
+  ["KS","Kansas"],["KY","Kentucky"],["LA","Louisiana"],["ME","Maine"],["MD","Maryland"],
+  ["MA","Massachusetts"],["MI","Michigan"],["MN","Minnesota"],["MS","Mississippi"],["MO","Missouri"],
+  ["MT","Montana"],["NE","Nebraska"],["NV","Nevada"],["NH","New Hampshire"],["NJ","New Jersey"],
+  ["NM","New Mexico"],["NY","New York"],["NC","North Carolina"],["ND","North Dakota"],["OH","Ohio"],
+  ["OK","Oklahoma"],["OR","Oregon"],["PA","Pennsylvania"],["RI","Rhode Island"],["SC","South Carolina"],
+  ["SD","South Dakota"],["TN","Tennessee"],["TX","Texas"],["UT","Utah"],["VT","Vermont"],
+  ["VA","Virginia"],["WA","Washington"],["WV","West Virginia"],["WI","Wisconsin"],["WY","Wyoming"],
+  ["DC","District of Columbia"],
+];
 
 function GoogleSignInButton({ label = "Continue with Google" }: { label?: string }) {
   return (
@@ -69,6 +84,10 @@ const registerSchema = insertUserSchema.extend({
       (val) => val.replace(/\D/g, '').length >= 10,
       "Phone number must contain at least 10 digits"
     ),
+  streetAddress: z.string().min(3, "Street address is required"),
+  city: z.string().min(1, "City is required"),
+  state: z.string().length(2, "Please select a state"),
+  zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, "Enter a valid 5-digit ZIP code"),
   invitationToken: z.string().optional(),
 });
 
@@ -91,11 +110,19 @@ export default function AuthPage() {
     resolver: zodResolver(loginSchema),
   });
 
+  const [addressVerified, setAddressVerified] = useState(false);
+  const [addressVerifying, setAddressVerifying] = useState(false);
+  const [addressVerifyError, setAddressVerifyError] = useState<string | null>(null);
+
   const registerForm = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       invitationToken: "",
       phoneNumber: "",
+      streetAddress: "",
+      city: "",
+      state: "",
+      zipCode: "",
     },
   });
 
@@ -185,11 +212,55 @@ export default function AuthPage() {
     setRememberDevice(false);
   };
 
+  const verifyAddress = async () => {
+    const { streetAddress, city, state, zipCode } = registerForm.getValues();
+    if (!streetAddress || !city || !state || !zipCode) {
+      setAddressVerifyError("Please fill in all address fields before verifying.");
+      return;
+    }
+    setAddressVerifying(true);
+    setAddressVerifyError(null);
+    setAddressVerified(false);
+    try {
+      const params = new URLSearchParams({
+        street: streetAddress,
+        city,
+        state,
+        zip: zipCode,
+        benchmark: "Public_AR_Current",
+        format: "json",
+      });
+      const res = await fetch(
+        `https://geocoding.geo.census.gov/geocoder/locations/address?${params}`
+      );
+      const data = await res.json();
+      const matches = data?.result?.addressMatches ?? [];
+      if (matches.length > 0) {
+        setAddressVerified(true);
+        setAddressVerifyError(null);
+        // Auto-fill with normalized address from Census response
+        const match = matches[0];
+        if (match.addressComponents) {
+          const c = match.addressComponents;
+          registerForm.setValue("city", c.city || city);
+          registerForm.setValue("state", c.state || state);
+          registerForm.setValue("zipCode", c.zip || zipCode);
+        }
+      } else {
+        setAddressVerifyError("Address not found. Please check for typos and try again.");
+      }
+    } catch {
+      setAddressVerifyError("Verification service unavailable. Please check your address and continue.");
+    } finally {
+      setAddressVerifying(false);
+    }
+  };
+
   const onRegister = (data: RegisterData) => {
     // Remove invitationToken if it's empty/undefined
     const { invitationToken, ...rest } = data;
     const payload = invitationToken ? data : rest;
-    registerMutation.mutate(payload as any);
+    registerMutation.mutate({ ...payload, addressVerified } as any);
   };
 
   return (
@@ -473,6 +544,116 @@ export default function AuthPage() {
                           {registerForm.formState.errors.phoneNumber.message}
                         </p>
                       )}
+                    </div>
+
+                    {/* Address Section */}
+                    <div className="border rounded-lg p-4 space-y-3 bg-slate-50 dark:bg-slate-900">
+                      <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                        <MapPin className="h-4 w-4" />
+                        Home Address
+                        {addressVerified && (
+                          <span className="ml-auto flex items-center gap-1 text-green-600 text-xs font-semibold">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Verified
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="streetAddress">Street Address</Label>
+                        <Input
+                          id="streetAddress"
+                          {...registerForm.register("streetAddress")}
+                          placeholder="123 Main St"
+                          disabled={registerMutation.isPending}
+                          onChange={() => setAddressVerified(false)}
+                        />
+                        {registerForm.formState.errors.streetAddress && (
+                          <p className="text-sm text-destructive mt-1">
+                            {registerForm.formState.errors.streetAddress.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="city">City</Label>
+                          <Input
+                            id="city"
+                            {...registerForm.register("city")}
+                            placeholder="Minneapolis"
+                            disabled={registerMutation.isPending}
+                            onChange={() => setAddressVerified(false)}
+                          />
+                          {registerForm.formState.errors.city && (
+                            <p className="text-sm text-destructive mt-1">
+                              {registerForm.formState.errors.city.message}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="zipCode">ZIP Code</Label>
+                          <Input
+                            id="zipCode"
+                            {...registerForm.register("zipCode")}
+                            placeholder="55401"
+                            maxLength={10}
+                            disabled={registerMutation.isPending}
+                            onChange={() => setAddressVerified(false)}
+                          />
+                          {registerForm.formState.errors.zipCode && (
+                            <p className="text-sm text-destructive mt-1">
+                              {registerForm.formState.errors.zipCode.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="state">State</Label>
+                        <Select
+                          onValueChange={(val) => {
+                            registerForm.setValue("state", val, { shouldValidate: true });
+                            setAddressVerified(false);
+                          }}
+                          value={registerForm.watch("state")}
+                          disabled={registerMutation.isPending}
+                        >
+                          <SelectTrigger id="state">
+                            <SelectValue placeholder="Select state" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {US_STATES.map(([abbr, name]) => (
+                              <SelectItem key={abbr} value={abbr}>{name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {registerForm.formState.errors.state && (
+                          <p className="text-sm text-destructive mt-1">
+                            {registerForm.formState.errors.state.message}
+                          </p>
+                        )}
+                      </div>
+
+                      {addressVerifyError && (
+                        <p className="text-sm text-amber-600 dark:text-amber-400">{addressVerifyError}</p>
+                      )}
+
+                      <Button
+                        type="button"
+                        variant={addressVerified ? "outline" : "secondary"}
+                        size="sm"
+                        className="w-full"
+                        onClick={verifyAddress}
+                        disabled={addressVerifying || registerMutation.isPending}
+                      >
+                        {addressVerifying ? (
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Verifying…</>
+                        ) : addressVerified ? (
+                          <><CheckCircle2 className="h-4 w-4 mr-2 text-green-600" /> Address Verified</>
+                        ) : (
+                          "Verify Address"
+                        )}
+                      </Button>
                     </div>
 
                     <div>

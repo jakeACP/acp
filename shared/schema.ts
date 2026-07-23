@@ -74,6 +74,12 @@ export const users = pgTable("users", {
   extendedProfileData: json("extended_profile_data"),
   // Custom avatar configuration (JSON blob for the avatar builder)
   avatarConfig: json("avatar_config"),
+  // Home address (collected at signup, verified via Census Bureau geocoder)
+  streetAddress: text("street_address"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  addressVerified: boolean("address_verified").default(false),
 }, (table) => ({
   politicalLeanRange: sql`CHECK (${table.politicalLean} BETWEEN -1.00 AND 1.00 OR ${table.politicalLean} IS NULL)`,
   trustScoreRange: sql`CHECK (${table.trustScore} BETWEEN 0.00 AND 1.00 OR ${table.trustScore} IS NULL)`,
