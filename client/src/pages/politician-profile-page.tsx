@@ -23,6 +23,7 @@ import { useState, useMemo, useEffect, useRef, lazy, Suspense } from "react";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import type { Post, PoliticianProfile, PoliticalPosition, PoliticianCorruptionRating, SpecialInterestGroup, PoliticianSigSponsorship, PoliticianDemerit, CandidateProfileModule } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import { PoliticalCompassTab } from "@/components/political-compass-tab";
 
 type PoliticianProfileWithPosition = PoliticianProfile & {
   position?: PoliticalPosition | null;
@@ -80,6 +81,18 @@ export default function PoliticianProfilePage() {
   // Fetch posts where this politician is tagged
   const { data: posts = [], isLoading: postsLoading } = useQuery<Post[]>({
     queryKey: ['/api/feeds/all'],
+  });
+
+  const isOwner = !!user && (profile?.claimedByUserId === user.id || user.role === 'admin');
+
+  const compassMutation = useMutation({
+    mutationFn: async (result: { economicScore: number; socialScore: number; quadrant: string }) =>
+      apiRequest(`/api/politician-profiles/${id}/compass`, "PUT", result),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/politician-profiles/${id}`] });
+      toast({ title: "Political position saved", description: "The compass position has been updated." });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   // Fetch corruption rating stats
@@ -549,7 +562,7 @@ export default function PoliticianProfilePage() {
 
           {/* ── Tabbed Content ──────────────────────────────── */}
           <Tabs defaultValue={profile.claimedByUserId ? "candidate-profile" : "news-feed"}>
-            <TabsList className={`grid w-full ${profile.claimedByUserId ? 'grid-cols-6' : 'grid-cols-5'}`}>
+            <TabsList className={`grid w-full ${profile.claimedByUserId ? 'grid-cols-7' : 'grid-cols-6'}`}>
               {profile.claimedByUserId && (
                 <TabsTrigger value="candidate-profile">Candidate Profile</TabsTrigger>
               )}
@@ -557,6 +570,7 @@ export default function PoliticianProfilePage() {
               <TabsTrigger value="donors">Donors</TabsTrigger>
               <TabsTrigger value="trading">Trading</TabsTrigger>
               <TabsTrigger value="endorsements">Endorsements</TabsTrigger>
+              <TabsTrigger value="political-position">Political Position</TabsTrigger>
               <TabsTrigger value="promises" disabled>Campaign Promises</TabsTrigger>
             </TabsList>
 
@@ -618,6 +632,30 @@ export default function PoliticianProfilePage() {
             {/* ── ENDORSEMENTS TAB ──────────────────────────── */}
             <TabsContent value="endorsements">
               <EndorsementsTab profile={profile} sponsors={sponsors} />
+            </TabsContent>
+
+            {/* ── POLITICAL POSITION TAB ────────────────────── */}
+            <TabsContent value="political-position">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Political Position</CardTitle>
+                  <CardDescription>
+                    Where {profile.fullName} stands on economic and social/governance axes
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <PoliticalCompassTab
+                    economicScore={(profile as any).compassEconomicScore}
+                    socialScore={(profile as any).compassSocialScore}
+                    quadrant={(profile as any).compassQuadrant}
+                    isOwner={isOwner}
+                    isSaving={compassMutation.isPending}
+                    onSave={(result) => compassMutation.mutate(result)}
+                    subjectName={profile.fullName}
+                    uid={`pol-${id}`}
+                  />
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* ── CAMPAIGN PROMISES TAB ─────────────────────── */}

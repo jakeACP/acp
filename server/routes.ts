@@ -28,7 +28,7 @@ import { redactAgentData } from "./agentRedact";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertElectionRaceSchema, insertRaceCandidateSchema, politicianProfiles, politicalPositions, candidates, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, PLEDGE_DEFINITIONS, type InsertAgentApp, type AgentApiKey } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertElectionRaceSchema, insertRaceCandidateSchema, politicianProfiles, politicalPositions, candidates, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, PLEDGE_DEFINITIONS, type InsertAgentApp, type AgentApiKey, users } from "@shared/schema";
 import archiver from "archiver";
 import multer from "multer";
 import unzipper from "unzipper";
@@ -2008,6 +2008,23 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     } catch (error: any) {
       console.error("Error fetching candidate:", error);
       res.status(500).json({ message: "Failed to fetch candidate" });
+    }
+  });
+
+  // Get a candidate's political compass result (from their user extendedProfileData)
+  app.get("/api/candidates/:id/compass-result", async (req, res) => {
+    try {
+      const candidate = await storage.getCandidateById(req.params.id);
+      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+      const [userRow] = await db
+        .select({ extendedProfileData: users.extendedProfileData })
+        .from(users)
+        .where(eq(users.id, candidate.userId))
+        .limit(1);
+      const compassResult = (userRow?.extendedProfileData as any)?.compassResult ?? null;
+      res.json({ compassResult });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 
@@ -6418,6 +6435,30 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       res.json(profile);
     } catch (error: any) {
       console.error("Get politician profile error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Update politician political compass position
+  app.put("/api/politician-profiles/:id/compass", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+      const isAdmin = (req.user as any).role === 'admin';
+      const isClaimer = profile.claimedByUserId === (req.user as any).id;
+      if (!isAdmin && !isClaimer) return res.status(403).json({ message: "Not authorized" });
+      const { economicScore, socialScore, quadrant } = req.body;
+      if (typeof economicScore !== "number" || typeof socialScore !== "number" || typeof quadrant !== "string") {
+        return res.status(400).json({ message: "Invalid compass data" });
+      }
+      const updated = await storage.updatePoliticianProfile(req.params.id, {
+        compassEconomicScore: economicScore,
+        compassSocialScore: socialScore,
+        compassQuadrant: quadrant,
+      } as any);
+      res.json(updated);
+    } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });

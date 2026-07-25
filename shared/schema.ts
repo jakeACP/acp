@@ -1374,6 +1374,9 @@ export const politicianProfiles = pgTable("politician_profiles", {
   numericScore: real("numeric_score"), // 0–100 computed corruption score
   communityAdj: real("community_adj").default(0), // Manual admin adjustment, capped ±5 pts
   gradeExplanation: json("grade_explanation"), // Metric values, weights, sources used
+  compassEconomicScore: real("compass_economic_score"), // -10 (left) to +10 (right)
+  compassSocialScore: real("compass_social_score"),     // -10 (libertarian) to +10 (authoritarian)
+  compassQuadrant: text("compass_quadrant"),             // Named quadrant e.g. "State Progressive"
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

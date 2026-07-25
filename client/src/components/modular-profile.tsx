@@ -71,6 +71,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { Post } from "@shared/schema";
 import { PLEDGE_DEFINITIONS } from "@shared/schema";
 import { POLICY_ISSUES, RESPONSE_LABELS } from "@/lib/issue-data";
+import { PoliticalCompassTab } from "@/components/political-compass-tab";
 
 interface ExtendedProfileData {
   issueInterests?: string[];
@@ -755,6 +756,35 @@ interface UserProfile {
   trustScore?: string;
   profileViews?: number;
   createdAt?: string;
+}
+
+function CompassProfileModule({
+  compassResult, isOwner, profileUserId,
+}: { compassResult: any; isOwner: boolean; profileUserId?: string }) {
+  const { toast } = useToast();
+  const saveCompassMutation = useMutation({
+    mutationFn: async (result: { economicScore: number; socialScore: number; quadrant: string }) =>
+      apiRequest("/api/profile/extended", "PUT", {
+        compassResult: { ...result, completedAt: new Date().toISOString(), showOnProfile: true },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profile", profileUserId, "extended"] });
+      toast({ title: "Political position saved" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+  return (
+    <PoliticalCompassTab
+      economicScore={compassResult?.economicScore}
+      socialScore={compassResult?.socialScore}
+      quadrant={compassResult?.quadrant}
+      isOwner={isOwner}
+      isSaving={saveCompassMutation.isPending}
+      onSave={(result) => saveCompassMutation.mutate(result)}
+      subjectName="You"
+      uid="profile-module"
+    />
+  );
 }
 
 export function ModularProfile({ userId, isOwner = false, politicianProfileId }: { userId?: string; isOwner?: boolean; politicianProfileId?: string }) {
@@ -2538,82 +2568,12 @@ export function ModularProfile({ userId, isOwner = false, politicianProfileId }:
           return <RepresentativesModuleContent profileUserId={profileUserId} />;
         case "political-compass": {
           const compassResult = (extendedData as any)?.compassResult;
-          const hasResult = compassResult && typeof compassResult.economicScore === "number";
-          const eScore: number = hasResult ? compassResult.economicScore : 0;
-          const sScore: number = hasResult ? compassResult.socialScore : 0;
-          const quadrant: string = hasResult ? (compassResult.quadrant || "") : "";
-
-          // Mini compass SVG constants
-          const sz = 180;
-          const pad = 20;
-          const area = sz - pad * 2;
-          const ccx = sz / 2;
-          const ccy = sz / 2;
-          const sc = (area / 2) / 10;
-          const dotX = ccx + eScore * sc;
-          const dotY = ccy - sScore * sc;
-
           return (
-            <div className="space-y-3">
-              {hasResult ? (
-                <>
-                  {/* Compass chart */}
-                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-900 to-indigo-950 p-3">
-                    <div className="flex items-center justify-center">
-                      <svg viewBox={`0 0 ${sz} ${sz}`} width={sz} height={sz}>
-                        {/* Quadrant fills */}
-                        <rect x={pad} y={pad} width={area/2} height={area/2} fill="#ef4444" fillOpacity="0.15" />
-                        <rect x={ccx}  y={pad} width={area/2} height={area/2} fill="#6366f1" fillOpacity="0.15" />
-                        <rect x={pad}  y={ccy} width={area/2} height={area/2} fill="#10b981" fillOpacity="0.15" />
-                        <rect x={ccx}  y={ccy} width={area/2} height={area/2} fill="#f59e0b" fillOpacity="0.15" />
-                        {/* Border */}
-                        <rect x={pad} y={pad} width={area} height={area} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" rx="2" />
-                        {/* Axes */}
-                        <line x1={ccx} y1={pad} x2={ccx} y2={sz-pad} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-                        <line x1={pad} y1={ccy} x2={sz-pad} y2={ccy} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-                        {/* Axis labels */}
-                        <text x={ccx} y={pad-4} fontSize="6" fill="rgba(255,255,255,0.5)" textAnchor="middle">AUTH.</text>
-                        <text x={ccx} y={sz-pad+10} fontSize="6" fill="rgba(255,255,255,0.5)" textAnchor="middle">LIB.</text>
-                        <text x={pad+2} y={ccy-2} fontSize="6" fill="rgba(255,255,255,0.5)" textAnchor="start">L</text>
-                        <text x={sz-pad-2} y={ccy-2} fontSize="6" fill="rgba(255,255,255,0.5)" textAnchor="end">R</text>
-                        {/* Dot glow */}
-                        <circle cx={dotX} cy={dotY} r="10" fill="#f97316" fillOpacity="0.25" />
-                        {/* Dot ring */}
-                        <circle cx={dotX} cy={dotY} r="6" fill="none" stroke="white" strokeWidth="1.5" opacity="0.7" />
-                        {/* Dot core */}
-                        <circle cx={dotX} cy={dotY} r="4" fill="#f97316" />
-                      </svg>
-                    </div>
-                    <div className="text-center mt-1">
-                      <p className="text-white text-xs font-semibold">{quadrant}</p>
-                      <p className="text-slate-400 text-xs mt-0.5">
-                        Econ {eScore >= 0 ? "+" : ""}{eScore.toFixed(1)} · Social {sScore >= 0 ? "+" : ""}{sScore.toFixed(1)}
-                      </p>
-                    </div>
-                  </div>
-                  <a href="/political-compass">
-                    <Button variant="outline" size="sm" className="w-full">
-                      <Target className="h-4 w-4 mr-2" />
-                      Retake Quiz
-                    </Button>
-                  </a>
-                </>
-              ) : (
-                <>
-                  <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-5 text-center space-y-2">
-                    <Target className="h-8 w-8 text-indigo-400 mx-auto opacity-60" />
-                    <p className="text-sm text-slate-500 dark:text-slate-400">No compass result yet</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500">Take the quiz to discover where your views fall on economic and social issues.</p>
-                  </div>
-                  <a href="/political-compass">
-                    <Button size="sm" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white">
-                      <Target className="h-4 w-4 mr-2" />
-                      Take the Political Compass Quiz
-                    </Button>
-                  </a>
-                </>
-              )}
-            </div>
+            <CompassProfileModule
+              compassResult={compassResult}
+              isOwner={isOwner}
+              profileUserId={profileUserId}
+            />
           );
         }
         case "approval-rating": {

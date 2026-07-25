@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ArrowLeft, Heart, HeartOff, Users, Calendar, FileText, MapPin, Mail, Award } from "lucide-react";
 import DistrictBudgetWidget from "@/components/district-budget-widget";
 import { format } from "date-fns";
+import { PoliticalCompassTab } from "@/components/political-compass-tab";
 
 interface CandidateWithUser {
   id: string;
@@ -100,6 +101,23 @@ export default function CandidateProfilePage() {
         variant: "destructive",
       });
     },
+  });
+
+  const { data: compassData } = useQuery<{ compassResult: any }>({
+    queryKey: ["/api/candidates", candidateId, "compass-result"],
+    enabled: !!candidateId,
+  });
+
+  const compassMutation = useMutation({
+    mutationFn: async (result: { economicScore: number; socialScore: number; quadrant: string }) =>
+      apiRequest("/api/profile/extended", "PUT", {
+        compassResult: { ...result, completedAt: new Date().toISOString(), showOnProfile: true },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates", candidateId, "compass-result"] });
+      toast({ title: "Political position saved" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const handleSupportToggle = () => {
@@ -282,6 +300,28 @@ export default function CandidateProfilePage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Political Position */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Political Position</CardTitle>
+                <CardDescription>
+                  Where {getDisplayName(candidate)} stands on economic and social/governance axes
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PoliticalCompassTab
+                  economicScore={compassData?.compassResult?.economicScore}
+                  socialScore={compassData?.compassResult?.socialScore}
+                  quadrant={compassData?.compassResult?.quadrant}
+                  isOwner={isOwnCandidacy}
+                  isSaving={compassMutation.isPending}
+                  onSave={(result) => compassMutation.mutate(result)}
+                  subjectName={getDisplayName(candidate)}
+                  uid={`cand-${candidateId}`}
+                />
+              </CardContent>
+            </Card>
           </div>
 
           {/* Sidebar */}
