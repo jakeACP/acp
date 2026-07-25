@@ -6452,6 +6452,36 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       if (typeof economicScore !== "number" || typeof socialScore !== "number" || typeof quadrant !== "string") {
         return res.status(400).json({ message: "Invalid compass data" });
       }
+      if (economicScore < -10 || economicScore > 10 || socialScore < -10 || socialScore > 10) {
+        return res.status(400).json({ message: "Scores must be in the range -10 to +10" });
+      }
+      const updated = await storage.updatePoliticianProfile(req.params.id, {
+        compassEconomicScore: economicScore,
+        compassSocialScore: socialScore,
+        compassQuadrant: quadrant,
+      } as any);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Alias: PUT /api/politicians/:id/compass (delegates to the politician-profiles route handler)
+  app.put("/api/politicians/:id/compass", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+      const isAdmin = (req.user as any).role === 'admin';
+      const isClaimer = profile.claimedByUserId === (req.user as any).id;
+      if (!isAdmin && !isClaimer) return res.status(403).json({ message: "Not authorized" });
+      const { economicScore, socialScore, quadrant } = req.body;
+      if (typeof economicScore !== "number" || typeof socialScore !== "number" || typeof quadrant !== "string") {
+        return res.status(400).json({ message: "Invalid compass data" });
+      }
+      if (economicScore < -10 || economicScore > 10 || socialScore < -10 || socialScore > 10) {
+        return res.status(400).json({ message: "Scores must be in the range -10 to +10" });
+      }
       const updated = await storage.updatePoliticianProfile(req.params.id, {
         compassEconomicScore: economicScore,
         compassSocialScore: socialScore,

@@ -7,6 +7,7 @@ import { FriendButton } from "@/components/friend-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -260,68 +261,95 @@ export default function CandidateProfilePage() {
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Platform */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Campaign Platform
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="whitespace-pre-wrap text-gray-700 dark:text-gray-300 leading-relaxed">
-                  {candidate.platform || "No platform statement provided."}
-                </p>
-              </CardContent>
-            </Card>
+          {/* Main Content — tabbed */}
+          <div className="lg:col-span-2">
+            <Tabs defaultValue="platform">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="platform">Platform</TabsTrigger>
+                <TabsTrigger value="proposals">
+                  Policy Proposals
+                  {candidate.proposals?.length > 0 && (
+                    <span className="ml-1.5 text-xs bg-primary/15 text-primary rounded-full px-1.5 py-0.5">
+                      {candidate.proposals.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="political-position">Political Position</TabsTrigger>
+              </TabsList>
 
-            {/* Policy Proposals */}
-            {candidate.proposals && candidate.proposals.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Policy Proposals</CardTitle>
-                  <CardDescription>
-                    {candidate.proposals.length} proposal{candidate.proposals.length !== 1 ? 's' : ''}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {candidate.proposals.map((proposal, index) => (
-                    <div key={proposal.id} className="border-l-4 border-primary pl-4">
-                      <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-                        {index + 1}. {proposal.title}
-                      </h4>
-                      <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                        {proposal.description}
-                      </p>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
+              {/* Platform tab */}
+              <TabsContent value="platform">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Campaign Platform
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="whitespace-pre-wrap text-gray-700 dark:text-gray-300 leading-relaxed">
+                      {candidate.platform || "No platform statement provided."}
+                    </p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-            {/* Political Position */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Political Position</CardTitle>
-                <CardDescription>
-                  Where {getDisplayName(candidate)} stands on economic and social/governance axes
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <PoliticalCompassTab
-                  economicScore={compassData?.compassResult?.economicScore}
-                  socialScore={compassData?.compassResult?.socialScore}
-                  quadrant={compassData?.compassResult?.quadrant}
-                  isOwner={isOwnCandidacy}
-                  isSaving={compassMutation.isPending}
-                  onSave={(result) => compassMutation.mutate(result)}
-                  subjectName={getDisplayName(candidate)}
-                  uid={`cand-${candidateId}`}
-                />
-              </CardContent>
-            </Card>
+              {/* Policy Proposals tab */}
+              <TabsContent value="proposals">
+                {candidate.proposals && candidate.proposals.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Policy Proposals</CardTitle>
+                      <CardDescription>
+                        {candidate.proposals.length} proposal{candidate.proposals.length !== 1 ? 's' : ''}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {candidate.proposals.map((proposal, index) => (
+                        <div key={proposal.id} className="border-l-4 border-primary pl-4">
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                            {index + 1}. {proposal.title}
+                          </h4>
+                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {proposal.description}
+                          </p>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="py-10 text-center text-gray-500 dark:text-gray-400">
+                      No policy proposals have been added yet.
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* Political Position tab */}
+              <TabsContent value="political-position">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Political Position</CardTitle>
+                    <CardDescription>
+                      Where {getDisplayName(candidate)} stands on economic and social/governance axes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <PoliticalCompassTab
+                      economicScore={compassData?.compassResult?.economicScore}
+                      socialScore={compassData?.compassResult?.socialScore}
+                      quadrant={compassData?.compassResult?.quadrant}
+                      isOwner={isOwnCandidacy}
+                      isSaving={compassMutation.isPending}
+                      onSave={(result) => compassMutation.mutate(result)}
+                      subjectName={getDisplayName(candidate)}
+                      uid={`cand-${candidateId}`}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
 
           {/* Sidebar */}
