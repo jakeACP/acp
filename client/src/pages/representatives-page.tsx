@@ -10,6 +10,7 @@ import {
   MapPin, Search, ExternalLink, DollarSign, ShieldCheck, ShieldAlert,
   AlertTriangle, Loader2, Users, X, ChevronUp, ChevronDown,
 } from "lucide-react";
+import { QUADRANT_INFO } from "@/lib/political-compass-config";
 
 type RepEntry = {
   id: string;
@@ -37,6 +38,7 @@ type RepEntry = {
     jurisdiction: string;
   } | null;
   demerits?: Array<{ label: string; type: string }>;
+  compassQuadrant?: string;
 };
 
 type ZipResult = {
@@ -129,6 +131,14 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
               {pol.isCurrent !== false
                 ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">Incumbent</span>
                 : <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Candidate</span>}
+              {pol.compassQuadrant && QUADRANT_INFO[pol.compassQuadrant] && (
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-white"
+                  style={{ backgroundColor: QUADRANT_INFO[pol.compassQuadrant].color }}
+                >
+                  {pol.compassQuadrant}
+                </span>
+              )}
             </div>
             {total != null && (
               <div className="flex items-center gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
@@ -461,11 +471,19 @@ export default function RepresentativesPage() {
                               {rep.fullName}
                             </span>
                           </Link>
-                          {rep.isVerified && (
-                            <div className="flex items-center gap-1 mt-0.5">
+                          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                            {rep.isVerified && (
                               <span className="text-[10px] px-1 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">Verified</span>
-                            </div>
-                          )}
+                            )}
+                            {rep.compassQuadrant && QUADRANT_INFO[rep.compassQuadrant] && (
+                              <span
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-white"
+                                style={{ backgroundColor: QUADRANT_INFO[rep.compassQuadrant].color }}
+                              >
+                                {rep.compassQuadrant}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Party */}
