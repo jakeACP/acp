@@ -628,3 +628,97 @@ Rules:
     return [];
   }
 }
+
+// ── AI Compass Position Analysis ──────────────────────────────────────────────
+
+interface CompassAnalysisInput {
+  name: string;
+  party?: string | null;
+  biography?: string | null;
+  positionTitle?: string | null;
+  sigSponsorships?: Array<{ sigName: string; relationship: string; industry?: string | null; amountDollars?: number | null }>;
+  initiatives?: Array<{ title: string; summary: string; type: string }>;
+}
+
+interface CompassAnalysisResult {
+  economicScore: number;
+  socialScore: number;
+  quadrant: string;
+  reasoning: string;
+}
+
+const VALID_QUADRANTS = [
+  "State Progressive",
+  "National Conservative",
+  "Community Libertarian",
+  "Market Libertarian",
+  "Pragmatic Centrist",
+  "Mixed / Issue-by-Issue Voter",
+];
+
+export async function analyzeCompassPosition(data: CompassAnalysisInput): Promise<CompassAnalysisResult> {
+  const openai = getOpenAIClient();
+
+  const sigSection = data.sigSponsorships?.length
+    ? `Special Interest Group Ties:\n${data.sigSponsorships.map(s =>
+        `- ${s.sigName} (${s.relationship}${s.industry ? ", " + s.industry : ""}${s.amountDollars ? ", $" + s.amountDollars.toLocaleString() : ""})`
+      ).join("\n")}`
+    : "";
+
+  const initiativeSection = data.initiatives?.length
+    ? `Legislative Initiatives:\n${data.initiatives.map(i => `- ${i.title}: ${i.summary}`).join("\n")}`
+    : "";
+
+  const prompt = `You are a nonpartisan political analyst. Based on the information below, estimate where this politician or candidate falls on the two-axis political compass.
+
+AXES:
+- Economic axis: -10 = far left (strong public ownership, redistribution, regulation) to +10 = far right (free market, deregulation, low taxes)
+- Social/governance axis: -10 = libertarian (maximum personal freedom, minimal state power) to +10 = authoritarian (strong state control, traditional order)
+
+QUADRANT labels (pick exactly one):
+- "State Progressive" — left econ, high authority (social programs, strong government enforcement)
+- "National Conservative" — right econ, high authority (markets + strict social/immigration order)
+- "Community Libertarian" — left econ, low authority (cooperative economics, civil liberties)
+- "Market Libertarian" — right econ, low authority (free markets, personal freedom)
+- "Pragmatic Centrist" — near center on both axes
+- "Mixed / Issue-by-Issue Voter" — contradictory or incomplete signals
+
+Return ONLY valid JSON with these exact keys:
+{
+  "economicScore": <number -10 to +10>,
+  "socialScore": <number -10 to +10>,
+  "quadrant": <one of the six quadrant labels above>,
+  "reasoning": <2–3 sentence plain-English explanation of your assessment>
+}
+
+POLITICIAN DATA:
+Name: ${data.name}
+Party: ${data.party ?? "Not specified"}
+Current Role: ${data.positionTitle ?? "Not specified"}
+Biography: ${data.biography ?? "Not provided"}
+${sigSection}
+${initiativeSection}
+
+Reply with ONLY the JSON object. No markdown, no preamble.`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-5",
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
+    temperature: 0.2,
+  });
+
+  let result: any = {};
+  try {
+    result = JSON.parse(response.choices[0]?.message?.content ?? "{}");
+  } catch {
+    result = {};
+  }
+
+  const economicScore = Math.max(-10, Math.min(10, Number(result.economicScore) || 0));
+  const socialScore = Math.max(-10, Math.min(10, Number(result.socialScore) || 0));
+  const quadrant = VALID_QUADRANTS.includes(result.quadrant) ? result.quadrant : "Pragmatic Centrist";
+  const reasoning = typeof result.reasoning === "string" ? result.reasoning : "No reasoning provided.";
+
+  return { economicScore, socialScore, quadrant, reasoning };
+}

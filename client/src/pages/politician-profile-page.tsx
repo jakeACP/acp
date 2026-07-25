@@ -84,6 +84,7 @@ export default function PoliticianProfilePage() {
   });
 
   const isOwner = !!user && (profile?.claimedByUserId === user.id || user.role === 'admin');
+  const isAdmin = user?.role === 'admin';
 
   const compassMutation = useMutation({
     mutationFn: async (result: { economicScore: number; socialScore: number; quadrant: string }) =>
@@ -93,6 +94,16 @@ export default function PoliticianProfilePage() {
       toast({ title: "Political position saved", description: "The compass position has been updated." });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const aiScanMutation = useMutation({
+    mutationFn: async () =>
+      apiRequest(`/api/politician-profiles/${id}/ai-compass-scan`, "POST"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/politician-profiles/${id}`] });
+      toast({ title: "AI scan complete", description: "Political position has been updated from AI analysis." });
+    },
+    onError: (e: any) => toast({ title: "AI scan failed", description: e.message, variant: "destructive" }),
   });
 
   // Fetch corruption rating stats
@@ -648,9 +659,14 @@ export default function PoliticianProfilePage() {
                     economicScore={(profile as any).compassEconomicScore}
                     socialScore={(profile as any).compassSocialScore}
                     quadrant={(profile as any).compassQuadrant}
+                    compassSource={(profile as any).compassSource}
+                    compassAiReasoning={(profile as any).compassAiReasoning}
                     isOwner={isOwner}
+                    isAdmin={isAdmin}
                     isSaving={compassMutation.isPending}
+                    isScanning={aiScanMutation.isPending}
                     onSave={(result) => compassMutation.mutate(result)}
+                    onAiScan={() => aiScanMutation.mutate()}
                     subjectName={profile.fullName}
                     uid={`pol-${id}`}
                   />

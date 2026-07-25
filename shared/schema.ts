@@ -1377,6 +1377,8 @@ export const politicianProfiles = pgTable("politician_profiles", {
   compassEconomicScore: real("compass_economic_score"), // -10 (left) to +10 (right)
   compassSocialScore: real("compass_social_score"),     // -10 (libertarian) to +10 (authoritarian)
   compassQuadrant: text("compass_quadrant"),             // Named quadrant e.g. "State Progressive"
+  compassSource: text("compass_source"),                // 'ai' | 'self' — who set the position
+  compassAiReasoning: text("compass_ai_reasoning"),     // AI-generated explanation (when source='ai')
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

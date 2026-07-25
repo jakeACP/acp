@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Check, ChevronLeft, ChevronRight, Compass, Target } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Compass, Target, Bot, Sparkles, User, Loader2, AlertCircle } from "lucide-react";
 import { CompassChart } from "@/components/compass-chart";
 import { COMPASS_QUESTIONS, LIKERT_OPTIONS, QUADRANT_INFO } from "@/lib/political-compass-config";
 import { calculateScores, getQuadrant, formatScore } from "@/lib/political-compass-scoring";
@@ -18,9 +18,14 @@ interface Props {
   economicScore?: number | null;
   socialScore?: number | null;
   quadrant?: string | null;
+  compassSource?: string | null;
+  compassAiReasoning?: string | null;
   isOwner: boolean;
+  isAdmin?: boolean;
   isSaving?: boolean;
+  isScanning?: boolean;
   onSave: (result: { economicScore: number; socialScore: number; quadrant: string }) => void;
+  onAiScan?: () => void;
   subjectName: string;
   uid?: string;
 }
@@ -58,9 +63,28 @@ function LikertButton({
   );
 }
 
+function SourceBadge({ source }: { source: string | null | undefined }) {
+  if (!source) return null;
+  if (source === "ai") {
+    return (
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-violet-500/15 text-violet-300 border border-violet-500/25">
+        <Bot className="w-3 h-3" />
+        AI Assessed
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+      <User className="w-3 h-3" />
+      Self-Reported
+    </div>
+  );
+}
+
 export function PoliticalCompassTab({
   economicScore, socialScore, quadrant,
-  isOwner, isSaving, onSave, subjectName, uid = "tab",
+  compassSource, compassAiReasoning,
+  isOwner, isAdmin, isSaving, isScanning, onSave, onAiScan, subjectName, uid = "tab",
 }: Props) {
   const hasResult = economicScore != null && socialScore != null;
   const qInfo = quadrant ? (QUADRANT_INFO[quadrant] ?? QUADRANT_INFO["Pragmatic Centrist"]) : null;
@@ -70,6 +94,7 @@ export function PoliticalCompassTab({
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [resultReady, setResultReady] = useState(false);
   const [pendingResult, setPendingResult] = useState<{ economicScore: number; socialScore: number; quadrant: string } | null>(null);
+  const [reasoningOpen, setReasoningOpen] = useState(false);
 
   const question = MINI_QUESTIONS[currentQ];
   const total = MINI_QUESTIONS.length;
@@ -114,104 +139,169 @@ export function PoliticalCompassTab({
   const econLabel = eScore < -1 ? "Economic Left" : eScore > 1 ? "Economic Right" : "Economic Center";
   const socialLabel = sScore < -1 ? "Libertarian" : sScore > 1 ? "Authoritarian" : "Social Center";
 
+  const canSelfOverride = isOwner && compassSource === "ai";
+  const showQuizButton = isOwner;
+  const showAiButton = isAdmin && !!onAiScan;
+
   return (
     <div className="space-y-6">
       {/* ── RESULT STATE ──────────────────────────────────────────────────── */}
       {hasResult ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          {/* Chart */}
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-indigo-950 p-5 flex flex-col items-center gap-3">
-            <CompassChart economicScore={eScore} socialScore={sScore} size={280} uid={uid} />
-            {qInfo && (
-              <div className="text-center space-y-1">
-                <div
-                  className="inline-block px-3 py-1 rounded-full text-sm font-semibold"
-                  style={{ background: qInfo.color + "25", color: qInfo.color, border: `1px solid ${qInfo.color}50` }}
-                >
-                  {qInfo.label}
+        <div className="space-y-5">
+          {/* Source badge row */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <SourceBadge source={compassSource} />
+            {compassSource === "ai" && isOwner && (
+              <span className="text-slate-500 text-xs">
+                You can override this with your own quiz answers
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            {/* Chart */}
+            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-indigo-950 p-5 flex flex-col items-center gap-3">
+              <CompassChart economicScore={eScore} socialScore={sScore} size={280} uid={uid} />
+              {qInfo && (
+                <div className="text-center space-y-1">
+                  <div
+                    className="inline-block px-3 py-1 rounded-full text-sm font-semibold"
+                    style={{ background: qInfo.color + "25", color: qInfo.color, border: `1px solid ${qInfo.color}50` }}
+                  >
+                    {qInfo.label}
+                  </div>
+                  <p className="text-slate-400 text-xs">
+                    Econ {eScore >= 0 ? "+" : ""}{eScore.toFixed(1)} · Social {sScore >= 0 ? "+" : ""}{sScore.toFixed(1)}
+                  </p>
                 </div>
-                <p className="text-slate-400 text-xs">
-                  Econ {eScore >= 0 ? "+" : ""}{eScore.toFixed(1)} · Social {sScore >= 0 ? "+" : ""}{sScore.toFixed(1)}
+              )}
+            </div>
+
+            {/* Score breakdown + description */}
+            <div className="space-y-4">
+              {/* Economic axis bar */}
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
+                <p className="text-amber-300 text-xs font-semibold uppercase tracking-wide">Economic Axis</p>
+                <div className="flex items-end gap-2">
+                  <span className="text-2xl font-bold text-white">{formatScore(eScore)}</span>
+                  <span className="text-slate-400 text-xs pb-1">/ ±10</span>
+                </div>
+                <div className="relative h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="absolute top-0 h-full rounded-full bg-amber-400"
+                    style={{
+                      width: `${(Math.abs(eScore) / 10) * 50}%`,
+                      left: eScore >= 0 ? "50%" : `${50 - (Math.abs(eScore) / 10) * 50}%`,
+                    }}
+                  />
+                  <div className="absolute top-0 left-1/2 w-px h-full bg-white/30" />
+                </div>
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>Left</span><span>Right</span>
+                </div>
+              </div>
+
+              {/* Social axis bar */}
+              <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-2">
+                <p className="text-purple-300 text-xs font-semibold uppercase tracking-wide">Social Axis</p>
+                <div className="flex items-end gap-2">
+                  <span className="text-2xl font-bold text-white">{formatScore(sScore)}</span>
+                  <span className="text-slate-400 text-xs pb-1">/ ±10</span>
+                </div>
+                <div className="relative h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="absolute top-0 h-full rounded-full bg-purple-400"
+                    style={{
+                      width: `${(Math.abs(sScore) / 10) * 50}%`,
+                      left: sScore >= 0 ? "50%" : `${50 - (Math.abs(sScore) / 10) * 50}%`,
+                    }}
+                  />
+                  <div className="absolute top-0 left-1/2 w-px h-full bg-white/30" />
+                </div>
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>Libertarian</span><span>Authoritarian</span>
+                </div>
+              </div>
+
+              {/* Quadrant description */}
+              {qInfo && (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-1">
+                  <p className="text-white text-sm font-medium">What this means</p>
+                  <p className="text-slate-300 text-xs leading-relaxed">{qInfo.description}</p>
+                </div>
+              )}
+
+              {/* Position label */}
+              <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3">
+                <p className="text-slate-300 text-xs">
+                  <span className="font-medium text-white">{subjectName}</span> is positioned as{" "}
+                  <span className="text-amber-300">{econLabel}</span> and{" "}
+                  <span className="text-purple-300">{socialLabel}</span> on the political spectrum.
                 </p>
               </div>
-            )}
+
+              {/* Action buttons */}
+              <div className="space-y-2">
+                {/* AI reasoning panel toggle */}
+                {compassSource === "ai" && compassAiReasoning && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setReasoningOpen(r => !r)}
+                    className="w-full border-violet-500/30 text-violet-300 hover:border-violet-400 hover:bg-violet-500/10 text-xs"
+                  >
+                    <Bot className="w-3.5 h-3.5 mr-1.5" />
+                    {reasoningOpen ? "Hide" : "Show"} AI reasoning
+                  </Button>
+                )}
+
+                {showAiButton && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onAiScan}
+                    disabled={isScanning}
+                    className="w-full border-violet-500/30 text-violet-300 hover:border-violet-400 hover:bg-violet-500/10"
+                  >
+                    {isScanning ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Scanning…</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4 mr-2" />Re-run AI Scan</>
+                    )}
+                  </Button>
+                )}
+
+                {showQuizButton && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openQuiz}
+                    className={`w-full ${canSelfOverride ? "border-emerald-500/30 text-emerald-300 hover:border-emerald-400 hover:bg-emerald-500/10" : "border-slate-600 hover:border-indigo-500 hover:text-indigo-300"}`}
+                  >
+                    <Target className="w-4 h-4 mr-2" />
+                    {canSelfOverride ? "Override with Self-Reported Quiz" : "Update Position"}
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Score breakdown + description */}
-          <div className="space-y-4">
-            {/* Economic axis bar */}
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
-              <p className="text-amber-300 text-xs font-semibold uppercase tracking-wide">Economic Axis</p>
-              <div className="flex items-end gap-2">
-                <span className="text-2xl font-bold text-white">{formatScore(eScore)}</span>
-                <span className="text-slate-400 text-xs pb-1">/ ±10</span>
+          {/* AI Reasoning panel */}
+          {reasoningOpen && compassAiReasoning && (
+            <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-violet-400" />
+                <p className="text-violet-300 text-sm font-medium">AI Assessment Reasoning</p>
               </div>
-              <div className="relative h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <div
-                  className="absolute top-0 h-full rounded-full bg-amber-400"
-                  style={{
-                    width: `${(Math.abs(eScore) / 10) * 50}%`,
-                    left: eScore >= 0 ? "50%" : `${50 - (Math.abs(eScore) / 10) * 50}%`,
-                  }}
-                />
-                <div className="absolute top-0 left-1/2 w-px h-full bg-white/30" />
-              </div>
-              <div className="flex justify-between text-xs text-slate-500">
-                <span>Left</span><span>Right</span>
+              <p className="text-slate-300 text-sm leading-relaxed">{compassAiReasoning}</p>
+              <div className="flex items-start gap-2 pt-1 border-t border-violet-500/15">
+                <AlertCircle className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
+                <p className="text-slate-500 text-xs leading-relaxed">
+                  This assessment was generated by AI based on public data. The candidate can override it by completing the self-reported quiz.
+                </p>
               </div>
             </div>
-
-            {/* Social axis bar */}
-            <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-2">
-              <p className="text-purple-300 text-xs font-semibold uppercase tracking-wide">Social Axis</p>
-              <div className="flex items-end gap-2">
-                <span className="text-2xl font-bold text-white">{formatScore(sScore)}</span>
-                <span className="text-slate-400 text-xs pb-1">/ ±10</span>
-              </div>
-              <div className="relative h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <div
-                  className="absolute top-0 h-full rounded-full bg-purple-400"
-                  style={{
-                    width: `${(Math.abs(sScore) / 10) * 50}%`,
-                    left: sScore >= 0 ? "50%" : `${50 - (Math.abs(sScore) / 10) * 50}%`,
-                  }}
-                />
-                <div className="absolute top-0 left-1/2 w-px h-full bg-white/30" />
-              </div>
-              <div className="flex justify-between text-xs text-slate-500">
-                <span>Libertarian</span><span>Authoritarian</span>
-              </div>
-            </div>
-
-            {/* Quadrant description */}
-            {qInfo && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-1">
-                <p className="text-white text-sm font-medium">What this means</p>
-                <p className="text-slate-300 text-xs leading-relaxed">{qInfo.description}</p>
-              </div>
-            )}
-
-            {/* Position label */}
-            <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3">
-              <p className="text-slate-300 text-xs">
-                <span className="font-medium text-white">{subjectName}</span> is positioned as{" "}
-                <span className="text-amber-300">{econLabel}</span> and{" "}
-                <span className="text-purple-300">{socialLabel}</span> on the political spectrum.
-              </p>
-            </div>
-
-            {isOwner && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openQuiz}
-                className="w-full border-slate-600 hover:border-indigo-500 hover:text-indigo-300"
-              >
-                <Target className="w-4 h-4 mr-2" />
-                Update Position
-              </Button>
-            )}
-          </div>
+          )}
         </div>
       ) : (
         /* ── EMPTY STATE ──────────────────────────────────────────────────── */
@@ -251,20 +341,40 @@ export function PoliticalCompassTab({
               ))}
             </div>
 
-            {isOwner && (
-              <Button
-                onClick={openQuiz}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
-              >
-                <Target className="w-4 h-4 mr-2" />
-                Set Political Position (10 questions)
-              </Button>
-            )}
-            {!isOwner && (
-              <p className="text-slate-500 text-xs">
-                Only verified profile owners and admins can set this position.
-              </p>
-            )}
+            <div className="flex flex-col gap-2">
+              {showAiButton && (
+                <Button
+                  onClick={onAiScan}
+                  disabled={isScanning}
+                  className="bg-violet-600 hover:bg-violet-500 text-white font-medium"
+                >
+                  {isScanning ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Scanning with AI…</>
+                  ) : (
+                    <><Sparkles className="w-4 h-4 mr-2" />AI Scan Political Position</>
+                  )}
+                </Button>
+              )}
+              {showQuizButton && (
+                <Button
+                  onClick={openQuiz}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
+                >
+                  <Target className="w-4 h-4 mr-2" />
+                  Set Political Position (10 questions)
+                </Button>
+              )}
+              {!isOwner && !isAdmin && (
+                <p className="text-slate-500 text-xs">
+                  Only verified profile owners and admins can set this position.
+                </p>
+              )}
+              {showAiButton && !showQuizButton && (
+                <p className="text-slate-500 text-xs">
+                  The candidate can override this AI assessment by completing the self-reported quiz.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}

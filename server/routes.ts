@@ -36,7 +36,7 @@ import { eq, inArray, or, sql, asc, and, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
-import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle, findAllCandidatesByZip } from "./openai";
+import { findRepresentativesByZipCode, generatePoliticalSeat, generateCandidateProfiles, generateArticleContent, generateArticleBodyFromTitle, findAllCandidatesByZip, analyzeCompassPosition } from "./openai";
 import { z } from "zod";
 import { fetchLinkPreview } from "./lib/link-preview";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
@@ -6459,6 +6459,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         compassEconomicScore: economicScore,
         compassSocialScore: socialScore,
         compassQuadrant: quadrant,
+        compassSource: 'self',
+        compassAiReasoning: null,
       } as any);
       res.json(updated);
     } catch (error: any) {
@@ -6486,8 +6488,69 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         compassEconomicScore: economicScore,
         compassSocialScore: socialScore,
         compassQuadrant: quadrant,
+        compassSource: 'self',
+        compassAiReasoning: null,
       } as any);
       res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin-only: AI compass scan for a politician profile
+  app.post("/api/politician-profiles/:id/ai-compass-scan", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if ((req.user as any).role !== 'admin') return res.status(403).json({ message: "Admin only" });
+    try {
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+      // Gather SIG sponsorships with SIG names + industries
+      const { politicianSigSponsorships: pss, specialInterestGroups: sigs } = await import("@shared/schema");
+      const sigsRaw = await db
+        .select({
+          sigName: sigs.name,
+          industry: sigs.industry,
+          relationship: pss.relationshipType,
+          amountCents: pss.reportedAmount,
+        })
+        .from(pss)
+        .leftJoin(sigs, eq(pss.sigId, sigs.id))
+        .where(eq(pss.politicianId, req.params.id))
+        .limit(20);
+
+      const sigSponsorships = sigsRaw.map(r => ({
+        sigName: r.sigName ?? "Unknown SIG",
+        relationship: r.relationship ?? "donor",
+        industry: r.industry,
+        amountDollars: r.amountCents ? Math.round(r.amountCents / 100) : null,
+      }));
+
+      // Gather recent initiatives (profile-level filtering not reliable; pass top global ones as context)
+      const initiatives = await storage.getInitiatives(8, 0, {});
+
+      const { economicScore, socialScore, quadrant, reasoning } = await analyzeCompassPosition({
+        name: profile.fullName,
+        party: (profile as any).party,
+        biography: (profile as any).biography,
+        positionTitle: (profile as any).position?.name ?? (profile as any).positionTitle,
+        sigSponsorships,
+        initiatives: initiatives.slice(0, 5).map(i => ({
+          title: i.title,
+          summary: i.summary ?? "",
+          type: (i as any).initiativeType ?? "",
+        })),
+      });
+
+      const updated = await storage.updatePoliticianProfile(req.params.id, {
+        compassEconomicScore: economicScore,
+        compassSocialScore: socialScore,
+        compassQuadrant: quadrant,
+        compassSource: 'ai',
+        compassAiReasoning: reasoning,
+      } as any);
+
+      res.json({ profile: updated, economicScore, socialScore, quadrant, reasoning });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
