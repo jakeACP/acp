@@ -5534,6 +5534,18 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // In-memory job progress tracker (keyed by job type)
+  const jobProgress = new Map<string, {
+    total: number; current: number; currentName: string;
+    status: "idle" | "running" | "done";
+    assigned?: number; graded?: number; skipped?: number;
+  }>();
+
+  app.get("/api/admin/politicians/job-progress/:type", ensureAdmin, (req, res) => {
+    const p = jobProgress.get(req.params.type) ?? { status: "idle", total: 0, current: 0, currentName: "" };
+    res.json(p);
+  });
+
   // AI-grade a single politician profile
   app.post("/api/admin/politician-profiles/:id/ai-regrade", ensureAdmin, async (req, res) => {
     try {
@@ -5567,63 +5579,89 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.post("/api/admin/politicians/ai-grade-all-missing", ensureAdmin, async (req, res) => {
     try {
       const { aiGradeCandidate } = await import("./openai");
-      const ungraded = await db.select().from(politicianProfiles).where(
-        sql`corruption_grade IS NULL OR corruption_grade = '?'`
-      );
+      // Only look at profiles missing a real letter grade (null, '', or '?')
+      const ungraded = await db.execute(sql`
+        SELECT pp.id, pp.full_name, pp.party, pp.biography,
+               pos.title as office, pos.jurisdiction as state
+        FROM politician_profiles pp
+        LEFT JOIN political_positions pos ON pp.position_id = pos.id
+        WHERE pp.corruption_grade IS NULL OR pp.corruption_grade = '' OR pp.corruption_grade = '?'
+        ORDER BY pp.full_name
+      `);
+      const rows = ungraded.rows as any[];
 
-      let graded = 0;
-      let skipped = 0;
-      const errors: string[] = [];
+      jobProgress.set("ai-grade-missing", { status: "running", total: rows.length, current: 0, currentName: "", graded: 0, skipped: 0 });
+      res.json({ started: true, total: rows.length });
 
-      for (const p of ungraded) {
-        try {
-          const result = await aiGradeCandidate({
-            name: p.fullName,
-            state: (p as any).state ?? undefined,
-            party: p.party ?? undefined,
-            office: (p as any).office ?? undefined,
-            biography: p.biography ?? undefined,
-          });
-          await db.update(politicianProfiles).set({
-            corruptionGrade: result.grade,
-            gradeExplanation: { aiGrade: true, reasoning: result.reasoning, confidence: result.confidence },
-          } as any).where(eq(politicianProfiles.id, p.id));
-          if (result.grade !== "?") graded++;
-          else skipped++;
-        } catch (e: any) {
-          errors.push(`${p.fullName}: ${e?.message ?? "unknown"}`);
+      // Run async after response
+      (async () => {
+        let graded = 0;
+        let skipped = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const p = rows[i];
+          jobProgress.set("ai-grade-missing", { status: "running", total: rows.length, current: i + 1, currentName: p.full_name, graded, skipped });
+          try {
+            const result = await aiGradeCandidate({
+              name: p.full_name,
+              state: p.state ?? undefined,
+              party: p.party ?? undefined,
+              office: p.office ?? undefined,
+              biography: p.biography ?? undefined,
+            });
+            await db.update(politicianProfiles).set({
+              corruptionGrade: result.grade,
+              gradeExplanation: { aiGrade: true, reasoning: result.reasoning, confidence: result.confidence },
+            } as any).where(eq(politicianProfiles.id, p.id));
+            if (result.grade !== "?") graded++;
+            else skipped++;
+          } catch (e: any) {
+            console.error(`AI grade error for ${p.full_name}:`, e?.message);
+          }
         }
-      }
-      res.json({ scanned: ungraded.length, graded, skipped, errors });
+        jobProgress.set("ai-grade-missing", { status: "done", total: rows.length, current: rows.length, currentName: "", graded, skipped });
+      })();
     } catch (error: any) {
       console.error("AI grade all missing error:", error);
-      res.status(500).json({ message: error.message });
+      jobProgress.set("ai-grade-missing", { status: "idle", total: 0, current: 0, currentName: "" });
+      // res already sent if error is after res.json — guard it
     }
   });
 
-  // Assign "?" grade to all politicians with no data available
+  // Assign "?" grade to politicians with no usable data (no FEC ID, no SIG links)
   app.post("/api/admin/politicians/grade-no-data", ensureAdmin, async (req, res) => {
     try {
-      // Find all politicians without a FEC candidate ID and without SIG sponsorships
-      const allProfiles = await db.select({
-        id: politicianProfiles.id,
-        fecCandidateId: (politicianProfiles as any).fecCandidateId,
-      }).from(politicianProfiles);
+      // Direct query: profiles with no grade AND no FEC ID AND no SIG sponsorships
+      const candidates = await db.execute(sql`
+        SELECT pp.id, pp.full_name
+        FROM politician_profiles pp
+        WHERE (pp.corruption_grade IS NULL OR pp.corruption_grade = '' OR pp.corruption_grade = '?')
+          AND (pp.fec_candidate_id IS NULL OR pp.fec_candidate_id = '')
+          AND NOT EXISTS (
+            SELECT 1 FROM politician_sig_sponsorships pss WHERE pss.politician_id = pp.id
+          )
+        ORDER BY pp.full_name
+      `);
+      const rows = candidates.rows as any[];
 
-      let assigned = 0;
-      const errors: string[] = [];
-      for (const p of allProfiles) {
-        try {
-          const result = await storage.computePoliticianGrade(p.id);
-          if (result.grade === '?') assigned++;
-        } catch (e: any) {
-          errors.push(`${p.id}: ${e?.message ?? 'unknown'}`);
+      jobProgress.set("grade-no-data", { status: "running", total: rows.length, current: 0, currentName: "", assigned: 0 });
+      res.json({ started: true, total: rows.length });
+
+      // Run async after response
+      (async () => {
+        let assigned = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const p = rows[i];
+          jobProgress.set("grade-no-data", { status: "running", total: rows.length, current: i + 1, currentName: p.full_name, assigned });
+          await db.update(politicianProfiles)
+            .set({ corruptionGrade: "?" } as any)
+            .where(eq(politicianProfiles.id, p.id));
+          assigned++;
         }
-      }
-      res.json({ assigned, scanned: allProfiles.length, errors });
+        jobProgress.set("grade-no-data", { status: "done", total: rows.length, current: rows.length, currentName: "", assigned });
+      })();
     } catch (error: any) {
       console.error("Grade no-data error:", error);
-      res.status(500).json({ message: error.message });
+      jobProgress.set("grade-no-data", { status: "idle", total: 0, current: 0, currentName: "" });
     }
   });
 

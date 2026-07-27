@@ -280,18 +280,42 @@ export default function AdminPoliticiansPage() {
     },
   });
 
+  const [gradeNoDataProgress, setGradeNoDataProgress] = useState<{ total: number; current: number; currentName: string; status: string } | null>(null);
+  const [aiGradeProgress, setAiGradeProgress] = useState<{ total: number; current: number; currentName: string; status: string; graded?: number; skipped?: number } | null>(null);
+
+  async function pollJobProgress(type: string, setter: (p: any) => void, onDone: () => void) {
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/admin/politicians/job-progress/${type}`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setter(data);
+        if (data.status === "done") {
+          onDone();
+          setTimeout(() => setter(null), 3000);
+        } else if (data.status === "running") {
+          setTimeout(poll, 600);
+        }
+      } catch {
+        // ignore network errors during poll
+      }
+    };
+    setTimeout(poll, 400);
+  }
+
   const aiGradeAllMissingMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("/api/admin/politicians/ai-grade-all-missing", "POST");
       return await res.json();
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/missing-info"] });
-      toast({
-        title: "AI Grade All complete",
-        description: `Scanned ${data.scanned} — ${data.graded} received a letter grade, ${data.skipped} stayed as "?" (no data found).`,
-      });
+      if (data.started) {
+        pollJobProgress("ai-grade-missing", setAiGradeProgress, () => {
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/missing-info"] });
+          toast({ title: "AI Grade Missing done", description: `${data.total} candidates processed.` });
+        });
+      }
     },
     onError: (error: any) => {
       toast({ title: "AI grading failed", description: error.message, variant: "destructive" });
@@ -328,12 +352,13 @@ export default function AdminPoliticiansPage() {
       return await res.json();
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/missing-info"] });
-      toast({
-        title: "Grade Candidates complete",
-        description: `Scanned ${data.scanned} politicians — ${data.assigned} assigned a "?" (No Data) grade.`,
-      });
+      if (data.started) {
+        pollJobProgress("grade-no-data", setGradeNoDataProgress, () => {
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/missing-info"] });
+          toast({ title: "Grade Candidates done", description: `${data.total} candidates processed — "?" grade assigned.` });
+        });
+      }
     },
     onError: (error: any) => {
       toast({ title: "Error grading candidates", description: error.message, variant: "destructive" });
@@ -2968,10 +2993,10 @@ export default function AdminPoliticiansPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => gradeNoDataMutation.mutate()}
-                      disabled={gradeNoDataMutation.isPending}
+                      disabled={gradeNoDataMutation.isPending || !!gradeNoDataProgress}
                       className="flex items-center gap-2"
                     >
-                      {gradeNoDataMutation.isPending ? (
+                      {(gradeNoDataMutation.isPending || gradeNoDataProgress?.status === "running") ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <HelpCircle className="h-4 w-4 text-slate-500" />
@@ -2982,18 +3007,55 @@ export default function AdminPoliticiansPage() {
                       variant="default"
                       size="sm"
                       onClick={() => aiGradeAllMissingMutation.mutate()}
-                      disabled={aiGradeAllMissingMutation.isPending || missingInfoData.length === 0}
+                      disabled={aiGradeAllMissingMutation.isPending || !!aiGradeProgress}
                       className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white"
                     >
-                      {aiGradeAllMissingMutation.isPending ? (
+                      {(aiGradeAllMissingMutation.isPending || aiGradeProgress?.status === "running") ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <Sparkles className="h-4 w-4" />
                       )}
-                      AI Grade All Candidates
+                      AI Grade Missing Candidates
                     </Button>
                   </div>
                 </div>
+
+                {/* Progress bars */}
+                {gradeNoDataProgress && gradeNoDataProgress.status !== "idle" && (
+                  <div className="mb-3 rounded-lg border bg-slate-50 dark:bg-slate-900 p-3 space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                      <span>Grade Candidates — {gradeNoDataProgress.status === "done" ? "Complete ✓" : `Processing ${gradeNoDataProgress.current} of ${gradeNoDataProgress.total}`}</span>
+                      <span>{gradeNoDataProgress.total > 0 ? Math.round((gradeNoDataProgress.current / gradeNoDataProgress.total) * 100) : 0}%</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${gradeNoDataProgress.status === "done" ? "bg-green-500" : "bg-blue-500"}`}
+                        style={{ width: `${gradeNoDataProgress.total > 0 ? (gradeNoDataProgress.current / gradeNoDataProgress.total) * 100 : 0}%` }}
+                      />
+                    </div>
+                    {gradeNoDataProgress.currentName && gradeNoDataProgress.status === "running" && (
+                      <p className="text-xs text-muted-foreground truncate">Currently: {gradeNoDataProgress.currentName}</p>
+                    )}
+                  </div>
+                )}
+
+                {aiGradeProgress && aiGradeProgress.status !== "idle" && (
+                  <div className="mb-3 rounded-lg border bg-violet-50 dark:bg-violet-950/30 p-3 space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                      <span>AI Grade Missing — {aiGradeProgress.status === "done" ? `Complete ✓ (${aiGradeProgress.graded ?? 0} graded, ${aiGradeProgress.skipped ?? 0} stayed "?")` : `Processing ${aiGradeProgress.current} of ${aiGradeProgress.total}`}</span>
+                      <span>{aiGradeProgress.total > 0 ? Math.round((aiGradeProgress.current / aiGradeProgress.total) * 100) : 0}%</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-violet-200 dark:bg-violet-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${aiGradeProgress.status === "done" ? "bg-green-500" : "bg-violet-500"}`}
+                        style={{ width: `${aiGradeProgress.total > 0 ? (aiGradeProgress.current / aiGradeProgress.total) * 100 : 0}%` }}
+                      />
+                    </div>
+                    {aiGradeProgress.currentName && aiGradeProgress.status === "running" && (
+                      <p className="text-xs text-muted-foreground truncate">Currently: {aiGradeProgress.currentName}</p>
+                    )}
+                  </div>
+                )}
 
                 {missingInfoData.length === 0 ? (
                   <Card><CardContent className="py-8 text-center text-muted-foreground">
@@ -3015,8 +3077,8 @@ export default function AdminPoliticiansPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {missingInfoData.map((record: any) => (
-                          <TableRow key={record.id}>
+                        {missingInfoData.map((record: any, idx: number) => (
+                          <TableRow key={`${record.id}-${idx}`}>
                             <TableCell className="font-medium">{record.fullName}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">
                               {record.handle ? `@${record.handle}` : <span className="text-slate-400 italic">none</span>}
