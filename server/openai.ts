@@ -722,3 +722,72 @@ Reply with ONLY the JSON object. No markdown, no preamble.`;
 
   return { economicScore, socialScore, quadrant, reasoning };
 }
+
+export interface AiGradeResult {
+  grade: "A" | "B" | "C" | "D" | "F" | "?";
+  reasoning: string;
+  confidence: "high" | "medium" | "low" | "none";
+}
+
+/**
+ * Uses AI training-data knowledge to estimate a politician's corruption grade.
+ * Returns "?" when there is insufficient information to make a determination.
+ */
+export async function aiGradeCandidate(data: {
+  name: string;
+  state?: string;
+  party?: string;
+  office?: string;
+  biography?: string;
+}): Promise<AiGradeResult> {
+  const openai = getOpenAIClient();
+
+  const prompt = `You are a nonpartisan anti-corruption analyst for the Anti-Corruption Party.
+Using only your training data knowledge, assess this politician or candidate for corruption risk and special-interest influence. Assign a letter grade based on transparency, campaign finance patterns, and known special-interest ties.
+
+GRADE SCALE:
+- A: Highly transparent, minimal special-interest money, strong reform record
+- B: Mostly clean, minor concerns, generally transparent
+- C: Moderate concerns, some special-interest ties, mixed record
+- D: Significant special-interest influence, limited transparency
+- F: Major corruption concerns, heavy PAC/lobbyist money, poor transparency
+- ?: Insufficient data — you do not have enough reliable information about this person to grade them
+
+Return ONLY valid JSON with these exact keys:
+{
+  "grade": "A" | "B" | "C" | "D" | "F" | "?",
+  "reasoning": "<2-3 sentence explanation citing specific known facts, or explaining why data is insufficient>",
+  "confidence": "high" | "medium" | "low" | "none"
+}
+
+CANDIDATE DATA:
+Name: ${data.name}
+State: ${data.state ?? "Unknown"}
+Party: ${data.party ?? "Unknown"}
+Office/Role: ${data.office ?? "Unknown"}
+${data.biography ? `Biography: ${data.biography}` : ""}
+
+Reply with ONLY the JSON object. No markdown, no preamble.`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-5",
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
+    temperature: 0.3,
+  });
+
+  let result: any = {};
+  try {
+    result = JSON.parse(response.choices[0]?.message?.content ?? "{}");
+  } catch {
+    result = {};
+  }
+
+  const VALID_GRADES = ["A", "B", "C", "D", "F", "?"];
+  const VALID_CONFIDENCE = ["high", "medium", "low", "none"];
+  const grade = VALID_GRADES.includes(result.grade) ? result.grade : "?";
+  const reasoning = typeof result.reasoning === "string" ? result.reasoning : "No reasoning provided.";
+  const confidence = VALID_CONFIDENCE.includes(result.confidence) ? result.confidence : "none";
+
+  return { grade, reasoning, confidence };
+}

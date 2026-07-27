@@ -5534,6 +5534,73 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // AI-grade a single politician profile
+  app.post("/api/admin/politician-profiles/:id/ai-regrade", ensureAdmin, async (req, res) => {
+    try {
+      const { aiGradeCandidate } = await import("./openai");
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+      const position = (profile as any).position;
+      const result = await aiGradeCandidate({
+        name: profile.fullName,
+        state: (profile as any).state ?? position?.jurisdiction,
+        party: profile.party ?? undefined,
+        office: (profile as any).office ?? position?.title,
+        biography: profile.biography ?? undefined,
+      });
+
+      // Persist the grade and reasoning
+      await db.update(politicianProfiles).set({
+        corruptionGrade: result.grade,
+        gradeExplanation: { aiGrade: true, reasoning: result.reasoning, confidence: result.confidence },
+      } as any).where(eq(politicianProfiles.id, req.params.id));
+
+      res.json({ ...result, id: req.params.id });
+    } catch (error: any) {
+      console.error("AI regrade error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // AI-grade all politicians that are missing a grade (null or "?")
+  app.post("/api/admin/politicians/ai-grade-all-missing", ensureAdmin, async (req, res) => {
+    try {
+      const { aiGradeCandidate } = await import("./openai");
+      const ungraded = await db.select().from(politicianProfiles).where(
+        sql`corruption_grade IS NULL OR corruption_grade = '?'`
+      );
+
+      let graded = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+
+      for (const p of ungraded) {
+        try {
+          const result = await aiGradeCandidate({
+            name: p.fullName,
+            state: (p as any).state ?? undefined,
+            party: p.party ?? undefined,
+            office: (p as any).office ?? undefined,
+            biography: p.biography ?? undefined,
+          });
+          await db.update(politicianProfiles).set({
+            corruptionGrade: result.grade,
+            gradeExplanation: { aiGrade: true, reasoning: result.reasoning, confidence: result.confidence },
+          } as any).where(eq(politicianProfiles.id, p.id));
+          if (result.grade !== "?") graded++;
+          else skipped++;
+        } catch (e: any) {
+          errors.push(`${p.fullName}: ${e?.message ?? "unknown"}`);
+        }
+      }
+      res.json({ scanned: ungraded.length, graded, skipped, errors });
+    } catch (error: any) {
+      console.error("AI grade all missing error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Assign "?" grade to all politicians with no data available
   app.post("/api/admin/politicians/grade-no-data", ensureAdmin, async (req, res) => {
     try {
@@ -6382,7 +6449,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
           COALESCE(pol.phone, '')                 AS "PHONE",
           COALESCE(pol.biography, '')             AS "BIOGRAPHY",
           COALESCE(pol.photo_url, '')             AS "PHOTO_URL",
-          ''                                      AS "NOTES"
+          ''                                      AS "NOTES",
+          COALESCE(pol.corruption_grade, '')      AS "CORRUPTION_GRADE"
         FROM politician_profiles pol
         LEFT JOIN political_positions pos ON pol.position_id = pos.id
         ORDER BY pol.full_name

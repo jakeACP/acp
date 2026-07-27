@@ -5844,10 +5844,12 @@ export class DatabaseStorage implements IStorage {
   async importProfilesCsv(profiles: Array<{
     fullName: string; party: string; email: string; phone: string;
     website: string; biography: string; termStart: string; termEnd: string;
-    isCurrent: string; officeAddress: string;
+    isCurrent: string; officeAddress: string; corruptionGrade?: string;
   }>): Promise<{ created: number; updated: number }> {
     let created = 0;
     let updated = 0;
+
+    const VALID_GRADES = ["A", "B", "C", "D", "F", "?"];
 
     for (const row of profiles) {
       const fullName = (row.fullName || "").trim();
@@ -5856,7 +5858,10 @@ export class DatabaseStorage implements IStorage {
       const existing = await db.select().from(politicianProfiles)
         .where(sql`lower(full_name) = lower(${fullName})`);
 
-      const patch = {
+      const rawGrade = (row.corruptionGrade || "").trim().toUpperCase();
+      const grade = VALID_GRADES.includes(rawGrade) ? rawGrade : undefined;
+
+      const patch: any = {
         party: row.party || undefined,
         email: row.email || undefined,
         phone: row.phone || undefined,
@@ -5867,6 +5872,7 @@ export class DatabaseStorage implements IStorage {
         isCurrent: row.isCurrent ? row.isCurrent.toLowerCase() === "yes" || row.isCurrent === "true" : false,
         officeAddress: row.officeAddress || undefined,
       };
+      if (grade) patch.corruptionGrade = grade;
 
       if (existing.length > 0) {
         await db.update(politicianProfiles).set({ ...patch, updatedAt: new Date() })

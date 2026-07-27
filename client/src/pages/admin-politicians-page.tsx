@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown, Bot as BotIcon, ChevronDown, ChevronRight, AtSign, HelpCircle } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown, Bot as BotIcon, ChevronDown, ChevronRight, AtSign, HelpCircle, Sparkles } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
@@ -256,6 +256,71 @@ export default function AdminPoliticiansPage() {
   const { data: mergeCandidatesData = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/merge-candidates"],
   });
+
+  const [aiRegradingId, setAiRegradingId] = useState<string | null>(null);
+
+  const aiRegradeOneMutation = useMutation({
+    mutationFn: async (id: string) => {
+      setAiRegradingId(id);
+      const res = await apiRequest(`/api/admin/politician-profiles/${id}/ai-regrade`, "POST");
+      return await res.json();
+    },
+    onSuccess: (data: any) => {
+      setAiRegradingId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/missing-info"] });
+      toast({
+        title: `AI Grade: ${data.grade}`,
+        description: data.reasoning ?? "Grade assigned.",
+      });
+    },
+    onError: (error: any) => {
+      setAiRegradingId(null);
+      toast({ title: "AI regrade failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const aiGradeAllMissingMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/politicians/ai-grade-all-missing", "POST");
+      return await res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/missing-info"] });
+      toast({
+        title: "AI Grade All complete",
+        description: `Scanned ${data.scanned} — ${data.graded} received a letter grade, ${data.skipped} stayed as "?" (no data found).`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "AI grading failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  function exportMissingInfoCsv(records: any[]) {
+    const headers = ["FULL_NAME","HANDLE","OFFICE","STATE","GRADE","MISSING_FIELDS"];
+    const rows = [
+      headers.join(","),
+      ...records.map(r => [
+        `"${(r.fullName || "").replace(/"/g, '""')}"`,
+        `"${r.handle ? `@${r.handle}` : ""}"`,
+        `"${(r.office || "").replace(/"/g, '""')}"`,
+        `"${r.state || ""}"`,
+        `"${r.corruptionGrade || ""}"`,
+        `"${(r.missingFields || []).join("; ")}"`,
+      ].join(","))
+    ];
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "missing_info_candidates.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   const gradeNoDataMutation = useMutation({
     mutationFn: async () => {
@@ -2883,25 +2948,51 @@ export default function AdminPoliticiansPage() {
                   </div>
                 )}
 
-                <div className="flex justify-between items-center">
+                <div className="flex flex-wrap justify-between items-start gap-3">
                   <div>
                     <h3 className="text-lg font-semibold">Missing Information</h3>
                     <p className="text-sm text-muted-foreground">Politicians missing state or grade data</p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => gradeNoDataMutation.mutate()}
-                    disabled={gradeNoDataMutation.isPending}
-                    className="flex items-center gap-2"
-                  >
-                    {gradeNoDataMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <HelpCircle className="h-4 w-4 text-slate-500" />
-                    )}
-                    Grade Candidates
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => exportMissingInfoCsv(missingInfoData)}
+                      disabled={missingInfoData.length === 0}
+                      className="flex items-center gap-2"
+                    >
+                      <FileDown className="h-4 w-4" />
+                      Export CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => gradeNoDataMutation.mutate()}
+                      disabled={gradeNoDataMutation.isPending}
+                      className="flex items-center gap-2"
+                    >
+                      {gradeNoDataMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <HelpCircle className="h-4 w-4 text-slate-500" />
+                      )}
+                      Grade Candidates
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => aiGradeAllMissingMutation.mutate()}
+                      disabled={aiGradeAllMissingMutation.isPending || missingInfoData.length === 0}
+                      className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+                    >
+                      {aiGradeAllMissingMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      AI Grade All Candidates
+                    </Button>
+                  </div>
                 </div>
 
                 {missingInfoData.length === 0 ? (
@@ -2955,19 +3046,35 @@ export default function AdminPoliticiansPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  const profile = profiles.find(p => p.id === record.id);
-                                  if (profile) {
-                                    setEditingProfile(profile);
-                                    setProfileDialogOpen(true);
-                                  }
-                                }}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="AI Regrade"
+                                  onClick={() => aiRegradeOneMutation.mutate(record.id)}
+                                  disabled={aiRegradingId === record.id}
+                                >
+                                  {aiRegradingId === record.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
+                                  ) : (
+                                    <Sparkles className="h-4 w-4 text-violet-500" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="Edit profile"
+                                  onClick={() => {
+                                    const profile = profiles.find(p => p.id === record.id);
+                                    if (profile) {
+                                      setEditingProfile(profile);
+                                      setProfileDialogOpen(true);
+                                    }
+                                  }}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}

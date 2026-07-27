@@ -35,13 +35,13 @@ export const TEMPLATES = {
   },
   politicians: {
     filename: "politicians_template.csv",
-    headers: ["FULL_NAME","STATE","PARTY","CHAMBER","DISTRICT","OFFICE_TITLE","BIOGRAPHY","WEBSITE","EMAIL","PHONE"],
-    sample: ["Jane Smith","MN","Democratic","Senate","Minnesota","U.S. Senator from Minnesota","Brief bio here","https://example.gov","senator@example.gov","202-555-0100"],
+    headers: ["FULL_NAME","STATE","PARTY","CHAMBER","DISTRICT","OFFICE_TITLE","BIOGRAPHY","WEBSITE","EMAIL","PHONE","CORRUPTION_GRADE"],
+    sample: ["Jane Smith","MN","Democratic","Senate","Minnesota","U.S. Senator from Minnesota","Brief bio here","https://example.gov","senator@example.gov","202-555-0100",""],
   },
   candidates: {
     filename: "candidates_template.csv",
-    headers: ["FULL_NAME","PROFILE_TYPE","OFFICE","OFFICE_LEVEL","STATE","DISTRICT","PARTY","INCUMBENT","STATUS","PRIMARY_DATE","GENERAL_DATE","FEC_CANDIDATE_ID","BALLOTPEDIA_URL","WEBSITE","EMAIL","PHONE","BIOGRAPHY","PHOTO_URL","NOTES"],
-    sample: ["Jane Smith","candidate","U.S. Senate","Federal","Minnesota","","Democratic","No","Candidacy Declared","August 11, 2026","November 3, 2026","S0MN00123","https://ballotpedia.org/Jane_Smith","https://janesmith.com","jane@janesmith.com","651-555-0100","Brief bio here","",""],
+    headers: ["FULL_NAME","PROFILE_TYPE","OFFICE","OFFICE_LEVEL","STATE","DISTRICT","PARTY","INCUMBENT","STATUS","PRIMARY_DATE","GENERAL_DATE","FEC_CANDIDATE_ID","BALLOTPEDIA_URL","WEBSITE","EMAIL","PHONE","BIOGRAPHY","PHOTO_URL","NOTES","CORRUPTION_GRADE"],
+    sample: ["Jane Smith","candidate","U.S. Senate","Federal","Minnesota","","Democratic","No","Candidacy Declared","August 11, 2026","November 3, 2026","S0MN00123","https://ballotpedia.org/Jane_Smith","https://janesmith.com","jane@janesmith.com","651-555-0100","Brief bio here","","",""],
   },
   representatives: {
     filename: "representatives_template.csv",
