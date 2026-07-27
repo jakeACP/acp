@@ -1389,7 +1389,7 @@ export const politicianProfiles = pgTable("politician_profiles", {
   featuredIndex: index("politician_profiles_featured_idx").on(table.featured),
   verifiedIndex: index("politician_profiles_verified_idx").on(table.isVerified),
   claimStatusIndex: index("politician_profiles_claim_status_idx").on(table.claimRequestStatus),
-  corruptionGradeCheck: sql`CHECK (${table.corruptionGrade} IN ('A', 'B', 'C', 'D', 'F') OR ${table.corruptionGrade} IS NULL)`,
+  corruptionGradeCheck: sql`CHECK (${table.corruptionGrade} IN ('A', 'B', 'C', 'D', 'F', '?') OR ${table.corruptionGrade} IS NULL)`,
   claimStatusCheck: sql`CHECK (${table.claimRequestStatus} IN ('pending', 'approved', 'rejected') OR ${table.claimRequestStatus} IS NULL)`,
   profileTypeCheck: sql`CHECK (${table.profileType} IN ('representative', 'candidate', 'delegate') OR ${table.profileType} IS NULL)`,
 }));

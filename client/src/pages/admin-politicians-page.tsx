@@ -346,6 +346,21 @@ export default function AdminPoliticiansPage() {
     URL.revokeObjectURL(url);
   }
 
+  const setGradeMutation = useMutation({
+    mutationFn: async ({ id, grade }: { id: string; grade: string }) => {
+      const res = await apiRequest(`/api/admin/politician-profiles/${id}`, "PATCH", { corruptionGrade: grade });
+      return await res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/missing-info"] });
+      toast({ title: "Grade assigned", description: `Grade set to ${vars.grade}. Candidate updated.` });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to set grade", description: error.message, variant: "destructive" });
+    },
+  });
+
   const gradeNoDataMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("/api/admin/politicians/grade-no-data", "POST");
@@ -3086,19 +3101,30 @@ export default function AdminPoliticiansPage() {
                             <TableCell className="text-sm">{record.office || '-'}</TableCell>
                             <TableCell className="text-sm">{record.state || '-'}</TableCell>
                             <TableCell className="text-sm">
-                              {record.corruptionGrade ? (
-                                <span className={`inline-flex items-center justify-center w-7 h-7 rounded-md font-bold text-sm ${
+                              <Select
+                                value={record.corruptionGrade || ""}
+                                onValueChange={(grade) => setGradeMutation.mutate({ id: record.id, grade })}
+                                disabled={setGradeMutation.isPending}
+                              >
+                                <SelectTrigger className={`w-[72px] h-8 font-bold ${
                                   record.corruptionGrade === 'A' ? 'bg-green-600 text-white' :
                                   record.corruptionGrade === 'B' ? 'bg-blue-500 text-white' :
                                   record.corruptionGrade === 'C' ? 'bg-yellow-400 text-yellow-900' :
                                   record.corruptionGrade === 'D' ? 'bg-orange-500 text-white' :
                                   record.corruptionGrade === 'F' ? 'bg-red-600 text-white' :
-                                  record.corruptionGrade === '?' ? 'bg-slate-500 text-white' :
-                                  'bg-slate-400 text-white'
+                                  record.corruptionGrade === '?' ? 'bg-slate-500 text-white' : ''
                                 }`}>
-                                  {record.corruptionGrade}
-                                </span>
-                              ) : <span className="text-slate-400">—</span>}
+                                  <SelectValue placeholder="—" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="A">A</SelectItem>
+                                  <SelectItem value="B">B</SelectItem>
+                                  <SelectItem value="C">C</SelectItem>
+                                  <SelectItem value="D">D</SelectItem>
+                                  <SelectItem value="F">F</SelectItem>
+                                  <SelectItem value="?">? (No Data)</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-1 flex-wrap">
