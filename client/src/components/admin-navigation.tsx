@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -40,6 +41,7 @@ interface SubItem {
   disabled?: boolean;
   badge?: string;
   globalAdminOnly?: boolean;
+  dbaVisible?: boolean;
 }
 
 interface NavCategory {
@@ -65,12 +67,12 @@ const navCategories: NavCategory[] = [
     icon: Database,
     items: [
       { name: "Users", href: "/admin/users", icon: UserCircle },
-      { name: "Politicians", href: "/admin/politicians", icon: Users },
+      { name: "Politicians", href: "/admin/politicians", icon: Users, dbaVisible: true },
       { name: "Lobbies", href: "/admin/sigs", icon: Building2 },
       { name: "Parties", href: "/admin/parties", icon: Flag },
-      { name: "ACEs", href: "/admin/ace-pledges", icon: BadgeCheck },
-      { name: "Pledges", href: "/admin/pledge-requests", icon: BadgeCheck },
-      { name: "Trading Flags", href: "/admin/trading-flags", icon: Flag },
+      { name: "ACEs", href: "/admin/ace-pledges", icon: BadgeCheck, dbaVisible: true },
+      { name: "Pledges", href: "/admin/pledge-requests", icon: BadgeCheck, dbaVisible: true },
+      { name: "Trading Flags", href: "/admin/trading-flags", icon: Flag, dbaVisible: true },
       { name: "State Data", href: "/admin/state-data", icon: MapPin },
       { name: "Budget Baselines", href: "/admin/budget-baselines", icon: Database },
       { name: "Districts", href: "/admin/districts", icon: Map },
@@ -167,18 +169,22 @@ function DropdownMenu({
   category,
   location,
   isGlobalAdmin,
+  isDba,
 }: {
   category: NavCategory;
   location: string;
   isGlobalAdmin: boolean;
+  isDba: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const CategoryIcon = category.icon;
 
   // Filter out items the user cannot see
-  const visibleItems = category.items.filter(
-    (item) => !item.globalAdminOnly || isGlobalAdmin
-  );
+  const visibleItems = category.items.filter((item) => {
+    if (item.globalAdminOnly && !isGlobalAdmin) return false;
+    if (isDba && !item.dbaVisible) return false;
+    return true;
+  });
 
   const isActiveCategory = visibleItems.some(
     (item) => !item.disabled && location === item.href
@@ -264,6 +270,9 @@ export function AdminNavigation() {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
+  const { user } = useAuth();
+
+  const isDba = user?.role === "dba";
 
   const { data: globalAdminData } = useQuery<{ isGlobalAdmin: boolean }>({
     queryKey: ["/api/admin/is-global-admin"],
@@ -271,6 +280,11 @@ export function AdminNavigation() {
   const isGlobalAdmin = globalAdminData?.isGlobalAdmin ?? false;
 
   const isDashboard = location === "/admin/dashboard";
+
+  // DBA users only see categories that have at least one dba-visible item
+  const visibleCategories = isDba
+    ? navCategories.filter((cat) => cat.items.some((item) => item.dbaVisible))
+    : navCategories;
 
   return (
     <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
@@ -287,28 +301,32 @@ export function AdminNavigation() {
 
             {/* Desktop nav */}
             <nav className="hidden lg:flex items-center gap-0.5 ml-2">
-              {/* Dashboard — direct link, no dropdown */}
-              <Link
-                href="/admin/dashboard"
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap",
-                  isDashboard
-                    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
-                )}
-              >
-                <LayoutDashboard className="h-3.5 w-3.5" />
-                <span>Dashboard</span>
-              </Link>
+              {/* Dashboard — direct link, no dropdown (hidden for DBA) */}
+              {!isDba && (
+                <>
+                  <Link
+                    href="/admin/dashboard"
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap",
+                      isDashboard
+                        ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                        : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                    )}
+                  >
+                    <LayoutDashboard className="h-3.5 w-3.5" />
+                    <span>Dashboard</span>
+                  </Link>
 
-              <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+                  <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+                </>
+              )}
 
-              {navCategories.map((category, i) => (
+              {visibleCategories.map((category, i) => (
                 <div key={category.id} className="flex items-center">
                   {i > 0 && (
                     <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-0.5" />
                   )}
-                  <DropdownMenu category={category} location={location} isGlobalAdmin={isGlobalAdmin} />
+                  <DropdownMenu category={category} location={location} isGlobalAdmin={isGlobalAdmin} isDba={isDba} />
                 </div>
               ))}
             </nav>
@@ -340,27 +358,31 @@ export function AdminNavigation() {
       {/* Mobile Navigation */}
       {mobileOpen && (
         <div className="lg:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 pb-4">
-          {/* Dashboard */}
-          <Link
-            href="/admin/dashboard"
-            onClick={() => setMobileOpen(false)}
-            className={cn(
-              "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b border-slate-100 dark:border-slate-800",
-              isDashboard
-                ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
-                : "text-slate-700 dark:text-slate-300"
-            )}
-          >
-            <LayoutDashboard className="h-4 w-4" />
-            Dashboard
-          </Link>
+          {/* Dashboard (hidden for DBA) */}
+          {!isDba && (
+            <Link
+              href="/admin/dashboard"
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b border-slate-100 dark:border-slate-800",
+                isDashboard
+                  ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                  : "text-slate-700 dark:text-slate-300"
+              )}
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              Dashboard
+            </Link>
+          )}
 
-          {navCategories.map((category) => {
+          {visibleCategories.map((category) => {
             const CategoryIcon = category.icon;
             const isExpanded = mobileExpanded === category.id;
-            const mobileItems = category.items.filter(
-              (item) => !item.globalAdminOnly || isGlobalAdmin
-            );
+            const mobileItems = category.items.filter((item) => {
+              if (item.globalAdminOnly && !isGlobalAdmin) return false;
+              if (isDba && !item.dbaVisible) return false;
+              return true;
+            });
             const isActiveCategory = mobileItems.some(
               (item) => !item.disabled && location === item.href
             );

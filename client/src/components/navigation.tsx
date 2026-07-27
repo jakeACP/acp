@@ -28,7 +28,7 @@ export function Navigation() {
   });
 
   const isOwnerAdmin = user?.role === "admin" && adminUserId && user.id === adminUserId;
-  const canAccessAdmin = user?.role === "admin" || user?.role === "moderator";
+  const canAccessAdmin = user?.role === "admin" || user?.role === "moderator" || user?.role === "dba";
 
   const canCanvass = user?.role === "admin" || user?.role === "candidate" || user?.role === "state_admin";
 

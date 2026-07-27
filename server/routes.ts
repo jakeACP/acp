@@ -5048,14 +5048,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
 
-  // Admin Security Middleware - for admin and moderator access
+  // Admin Security Middleware - for admin, moderator, and dba access
   function ensureAdmin(req: any, res: any, next: any) {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
 
-    // Check if user is admin or moderator
-    if (req.user.role !== "admin" && req.user.role !== "moderator") {
+    // Check if user is admin, moderator, or dba
+    if (req.user.role !== "admin" && req.user.role !== "moderator" && req.user.role !== "dba") {
       return res.status(403).json({ message: "Admin or moderator access required" });
     }
 
