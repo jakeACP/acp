@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown, Bot as BotIcon, ChevronDown, ChevronRight, AtSign } from "lucide-react";
+import { Users, Building2, Plus, Edit, Trash2, UserPlus, MapPin, Upload, Star, DollarSign, Link as LinkIcon, Unlink, Download, Loader2, FileDown, Search, X, Shield, ExternalLink, RefreshCw, CheckCircle2, XCircle, Inbox, ShieldCheck, Calculator, ArrowUp, ArrowDown, Bot as BotIcon, ChevronDown, ChevronRight, AtSign, HelpCircle } from "lucide-react";
 import { downloadCsv, TEMPLATES } from "@/lib/download-template";
 import { ObjectUploader } from "@/components/ObjectUploader";
 
@@ -255,6 +255,24 @@ export default function AdminPoliticiansPage() {
 
   const { data: mergeCandidatesData = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/merge-candidates"],
+  });
+
+  const gradeNoDataMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("/api/admin/politicians/grade-no-data", "POST");
+      return await res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/politician-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/missing-info"] });
+      toast({
+        title: "Grade Candidates complete",
+        description: `Scanned ${data.scanned} politicians — ${data.assigned} assigned a "?" (No Data) grade.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error grading candidates", description: error.message, variant: "destructive" });
+    },
   });
 
   const linkPartyEndorsementsMutation = useMutation({
@@ -2870,6 +2888,20 @@ export default function AdminPoliticiansPage() {
                     <h3 className="text-lg font-semibold">Missing Information</h3>
                     <p className="text-sm text-muted-foreground">Politicians missing state or grade data</p>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => gradeNoDataMutation.mutate()}
+                    disabled={gradeNoDataMutation.isPending}
+                    className="flex items-center gap-2"
+                  >
+                    {gradeNoDataMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <HelpCircle className="h-4 w-4 text-slate-500" />
+                    )}
+                    Grade Candidates
+                  </Button>
                 </div>
 
                 {missingInfoData.length === 0 ? (
@@ -2900,7 +2932,21 @@ export default function AdminPoliticiansPage() {
                             </TableCell>
                             <TableCell className="text-sm">{record.office || '-'}</TableCell>
                             <TableCell className="text-sm">{record.state || '-'}</TableCell>
-                            <TableCell className="text-sm">{record.corruptionGrade || '-'}</TableCell>
+                            <TableCell className="text-sm">
+                              {record.corruptionGrade ? (
+                                <span className={`inline-flex items-center justify-center w-7 h-7 rounded-md font-bold text-sm ${
+                                  record.corruptionGrade === 'A' ? 'bg-green-600 text-white' :
+                                  record.corruptionGrade === 'B' ? 'bg-blue-500 text-white' :
+                                  record.corruptionGrade === 'C' ? 'bg-yellow-400 text-yellow-900' :
+                                  record.corruptionGrade === 'D' ? 'bg-orange-500 text-white' :
+                                  record.corruptionGrade === 'F' ? 'bg-red-600 text-white' :
+                                  record.corruptionGrade === '?' ? 'bg-slate-500 text-white' :
+                                  'bg-slate-400 text-white'
+                                }`}>
+                                  {record.corruptionGrade}
+                                </span>
+                              ) : <span className="text-slate-400">—</span>}
+                            </TableCell>
                             <TableCell>
                               <div className="flex gap-1 flex-wrap">
                                 {record.missingFields.map((f: string) => (

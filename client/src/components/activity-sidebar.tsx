@@ -203,6 +203,7 @@ export function ActivitySidebar() {
       'C': 'bg-yellow-600',
       'D': 'bg-orange-600',
       'F': 'bg-red-600',
+      '?': 'bg-slate-500',
     };
     return colors[grade] || "bg-slate-500";
   };

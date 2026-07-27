@@ -35,6 +35,7 @@ const GRADE_COLORS: Record<string, string> = {
   C: "bg-yellow-500 text-white",
   D: "bg-orange-500 text-white",
   F: "bg-red-600 text-white",
+  "?": "bg-slate-500 text-white",
 };
 
 function getPartyShort(party: string | null): string {

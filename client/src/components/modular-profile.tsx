@@ -427,6 +427,7 @@ function gradeColors(grade?: string | null) {
     case "C": return { badge: "bg-yellow-400 text-yellow-900", label: "text-yellow-700 dark:text-yellow-400" };
     case "D": return { badge: "bg-red-500 text-white", label: "text-red-600 dark:text-red-400" };
     case "F": return { badge: "bg-red-700 text-white", label: "text-red-700 dark:text-red-400" };
+    case "?": return { badge: "bg-slate-500 text-white", label: "text-slate-500 dark:text-slate-400" };
     default:  return { badge: "bg-slate-400 text-white", label: "text-slate-500 dark:text-slate-400" };
   }
 }
@@ -437,6 +438,7 @@ const GRADE_DESCRIPTIONS: Record<string, string> = {
   C: "Moderate — some special-interest ties",
   D: "High corruption — significant concerns",
   F: "Most corrupt — major special-interest influence",
+  "?": "No Data — insufficient information to assign a grade",
 };
 
 const GRADE_LEGEND = [
@@ -445,6 +447,7 @@ const GRADE_LEGEND = [
   { grade: "C", classes: "bg-yellow-400 text-yellow-900" },
   { grade: "D", classes: "bg-red-500 text-white" },
   { grade: "F", classes: "bg-red-700 text-white" },
+  { grade: "?", classes: "bg-slate-500 text-white" },
 ];
 
 function partyShort(party?: string | null): string {

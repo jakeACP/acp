@@ -5534,6 +5534,32 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  // Assign "?" grade to all politicians with no data available
+  app.post("/api/admin/politicians/grade-no-data", ensureAdmin, async (req, res) => {
+    try {
+      // Find all politicians without a FEC candidate ID and without SIG sponsorships
+      const allProfiles = await db.select({
+        id: politicianProfiles.id,
+        fecCandidateId: (politicianProfiles as any).fecCandidateId,
+      }).from(politicianProfiles);
+
+      let assigned = 0;
+      const errors: string[] = [];
+      for (const p of allProfiles) {
+        try {
+          const result = await storage.computePoliticianGrade(p.id);
+          if (result.grade === '?') assigned++;
+        } catch (e: any) {
+          errors.push(`${p.id}: ${e?.message ?? 'unknown'}`);
+        }
+      }
+      res.json({ assigned, scanned: allProfiles.length, errors });
+    } catch (error: any) {
+      console.error("Grade no-data error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Bulk regrade all profiles using the new configurable algorithm
   app.post("/api/admin/politician-profiles/regrade", ensureAdmin, async (req, res) => {
     try {

@@ -228,6 +228,7 @@ export default function PoliticianProfilePage() {
       'C': 'bg-yellow-400 text-yellow-900',
       'D': 'bg-orange-500 text-white',
       'F': 'bg-red-600 text-white',
+      '?': 'bg-slate-500 text-white',
     };
     return colors[grade as keyof typeof colors] || 'bg-slate-400 text-white';
   };

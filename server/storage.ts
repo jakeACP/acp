@@ -5108,6 +5108,22 @@ export class DatabaseStorage implements IStorage {
       communityAdjWeight: config.communityAdjWeight,
     };
 
+    // ── No-Data Detection ─────────────────────────────────────────────────
+    // If there is no FEC data and no SIG sponsorships, we have nothing to
+    // base a grade on — assign "?" (No Data Available) instead of a
+    // misleadingly high score derived from empty inputs.
+    const hasFecData = fecId && explanation.sources.includes('FEC');
+    const hasSigData = sponsorships.length > 0;
+    const hasCommunityData = (profile as any).communityAdj && (profile as any).communityAdj !== 0;
+    if (!hasFecData && !hasSigData && !hasCommunityData) {
+      await db.update(politicianProfiles).set({
+        corruptionGrade: '?',
+        numericScore: null,
+        gradeExplanation: { ...explanation, noData: true },
+      } as any).where(eq(politicianProfiles.id, politicianId));
+      return { grade: '?', numericScore: 0, explanation: { ...explanation, noData: true } };
+    }
+
     // ── Letter Grade ──────────────────────────────────────────────────────
     let grade: string;
     if (finalScore >= config.gradeACutoff) grade = 'A';

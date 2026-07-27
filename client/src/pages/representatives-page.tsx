@@ -57,6 +57,7 @@ function gradeColors(grade?: string) {
     case "C": return { bg: "bg-yellow-400", text: "text-yellow-900", border: "border-yellow-500", light: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300" };
     case "D": return { bg: "bg-orange-500", text: "text-white", border: "border-orange-600", light: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300" };
     case "F": return { bg: "bg-red-600", text: "text-white", border: "border-red-700", light: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" };
+    case "?": return { bg: "bg-slate-500", text: "text-white", border: "border-slate-600", light: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
     default: return { bg: "bg-slate-400", text: "text-white", border: "border-slate-500", light: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
   }
 }
