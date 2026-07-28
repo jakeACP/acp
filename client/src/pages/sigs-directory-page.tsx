@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -502,6 +503,11 @@ const SIG_SORT_OPTIONS = [
 ];
 
 export default function SigsDirectoryPage() {
+  usePageMeta({
+    title: "Lobbying Groups & Special Interests",
+    description: "Explore lobbying groups and special interest groups that influence politics. See their grades, spending, and impact on corruption.",
+  });
+
   // Per-tab state
   const [lobbySearch, setLobbySearch] = useState("");
   const [lobbySort, setLobbySort] = useState("spend");

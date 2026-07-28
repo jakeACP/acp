@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,6 +29,11 @@ type ForgotPasswordData = z.infer<typeof forgotPasswordSchema>;
 type AdminResetData = z.infer<typeof adminResetSchema>;
 
 export default function ForgotPasswordPage() {
+  usePageMeta({
+    title: "Forgot Password",
+    description: "Reset your ACP Democracy account password. Enter your email address to receive a secure reset link.",
+  });
+
   const [emailSent, setEmailSent] = useState(false);
   const [adminMode, setAdminMode] = useState(false);
   const [resetDone, setResetDone] = useState(false);

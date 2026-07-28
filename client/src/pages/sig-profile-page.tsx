@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { Link, useParams } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -228,6 +229,12 @@ export default function SigProfilePage() {
       return r.json();
     }),
     enabled: !!tag,
+  });
+
+  usePageMeta({
+    title: data?.sig?.name ? `${data.sig.name} – Lobbying Group Profile` : "Lobbying Group Profile",
+    description: data?.sig?.description
+      ?? `View ${data?.sig?.name ?? "this lobbying group"}'s ACP grade, sponsorships, and political influence on ACP Democracy.`,
   });
 
   useEffect(() => {

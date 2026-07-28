@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,11 @@ function LikertButton({
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function PoliticalCompassPage() {
+  usePageMeta({
+    title: "Political Compass Quiz",
+    description: "Take the 20-question political compass quiz to discover your position on the economic and social axes. Save and share your results.",
+  });
+
   const { toast } = useToast();
   const [screen, setScreen] = useState<Screen>("intro");
   const [currentQ, setCurrentQ] = useState(0);

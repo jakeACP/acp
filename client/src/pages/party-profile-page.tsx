@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Navigation } from "@/components/navigation";
@@ -163,6 +164,13 @@ export default function PartyProfilePage() {
       return res.json();
     },
     enabled: !!partyId,
+  });
+
+  usePageMeta({
+    title: party ? `${party.name}${party.acronym ? ` (${party.acronym})` : ""}` : "Political Party",
+    description: party?.shortDescription
+      ?? `Explore ${party?.name ?? "this party"}'s policy positions, ballot access, transparency score, and community ratings on ACP Democracy.`,
+    ogImage: party?.logoUrl ?? undefined,
   });
 
   const rateMutation = useMutation({

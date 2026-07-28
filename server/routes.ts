@@ -380,17 +380,22 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   function buildOgHtml(
     template: string,
-    opts: { title: string; description: string; image?: string; url: string }
+    opts: { title: string; description: string; image?: string; url: string; canonical?: string; ogType?: string }
   ): string {
     const escaped = (s: string) =>
       s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+    const canonicalHref = opts.canonical ?? opts.url;
+    const ogType = opts.ogType ?? "article";
+
     const tags = [
-      `<meta property="og:type" content="article" />`,
+      `<meta name="description" content="${escaped(opts.description)}" />`,
+      `<link rel="canonical" href="${escaped(canonicalHref)}" />`,
+      `<meta property="og:type" content="${ogType}" />`,
       `<meta property="og:site_name" content="ACP Democracy" />`,
       `<meta property="og:title" content="${escaped(opts.title)}" />`,
       `<meta property="og:description" content="${escaped(opts.description)}" />`,
-      `<meta property="og:url" content="${escaped(opts.url)}" />`,
+      `<meta property="og:url" content="${escaped(canonicalHref)}" />`,
       opts.image ? `<meta property="og:image" content="${escaped(opts.image)}" />` : "",
       `<meta name="twitter:card" content="${opts.image ? "summary_large_image" : "summary"}" />`,
       `<meta name="twitter:title" content="${escaped(opts.title)}" />`,
@@ -399,9 +404,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       `<title>${escaped(opts.title)} | ACP Democracy</title>`,
     ].filter(Boolean).join("\n    ");
 
-    // Remove any existing <title> tag so we don't end up with two
+    // Strip existing tags that will be replaced so we don't end up with duplicates
     return template
       .replace(/<title>[^<]*<\/title>/, "")
+      .replace(/<meta\s+name="description"[^>]*>/gi, "")
+      .replace(/<link\s+rel="canonical"[^>]*>/gi, "")
       .replace("</head>", `    ${tags}\n  </head>`);
   }
 
@@ -473,8 +480,183 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   }
 
   app.get("/signals/:id", signalOgHandler);
-  // Keep /mobile/signals/:id as alias so existing mobile deep-links still work
-  app.get("/mobile/signals/:id", signalOgHandler);
+  // /mobile/signals/:id is an alias; serve same OG metadata with canonical pointing to /signals/:id
+  app.get("/mobile/signals/:id", async (req, res, next) => {
+    try {
+      const signal = await storage.getSignalById(req.params.id);
+      if (!signal || !signal.isPublic) return next();
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const canonical = `${origin}/signals/${req.params.id}`;
+      const url = `${origin}/mobile/signals/${req.params.id}`;
+      const title = signal.title || "ACP Signal";
+      const description = signal.description || "Watch this Signal on ACP Democracy";
+      const image = signal.thumbnailUrl || undefined;
+      const template = await readHtmlTemplate();
+      const html = buildOgHtml(template, { title, description, image, url, canonical });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // /sigs and /sigs/:tag are legacy aliases — redirect permanently to /lobbies equivalents
+  app.get("/sigs", (_req, res) => res.redirect(301, "/lobbies"));
+  app.get("/sigs/:tag", (req, res) => res.redirect(301, `/lobbies/${req.params.tag}`));
+
+  // ── Server-side head injection for public SPA routes ──────────────────────
+  // These handlers run before the Vite/static catch-all so that crawlers and
+  // social bots receive unique <title>, <meta name="description">, canonical,
+  // og:*, and twitter:* tags without executing JavaScript.
+
+  async function serveSpaPage(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    opts: { title: string; description: string; image?: string }
+  ) {
+    try {
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const url = `${origin}${req.path}`;
+      const template = await readHtmlTemplate();
+      const html = buildOgHtml(template, { ...opts, url, ogType: "website" });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  // Static public SPA routes
+  const STATIC_SPA_ROUTES: Array<{ path: string; title: string; description: string }> = [
+    {
+      path: "/news",
+      title: "ACP News",
+      description: "Browse the latest news, articles, and community posts from the Anti-Corruption Party platform.",
+    },
+    {
+      path: "/terms",
+      title: "Terms of Service",
+      description: "Read the ACP Democracy Terms of Service including community guidelines, privacy rights, and platform usage rules.",
+    },
+    {
+      path: "/elections",
+      title: "Elections",
+      description: "Track candidates, find your representatives, and explore election races on the ACP Democracy platform.",
+    },
+    {
+      path: "/lobbies",
+      title: "Lobbying Groups & Special Interests",
+      description: "Explore lobbying groups and special interest groups that influence politics. See their grades, spending, and political impact.",
+    },
+    {
+      path: "/parties",
+      title: "Political Parties",
+      description: "Explore political parties by transparency, ballot access, and policy positions. Compare platforms and community ratings.",
+    },
+    {
+      path: "/political-compass",
+      title: "Political Compass Quiz",
+      description: "Take the 20-question political compass quiz to discover your position on the economic and social axes. Save and share your results.",
+    },
+    {
+      path: "/developer",
+      title: "Developer API",
+      description: "ACP Democracy Agent API documentation. Manage API keys, explore endpoints, and integrate AI agents with the platform.",
+    },
+    {
+      path: "/auth",
+      title: "Sign In",
+      description: "Sign in or create an account to participate in ACP Democracy — vote, track politicians, join groups, and engage your community.",
+    },
+    {
+      path: "/forgot-password",
+      title: "Forgot Password",
+      description: "Reset your ACP Democracy account password. Enter your email address to receive a secure reset link.",
+    },
+    {
+      path: "/reset-password",
+      title: "Reset Password",
+      description: "Set a new password for your ACP Democracy account using your secure reset link.",
+    },
+  ];
+
+  for (const route of STATIC_SPA_ROUTES) {
+    app.get(route.path, (req, res, next) =>
+      serveSpaPage(req, res, next, { title: route.title, description: route.description })
+    );
+  }
+
+  // Home page — same content as /news for unauthenticated crawlers
+  app.get("/", (req, res, next) =>
+    serveSpaPage(req, res, next, {
+      title: "ACP Democracy",
+      description: "The Anti-Corruption Party platform for transparent democratic participation, candidate tracking, corruption grading, and civic engagement.",
+    })
+  );
+
+  // Dynamic SPA route: /lobbies/:tag — inject SIG-specific metadata
+  app.get("/lobbies/:tag", async (req, res, next) => {
+    try {
+      const result = await storage.getPublicSigByTag(req.params.tag, undefined);
+      if (!result?.sig) return next();
+      const { sig } = result;
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const url = `${origin}/lobbies/${req.params.tag}`;
+      const title = `${sig.name} – Lobbying Group Profile`;
+      const description = sig.description
+        ?? `View ${sig.name}'s ACP grade, sponsorships, and political influence on ACP Democracy.`;
+      const template = await readHtmlTemplate();
+      const html = buildOgHtml(template, { title, description, url, ogType: "website" });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Dynamic SPA route: /parties/:partyId — inject party-specific metadata
+  app.get("/parties/:partyId", async (req, res, next) => {
+    try {
+      const party = await storage.getPartyByIdOrSlug(req.params.partyId);
+      if (!party) return next();
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const url = `${origin}/parties/${req.params.partyId}`;
+      const title = `${party.name}${party.acronym ? ` (${party.acronym})` : ""} – Political Party`;
+      const description = party.shortDescription
+        ?? `Explore ${party.name}'s policy positions, ballot access, transparency score, and community ratings on ACP Democracy.`;
+      const image = party.logoUrl ?? undefined;
+      const template = await readHtmlTemplate();
+      const html = buildOgHtml(template, { title, description, image, url, ogType: "website" });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Dynamic SPA route: /politicians/:id — inject politician-specific metadata
+  app.get("/politicians/:id", async (req, res, next) => {
+    try {
+      const profile = await storage.getPoliticianProfile(req.params.id);
+      if (!profile) return next();
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const url = `${origin}/politicians/${req.params.id}`;
+      const title = `${profile.fullName ?? "Politician"} – Corruption Grade & Profile`;
+      const description = `View ${profile.fullName}'s corruption grade, lobbying sponsors, policy positions, and community ratings on ACP Democracy.`;
+      const image = profile.photoUrl ?? undefined;
+      const template = await readHtmlTemplate();
+      const html = buildOgHtml(template, { title, description, image, url, ogType: "profile" });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Dynamic SPA route: /profile/:userId/friends — generic friends page metadata
+  app.get("/profile/:userId/friends", (req, res, next) =>
+    serveSpaPage(req, res, next, {
+      title: "Friends",
+      description: "View a community member's friends list on ACP Democracy.",
+    })
+  );
+  // ── End server-side SPA head injection ────────────────────────────────────
 
   // File Upload API
   app.post("/api/upload", upload.single('file'), async (req, res) => {

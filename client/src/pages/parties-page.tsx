@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,11 @@ function TransparencyBar({ score }: { score: number | null }) {
 }
 
 export default function PartiesPage() {
+  usePageMeta({
+    title: "Political Parties",
+    description: "Explore political parties by transparency, ballot access, and policy positions. Compare platforms and community ratings.",
+  });
+
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("alpha");
   const [ballotFilter, setBallotFilter] = useState("all");

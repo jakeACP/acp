@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,11 @@ interface ProfileUser {
 }
 
 export default function UserFriendsPage() {
+  usePageMeta({
+    title: "Friends",
+    description: "View a community member's friends list on ACP Democracy.",
+  });
+
   const { userId } = useParams<{ userId: string }>();
   const { user: currentUser } = useAuth();
   const [search, setSearch] = useState("");

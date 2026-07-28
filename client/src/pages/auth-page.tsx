@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,6 +96,11 @@ type LoginData = z.infer<typeof loginSchema>;
 type RegisterData = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
+  usePageMeta({
+    title: "Sign In",
+    description: "Sign in or create an account to participate in ACP Democracy — vote, track politicians, join groups, and engage your community.",
+  });
+
   const { user, loginMutation, registerMutation, verify2FAMutation } = useAuth();
   const [activeTab, setActiveTab] = useState("login");
   const [invitationToken, setInvitationToken] = useState<string | null>(null);

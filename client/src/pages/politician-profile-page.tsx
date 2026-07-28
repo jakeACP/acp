@@ -1,4 +1,5 @@
 import { useParams, Link } from "wouter";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { Navigation } from "@/components/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +77,16 @@ export default function PoliticianProfilePage() {
   const { data: profile, isLoading: profileLoading } = useQuery<PoliticianProfileWithPosition>({
     queryKey: [`/api/politician-profiles/${id}`],
     enabled: !!id,
+  });
+
+  usePageMeta({
+    title: profile
+      ? `${profile.fullName ?? "Politician"} – Corruption Grade & Profile`
+      : "Politician Profile",
+    description: profile
+      ? `View ${profile.fullName}'s corruption grade, lobbying sponsors, policy positions, and community ratings on ACP Democracy.`
+      : "View politician corruption grades, lobbying sponsors, and policy positions on ACP Democracy.",
+    ogImage: profile?.photoUrl ?? undefined,
   });
 
   // Fetch posts where this politician is tagged

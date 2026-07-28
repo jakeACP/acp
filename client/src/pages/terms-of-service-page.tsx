@@ -1,5 +1,6 @@
 import { Navigation } from "@/components/navigation";
 import { ScrollText, ShieldAlert, Users, FileText, DollarSign, Bot, Gavel, Mail } from "lucide-react";
+import { usePageMeta } from "@/hooks/use-page-meta";
 
 const EFFECTIVE_DATE = "June 4, 2025";
 const CONTACT_EMAIL = "legal@anticorruptionparty.us";
@@ -55,6 +56,11 @@ const TOC = [
 ];
 
 export default function TermsOfServicePage() {
+  usePageMeta({
+    title: "Terms of Service",
+    description: "Read the ACP Democracy Terms of Service, including community guidelines, privacy rights, and platform usage rules.",
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />

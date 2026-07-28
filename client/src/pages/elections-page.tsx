@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,11 @@ interface CandidateRunning {
 }
 
 export default function ElectionsPage() {
+  usePageMeta({
+    title: "Elections",
+    description: "Track candidates, find your representatives, and explore election races on the ACP Democracy platform.",
+  });
+
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [zipCode, setZipCode] = useState("");

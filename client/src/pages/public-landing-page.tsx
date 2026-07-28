@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { PublicHeader } from "@/components/public-header";
 import { PublicCategoryMenu, ArticleCategory } from "@/components/public-category-menu";
 import { PublicArticleCard } from "@/components/public-article-card";
@@ -12,6 +13,11 @@ import { Link } from "wouter";
 const ITEMS_PER_PAGE = 10;
 
 export default function PublicLandingPage() {
+  usePageMeta({
+    title: "ACP News",
+    description: "Browse the latest news, articles, and community posts from the Anti-Corruption Party platform.",
+  });
+
   const [activeCategory, setActiveCategory] = useState<ArticleCategory>('all');
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   const loadMoreRef = useRef<HTMLDivElement>(null);

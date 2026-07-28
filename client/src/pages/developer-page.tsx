@@ -1,4 +1,5 @@
 import { Navigation } from "@/components/navigation";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -413,6 +414,11 @@ const agentPermissions = [
 ];
 
 export default function DeveloperPage() {
+  usePageMeta({
+    title: "Developer API",
+    description: "ACP Democracy Agent API documentation for developers and AI agents. Manage API keys, explore endpoints, and integrate with the platform.",
+  });
+
   return (
     <div className="bg-slate-50 dark:bg-slate-950 min-h-screen">
       <Navigation />

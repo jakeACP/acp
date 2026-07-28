@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,6 +25,11 @@ const resetPasswordSchema = z.object({
 type ResetPasswordData = z.infer<typeof resetPasswordSchema>;
 
 export default function ResetPasswordPage() {
+  usePageMeta({
+    title: "Reset Password",
+    description: "Set a new password for your ACP Democracy account using your secure reset link.",
+  });
+
   const [location] = useLocation();
   const [token, setToken] = useState<string | null>(null);
   const [passwordReset, setPasswordReset] = useState(false);
