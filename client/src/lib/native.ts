@@ -1,7 +1,4 @@
 import { Capacitor } from "@capacitor/core";
-import { App as CapacitorApp, type URLOpenListenerEvent } from "@capacitor/app";
-import { Haptics, ImpactStyle } from "@capacitor/haptics";
-import { Share } from "@capacitor/share";
 
 const ACP_WEB_ORIGIN = "https://anticorruptionparty.us";
 
@@ -54,10 +51,11 @@ export function normalizeNativeInternalPath(path: string) {
   return "/mobile";
 }
 
-export async function nativeImpact(style: ImpactStyle = ImpactStyle.Light) {
+export async function nativeImpact(style?: string) {
   if (!isNativeApp()) return;
   try {
-    await Haptics.impact({ style });
+    const { Haptics, ImpactStyle } = await import("@capacitor/haptics");
+    await Haptics.impact({ style: (style as any) ?? ImpactStyle.Light });
   } catch {
     // Haptics are optional; interaction should continue silently if unavailable.
   }
@@ -68,6 +66,7 @@ export async function shareNative(input: { title: string; text?: string; url: st
 
   if (isNativeApp()) {
     try {
+      const { Share } = await import("@capacitor/share");
       const canShare = await Share.canShare();
       if (canShare.value) {
         await Share.share({
@@ -100,29 +99,36 @@ export function installNativeAppHandlers(navigate: (path: string, options?: { re
 
   document.documentElement.classList.add("capacitor-native");
 
-  const listenerPromises = [
-    CapacitorApp.addListener("backButton", ({ canGoBack }) => {
-      if (canGoBack && window.location.pathname !== "/mobile") {
-        window.history.back();
-        return;
-      }
-      CapacitorApp.exitApp();
-    }),
-    CapacitorApp.addListener("appUrlOpen", (event: URLOpenListenerEvent) => {
-      try {
-        const url = new URL(event.url);
-        if (url.hostname === "anticorruptionparty.us") {
-          navigate(normalizeNativeInternalPath(`${url.pathname}${url.search}${url.hash}`));
+  const setup = async () => {
+    const { App: CapacitorApp } = await import("@capacitor/app");
+    const listenerPromises = [
+      CapacitorApp.addListener("backButton", ({ canGoBack }: { canGoBack: boolean }) => {
+        if (canGoBack && window.location.pathname !== "/mobile") {
+          window.history.back();
+          return;
         }
-      } catch {
-        // Ignore malformed deep-link payloads.
-      }
-    }),
-  ];
+        CapacitorApp.exitApp();
+      }),
+      CapacitorApp.addListener("appUrlOpen", (event: { url: string }) => {
+        try {
+          const url = new URL(event.url);
+          if (url.hostname === "anticorruptionparty.us") {
+            navigate(normalizeNativeInternalPath(`${url.pathname}${url.search}${url.hash}`));
+          }
+        } catch {
+          // Ignore malformed deep-link payloads.
+        }
+      }),
+    ];
+    return listenerPromises;
+  };
+
+  let listenerPromises: Promise<any>[] = [];
+  setup().then((promises) => { listenerPromises = promises; }).catch(() => {});
 
   return () => {
     for (const listenerPromise of listenerPromises) {
-      listenerPromise.then((listener) => listener.remove()).catch(() => {});
+      listenerPromise.then((listener: any) => listener.remove()).catch(() => {});
     }
   };
 }

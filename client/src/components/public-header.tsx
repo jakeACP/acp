@@ -1,6 +1,34 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import acpLogo from "@assets/logo-tpb_1763998990798.png";
+
+function AcpLogoSvg({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 48 48"
+      className={className}
+      aria-label="Anti-Corruption Party Logo"
+      role="img"
+    >
+      <defs>
+        <radialGradient id="acp-bg" cx="50%" cy="40%" r="55%">
+          <stop offset="0%" stopColor="#4a5fa8" />
+          <stop offset="100%" stopColor="#1e2d6b" />
+        </radialGradient>
+      </defs>
+      <circle cx="24" cy="24" r="23" fill="url(#acp-bg)" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
+      <rect x="14" y="20" width="20" height="2.5" rx="1.25" fill="#B22234" />
+      <rect x="14" y="25.5" width="20" height="2.5" rx="1.25" fill="white" />
+      <rect x="14" y="31" width="20" height="2.5" rx="1.25" fill="#B22234" />
+      <rect x="14" y="14" width="8" height="10" rx="0" fill="#3C3B6E" />
+      <circle cx="17" cy="17" r="1" fill="white" />
+      <circle cx="20" cy="17" r="1" fill="white" />
+      <circle cx="17" cy="21" r="1" fill="white" />
+      <circle cx="20" cy="21" r="1" fill="white" />
+      <text x="24" y="13" textAnchor="middle" fontSize="7" fontWeight="bold" fill="white" fontFamily="sans-serif" letterSpacing="0.5">ACP</text>
+    </svg>
+  );
+}
 
 export function PublicHeader() {
   return (
@@ -11,11 +39,7 @@ export function PublicHeader() {
           <Link href="/" className="flex items-center gap-4 hover:opacity-90 transition-opacity group">
             <div className="relative">
               <div className="absolute inset-0 bg-white/20 rounded-full blur-md group-hover:blur-lg transition-all" />
-              <img 
-                src={acpLogo} 
-                alt="Anti-Corruption Party" 
-                className="relative h-12 w-12 rounded-full border-2 border-white/40 shadow-lg"
-              />
+              <AcpLogoSvg className="relative h-12 w-12 rounded-full border-2 border-white/40 shadow-lg" />
             </div>
             <div className="flex flex-col">
               <span className="text-2xl font-bold text-white tracking-tight drop-shadow-lg">

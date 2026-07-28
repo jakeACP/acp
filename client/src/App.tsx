@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,99 +8,108 @@ import { AuthProvider } from "./hooks/use-auth";
 import { ThemeProvider } from "./hooks/use-theme";
 import { FloatingVideoProvider } from "./contexts/floating-video-context";
 import { ProtectedRoute } from "./lib/protected-route";
-import { MobileApp } from "./mobile/MobileApp";
-import { MobileAuthPage } from "./mobile/pages/MobileAuthPage";
-import HomePage from "@/pages/home-page";
-import AuthPage from "@/pages/auth-page";
-import GroupsPage from "@/pages/groups-page";
-import PollsPage from "@/pages/polls-page";
-import CandidatesPage from "@/pages/candidates-page";
-import CandidateProfilePage from "@/pages/candidate-profile-page";
-import ElectionsPage from "@/pages/elections-page";
-import ElectionPositionsPage from "@/pages/election-positions-page";
-import ElectionRacePage from "@/pages/election-race-page";
-import PoliticianProfilePage from "@/pages/politician-profile-page";
-import MessagesPage from "@/pages/messages-page";
-import RepresentativesPage from "@/pages/representatives-page";
-import SettingsPage from "@/pages/settings-page";
-import PrivacySettingsPage from "@/pages/privacy-settings-page";
-import EventsPage from "@/pages/events-page";
-import FriendsPage from "@/pages/friends-page";
-import UserFriendsPage from "@/pages/user-friends-page";
-import PollDetailPage from "@/pages/poll-detail-page";
-import ForgotPasswordPage from "@/pages/forgot-password-page";
-import ResetPasswordPage from "@/pages/reset-password-page";
-import CryptoDashboardPage from "@/pages/crypto-dashboard-page";
-import ProfilePage from "@/pages/profile-page";
-import CandidateEditProfilePage from "@/pages/candidate-edit-profile-page";
-import CharitiesPage from "@/pages/charities-page";
-import CharityDetailPage from "@/pages/charity-detail-page";
-import BoycottsPage from "@/pages/boycotts-page";
-import InitiativesPage from "@/pages/InitiativesPage";
-import InitiativeFormPage from "@/pages/InitiativeFormPage";
-import InitiativeDetailPage from "@/pages/InitiativeDetailPage";
-import SubscriptionPage from "@/pages/subscription-page";
-import { LivePage } from "@/pages/LivePage";
-import SignalsPage from "@/pages/signals-page";
-import SignalEditorPage from "@/pages/signal-editor-page";
-import MyStreamsPage from "@/pages/MyStreamsPage";
-import AdminInvitationsPage from "@/pages/admin-invitations-page";
-import AdminRepresentativesPage from "@/pages/admin-representatives-page";
-import AdminDashboardPage from "@/pages/admin-dashboard-page";
-import AdminModerationPage from "@/pages/admin-moderation-page";
-import AdminUsersPage from "@/pages/admin-users-page";
-import AdminUserBansPage from "@/pages/admin-user-bans-page";
-import AdminIpBlocksPage from "@/pages/admin-ip-blocks-page";
-import AdminPoliticiansPage from "@/pages/admin-politicians-page";
-import AdminPollsPage from "@/pages/admin-polls-page";
-import AdminSecurityPage from "@/pages/admin-security-page";
-import AdminDatabasePage from "@/pages/admin-database-page";
-import AdminAlgorithmPage from "@/pages/admin-algorithm-page";
-import AdminAiParametersPage from "@/pages/admin-ai-parameters-page";
-import AdminAcpPlusPage from "@/pages/admin-acp-plus-page";
-import AdminSettingsPage from "@/pages/admin-settings-page";
-import AdminVoterVerificationPage from "@/pages/admin-voter-verification-page";
-import AdminSigsPage from "@/pages/admin-sigs-page";
-import AdminStateDataPage from "@/pages/admin-state-data-page";
-import AdminImportExportPage from "@/pages/admin-import-export-page";
-import AdminTradingFlagsPage from "@/pages/admin-trading-flags-page";
-import AdminAcePledgesPage from "@/pages/admin-ace-pledges-page";
-import AdminPledgeRequestsPage from "@/pages/admin-pledge-requests-page";
-import AdminScannerPage from "@/pages/admin-scanner-page";
-import AdminAgenticAiPage from "@/pages/admin-agentic-ai-page";
-import BudgetSimulatorPage from "@/pages/budget-simulator-page";
-import AdminBudgetBaselinesPage from "@/pages/admin-budget-baselines-page";
-import AdminDistrictsPage from "@/pages/admin-districts-page";
-import AdminDistrictFormPage from "@/pages/admin-district-form-page";
-import AdminDistrictDetailPage from "@/pages/admin-district-detail-page";
-import SigsDirectoryPage from "@/pages/sigs-directory-page";
-import SigProfilePage from "@/pages/sig-profile-page";
-import PartiesPage from "@/pages/parties-page";
-import PartyProfilePage from "@/pages/party-profile-page";
-import AdminPartiesPage from "@/pages/admin-parties-page";
-import WhistleblowingPage from "@/pages/whistleblowing-page";
-import PoliticalCompassPage from "@/pages/political-compass";
-import CreateArticlePage from "@/pages/create-article-page";
-import ArticlePage from "@/pages/article-page";
-import PublicLandingPage from "@/pages/public-landing-page";
-import PublicArticlePage from "@/pages/public-article-page";
-import PublicPostPage from "@/pages/public-post-page";
-import PublicSignalPage from "@/pages/public-signal-page";
-import DeveloperPage from "@/pages/developer-page";
-import RunForOfficePage from "@/pages/run-for-office-page";
-import IssuesPage from "@/pages/issues-page";
-import TermsOfServicePage from "@/pages/terms-of-service-page";
-import AdminEmailTemplatesPage from "@/pages/admin-email-templates-page";
-import CanvassingMapPage from "@/pages/canvassing-map-page";
-import CanvassingContactsPage from "@/pages/canvassing-contacts-page";
-import NotFound from "@/pages/not-found";
 import { useScrollLight } from "./hooks/useScrollLight";
 import { useAuth } from "./hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { TwoFactorReminder } from "./components/two-factor-reminder";
 import { ErrorBoundary } from "./components/error-boundary";
 import { installNativeAppHandlers, isNativeApp, normalizeNativeInternalPath } from "./lib/native";
-import { initNativeApp } from "./mobile/services/native";
+
+const MobileApp = lazy(() => import("./mobile/MobileApp").then(m => ({ default: m.MobileApp })));
+const MobileAuthPage = lazy(() => import("./mobile/pages/MobileAuthPage").then(m => ({ default: m.MobileAuthPage })));
+
+const HomePage = lazy(() => import("@/pages/home-page"));
+const AuthPage = lazy(() => import("@/pages/auth-page"));
+const GroupsPage = lazy(() => import("@/pages/groups-page"));
+const PollsPage = lazy(() => import("@/pages/polls-page"));
+const CandidatesPage = lazy(() => import("@/pages/candidates-page"));
+const CandidateProfilePage = lazy(() => import("@/pages/candidate-profile-page"));
+const ElectionsPage = lazy(() => import("@/pages/elections-page"));
+const ElectionPositionsPage = lazy(() => import("@/pages/election-positions-page"));
+const ElectionRacePage = lazy(() => import("@/pages/election-race-page"));
+const PoliticianProfilePage = lazy(() => import("@/pages/politician-profile-page"));
+const MessagesPage = lazy(() => import("@/pages/messages-page"));
+const RepresentativesPage = lazy(() => import("@/pages/representatives-page"));
+const SettingsPage = lazy(() => import("@/pages/settings-page"));
+const PrivacySettingsPage = lazy(() => import("@/pages/privacy-settings-page"));
+const EventsPage = lazy(() => import("@/pages/events-page"));
+const FriendsPage = lazy(() => import("@/pages/friends-page"));
+const UserFriendsPage = lazy(() => import("@/pages/user-friends-page"));
+const PollDetailPage = lazy(() => import("@/pages/poll-detail-page"));
+const ForgotPasswordPage = lazy(() => import("@/pages/forgot-password-page"));
+const ResetPasswordPage = lazy(() => import("@/pages/reset-password-page"));
+const CryptoDashboardPage = lazy(() => import("@/pages/crypto-dashboard-page"));
+const ProfilePage = lazy(() => import("@/pages/profile-page"));
+const CandidateEditProfilePage = lazy(() => import("@/pages/candidate-edit-profile-page"));
+const CharitiesPage = lazy(() => import("@/pages/charities-page"));
+const CharityDetailPage = lazy(() => import("@/pages/charity-detail-page"));
+const BoycottsPage = lazy(() => import("@/pages/boycotts-page"));
+const InitiativesPage = lazy(() => import("@/pages/InitiativesPage"));
+const InitiativeFormPage = lazy(() => import("@/pages/InitiativeFormPage"));
+const InitiativeDetailPage = lazy(() => import("@/pages/InitiativeDetailPage"));
+const SubscriptionPage = lazy(() => import("@/pages/subscription-page"));
+const LivePage = lazy(() => import("@/pages/LivePage").then(m => ({ default: m.LivePage })));
+const SignalsPage = lazy(() => import("@/pages/signals-page"));
+const SignalEditorPage = lazy(() => import("@/pages/signal-editor-page"));
+const MyStreamsPage = lazy(() => import("@/pages/MyStreamsPage"));
+const AdminInvitationsPage = lazy(() => import("@/pages/admin-invitations-page"));
+const AdminRepresentativesPage = lazy(() => import("@/pages/admin-representatives-page"));
+const AdminDashboardPage = lazy(() => import("@/pages/admin-dashboard-page"));
+const AdminModerationPage = lazy(() => import("@/pages/admin-moderation-page"));
+const AdminUsersPage = lazy(() => import("@/pages/admin-users-page"));
+const AdminUserBansPage = lazy(() => import("@/pages/admin-user-bans-page"));
+const AdminIpBlocksPage = lazy(() => import("@/pages/admin-ip-blocks-page"));
+const AdminPoliticiansPage = lazy(() => import("@/pages/admin-politicians-page"));
+const AdminPollsPage = lazy(() => import("@/pages/admin-polls-page"));
+const AdminSecurityPage = lazy(() => import("@/pages/admin-security-page"));
+const AdminDatabasePage = lazy(() => import("@/pages/admin-database-page"));
+const AdminAlgorithmPage = lazy(() => import("@/pages/admin-algorithm-page"));
+const AdminAiParametersPage = lazy(() => import("@/pages/admin-ai-parameters-page"));
+const AdminAcpPlusPage = lazy(() => import("@/pages/admin-acp-plus-page"));
+const AdminSettingsPage = lazy(() => import("@/pages/admin-settings-page"));
+const AdminVoterVerificationPage = lazy(() => import("@/pages/admin-voter-verification-page"));
+const AdminSigsPage = lazy(() => import("@/pages/admin-sigs-page"));
+const AdminStateDataPage = lazy(() => import("@/pages/admin-state-data-page"));
+const AdminImportExportPage = lazy(() => import("@/pages/admin-import-export-page"));
+const AdminTradingFlagsPage = lazy(() => import("@/pages/admin-trading-flags-page"));
+const AdminAcePledgesPage = lazy(() => import("@/pages/admin-ace-pledges-page"));
+const AdminPledgeRequestsPage = lazy(() => import("@/pages/admin-pledge-requests-page"));
+const AdminScannerPage = lazy(() => import("@/pages/admin-scanner-page"));
+const AdminAgenticAiPage = lazy(() => import("@/pages/admin-agentic-ai-page"));
+const BudgetSimulatorPage = lazy(() => import("@/pages/budget-simulator-page"));
+const AdminBudgetBaselinesPage = lazy(() => import("@/pages/admin-budget-baselines-page"));
+const AdminDistrictsPage = lazy(() => import("@/pages/admin-districts-page"));
+const AdminDistrictFormPage = lazy(() => import("@/pages/admin-district-form-page"));
+const AdminDistrictDetailPage = lazy(() => import("@/pages/admin-district-detail-page"));
+const SigsDirectoryPage = lazy(() => import("@/pages/sigs-directory-page"));
+const SigProfilePage = lazy(() => import("@/pages/sig-profile-page"));
+const PartiesPage = lazy(() => import("@/pages/parties-page"));
+const PartyProfilePage = lazy(() => import("@/pages/party-profile-page"));
+const AdminPartiesPage = lazy(() => import("@/pages/admin-parties-page"));
+const WhistleblowingPage = lazy(() => import("@/pages/whistleblowing-page"));
+const PoliticalCompassPage = lazy(() => import("@/pages/political-compass"));
+const CreateArticlePage = lazy(() => import("@/pages/create-article-page"));
+const ArticlePage = lazy(() => import("@/pages/article-page"));
+const PublicLandingPage = lazy(() => import("@/pages/public-landing-page"));
+const PublicArticlePage = lazy(() => import("@/pages/public-article-page"));
+const PublicPostPage = lazy(() => import("@/pages/public-post-page"));
+const PublicSignalPage = lazy(() => import("@/pages/public-signal-page"));
+const DeveloperPage = lazy(() => import("@/pages/developer-page"));
+const RunForOfficePage = lazy(() => import("@/pages/run-for-office-page"));
+const IssuesPage = lazy(() => import("@/pages/issues-page"));
+const TermsOfServicePage = lazy(() => import("@/pages/terms-of-service-page"));
+const AdminEmailTemplatesPage = lazy(() => import("@/pages/admin-email-templates-page"));
+const CanvassingMapPage = lazy(() => import("@/pages/canvassing-map-page"));
+const CanvassingContactsPage = lazy(() => import("@/pages/canvassing-contacts-page"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <Loader2 className="h-8 w-8 animate-spin text-border" />
+    </div>
+  );
+}
 
 function PoliticianHandleRedirect({ params }: { params?: { handle?: string } }) {
   const [, navigate] = useLocation();
@@ -117,11 +126,7 @@ function PoliticianHandleRedirect({ params }: { params?: { handle?: string } }) 
   });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-border" />
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (data?.id) {
@@ -140,115 +145,121 @@ function HomeRoute() {
   const { user, isLoading } = useAuth();
   
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-border" />
-      </div>
-    );
+    return <PageLoader />;
   }
   
   if (!user) {
-    return <PublicLandingPage />;
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <PublicLandingPage />
+      </Suspense>
+    );
   }
   
-  return <HomePage />;
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <HomePage />
+    </Suspense>
+  );
 }
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={HomeRoute} />
-      <Route path="/news" component={PublicLandingPage} />
-      <Route path="/terms" component={TermsOfServicePage} />
-      <Route path="/read/:id" component={PublicArticlePage} />
-      <Route path="/posts/:id" component={PublicPostPage} />
-      <Route path="/signals/:id" component={PublicSignalPage} />
-      <ProtectedRoute path="/groups" component={GroupsPage} />
-      <ProtectedRoute path="/polls" component={PollsPage} />
-      <ProtectedRoute path="/polls/:id" component={PollDetailPage} />
-      <Route path="/elections" component={ElectionsPage} />
-      <ProtectedRoute path="/elections/positions" component={ElectionPositionsPage} />
-      <ProtectedRoute path="/elections/race" component={ElectionRacePage} />
-      <ProtectedRoute path="/candidates" component={CandidatesPage} />
-      <ProtectedRoute path="/candidates/:id" component={CandidateProfilePage} />
-      <ProtectedRoute path="/politicians/handle/:handle" component={PoliticianHandleRedirect} />
-      <Route path="/politicians/:id" component={PoliticianProfilePage} />
-      <ProtectedRoute path="/representatives" component={RepresentativesPage} />
-      <ProtectedRoute path="/events" component={EventsPage} />
-      <ProtectedRoute path="/signals/edit" component={SignalEditorPage} />
-      <ProtectedRoute path="/signals" component={SignalsPage} />
-      <ProtectedRoute path="/live" component={LivePage} />
-      <ProtectedRoute path="/my-streams" component={MyStreamsPage} />
-      <ProtectedRoute path="/friends" component={FriendsPage} />
-      <Route path="/profile/:userId/friends" component={UserFriendsPage} />
-      <ProtectedRoute path="/messages" component={MessagesPage} />
-      <ProtectedRoute path="/crypto" component={CryptoDashboardPage} />
-      <ProtectedRoute path="/charities" component={CharitiesPage} />
-      <ProtectedRoute path="/charities/:id" component={CharityDetailPage} />
-      <ProtectedRoute path="/boycotts" component={BoycottsPage} />
-      <ProtectedRoute path="/whistleblowing" component={WhistleblowingPage} />
-      <ProtectedRoute path="/write" component={CreateArticlePage} />
-      <ProtectedRoute path="/write/:id" component={CreateArticlePage} />
-      <ProtectedRoute path="/article/:id" component={ArticlePage} />
-      <ProtectedRoute path="/initiatives" component={InitiativesPage} />
-      <ProtectedRoute path="/initiatives/new" component={InitiativeFormPage} />
-      <ProtectedRoute path="/initiatives/edit/:id" component={InitiativeFormPage} />
-      <ProtectedRoute path="/initiatives/:id" component={InitiativeDetailPage} />
-      <ProtectedRoute path="/run-for-office" component={RunForOfficePage} />
-      <ProtectedRoute path="/issues" component={IssuesPage} />
-      <ProtectedRoute path="/political-profile" component={CandidateEditProfilePage} />
-      <ProtectedRoute path="/profile" component={ProfilePage} />
-      <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
-      <ProtectedRoute path="/subscription" component={SubscriptionPage} />
-      <ProtectedRoute path="/settings" component={SettingsPage} />
-      <ProtectedRoute path="/privacy-settings" component={PrivacySettingsPage} />
-      <ProtectedRoute path="/admin/dashboard" component={AdminDashboardPage} />
-      <ProtectedRoute path="/admin/moderation" component={AdminModerationPage} />
-      <ProtectedRoute path="/admin/users" component={AdminUsersPage} />
-      <ProtectedRoute path="/admin/bans" component={AdminUserBansPage} />
-      <ProtectedRoute path="/admin/ip-blocks" component={AdminIpBlocksPage} />
-      <ProtectedRoute path="/admin/invitations" component={AdminInvitationsPage} />
-      <ProtectedRoute path="/admin/representatives" component={AdminRepresentativesPage} />
-      <ProtectedRoute path="/admin/politicians" component={AdminPoliticiansPage} />
-      <Route path="/lobbies" component={SigsDirectoryPage} />
-      <Route path="/lobbies/:tag" component={SigProfilePage} />
-      <Route path="/sigs">{() => { window.location.replace("/lobbies"); return null; }}</Route>
-      <Route path="/sigs/:tag">{(params) => { window.location.replace(`/lobbies/${params.tag}`); return null; }}</Route>
-      <Route path="/parties" component={PartiesPage} />
-      <Route path="/parties/:partyId" component={PartyProfilePage} />
-      <ProtectedRoute path="/admin/sigs" component={AdminSigsPage} />
-      <ProtectedRoute path="/admin/parties" component={AdminPartiesPage} />
-      <ProtectedRoute path="/admin/state-data" component={AdminStateDataPage} />
-      <ProtectedRoute path="/admin/import-export" component={AdminImportExportPage} />
-      <ProtectedRoute path="/admin/trading-flags" component={AdminTradingFlagsPage} />
-      <ProtectedRoute path="/admin/ace-pledges" component={AdminAcePledgesPage} />
-      <ProtectedRoute path="/admin/scanner" component={AdminScannerPage} />
-      <ProtectedRoute path="/admin/agentic-ai" component={AdminAgenticAiPage} />
-      <ProtectedRoute path="/admin/polls" component={AdminPollsPage} />
-      <ProtectedRoute path="/admin/security" component={AdminSecurityPage} />
-      <ProtectedRoute path="/admin/database" component={AdminDatabasePage} />
-      <ProtectedRoute path="/admin/algorithm" component={AdminAlgorithmPage} />
-      <ProtectedRoute path="/admin/ai-parameters" component={AdminAiParametersPage} />
-      <ProtectedRoute path="/admin/acp-plus" component={AdminAcpPlusPage} />
-      <ProtectedRoute path="/admin/voter-verification" component={AdminVoterVerificationPage} />
-      <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />
-      <ProtectedRoute path="/admin/email-templates" component={AdminEmailTemplatesPage} />
-      <ProtectedRoute path="/admin/pledge-requests" component={AdminPledgeRequestsPage} />
-      <ProtectedRoute path="/budget-simulator" component={BudgetSimulatorPage} />
-      <ProtectedRoute path="/admin/budget-baselines" component={AdminBudgetBaselinesPage} />
-      <ProtectedRoute path="/admin/districts" component={AdminDistrictsPage} />
-      <ProtectedRoute path="/admin/districts/new" component={AdminDistrictFormPage} />
-      <ProtectedRoute path="/admin/districts/:districtId/edit" component={AdminDistrictFormPage} />
-      <ProtectedRoute path="/admin/districts/:districtId" component={AdminDistrictDetailPage} />
-      <ProtectedRoute path="/canvassing" component={CanvassingMapPage} />
-      <ProtectedRoute path="/canvassing/contacts" component={CanvassingContactsPage} />
-      <Route path="/political-compass" component={PoliticalCompassPage} />
-      <Route path="/developer" component={DeveloperPage} />
-      <Route path="/auth" component={AuthPage} />
-      <Route path="/forgot-password" component={ForgotPasswordPage} />  
-      <Route path="/reset-password" component={ResetPasswordPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/" component={HomeRoute} />
+        <Route path="/news" component={PublicLandingPage} />
+        <Route path="/terms" component={TermsOfServicePage} />
+        <Route path="/read/:id" component={PublicArticlePage} />
+        <Route path="/posts/:id" component={PublicPostPage} />
+        <Route path="/signals/:id" component={PublicSignalPage} />
+        <ProtectedRoute path="/groups" component={GroupsPage} />
+        <ProtectedRoute path="/polls" component={PollsPage} />
+        <ProtectedRoute path="/polls/:id" component={PollDetailPage} />
+        <Route path="/elections" component={ElectionsPage} />
+        <ProtectedRoute path="/elections/positions" component={ElectionPositionsPage} />
+        <ProtectedRoute path="/elections/race" component={ElectionRacePage} />
+        <ProtectedRoute path="/candidates" component={CandidatesPage} />
+        <ProtectedRoute path="/candidates/:id" component={CandidateProfilePage} />
+        <ProtectedRoute path="/politicians/handle/:handle" component={PoliticianHandleRedirect} />
+        <Route path="/politicians/:id" component={PoliticianProfilePage} />
+        <ProtectedRoute path="/representatives" component={RepresentativesPage} />
+        <ProtectedRoute path="/events" component={EventsPage} />
+        <ProtectedRoute path="/signals/edit" component={SignalEditorPage} />
+        <ProtectedRoute path="/signals" component={SignalsPage} />
+        <ProtectedRoute path="/live" component={LivePage} />
+        <ProtectedRoute path="/my-streams" component={MyStreamsPage} />
+        <ProtectedRoute path="/friends" component={FriendsPage} />
+        <Route path="/profile/:userId/friends" component={UserFriendsPage} />
+        <ProtectedRoute path="/messages" component={MessagesPage} />
+        <ProtectedRoute path="/crypto" component={CryptoDashboardPage} />
+        <ProtectedRoute path="/charities" component={CharitiesPage} />
+        <ProtectedRoute path="/charities/:id" component={CharityDetailPage} />
+        <ProtectedRoute path="/boycotts" component={BoycottsPage} />
+        <ProtectedRoute path="/whistleblowing" component={WhistleblowingPage} />
+        <ProtectedRoute path="/write" component={CreateArticlePage} />
+        <ProtectedRoute path="/write/:id" component={CreateArticlePage} />
+        <ProtectedRoute path="/article/:id" component={ArticlePage} />
+        <ProtectedRoute path="/initiatives" component={InitiativesPage} />
+        <ProtectedRoute path="/initiatives/new" component={InitiativeFormPage} />
+        <ProtectedRoute path="/initiatives/edit/:id" component={InitiativeFormPage} />
+        <ProtectedRoute path="/initiatives/:id" component={InitiativeDetailPage} />
+        <ProtectedRoute path="/run-for-office" component={RunForOfficePage} />
+        <ProtectedRoute path="/issues" component={IssuesPage} />
+        <ProtectedRoute path="/political-profile" component={CandidateEditProfilePage} />
+        <ProtectedRoute path="/profile" component={ProfilePage} />
+        <ProtectedRoute path="/profile/:userId" component={ProfilePage} />
+        <ProtectedRoute path="/subscription" component={SubscriptionPage} />
+        <ProtectedRoute path="/settings" component={SettingsPage} />
+        <ProtectedRoute path="/privacy-settings" component={PrivacySettingsPage} />
+        <ProtectedRoute path="/admin/dashboard" component={AdminDashboardPage} />
+        <ProtectedRoute path="/admin/moderation" component={AdminModerationPage} />
+        <ProtectedRoute path="/admin/users" component={AdminUsersPage} />
+        <ProtectedRoute path="/admin/bans" component={AdminUserBansPage} />
+        <ProtectedRoute path="/admin/ip-blocks" component={AdminIpBlocksPage} />
+        <ProtectedRoute path="/admin/invitations" component={AdminInvitationsPage} />
+        <ProtectedRoute path="/admin/representatives" component={AdminRepresentativesPage} />
+        <ProtectedRoute path="/admin/politicians" component={AdminPoliticiansPage} />
+        <Route path="/lobbies" component={SigsDirectoryPage} />
+        <Route path="/lobbies/:tag" component={SigProfilePage} />
+        <Route path="/sigs">{() => { window.location.replace("/lobbies"); return null; }}</Route>
+        <Route path="/sigs/:tag">{(params) => { window.location.replace(`/lobbies/${params.tag}`); return null; }}</Route>
+        <Route path="/parties" component={PartiesPage} />
+        <Route path="/parties/:partyId" component={PartyProfilePage} />
+        <ProtectedRoute path="/admin/sigs" component={AdminSigsPage} />
+        <ProtectedRoute path="/admin/parties" component={AdminPartiesPage} />
+        <ProtectedRoute path="/admin/state-data" component={AdminStateDataPage} />
+        <ProtectedRoute path="/admin/import-export" component={AdminImportExportPage} />
+        <ProtectedRoute path="/admin/trading-flags" component={AdminTradingFlagsPage} />
+        <ProtectedRoute path="/admin/ace-pledges" component={AdminAcePledgesPage} />
+        <ProtectedRoute path="/admin/scanner" component={AdminScannerPage} />
+        <ProtectedRoute path="/admin/agentic-ai" component={AdminAgenticAiPage} />
+        <ProtectedRoute path="/admin/polls" component={AdminPollsPage} />
+        <ProtectedRoute path="/admin/security" component={AdminSecurityPage} />
+        <ProtectedRoute path="/admin/database" component={AdminDatabasePage} />
+        <ProtectedRoute path="/admin/algorithm" component={AdminAlgorithmPage} />
+        <ProtectedRoute path="/admin/ai-parameters" component={AdminAiParametersPage} />
+        <ProtectedRoute path="/admin/acp-plus" component={AdminAcpPlusPage} />
+        <ProtectedRoute path="/admin/voter-verification" component={AdminVoterVerificationPage} />
+        <ProtectedRoute path="/admin/settings" component={AdminSettingsPage} />
+        <ProtectedRoute path="/admin/email-templates" component={AdminEmailTemplatesPage} />
+        <ProtectedRoute path="/admin/pledge-requests" component={AdminPledgeRequestsPage} />
+        <ProtectedRoute path="/budget-simulator" component={BudgetSimulatorPage} />
+        <ProtectedRoute path="/admin/budget-baselines" component={AdminBudgetBaselinesPage} />
+        <ProtectedRoute path="/admin/districts" component={AdminDistrictsPage} />
+        <ProtectedRoute path="/admin/districts/new" component={AdminDistrictFormPage} />
+        <ProtectedRoute path="/admin/districts/:districtId/edit" component={AdminDistrictFormPage} />
+        <ProtectedRoute path="/admin/districts/:districtId" component={AdminDistrictDetailPage} />
+        <ProtectedRoute path="/canvassing" component={CanvassingMapPage} />
+        <ProtectedRoute path="/canvassing/contacts" component={CanvassingContactsPage} />
+        <Route path="/political-compass" component={PoliticalCompassPage} />
+        <Route path="/developer" component={DeveloperPage} />
+        <Route path="/auth" component={AuthPage} />
+        <Route path="/forgot-password" component={ForgotPasswordPage} />  
+        <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
@@ -262,10 +273,10 @@ function AppContent() {
 
   useEffect(() => installNativeAppHandlers(navigate), [navigate]);
 
-  // Dismiss native launch artwork from the app root. Auth and route loading can
-  // be network-dependent, so the splash must never wait for MobileApp to mount.
   useEffect(() => {
-    if (isNativeApp()) initNativeApp();
+    if (isNativeApp()) {
+      import("./mobile/services/native").then(m => m.initNativeApp()).catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -281,7 +292,9 @@ function AppContent() {
     return (
       <>
         <Toaster />
-        <MobileApp />
+        <Suspense fallback={<PageLoader />}>
+          <MobileApp />
+        </Suspense>
       </>
     );
   }
@@ -290,7 +303,9 @@ function AppContent() {
     return (
       <>
         <Toaster />
-        <MobileAuthPage />
+        <Suspense fallback={<PageLoader />}>
+          <MobileAuthPage />
+        </Suspense>
       </>
     );
   }
