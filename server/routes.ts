@@ -378,64 +378,181 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     );
   }
 
+  // ── SSR/prerender helpers ───────────────────────────────────────────────────
+
+  /** Escape a string for safe inclusion in an HTML attribute value. */
+  const escAttr = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  /** Escape a string for safe inclusion in HTML text content. */
+  const escText = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  /** Strip HTML tags and collapse whitespace to extract plain text. */
+  const stripHtml = (s: string) =>
+    s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+
+  /**
+   * Build a full HTML response with:
+   *   - Open Graph / Twitter card meta tags in <head>
+   *   - canonical link tag in <head>
+   *   - Optional JSON-LD structured data in <head>
+   *   - Optional pre-rendered body content injected inside <div id="root">
+   *     so that non-JS crawlers can read the actual page content while React
+   *     replaces it transparently on load.
+   */
+  function buildSsrHtml(
+    template: string,
+    opts: {
+      title: string;
+      description: string;
+      url: string;
+      canonical?: string;
+      ogType?: string;
+      image?: string;
+      jsonLd?: object;
+      bodyContent?: string;
+    }
+  ): string {
+    const ogType = opts.ogType || "article";
+    const canonicalHref = opts.canonical ?? opts.url;
+
+    const headTags = [
+      `<title>${escAttr(opts.title)} | ACP Democracy</title>`,
+      `<meta name="description" content="${escAttr(opts.description)}" />`,
+      `<link rel="canonical" href="${escAttr(canonicalHref)}" />`,
+      `<meta property="og:type" content="${ogType}" />`,
+      `<meta property="og:site_name" content="ACP Democracy" />`,
+      `<meta property="og:title" content="${escAttr(opts.title)}" />`,
+      `<meta property="og:description" content="${escAttr(opts.description)}" />`,
+      `<meta property="og:url" content="${escAttr(canonicalHref)}" />`,
+      opts.image ? `<meta property="og:image" content="${escAttr(opts.image)}" />` : "",
+      `<meta name="twitter:card" content="${opts.image ? "summary_large_image" : "summary"}" />`,
+      `<meta name="twitter:title" content="${escAttr(opts.title)}" />`,
+      `<meta name="twitter:description" content="${escAttr(opts.description)}" />`,
+      opts.image ? `<meta name="twitter:image" content="${escAttr(opts.image)}" />` : "",
+      opts.jsonLd
+        ? `<script type="application/ld+json">${JSON.stringify(opts.jsonLd).replace(/<\//g, "<\\/")}</script>`
+        : "",
+    ].filter(Boolean).join("\n    ");
+
+    // Strip existing head tags that will be replaced to avoid duplicates
+    let html = template
+      .replace(/<title>[^<]*<\/title>/, "")
+      .replace(/<meta\s+name="description"[^>]*>/gi, "")
+      .replace(/<link\s+rel="canonical"[^>]*>/gi, "")
+      .replace("</head>", `    ${headTags}\n  </head>`);
+
+    // Inject pre-rendered body content inside <div id="root"> so crawlers can
+    // read it without executing JavaScript. React's createRoot().render() will
+    // replace this content transparently when the app loads.
+    if (opts.bodyContent) {
+      html = html.replace(
+        '<div id="root"></div>',
+        `<div id="root">${opts.bodyContent}</div>`
+      );
+    }
+
+    return html;
+  }
+
+  /** Thin compatibility alias — used by HEAD-introduced routes that only need meta tags. */
   function buildOgHtml(
     template: string,
     opts: { title: string; description: string; image?: string; url: string; canonical?: string; ogType?: string }
   ): string {
-    const escaped = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return buildSsrHtml(template, opts);
+  }
 
-    const canonicalHref = opts.canonical ?? opts.url;
-    const ogType = opts.ogType ?? "article";
+  /** Build SSR body HTML for an article/blog post. */
+  function buildArticleSsrBody(opts: {
+    title: string;
+    description: string;
+    image?: string | null;
+    authorName?: string | null;
+    datePublished?: Date | null;
+    bodyText: string;
+    url: string;
+  }): string {
+    const date = opts.datePublished
+      ? new Date(opts.datePublished).toLocaleDateString("en-US", {
+          year: "numeric", month: "long", day: "numeric",
+        })
+      : "";
+    return `<article style="font-family:sans-serif;max-width:800px;margin:0 auto;padding:24px">` +
+      (opts.image ? `<img src="${escAttr(opts.image)}" alt="${escAttr(opts.title)}" style="width:100%;border-radius:8px;margin-bottom:16px" />` : "") +
+      `<h1>${escText(opts.title)}</h1>` +
+      (opts.description ? `<p style="font-size:1.1em;color:#555">${escText(opts.description)}</p>` : "") +
+      ((opts.authorName || date) ? `<p style="color:#888;font-size:.9em">${opts.authorName ? `By ${escText(opts.authorName)}` : ""}${opts.authorName && date ? " · " : ""}${date}</p>` : "") +
+      (opts.bodyText ? `<div style="line-height:1.7">${opts.bodyText}</div>` : "") +
+      `<p style="margin-top:24px"><a href="${escAttr(opts.url)}">Read on ACP Democracy →</a></p>` +
+      `</article>`;
+  }
 
-    const tags = [
-      `<meta name="description" content="${escaped(opts.description)}" />`,
-      `<link rel="canonical" href="${escaped(canonicalHref)}" />`,
-      `<meta property="og:type" content="${ogType}" />`,
-      `<meta property="og:site_name" content="ACP Democracy" />`,
-      `<meta property="og:title" content="${escaped(opts.title)}" />`,
-      `<meta property="og:description" content="${escaped(opts.description)}" />`,
-      `<meta property="og:url" content="${escaped(canonicalHref)}" />`,
-      opts.image ? `<meta property="og:image" content="${escaped(opts.image)}" />` : "",
-      `<meta name="twitter:card" content="${opts.image ? "summary_large_image" : "summary"}" />`,
-      `<meta name="twitter:title" content="${escaped(opts.title)}" />`,
-      `<meta name="twitter:description" content="${escaped(opts.description)}" />`,
-      opts.image ? `<meta name="twitter:image" content="${escaped(opts.image)}" />` : "",
-      `<title>${escaped(opts.title)} | ACP Democracy</title>`,
-    ].filter(Boolean).join("\n    ");
-
-    // Strip existing tags that will be replaced so we don't end up with duplicates
-    return template
-      .replace(/<title>[^<]*<\/title>/, "")
-      .replace(/<meta\s+name="description"[^>]*>/gi, "")
-      .replace(/<link\s+rel="canonical"[^>]*>/gi, "")
-      .replace("</head>", `    ${tags}\n  </head>`);
+  /** Truncate plain text to a word boundary near maxChars. */
+  function truncateText(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text;
+    return text.slice(0, maxChars).replace(/\s\S*$/, "") + "…";
   }
 
   // Permanent server-side redirects: /sigs → /lobbies (canonical URL)
   app.get("/sigs", (_req, res) => res.redirect(301, "/lobbies"));
   app.get("/sigs/:tag", (req, res) => res.redirect(301, `/lobbies/${req.params.tag}`));
 
-  // Public post page OG tags: /posts/:id
+  // ── Shareable content routes with full SSR body ─────────────────────────────
+
+  // /posts/:id — community posts
   app.get("/posts/:id", async (req, res, next) => {
     try {
       const post = await storage.getPostById(req.params.id);
       if (!post) return res.status(404).end();
       const origin = `${req.protocol}://${req.get("host")}`;
       const url = `${origin}/posts/${req.params.id}`;
-      const title = post.title || (post.content || "").slice(0, 80) || "ACP Post";
-      const description = (post.content || "").slice(0, 160).trim() || "Read on ACP Democracy";
+      const title = post.title || stripHtml(post.content || "").slice(0, 80) || "ACP Post";
+      const plainContent = stripHtml(post.content || "");
+      const description = plainContent.slice(0, 160).trim() || "Read on ACP Democracy";
       const image = (post as any).image || undefined;
+      const author = (post as any).author;
+      const authorName = author
+        ? [author.firstName, author.lastName].filter(Boolean).join(" ") || author.username
+        : null;
+
+      // Build article body — use articleBody HTML if present, otherwise plain content
+      const bodyHtml = (post as any).articleBody || `<p>${escText(plainContent)}</p>`;
+      const bodyText = stripHtml(bodyHtml);
+      const ssrBodyText = truncateText(bodyText, 3000);
+
+      const jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "SocialMediaPosting",
+        headline: title,
+        description,
+        url,
+        ...(image ? { image } : {}),
+        ...(authorName ? { author: { "@type": "Person", name: authorName } } : {}),
+        ...(post.createdAt ? { datePublished: new Date(post.createdAt).toISOString() } : {}),
+        publisher: { "@type": "Organization", name: "ACP Democracy" },
+      };
+
+      const bodyContent = buildArticleSsrBody({
+        title,
+        description,
+        image,
+        authorName,
+        datePublished: post.createdAt ?? null,
+        bodyText: ssrBodyText,
+        url,
+      });
 
       const template = await readHtmlTemplate();
-      const html = buildOgHtml(template, { title, description, image, url });
+      const html = buildSsrHtml(template, { title, description, image, url, jsonLd, bodyContent });
       res.set("Content-Type", "text/html").send(html);
     } catch (e) {
       next(e);
     }
   });
 
-  // Public article page OG tags: /read/:id
+  // /read/:id — public articles
   app.get("/read/:id", async (req, res, next) => {
     try {
       const article = await storage.getPublicArticle(req.params.id);
@@ -443,23 +560,51 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const origin = `${req.protocol}://${req.get("host")}`;
       const url = `${origin}/read/${req.params.id}`;
       const title = article.title || "ACP Article";
+      const rawBody = article.articleBody || article.content || "";
+      const plainBody = stripHtml(rawBody);
       const description = article.excerpt
-        || (article.articleBody || article.content || "")
-            .replace(/<[^>]*>/g, "")
-            .slice(0, 160)
-            .trim()
+        || plainBody.slice(0, 160).trim()
         || "Read on ACP Democracy";
       const image = (article as any).featuredImage || undefined;
+      const author = (article as any).author;
+      const authorName = author
+        ? [author.firstName, author.lastName].filter(Boolean).join(" ") || author.username
+        : null;
+
+      // Keep HTML for articles so headings/paragraphs are preserved; limit size
+      const bodyText = truncateText(plainBody, 5000);
+
+      const jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        headline: title,
+        description,
+        url,
+        ...(image ? { image } : {}),
+        ...(authorName ? { author: { "@type": "Person", name: authorName } } : {}),
+        ...(article.createdAt ? { datePublished: new Date(article.createdAt).toISOString() } : {}),
+        publisher: { "@type": "Organization", name: "ACP Democracy", url: origin },
+      };
+
+      const bodyContent = buildArticleSsrBody({
+        title,
+        description,
+        image,
+        authorName,
+        datePublished: article.createdAt ?? null,
+        bodyText,
+        url,
+      });
 
       const template = await readHtmlTemplate();
-      const html = buildOgHtml(template, { title, description, image, url });
+      const html = buildSsrHtml(template, { title, description, image, url, jsonLd, bodyContent });
       res.set("Content-Type", "text/html").send(html);
     } catch (e) {
       next(e);
     }
   });
 
-  // Public signal page OG tags: /signals/:id  (canonical public URL for sharing)
+  // /signals/:id — short video content
   async function signalOgHandler(req: Request, res: Response, next: NextFunction) {
     try {
       const signal = await storage.getSignalById(req.params.id);
@@ -470,9 +615,33 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const title = signal.title || "ACP Signal";
       const description = signal.description || "Watch this Signal on ACP Democracy";
       const image = signal.thumbnailUrl || undefined;
+      const author = (signal as any).author;
+      const authorName = author
+        ? [author.firstName, author.lastName].filter(Boolean).join(" ") || author.username
+        : null;
+
+      const jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "VideoObject",
+        name: title,
+        description,
+        url,
+        ...(image ? { thumbnailUrl: image } : {}),
+        ...(signal.createdAt ? { uploadDate: new Date(signal.createdAt).toISOString() } : {}),
+        ...(signal.duration ? { duration: `PT${Math.round(signal.duration)}S` } : {}),
+        publisher: { "@type": "Organization", name: "ACP Democracy", url: origin },
+      };
+
+      const bodyContent = `<article style="font-family:sans-serif;max-width:800px;margin:0 auto;padding:24px">` +
+        (image ? `<img src="${escAttr(image)}" alt="${escAttr(title)}" style="width:100%;border-radius:8px;margin-bottom:16px" />` : "") +
+        `<h1>${escText(title)}</h1>` +
+        (description !== "Watch this Signal on ACP Democracy" ? `<p>${escText(description)}</p>` : "") +
+        (authorName ? `<p style="color:#888">By ${escText(authorName)}</p>` : "") +
+        `<p><a href="${escAttr(url)}">Watch on ACP Democracy →</a></p>` +
+        `</article>`;
 
       const template = await readHtmlTemplate();
-      const html = buildOgHtml(template, { title, description, image, url });
+      const html = buildSsrHtml(template, { title, description, image, url, ogType: "video.other", jsonLd, bodyContent });
       res.set("Content-Type", "text/html").send(html);
     } catch (e) {
       next(e);
@@ -499,14 +668,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // /sigs and /sigs/:tag are legacy aliases — redirect permanently to /lobbies equivalents
-  app.get("/sigs", (_req, res) => res.redirect(301, "/lobbies"));
-  app.get("/sigs/:tag", (req, res) => res.redirect(301, `/lobbies/${req.params.tag}`));
-
-  // ── Server-side head injection for public SPA routes ──────────────────────
-  // These handlers run before the Vite/static catch-all so that crawlers and
-  // social bots receive unique <title>, <meta name="description">, canonical,
-  // og:*, and twitter:* tags without executing JavaScript.
+  // ── Server-side head injection for auth / misc public SPA routes ─────────
+  // Routes below are not covered by the data-fetching SSR handlers further down.
 
   async function serveSpaPage(
     req: Request,
@@ -518,82 +681,42 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const origin = `${req.protocol}://${req.get("host")}`;
       const url = `${origin}${req.path}`;
       const template = await readHtmlTemplate();
-      const html = buildOgHtml(template, { ...opts, url, ogType: "website" });
+      const html = buildSsrHtml(template, { ...opts, url, ogType: "website" });
       res.set("Content-Type", "text/html").send(html);
     } catch (e) {
       next(e);
     }
   }
 
-  // Static public SPA routes
-  const STATIC_SPA_ROUTES: Array<{ path: string; title: string; description: string }> = [
-    {
-      path: "/news",
-      title: "ACP News",
-      description: "Browse the latest news, articles, and community posts from the Anti-Corruption Party platform.",
-    },
-    {
-      path: "/terms",
-      title: "Terms of Service",
-      description: "Read the ACP Democracy Terms of Service including community guidelines, privacy rights, and platform usage rules.",
-    },
-    {
-      path: "/elections",
-      title: "Elections",
-      description: "Track candidates, find your representatives, and explore election races on the ACP Democracy platform.",
-    },
-    {
-      path: "/lobbies",
-      title: "Lobbying Groups & Special Interests",
-      description: "Explore lobbying groups and special interest groups that influence politics. See their grades, spending, and political impact.",
-    },
-    {
-      path: "/parties",
-      title: "Political Parties",
-      description: "Explore political parties by transparency, ballot access, and policy positions. Compare platforms and community ratings.",
-    },
-    {
-      path: "/political-compass",
-      title: "Political Compass Quiz",
-      description: "Take the 20-question political compass quiz to discover your position on the economic and social axes. Save and share your results.",
-    },
-    {
-      path: "/developer",
-      title: "Developer API",
-      description: "ACP Democracy Agent API documentation. Manage API keys, explore endpoints, and integrate AI agents with the platform.",
-    },
-    {
-      path: "/auth",
+  // Auth / password-reset routes (meta-only; no sensitive SSR body needed)
+  app.get("/auth", (req, res, next) =>
+    serveSpaPage(req, res, next, {
       title: "Sign In",
       description: "Sign in or create an account to participate in ACP Democracy — vote, track politicians, join groups, and engage your community.",
-    },
-    {
-      path: "/forgot-password",
+    })
+  );
+  app.get("/forgot-password", (req, res, next) =>
+    serveSpaPage(req, res, next, {
       title: "Forgot Password",
       description: "Reset your ACP Democracy account password. Enter your email address to receive a secure reset link.",
-    },
-    {
-      path: "/reset-password",
+    })
+  );
+  app.get("/reset-password", (req, res, next) =>
+    serveSpaPage(req, res, next, {
       title: "Reset Password",
       description: "Set a new password for your ACP Democracy account using your secure reset link.",
-    },
-  ];
-
-  for (const route of STATIC_SPA_ROUTES) {
-    app.get(route.path, (req, res, next) =>
-      serveSpaPage(req, res, next, { title: route.title, description: route.description })
-    );
-  }
-
-  // Home page — same content as /news for unauthenticated crawlers
-  app.get("/", (req, res, next) =>
-    serveSpaPage(req, res, next, {
-      title: "ACP Democracy",
-      description: "The Anti-Corruption Party platform for transparent democratic participation, candidate tracking, corruption grading, and civic engagement.",
     })
   );
 
-  // Dynamic SPA route: /lobbies/:tag — inject SIG-specific metadata
+  // /profile/:userId/friends — public friends list
+  app.get("/profile/:userId/friends", (req, res, next) =>
+    serveSpaPage(req, res, next, {
+      title: "Friends",
+      description: "View a community member's friends list on ACP Democracy.",
+    })
+  );
+
+  // /lobbies/:tag — individual SIG profile with fetched metadata + SSR body
   app.get("/lobbies/:tag", async (req, res, next) => {
     try {
       const result = await storage.getPublicSigByTag(req.params.tag, undefined);
@@ -604,59 +727,430 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       const title = `${sig.name} – Lobbying Group Profile`;
       const description = sig.description
         ?? `View ${sig.name}'s ACP grade, sponsorships, and political influence on ACP Democracy.`;
+      const bodyContent =
+        `<article style="font-family:sans-serif;max-width:800px;margin:0 auto;padding:24px">` +
+        `<h1>${escText(sig.name)}</h1>` +
+        (sig.category ? `<p style="color:#555">${escText(sig.category)}</p>` : "") +
+        (sig.description ? `<p style="line-height:1.7">${escText(sig.description)}</p>` : "") +
+        `<p><a href="${escAttr(url)}">View ${escText(sig.name)} on ACP Democracy →</a></p>` +
+        `</article>`;
       const template = await readHtmlTemplate();
-      const html = buildOgHtml(template, { title, description, url, ogType: "website" });
+      const html = buildSsrHtml(template, { title, description, url, ogType: "website", bodyContent });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+  // ── End server-side SPA head injection ────────────────────────────────────
+
+  // ── Public entity pages with server-injected meta + JSON-LD ────────────────
+
+  // /politicians/:id
+  app.get("/politicians/:id", async (req, res, next) => {
+    try {
+      const politician = await storage.getPoliticianProfile(req.params.id);
+      if (!politician) return next();
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const url = `${origin}/politicians/${req.params.id}`;
+      const name = [politician.firstName, politician.lastName].filter(Boolean).join(" ") || politician.name || "Politician";
+      const position = politician.currentPosition || politician.title || "";
+      const state = politician.state || "";
+      const title = position ? `${name} — ${position}` : name;
+      const bio = politician.bio || politician.description || "";
+      const description = bio
+        ? stripHtml(bio).slice(0, 160).trim()
+        : `View ${name}'s profile, voting record, and corruption grade on ACP Democracy.${state ? " " + state + "." : ""}`;
+      const image = politician.profileImage || politician.image || undefined;
+
+      const sigs: any[] = politician.sigs || [];
+      const jsonLd: any = {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        name,
+        url,
+        ...(image ? { image } : {}),
+        ...(bio ? { description: stripHtml(bio).slice(0, 300) } : {}),
+        ...(position ? { jobTitle: position } : {}),
+        ...(state ? { addressRegion: state, addressCountry: "US" } : {}),
+      };
+
+      const bodyContent = `<article style="font-family:sans-serif;max-width:800px;margin:0 auto;padding:24px">` +
+        (image ? `<img src="${escAttr(image)}" alt="${escAttr(name)}" style="width:120px;height:120px;border-radius:50%;float:right;margin:0 0 16px 16px;object-fit:cover" />` : "") +
+        `<h1>${escText(name)}</h1>` +
+        (position ? `<p style="font-size:1.1em;color:#555">${escText(position)}${state ? ` · ${escText(state)}` : ""}</p>` : "") +
+        (bio ? `<p style="line-height:1.7">${escText(stripHtml(bio).slice(0, 600))}</p>` : "") +
+        (sigs.length ? `<p><strong>Sponsored by:</strong> ${sigs.slice(0, 5).map((s: any) => escText(s.name || s.title || "")).join(", ")}</p>` : "") +
+        `<p><a href="${escAttr(url)}">View full profile on ACP Democracy →</a></p>` +
+        `</article>`;
+
+      const template = await readHtmlTemplate();
+      const html = buildSsrHtml(template, { title, description, image, url, ogType: "profile", jsonLd, bodyContent });
       res.set("Content-Type", "text/html").send(html);
     } catch (e) {
       next(e);
     }
   });
 
-  // Dynamic SPA route: /parties/:partyId — inject party-specific metadata
+  // /parties/:partyId
   app.get("/parties/:partyId", async (req, res, next) => {
     try {
       const party = await storage.getPartyByIdOrSlug(req.params.partyId);
       if (!party) return next();
       const origin = `${req.protocol}://${req.get("host")}`;
       const url = `${origin}/parties/${req.params.partyId}`;
-      const title = `${party.name}${party.acronym ? ` (${party.acronym})` : ""} – Political Party`;
-      const description = party.shortDescription
-        ?? `Explore ${party.name}'s policy positions, ballot access, transparency score, and community ratings on ACP Democracy.`;
-      const image = party.logoUrl ?? undefined;
+      const name = party.name || "Political Party";
+      const ideology = party.ideology || party.description || "";
+      const description = ideology
+        ? stripHtml(ideology).slice(0, 160).trim()
+        : `Learn about the ${name} — platform, ballot access, endorsements, and community ratings on ACP Democracy.`;
+      const image = party.logoUrl || party.logo || undefined;
+
+      const jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name,
+        url,
+        ...(image ? { logo: image } : {}),
+        ...(party.website ? { sameAs: [party.website] } : {}),
+        ...(ideology ? { description: stripHtml(ideology).slice(0, 300) } : {}),
+      };
+
+      const bodyContent = `<article style="font-family:sans-serif;max-width:800px;margin:0 auto;padding:24px">` +
+        (image ? `<img src="${escAttr(image)}" alt="${escAttr(name)} logo" style="max-height:80px;margin-bottom:16px" />` : "") +
+        `<h1>${escText(name)}</h1>` +
+        (party.tagline ? `<p style="font-size:1.1em;color:#555">${escText(party.tagline)}</p>` : "") +
+        (ideology ? `<p style="line-height:1.7">${escText(stripHtml(ideology).slice(0, 500))}</p>` : "") +
+        (party.founded ? `<p><strong>Founded:</strong> ${escText(String(party.founded))}</p>` : "") +
+        `<p><a href="${escAttr(url)}">View full profile on ACP Democracy →</a></p>` +
+        `</article>`;
+
       const template = await readHtmlTemplate();
-      const html = buildOgHtml(template, { title, description, image, url, ogType: "website" });
+      const html = buildSsrHtml(template, { title: `${name} | Political Party`, description, image, url, ogType: "website", jsonLd, bodyContent });
       res.set("Content-Type", "text/html").send(html);
     } catch (e) {
       next(e);
     }
   });
 
-  // Dynamic SPA route: /politicians/:id — inject politician-specific metadata
-  app.get("/politicians/:id", async (req, res, next) => {
+  // ── Static / semi-static public routes with data-fetched crawlable body ─────
+
+  /** Build a simple card-list body for directory/listing pages. */
+  function buildCardListBody(opts: {
+    heading: string;
+    intro: string;
+    items: Array<{ title: string; subtitle?: string; description?: string; href?: string }>;
+    moreHref: string;
+    moreLabel: string;
+  }): string {
+    const cards = opts.items
+      .slice(0, 12)
+      .map(
+        (item) =>
+          `<li style="margin-bottom:16px;padding:12px;border:1px solid #e5e7eb;border-radius:8px">` +
+          `<strong>${item.href ? `<a href="${escAttr(item.href)}">${escText(item.title)}</a>` : escText(item.title)}</strong>` +
+          (item.subtitle ? `<br/><span style="color:#555;font-size:.9em">${escText(item.subtitle)}</span>` : "") +
+          (item.description ? `<p style="margin:4px 0 0;color:#666;font-size:.9em">${escText(truncateText(item.description, 160))}</p>` : "") +
+          `</li>`
+      )
+      .join("");
+    return (
+      `<main style="font-family:sans-serif;max-width:900px;margin:0 auto;padding:24px">` +
+      `<h1>${escText(opts.heading)}</h1>` +
+      `<p style="color:#555;margin-bottom:24px">${escText(opts.intro)}</p>` +
+      `<ul style="list-style:none;padding:0">${cards}</ul>` +
+      `<p><a href="${escAttr(opts.moreHref)}">${escText(opts.moreLabel)}</a></p>` +
+      `</main>`
+    );
+  }
+
+  // /news and / — fetch recent public posts
+  app.get(["/news", "/"], async (req, res, next) => {
     try {
-      const profile = await storage.getPoliticianProfile(req.params.id);
-      if (!profile) return next();
       const origin = `${req.protocol}://${req.get("host")}`;
-      const url = `${origin}/politicians/${req.params.id}`;
-      const title = `${profile.fullName ?? "Politician"} – Corruption Grade & Profile`;
-      const description = `View ${profile.fullName}'s corruption grade, lobbying sponsors, policy positions, and community ratings on ACP Democracy.`;
-      const image = profile.photoUrl ?? undefined;
+      const posts = await storage.getPosts(8, 0);
+      const items = posts.map((p: any) => ({
+        title: p.title || stripHtml(p.content || "").slice(0, 80) || "Post",
+        subtitle: p.author
+          ? [p.author.firstName, p.author.lastName].filter(Boolean).join(" ") || p.author.username
+          : undefined,
+        description: stripHtml(p.content || p.excerpt || ""),
+        href: `/posts/${p.id}`,
+      }));
+      const bodyContent = buildCardListBody({
+        heading: "ACP Democracy — Latest News & Discussions",
+        intro: "Political transparency news, community posts, polls, and updates from the Anti-Corruption Party platform.",
+        items,
+        moreHref: `${origin}/news`,
+        moreLabel: "Read more on ACP Democracy →",
+      });
       const template = await readHtmlTemplate();
-      const html = buildOgHtml(template, { title, description, image, url, ogType: "profile" });
+      const html = buildSsrHtml(template, {
+        title: "ACP Democracy — Anti-Corruption Party Platform",
+        description: "The Anti-Corruption Party's democratic platform for political transparency, grassroots engagement, and citizen action. News, candidates, polls, and more.",
+        url: `${origin}/`,
+        ogType: "website",
+        jsonLd: {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "ACP Democracy",
+          description: "The Anti-Corruption Party's platform for political transparency and democratic participation.",
+          url: origin,
+          potentialAction: {
+            "@type": "SearchAction",
+            target: { "@type": "EntryPoint", urlTemplate: `${origin}/news?q={search_term_string}` },
+            "query-input": "required name=search_term_string",
+          },
+        },
+        bodyContent,
+      });
       res.set("Content-Type", "text/html").send(html);
     } catch (e) {
       next(e);
     }
   });
 
-  // Dynamic SPA route: /profile/:userId/friends — generic friends page metadata
-  app.get("/profile/:userId/friends", (req, res, next) =>
-    serveSpaPage(req, res, next, {
-      title: "Friends",
-      description: "View a community member's friends list on ACP Democracy.",
-    })
-  );
-  // ── End server-side SPA head injection ────────────────────────────────────
+  // /elections — fetch candidate list
+  app.get("/elections", async (req, res, next) => {
+    try {
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const candidates = await storage.getCandidatesWithUserData();
+      const items = candidates.slice(0, 12).map((c: any) => ({
+        title: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.name || c.username || "Candidate",
+        subtitle: [c.office, c.state].filter(Boolean).join(" — "),
+        description: c.platform || c.bio || "",
+        href: c.userId ? `/profile/${c.userId}` : undefined,
+      }));
+      const bodyContent = buildCardListBody({
+        heading: "Elections & Candidates",
+        intro: "Browse verified candidates running for office. View campaign platforms, endorsements, and corruption grades.",
+        items,
+        moreHref: `${origin}/elections`,
+        moreLabel: "View all candidates on ACP Democracy →",
+      });
+      const template = await readHtmlTemplate();
+      const html = buildSsrHtml(template, {
+        title: "Elections & Candidates",
+        description: "Browse verified candidates running for office. View campaign platforms, endorsements, corruption grades, and how to vote on ACP Democracy.",
+        url: `${origin}/elections`,
+        ogType: "website",
+        jsonLd: {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          name: "Elections & Candidates — ACP Democracy",
+          description: "Directory of candidates running for federal and state office, with corruption grades and platform details.",
+          url: `${origin}/elections`,
+          publisher: { "@type": "Organization", name: "ACP Democracy", url: origin },
+        },
+        bodyContent,
+      });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // /lobbies and /sigs — fetch SIG directory
+  app.get(["/lobbies", "/sigs"], async (req, res, next) => {
+    try {
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const sigs = await storage.getPublicSigs();
+      const items = sigs.slice(0, 12).map((s: any) => ({
+        title: s.name || s.tag || "Special Interest Group",
+        subtitle: s.category || s.industry || "",
+        description: s.description || "",
+        href: `/lobbies/${s.tag || s.id}`,
+      }));
+      const bodyContent = buildCardListBody({
+        heading: "Special Interest Groups & Lobbies",
+        intro: "Explore the influence of PACs, corporations, and lobbying groups on politicians. See sponsorship data, funding totals, and corruption impact.",
+        items,
+        moreHref: `${origin}/lobbies`,
+        moreLabel: "View all lobbies on ACP Democracy →",
+      });
+      const template = await readHtmlTemplate();
+      const html = buildSsrHtml(template, {
+        title: "Special Interest Groups & Lobbies",
+        description: "Explore the influence of PACs, corporations, and lobbying groups on politicians. See sponsorship data, funding totals, and corruption impact on ACP Democracy.",
+        url: `${origin}/lobbies`,
+        ogType: "website",
+        jsonLd: {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          name: "Special Interest Groups & Lobbies — ACP Democracy",
+          description: "Searchable directory of special interest groups and their political contributions and sponsorships.",
+          url: `${origin}/lobbies`,
+          publisher: { "@type": "Organization", name: "ACP Democracy", url: origin },
+        },
+        bodyContent,
+      });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // /parties — fetch party directory
+  app.get(["/parties", "/parties/"], async (req, res, next) => {
+    try {
+      const origin = `${req.protocol}://${req.get("host")}`;
+      let bodyContent: string;
+      try {
+        const parties = await storage.listParties({});
+        const items = (parties as any[]).slice(0, 12).map((p: any) => ({
+          title: p.name || "Party",
+          subtitle: p.ideology ? stripHtml(p.ideology).slice(0, 80) : (p.tagline || ""),
+          description: p.description ? stripHtml(p.description) : "",
+          href: `/parties/${p.slug || p.id}`,
+        }));
+        bodyContent = buildCardListBody({
+          heading: "Political Parties Directory",
+          intro: "Discover and compare U.S. political parties by platform, ballot access, transparency, and political compass position.",
+          items,
+          moreHref: `${origin}/parties`,
+          moreLabel: "View all parties on ACP Democracy →",
+        });
+      } catch {
+        bodyContent =
+          `<main style="font-family:sans-serif;max-width:900px;margin:0 auto;padding:24px">` +
+          `<h1>Political Parties Directory</h1>` +
+          `<p>Discover and compare U.S. political parties by platform, ballot access, transparency, and political compass position. Rated by the ACP Democracy community.</p>` +
+          `<p>Browse parties ranging from major parties to independents, evaluating each by their transparency score, political compass position (Economic and Social axes), and community rating.</p>` +
+          `<p><a href="${escAttr(origin)}/parties">View the full parties directory on ACP Democracy →</a></p>` +
+          `</main>`;
+      }
+      const template = await readHtmlTemplate();
+      const html = buildSsrHtml(template, {
+        title: "Political Parties Directory",
+        description: "Discover and compare U.S. political parties by platform, ballot access, transparency, and political compass position. Rated by the community on ACP Democracy.",
+        url: `${origin}/parties`,
+        ogType: "website",
+        jsonLd: {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          name: "Political Parties Directory — ACP Democracy",
+          description: "Comprehensive directory of U.S. political parties with community ratings, policy positions, and ballot access information.",
+          url: `${origin}/parties`,
+          publisher: { "@type": "Organization", name: "ACP Democracy", url: origin },
+        },
+        bodyContent,
+      });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // /terms — static content with key text for crawlers
+  app.get("/terms", async (req, res, next) => {
+    try {
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const bodyContent =
+        `<main style="font-family:sans-serif;max-width:800px;margin:0 auto;padding:24px">` +
+        `<h1>Terms of Service</h1>` +
+        `<p>Welcome to ACP Democracy, the platform of the Anti-Corruption Party. By accessing or using this platform you agree to these Terms of Service.</p>` +
+        `<h2>Use of the Platform</h2>` +
+        `<p>ACP Democracy is a civic engagement platform. Users must be 18 or older and comply with all applicable laws. You are responsible for the content you post.</p>` +
+        `<h2>Community Standards</h2>` +
+        `<p>We prohibit harassment, hate speech, misinformation, and spam. Accounts that violate community standards may be suspended.</p>` +
+        `<h2>Privacy</h2>` +
+        `<p>We collect information necessary to operate the platform. We do not sell your personal data. See our privacy policy for details.</p>` +
+        `<h2>Subscriptions</h2>` +
+        `<p>Premium features are available via subscription. Subscriptions renew automatically and may be cancelled at any time.</p>` +
+        `<p><a href="${escAttr(origin)}/terms">Read the full Terms of Service on ACP Democracy →</a></p>` +
+        `</main>`;
+      const template = await readHtmlTemplate();
+      const html = buildSsrHtml(template, {
+        title: "Terms of Service",
+        description: "Read the ACP Democracy Terms of Service governing your use of the platform.",
+        url: `${origin}/terms`,
+        ogType: "website",
+        bodyContent,
+      });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // /developer — API docs overview for crawlers
+  app.get("/developer", async (req, res, next) => {
+    try {
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const bodyContent =
+        `<main style="font-family:sans-serif;max-width:800px;margin:0 auto;padding:24px">` +
+        `<h1>ACP Democracy Developer API</h1>` +
+        `<p>The ACP Democracy public API lets you build applications using our political data, candidate profiles, voting records, and civic engagement tools.</p>` +
+        `<h2>Available Data</h2>` +
+        `<ul>` +
+        `<li>Politician profiles, positions, and corruption grades</li>` +
+        `<li>Special interest group sponsorship and contribution data</li>` +
+        `<li>Election candidates and campaign platforms</li>` +
+        `<li>Political party directory and ballot access</li>` +
+        `<li>Community polls, votes, and posts</li>` +
+        `</ul>` +
+        `<h2>Authentication</h2>` +
+        `<p>The API uses bearer token authentication. Register for an account and visit your developer settings to generate an API key.</p>` +
+        `<p><a href="${escAttr(origin)}/developer">View full API documentation on ACP Democracy →</a></p>` +
+        `</main>`;
+      const template = await readHtmlTemplate();
+      const html = buildSsrHtml(template, {
+        title: "Developer API",
+        description: "ACP Democracy's developer API documentation. Build applications using our political data, candidate profiles, voting records, and civic engagement tools.",
+        url: `${origin}/developer`,
+        ogType: "website",
+        jsonLd: {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          name: "ACP Democracy Developer API",
+          description: "Documentation for the ACP Democracy public API.",
+          url: `${origin}/developer`,
+        },
+        bodyContent,
+      });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // /political-compass — quiz overview for crawlers
+  app.get("/political-compass", async (req, res, next) => {
+    try {
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const bodyContent =
+        `<main style="font-family:sans-serif;max-width:800px;margin:0 auto;padding:24px">` +
+        `<h1>Political Compass Quiz</h1>` +
+        `<p>Take the 20-question ACP Democracy political compass quiz to discover where you stand on two axes: Economic (Left ↔ Right) and Social (Libertarian ↔ Authoritarian).</p>` +
+        `<h2>How It Works</h2>` +
+        `<ol>` +
+        `<li>Answer 20 questions using a 5-point scale from Strongly Agree to Strongly Disagree.</li>` +
+        `<li>Your responses are scored across the Economic and Social axes.</li>` +
+        `<li>View your position on a 2D compass chart with quadrant classification.</li>` +
+        `<li>Optionally save your result to your ACP Democracy profile.</li>` +
+        `</ol>` +
+        `<h2>Quadrants</h2>` +
+        `<ul>` +
+        `<li><strong>Community Libertarian</strong> — Social freedom with economic equality</li>` +
+        `<li><strong>Market Libertarian</strong> — Social and economic freedom</li>` +
+        `<li><strong>State Progressive</strong> — Government-led social and economic policy</li>` +
+        `<li><strong>National Conservative</strong> — Traditional social values with market skepticism</li>` +
+        `<li><strong>Pragmatic Centrist</strong> — Near center on both axes</li>` +
+        `</ul>` +
+        `<p><a href="${escAttr(origin)}/political-compass">Take the quiz on ACP Democracy →</a></p>` +
+        `</main>`;
+      const template = await readHtmlTemplate();
+      const html = buildSsrHtml(template, {
+        title: "Political Compass Quiz",
+        description: "Take the 20-question ACP Democracy political compass quiz to find your position on the Economic and Social axes. Save results to your profile.",
+        url: `${origin}/political-compass`,
+        ogType: "website",
+        bodyContent,
+      });
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      next(e);
+    }
+  });
 
   // File Upload API
   app.post("/api/upload", upload.single('file'), async (req, res) => {
