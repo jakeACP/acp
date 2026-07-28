@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://acp-social-democracy.replit.app/sitemap.xml

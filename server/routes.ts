@@ -405,11 +405,15 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       .replace("</head>", `    ${tags}\n  </head>`);
   }
 
+  // Permanent server-side redirects: /sigs → /lobbies (canonical URL)
+  app.get("/sigs", (_req, res) => res.redirect(301, "/lobbies"));
+  app.get("/sigs/:tag", (req, res) => res.redirect(301, `/lobbies/${req.params.tag}`));
+
   // Public post page OG tags: /posts/:id
   app.get("/posts/:id", async (req, res, next) => {
     try {
       const post = await storage.getPostById(req.params.id);
-      if (!post) return next();
+      if (!post) return res.status(404).end();
       const origin = `${req.protocol}://${req.get("host")}`;
       const url = `${origin}/posts/${req.params.id}`;
       const title = post.title || (post.content || "").slice(0, 80) || "ACP Post";
@@ -428,7 +432,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.get("/read/:id", async (req, res, next) => {
     try {
       const article = await storage.getPublicArticle(req.params.id);
-      if (!article) return next();
+      if (!article) return res.status(404).end();
       const origin = `${req.protocol}://${req.get("host")}`;
       const url = `${origin}/read/${req.params.id}`;
       const title = article.title || "ACP Article";
@@ -453,7 +457,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     try {
       const signal = await storage.getSignalById(req.params.id);
       // Only serve OG metadata for public signals to prevent metadata leakage
-      if (!signal || !signal.isPublic) return next();
+      if (!signal || !signal.isPublic) return res.status(404).end();
       const origin = `${req.protocol}://${req.get("host")}`;
       const url = `${origin}/signals/${req.params.id}`;
       const title = signal.title || "ACP Signal";

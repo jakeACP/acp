@@ -1,0 +1,25 @@
+# ACP Democracy — AI Crawler Guidance
+
+ACP Democracy is the Anti-Corruption Party's open social-democracy platform. It provides tools for civic participation, candidate research, and transparent political engagement.
+
+## Public Sections
+
+- / — Home feed: community posts, announcements, and polls
+- /news — Latest political news and articles
+- /elections — Election information, race listings, and candidate comparisons
+- /lobbies — Special-interest group (SIG/lobby) directory and sponsorship data
+- /parties — Political party profiles with transparency ratings and policy positions
+- /politicians/:id — Individual politician profiles with corruption-grade scores, FEC data, and SIG sponsorships
+- /read/:id — Long-form articles and in-depth policy explainers
+- /posts/:id — Community posts and discussions
+- /signals/:id — Short civic-engagement videos (Signals)
+- /political-compass — 20-question political compass quiz (public, no login required)
+- /budget-simulator — Interactive federal budget simulator using CBO baseline data
+
+## Purpose
+
+This platform aims to increase political accountability by surfacing campaign-finance data, SIG sponsorships, and community-driven corruption grades for elected officials and candidates. All politician and election data is presented neutrally and is sourced from FEC public records.
+
+## Authentication
+
+Most content is publicly readable. Voting, posting, and saving quiz results require an account.

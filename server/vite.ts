@@ -19,6 +19,63 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+// Known client-side SPA routes. Requests matching these patterns receive the
+// index.html shell with HTTP 200. Everything else returns 404 so crawlers
+// never treat unknown or deleted URLs as valid pages.
+const KNOWN_SPA_ROUTES: RegExp[] = [
+  /^\/$/,
+  /^\/news$/,
+  /^\/terms$/,
+  /^\/auth$/,
+  /^\/forgot-password$/,
+  /^\/reset-password$/,
+  /^\/political-compass$/,
+  /^\/developer$/,
+  // Public shareable content
+  /^\/read\/[^/]+$/,
+  /^\/posts\/[^/]+$/,
+  /^\/signals(\/edit|\/[^/]+)?$/,
+  // Directories and profiles
+  /^\/elections(\/positions|\/race)?$/,
+  /^\/politicians(\/handle\/[^/]+|\/[^/]+)?$/,
+  /^\/candidates(\/[^/]+)?$/,
+  /^\/lobbies(\/[^/]+)?$/,
+  /^\/parties(\/[^/]+)?$/,
+  // Auth-required routes (SPA still needs to serve shell so it can redirect)
+  /^\/groups$/,
+  /^\/polls(\/[^/]+)?$/,
+  /^\/representatives$/,
+  /^\/events$/,
+  /^\/live$/,
+  /^\/my-streams$/,
+  /^\/friends$/,
+  /^\/profile(\/[^/]+(\/friends)?)?$/,
+  /^\/messages$/,
+  /^\/crypto$/,
+  /^\/charities(\/[^/]+)?$/,
+  /^\/boycotts$/,
+  /^\/whistleblowing$/,
+  /^\/write(\/[^/]+)?$/,
+  /^\/article\/[^/]+$/,
+  /^\/initiatives(\/new|\/edit\/[^/]+|\/[^/]+)?$/,
+  /^\/run-for-office$/,
+  /^\/issues$/,
+  /^\/political-profile$/,
+  /^\/subscription$/,
+  /^\/settings$/,
+  /^\/privacy-settings$/,
+  /^\/budget-simulator$/,
+  /^\/canvassing(\/contacts)?$/,
+  // Admin panel (auth-required)
+  /^\/admin(\/.*)?$/,
+  // Mobile interface
+  /^\/mobile(\/.*)?$/,
+];
+
+function isKnownSpaRoute(pathname: string): boolean {
+  return KNOWN_SPA_ROUTES.some((pattern) => pattern.test(pathname));
+}
+
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
@@ -43,6 +100,13 @@ export async function setupVite(app: Express, server: Server) {
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
+    const pathname = req.path;
+
+    // Return 404 for paths that are not known client-side routes so crawlers
+    // never receive a 200 SPA shell for invalid or deleted URLs.
+    if (!isKnownSpaRoute(pathname)) {
+      return res.status(404).end();
+    }
 
     try {
       const clientTemplate = path.resolve(
@@ -80,7 +144,7 @@ export function serveStatic(app: Express) {
 
   // Return 404 for missing static asset files instead of serving index.html,
   // which would cause the browser to receive HTML instead of JS/CSS.
-  const ASSET_EXT = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|json|webp|avif)$/i;
+  const ASSET_EXT = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|json|webp|avif|txt|xml)$/i;
   app.use("*", (req, res, next) => {
     if (ASSET_EXT.test(req.path)) {
       return res.status(404).end();
@@ -88,8 +152,12 @@ export function serveStatic(app: Express) {
     next();
   });
 
-  // fall through to index.html for all SPA routes
-  app.use("*", (_req, res) => {
+  // Serve index.html only for known SPA routes; return 404 for everything else
+  // so crawlers never receive a 200 shell for unknown or deleted URLs.
+  app.use("*", (req, res) => {
+    if (!isKnownSpaRoute(req.path)) {
+      return res.status(404).end();
+    }
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
