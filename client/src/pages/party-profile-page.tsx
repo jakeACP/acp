@@ -218,8 +218,28 @@ export default function PartyProfilePage() {
 
   const displayRating = myRating?.rating ?? ratingValue;
 
+  const partyUrl = typeof window !== "undefined" ? `${window.location.origin}/parties/${partyId}` : `/parties/${partyId}`;
+  const jsonLd = party ? {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": party.name,
+    "alternateName": party.acronym || undefined,
+    "description": party.shortDescription || party.fullDescription || undefined,
+    "url": party.websiteUrl || partyUrl,
+    "logo": party.logoUrl || undefined,
+    "foundingDate": party.foundedYear ? String(party.foundedYear) : undefined,
+    "location": party.headquartersState ? { "@type": "Place", "name": party.headquartersState } : undefined,
+    "sameAs": party.websiteUrl ? [party.websiteUrl] : undefined,
+  } : null;
+
   return (
     <div className="min-h-screen bg-background">
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
       <Navigation />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back nav */}

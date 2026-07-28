@@ -56,8 +56,26 @@ export default function PublicPostPage() {
     );
   }
 
+  const jsonLd = post ? {
+    "@context": "https://schema.org",
+    "@type": "SocialMediaPosting",
+    "headline": post.title || post.content?.slice(0, 110),
+    "text": post.content,
+    "image": post.image ? [post.image] : undefined,
+    "datePublished": post.createdAt,
+    "author": [{ "@type": "Person", "name": displayName }],
+    "publisher": { "@type": "Organization", "name": "Anti-Corruption Party" },
+    "url": postUrl,
+  } : null;
+
   return (
     <div className="min-h-screen bg-[#1a1a2e]">
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
       <PublicHeader />
       <main className="max-w-2xl mx-auto px-4 py-8">
         <Link href="/news">
@@ -71,7 +89,7 @@ export default function PublicPostPage() {
           {post.image && (
             <img
               src={post.image}
-              alt=""
+              alt={post.title || post.content?.slice(0, 120) || "ACP post image"}
               className="w-full h-64 object-cover"
             />
           )}

@@ -81,8 +81,28 @@ export default function PublicArticlePage() {
     );
   }
 
+  const jsonLd = article ? {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    "headline": article.title,
+    "image": article.featuredImage ? [article.featuredImage] : undefined,
+    "datePublished": article.createdAt,
+    "dateModified": article.updatedAt || article.createdAt,
+    "author": [{ "@type": "Person", "name": authorName }],
+    "publisher": { "@type": "Organization", "name": "Anti-Corruption Party" },
+    "description": article.excerpt || undefined,
+    "mainEntityOfPage": { "@type": "WebPage", "@id": articleUrl },
+    "url": articleUrl,
+  } : null;
+
   return (
     <div className="min-h-screen bg-[#1a1a2e]">
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
       <div 
         className="fixed inset-0 pointer-events-none"
         style={{

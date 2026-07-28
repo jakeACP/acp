@@ -257,8 +257,25 @@ export default function PoliticianProfilePage() {
   const hasRejectedClaim = profile.claimRequestStatus === 'rejected';
   const canClaim = !profile.isVerified && !hasPendingClaim;
 
+  const profileUrl = typeof window !== "undefined" ? `${window.location.origin}/politicians/${id}` : `/politicians/${id}`;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": profile.fullName,
+    "url": profileUrl,
+    "image": profile.photoUrl || undefined,
+    "jobTitle": profile.position?.title || undefined,
+    "memberOf": profile.party ? { "@type": "Organization", "name": profile.party } : undefined,
+    "description": profile.biography || undefined,
+    "sameAs": profile.websiteUrl ? [profile.websiteUrl] : undefined,
+  };
+
   return (
     <div className="min-h-screen bg-background" data-testid="politician-profile-page">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Header Section */}
@@ -297,9 +314,9 @@ export default function PoliticianProfilePage() {
 
               {/* Name and Position */}
               <div className="flex-1">
-                <CardTitle className="text-3xl mb-1" data-testid="text-politician-name">
+                <h1 className="text-3xl mb-1 font-semibold leading-none tracking-tight" data-testid="text-politician-name">
                   {profile.fullName}
-                </CardTitle>
+                </h1>
                 {profile.handle && (
                   <p className="text-base font-medium text-blue-600 dark:text-blue-400 mb-1">
                     @{profile.handle}

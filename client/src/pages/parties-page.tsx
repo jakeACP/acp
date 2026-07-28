@@ -121,8 +121,21 @@ export default function PartiesPage() {
     return list;
   }, [parties, search, ballotFilter]);
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "Political Parties Directory — Anti-Corruption Party",
+    "description": "Compare U.S. political parties by transparency, ballot access, and political compass position.",
+    "url": typeof window !== "undefined" ? `${window.location.origin}/parties` : "/parties",
+    "publisher": { "@type": "Organization", "name": "Anti-Corruption Party" },
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}

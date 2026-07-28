@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import { Vote, Users, Building2, Compass } from "lucide-react";
 
 function AcpLogoSvg({ className }: { className?: string }) {
   return (
@@ -30,18 +31,25 @@ function AcpLogoSvg({ className }: { className?: string }) {
   );
 }
 
+const NAV_LINKS = [
+  { href: "/elections", label: "Elections", icon: Vote },
+  { href: "/parties", label: "Parties", icon: Users },
+  { href: "/lobbies", label: "Lobbies", icon: Building2 },
+  { href: "/political-compass", label: "Compass", icon: Compass },
+];
+
 export function PublicHeader() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/20 bg-gradient-to-r from-[#3C3B6E]/90 via-[#1a1a4a]/95 to-[#3C3B6E]/90 backdrop-blur-2xl shadow-2xl">
       <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="flex h-18 py-3 items-center justify-between">
-          <Link href="/" className="flex items-center gap-4 hover:opacity-90 transition-opacity group">
+        <div className="flex h-18 py-3 items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-4 hover:opacity-90 transition-opacity group flex-shrink-0">
             <div className="relative">
               <div className="absolute inset-0 bg-white/20 rounded-full blur-md group-hover:blur-lg transition-all" />
               <AcpLogoSvg className="relative h-12 w-12 rounded-full border-2 border-white/40 shadow-lg" />
             </div>
-            <div className="flex flex-col">
+            <div className="flex flex-col hidden sm:flex">
               <span className="text-2xl font-bold text-white tracking-tight drop-shadow-lg">
                 Anti-Corruption Party
               </span>
@@ -51,9 +59,20 @@ export function PublicHeader() {
             </div>
           </Link>
 
+          <nav aria-label="Public site navigation" className="hidden md:flex items-center gap-1">
+            {NAV_LINKS.map(({ href, label, icon: Icon }) => (
+              <Link key={href} href={href}>
+                <a className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+                  <Icon className="h-4 w-4" />
+                  <span>{label}</span>
+                </a>
+              </Link>
+            ))}
+          </nav>
+
           <Link href="/auth">
-            <Button 
-              className="relative bg-gradient-to-r from-[#B22234] to-[#D4343F] hover:from-[#8B1A28] hover:to-[#B22234] text-white font-bold px-8 py-3 rounded-xl shadow-xl border border-white/30 transition-all hover:scale-105 hover:shadow-2xl overflow-hidden"
+            <Button
+              className="relative bg-gradient-to-r from-[#B22234] to-[#D4343F] hover:from-[#8B1A28] hover:to-[#B22234] text-white font-bold px-6 py-3 rounded-xl shadow-xl border border-white/30 transition-all hover:scale-105 hover:shadow-2xl overflow-hidden flex-shrink-0"
             >
               <span className="absolute inset-0 bg-gradient-to-t from-transparent to-white/20 pointer-events-none" />
               <span className="relative">Log In to ACP</span>

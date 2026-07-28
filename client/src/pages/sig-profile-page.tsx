@@ -292,8 +292,24 @@ export default function SigProfilePage() {
   const effectiveGrade = sig.letterGrade || (sig.influenceScore !== null && sig.influenceScore !== undefined ? influenceGrade(sig.influenceScore) : null);
   const isPac = sig.category === "pac" || sig.category === "Super PAC";
 
+  const sigUrl = typeof window !== "undefined" ? `${window.location.origin}/lobbies/${tag}` : `/lobbies/${tag}`;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": sig.name,
+    "alternateName": sig.acronym || undefined,
+    "description": sig.description || undefined,
+    "url": sig.website || sigUrl,
+    "sameAs": sig.website ? [sig.website] : undefined,
+    "additionalType": sig.category,
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Navigation />
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 

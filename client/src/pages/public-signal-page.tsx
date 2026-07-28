@@ -70,8 +70,26 @@ export default function PublicSignalPage() {
     );
   }
 
+  const jsonLd = signal ? {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": signal.title || "ACP Signal",
+    "description": signal.description || signal.title || "Short video signal from the Anti-Corruption Party",
+    "thumbnailUrl": signal.thumbnailUrl || undefined,
+    "contentUrl": signal.videoUrl || undefined,
+    "uploadDate": signal.createdAt,
+    "publisher": { "@type": "Organization", "name": "Anti-Corruption Party" },
+    "url": signalUrl,
+  } : null;
+
   return (
     <div className="min-h-screen bg-[#1a1a2e]">
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
       <PublicHeader />
       <main className="max-w-lg mx-auto px-4 py-8">
         <Link href="/news">
@@ -107,7 +125,7 @@ export default function PublicSignalPage() {
 
           {/* Thumbnail fallback */}
           {!signal.videoUrl && signal.thumbnailUrl && (
-            <img src={signal.thumbnailUrl} alt="" className="w-full aspect-video object-cover" />
+            <img src={signal.thumbnailUrl} alt={signal.title || signal.description?.slice(0, 120) || "ACP Signal thumbnail"} className="w-full aspect-video object-cover" />
           )}
 
           <div className="p-5">

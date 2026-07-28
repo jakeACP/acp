@@ -1,16 +1,34 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usePageMeta } from "@/hooks/use-page-meta";
+import { useLocation } from "wouter";
 import { PublicHeader } from "@/components/public-header";
 import { PublicCategoryMenu, ArticleCategory } from "@/components/public-category-menu";
 import { PublicArticleCard } from "@/components/public-article-card";
 import { PublicAdSidebarLeft, PublicAdSidebarRight } from "@/components/public-ad-sidebar";
-import { Loader2, Newspaper, Star } from "lucide-react";
+import { Loader2, Newspaper, Star, Vote, Building2, Users, Compass } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
 const ITEMS_PER_PAGE = 10;
+
+const PUBLIC_HUBS = [
+  { href: "/elections", label: "Elections", icon: Vote, description: "Find candidates running near you" },
+  { href: "/parties", label: "Parties", icon: Users, description: "Compare political parties" },
+  { href: "/lobbies", label: "Lobbies", icon: Building2, description: "Track special interest groups" },
+  { href: "/political-compass", label: "Political Compass", icon: Compass, description: "Discover your political position" },
+];
+
+function getCategoryFromSearch(search: string): ArticleCategory {
+  const params = new URLSearchParams(search.replace(/^\?/, ""));
+  const cat = params.get("category");
+  const valid: ArticleCategory[] = [
+    "all", "current-events", "politicians", "proposals", "issues",
+    "donors", "propaganda", "conspiracies", "legal-cases", "leaks",
+  ];
+  return valid.includes(cat as ArticleCategory) ? (cat as ArticleCategory) : "all";
+}
 
 export default function PublicLandingPage() {
   usePageMeta({
@@ -18,18 +36,26 @@ export default function PublicLandingPage() {
     description: "Browse the latest news, articles, and community posts from the Anti-Corruption Party platform.",
   });
 
-  const [activeCategory, setActiveCategory] = useState<ArticleCategory>('all');
+  const [location] = useLocation();
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  const [activeCategory, setActiveCategory] = useState<ArticleCategory>(() => getCategoryFromSearch(search));
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const cat = getCategoryFromSearch(window.location.search);
+    setActiveCategory(cat);
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [location]);
 
   const { data: articles = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/public/articles", activeCategory],
     queryFn: async () => {
-      const url = activeCategory === 'all' 
-        ? '/api/public/articles'
+      const url = activeCategory === "all"
+        ? "/api/public/articles"
         : `/api/public/articles?category=${activeCategory}`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to fetch articles');
+      if (!res.ok) throw new Error("Failed to fetch articles");
       return res.json();
     },
   });
@@ -41,23 +67,19 @@ export default function PublicLandingPage() {
   });
 
   useEffect(() => {
-    setVisibleCount(ITEMS_PER_PAGE);
-  }, [activeCategory]);
-
-  useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && visibleCount < sortedArticles.length) {
           setVisibleCount(prev => Math.min(prev + ITEMS_PER_PAGE, sortedArticles.length));
         }
       },
-      { threshold: 0.1, rootMargin: '100px' }
+      { threshold: 0.1, rootMargin: "100px" }
     );
-    
+
     if (loadMoreRef.current) {
       observer.observe(loadMoreRef.current);
     }
-    
+
     return () => observer.disconnect();
   }, [visibleCount, sortedArticles.length]);
 
@@ -66,9 +88,26 @@ export default function PublicLandingPage() {
   const heroArticle = visibleArticles[0];
   const remainingArticles = visibleArticles.slice(1);
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "Anti-Corruption Party News",
+    "description": "Breaking news, investigations, and political analysis from the Anti-Corruption Party.",
+    "url": typeof window !== "undefined" ? `${window.location.origin}/news` : "https://acp.vote/news",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Anti-Corruption Party",
+      "url": typeof window !== "undefined" ? window.location.origin : "https://acp.vote",
+    },
+  };
+
   return (
     <div className="min-h-screen bg-[#1a1a2e] relative">
-      <div 
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <div
         className="fixed inset-0 pointer-events-none"
         style={{
           background: `repeating-linear-gradient(
@@ -86,20 +125,37 @@ export default function PublicLandingPage() {
         }}
       />
       <div className="fixed inset-0 bg-gradient-to-b from-[#1a1a2e]/80 via-[#1a1a2e]/60 to-[#1a1a2e]/80 pointer-events-none" />
-      
+
       <PublicHeader />
-      <PublicCategoryMenu 
-        activeCategory={activeCategory} 
-        onCategoryChange={setActiveCategory} 
+      <PublicCategoryMenu
+        activeCategory={activeCategory}
+        onCategoryChange={setActiveCategory}
       />
-      
+
       <div className="relative w-full px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex gap-6">
           <div className="hidden lg:block flex-shrink-0">
             <PublicAdSidebarLeft />
           </div>
-          
+
           <main className="flex-1 min-w-0">
+            <h1 className="text-2xl font-bold text-white mb-6">
+              Anti-Corruption Party News
+            </h1>
+
+            {/* Public hub links */}
+            <nav aria-label="Explore public sections" className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+              {PUBLIC_HUBS.map(({ href, label, icon: Icon, description }) => (
+                <Link key={href} href={href}>
+                  <a className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-center group">
+                    <Icon className="h-5 w-5 text-[#B22234] group-hover:scale-110 transition-transform" />
+                    <span className="text-white text-sm font-semibold">{label}</span>
+                    <span className="text-white/50 text-xs leading-tight hidden sm:block">{description}</span>
+                  </a>
+                </Link>
+              ))}
+            </nav>
+
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-24">
                 <div className="relative">
@@ -116,11 +172,11 @@ export default function PublicLandingPage() {
                     <PublicArticleCard article={heroArticle} variant="hero" />
                   </div>
                 )}
-                
+
                 {remainingArticles.map((article) => (
                   <PublicArticleCard key={article.id} article={article} />
                 ))}
-                
+
                 <div ref={loadMoreRef} className="py-10 flex justify-center">
                   {hasMoreArticles ? (
                     <div className="flex items-center gap-3 text-white/60">
@@ -150,7 +206,7 @@ export default function PublicLandingPage() {
                     No Articles Yet
                   </h3>
                   <p className="text-slate-300 mb-8 max-w-md mx-auto text-lg leading-relaxed">
-                    {activeCategory === 'all' 
+                    {activeCategory === "all"
                       ? "Be the first to share breaking news and exposés. Join the Anti-Corruption Party today."
                       : `No articles found in this category yet. Check back soon or explore other topics.`
                     }
@@ -168,7 +224,7 @@ export default function PublicLandingPage() {
               </Card>
             )}
           </main>
-          
+
           <div className="hidden lg:block flex-shrink-0">
             <PublicAdSidebarRight />
           </div>

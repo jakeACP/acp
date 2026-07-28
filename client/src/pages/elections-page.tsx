@@ -51,8 +51,21 @@ export default function ElectionsPage() {
     navigate(`/elections/positions?address=${encodeURIComponent(zip)}`);
   };
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "Find Your Elections — Anti-Corruption Party",
+    "description": "Enter your ZIP code to see elected offices and candidates running near you.",
+    "url": typeof window !== "undefined" ? `${window.location.origin}/elections` : "/elections",
+    "publisher": { "@type": "Organization", "name": "Anti-Corruption Party" },
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Navigation />
       <div className="flex flex-col items-center px-4 py-12">
         <div className="w-full max-w-xl text-center">

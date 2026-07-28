@@ -580,8 +580,21 @@ export default function SigsDirectoryPage() {
     s.description?.toLowerCase().includes(aceSearch.toLowerCase())
   ), [aceSigs, aceSearch]);
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "Lobbies & Special Interest Groups — Anti-Corruption Party",
+    "description": "Track lobbying organizations, PACs, and special interest groups that influence American politics.",
+    "url": typeof window !== "undefined" ? `${window.location.origin}/lobbies` : "/lobbies",
+    "publisher": { "@type": "Organization", "name": "Anti-Corruption Party" },
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Navigation />
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
 
