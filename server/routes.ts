@@ -495,6 +495,15 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     return text.slice(0, maxChars).replace(/\s\S*$/, "") + "…";
   }
 
+  /**
+   * Returns true when the request comes from a known web crawler / social
+   * preview bot.  Real browsers will get next() so Vite/SPA handles the route.
+   */
+  function isBot(req: express.Request): boolean {
+    const ua = (req.headers["user-agent"] || "").toLowerCase();
+    return /bot|crawl|slurp|spider|mediapartners|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|pinterest|googlebot|bingbot|yandex|baidu|duckduck|semrush|ahrefs|msnbot|preview|curl|wget|python-requests|go-http|java\/|httpclient|okhttp/i.test(ua);
+  }
+
   // Permanent server-side redirects: /sigs → /lobbies (canonical URL)
   app.get("/sigs", (_req, res) => res.redirect(301, "/lobbies"));
   app.get("/sigs/:tag", (req, res) => res.redirect(301, `/lobbies/${req.params.tag}`));
@@ -503,6 +512,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /posts/:id — community posts
   app.get("/posts/:id", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const post = await storage.getPostById(req.params.id);
       if (!post) return res.status(404).end();
@@ -606,6 +616,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /signals/:id — short video content
   async function signalOgHandler(req: Request, res: Response, next: NextFunction) {
+    if (!isBot(req)) return next();
     try {
       const signal = await storage.getSignalById(req.params.id);
       // Only serve OG metadata for public signals to prevent metadata leakage
@@ -651,6 +662,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.get("/signals/:id", signalOgHandler);
   // /mobile/signals/:id is an alias; serve same OG metadata with canonical pointing to /signals/:id
   app.get("/mobile/signals/:id", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const signal = await storage.getSignalById(req.params.id);
       if (!signal || !signal.isPublic) return next();
@@ -718,6 +730,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /lobbies/:tag — individual SIG profile with fetched metadata + SSR body
   app.get("/lobbies/:tag", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const result = await storage.getPublicSigByTag(req.params.tag, undefined);
       if (!result?.sig) return next();
@@ -747,6 +760,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /politicians/:id
   app.get("/politicians/:id", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const politician = await storage.getPoliticianProfile(req.params.id);
       if (!politician) return next();
@@ -793,6 +807,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /parties/:partyId
   app.get("/parties/:partyId", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const party = await storage.getPartyByIdOrSlug(req.params.partyId);
       if (!party) return next();
@@ -865,6 +880,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /news and / — fetch recent public posts
   app.get(["/news", "/"], async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const origin = `${req.protocol}://${req.get("host")}`;
       const posts = await storage.getPosts(8, 0);
@@ -911,6 +927,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /elections — fetch candidate list
   app.get("/elections", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const origin = `${req.protocol}://${req.get("host")}`;
       const candidates = await storage.getCandidatesWithUserData();
@@ -951,6 +968,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /lobbies and /sigs — fetch SIG directory
   app.get(["/lobbies", "/sigs"], async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const origin = `${req.protocol}://${req.get("host")}`;
       const sigs = await storage.getPublicSigs();
@@ -991,6 +1009,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /parties — fetch party directory
   app.get(["/parties", "/parties/"], async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const origin = `${req.protocol}://${req.get("host")}`;
       let bodyContent: string;
