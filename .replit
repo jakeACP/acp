@@ -14,7 +14,6 @@ publicDir = "dist/public"
 [[ports]]
 localPort = 3001
 externalPort = 3002
-exposeLocalhost = true
 
 [[ports]]
 localPort = 5000
@@ -42,6 +41,9 @@ args = "Start application"
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"

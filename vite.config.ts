@@ -37,80 +37,17 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // NOTE: Do NOT split node_modules into multiple vendor chunks.
+          // Splitting React away from libraries that mutate/extend it at
+          // module-init time causes "Cannot set properties of undefined
+          // (setting 'Children')" in production builds due to chunk
+          // initialization order. Keep all vendor code in one chunk.
           if (!id.includes("node_modules")) {
             if (id.includes("/pages/admin-")) return "chunk-admin";
             if (id.includes("/mobile/")) return "chunk-mobile";
             return undefined;
           }
-
-          if (
-            id.includes("react-dom") ||
-            id.includes("/react/") ||
-            id.includes("/react.") ||
-            id.includes("scheduler") ||
-            id.includes("react-is")
-          ) {
-            return "vendor-react";
-          }
-          if (id.includes("lucide-react")) {
-            return "vendor-icons";
-          }
-          if (id.includes("framer-motion")) {
-            return "vendor-motion";
-          }
-          if (id.includes("leaflet")) {
-            return "vendor-maps";
-          }
-          if (
-            id.includes("prosemirror") ||
-            id.includes("@tiptap") ||
-            id.includes("@codemirror")
-          ) {
-            return "vendor-editor";
-          }
-          if (id.includes("date-fns") || id.includes("dayjs") || id.includes("moment")) {
-            return "vendor-dates";
-          }
-          if (id.includes("lodash")) {
-            return "vendor-lodash";
-          }
-          if (
-            id.includes("@radix-ui") ||
-            id.includes("class-variance-authority") ||
-            id.includes("clsx") ||
-            id.includes("tailwind-merge") ||
-            id.includes("cmdk") ||
-            id.includes("vaul") ||
-            id.includes("sonner") ||
-            id.includes("embla")
-          ) {
-            return "vendor-ui";
-          }
-          if (
-            id.includes("@hookform") ||
-            id.includes("react-hook-form") ||
-            id.includes("zod")
-          ) {
-            return "vendor-forms";
-          }
-          if (id.includes("@tanstack") || id.includes("react-query")) {
-            return "vendor-query";
-          }
-          if (
-            id.includes("recharts") ||
-            id.includes("d3-") ||
-            id.includes("victory")
-          ) {
-            return "vendor-charts";
-          }
-          if (id.includes("@stripe") || id.includes("/stripe/")) {
-            return "vendor-stripe";
-          }
-          if (id.includes("@capacitor")) {
-            return "vendor-capacitor";
-          }
-
-          return "vendor-misc";
+          return "vendor";
         },
       },
     },

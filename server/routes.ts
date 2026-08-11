@@ -564,6 +564,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /read/:id — public articles
   app.get("/read/:id", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const article = await storage.getPublicArticle(req.params.id);
       if (!article) return res.status(404).end();
@@ -689,6 +690,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     next: NextFunction,
     opts: { title: string; description: string; image?: string }
   ) {
+    if (!isBot(req)) return next();
     try {
       const origin = `${req.protocol}://${req.get("host")}`;
       const url = `${origin}${req.path}`;
@@ -1061,6 +1063,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /terms — static content with key text for crawlers
   app.get("/terms", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const origin = `${req.protocol}://${req.get("host")}`;
       const bodyContent =
@@ -1093,6 +1096,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /developer — API docs overview for crawlers
   app.get("/developer", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const origin = `${req.protocol}://${req.get("host")}`;
       const bodyContent =
@@ -1134,6 +1138,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // /political-compass — quiz overview for crawlers
   app.get("/political-compass", async (req, res, next) => {
+    if (!isBot(req)) return next();
     try {
       const origin = `${req.protocol}://${req.get("host")}`;
       const bodyContent =
