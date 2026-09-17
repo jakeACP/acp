@@ -28,11 +28,11 @@ import { redactAgentData } from "./agentRedact";
 import { type VoteRecord } from "./lib/blockchain";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculateRankedChoiceWinner, type RankedVote } from "./lib/ranked-choice";
-import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertElectionRaceSchema, insertRaceCandidateSchema, politicianProfiles, politicalPositions, candidates, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, PLEDGE_DEFINITIONS, type InsertAgentApp, type AgentApiKey, users } from "@shared/schema";
+import { insertPostSchema, insertPollSchema, insertGroupSchema, insertCommentSchema, insertCandidateSchema, insertMessageSchema, insertChannelSchema, insertChannelMessageSchema, insertFlagSchema, insertCharitySchema, insertCharityDonationSchema, insertInitiativeSchema, insertInitiativeVersionSchema, insertAuditLogSchema, subscriptionRewards, createSubscriptionSchema, insertUserFollowSchema, insertReactionSchema, insertBiasVoteSchema, insertRepresentativeSchema, insertZipCodeLookupSchema, insertPoliticalPositionSchema, insertPoliticianProfileSchema, insertElectionRaceSchema, insertRaceCandidateSchema, politicianProfiles, politicalPositions, candidates, insertLiveStreamSchema, insertNotificationSchema, comments, candidateProfileModules, insertAcePledgeRequestSchema, insertAgentAppSchema, insertPollingSourceSchema, pollingSources, pollingImportRuns, pollingImportErrors, externalPolls, PLEDGE_DEFINITIONS, type InsertAgentApp, type AgentApiKey, users } from "@shared/schema";
 import archiver from "archiver";
 import multer from "multer";
 import unzipper from "unzipper";
-import { eq, inArray, or, sql, asc, and, ilike } from "drizzle-orm";
+import { eq, inArray, or, sql, asc, and, ilike, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { createStreamingProvider, generateStreamKey, hashStreamKey, webhookEventSchema } from "./lib/streaming";
 import { db } from "./db";
@@ -42,6 +42,7 @@ import { fetchLinkPreview } from "./lib/link-preview";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
 import { randomUUID } from "crypto";
 import { RateLimiterMemory } from "rate-limiter-flexible";
+import { getPollingAdminOverview, runPollingImport, validatePollingSourceUrl } from "./lib/polling-import";
 
 function extractYouTubeVideoId(url: string): string | null {
   const patterns = [
@@ -6188,6 +6189,92 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     } catch (error: any) {
       console.error("Admin delete politician profile error:", error);
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  const pollingImportLimiter = new RateLimiterMemory({ points: 5, duration: 60 });
+  const sourceInputSchema = insertPollingSourceSchema.pick({
+    name: true, endpointUrl: true, format: true, geography: true, raceScope: true, accessNotes: true, isActive: true,
+  }).extend({
+    name: z.string().trim().min(2).max(120),
+    endpointUrl: z.string().url().max(2048),
+    format: z.enum(["csv", "json"]),
+    accessNotes: z.string().trim().min(3).max(1000),
+  });
+
+  app.get("/api/admin/polling", ensureAdmin, async (_req, res) => {
+    try {
+      res.json(await getPollingAdminOverview());
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/admin/polling/sources", ensureAdmin, async (req, res) => {
+    try {
+      const input = sourceInputSchema.parse(req.body);
+      await validatePollingSourceUrl(input.endpointUrl);
+      const [source] = await db.insert(pollingSources).values({ ...input, createdBy: req.user!.id }).returning();
+      res.status(201).json(source);
+    } catch (error: any) {
+      if (error?.code === "23505") return res.status(409).json({ message: "That source URL is already registered" });
+      res.status(error?.name === "ZodError" ? 400 : 422).json({ message: error.message, errors: error.errors });
+    }
+  });
+
+  app.patch("/api/admin/polling/sources/:id", ensureAdmin, async (req, res) => {
+    try {
+      const input = sourceInputSchema.partial().parse(req.body);
+      if (input.endpointUrl) await validatePollingSourceUrl(input.endpointUrl);
+      const [source] = await db.update(pollingSources).set({ ...input, updatedAt: new Date() })
+        .where(eq(pollingSources.id, req.params.id)).returning();
+      if (!source) return res.status(404).json({ message: "Polling source not found" });
+      res.json(source);
+    } catch (error: any) {
+      res.status(error?.name === "ZodError" ? 400 : 422).json({ message: error.message, errors: error.errors });
+    }
+  });
+
+  app.post("/api/admin/polling/sources/:id/import", ensureAdmin, async (req, res) => {
+    try {
+      await pollingImportLimiter.consume(`${req.user!.id}:${req.params.id}`);
+      const [source] = await db.select().from(pollingSources).where(eq(pollingSources.id, req.params.id)).limit(1);
+      if (!source) return res.status(404).json({ message: "Polling source not found" });
+      if (!source.isActive) return res.status(409).json({ message: "Activate the source before importing" });
+      const [existing] = await db.select().from(pollingImportRuns)
+        .where(and(eq(pollingImportRuns.sourceId, source.id), eq(pollingImportRuns.status, "running"))).limit(1);
+      if (existing) return res.status(409).json({ message: "An import is already running for this source", run: existing });
+      const [run] = await db.insert(pollingImportRuns).values({ sourceId: source.id, createdBy: req.user!.id }).returning();
+      void runPollingImport(run.id, source);
+      res.status(202).json(run);
+    } catch (error: any) {
+      if (error?.msBeforeNext) return res.status(429).json({ message: "Too many import requests. Please wait a minute." });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/polling/runs/:id", ensureAdmin, async (req, res) => {
+    const [run] = await db.select().from(pollingImportRuns).where(eq(pollingImportRuns.id, req.params.id)).limit(1);
+    if (!run) return res.status(404).json({ message: "Import run not found" });
+    const errors = await db.select().from(pollingImportErrors)
+      .where(eq(pollingImportErrors.importRunId, run.id)).orderBy(pollingImportErrors.rowNumber).limit(100);
+    res.json({ ...run, errors });
+  });
+
+  app.patch("/api/admin/polling/polls/:id/review", ensureAdmin, async (req, res) => {
+    try {
+      const input = z.object({
+        status: z.enum(["pending", "accepted", "rejected"]),
+        reviewNote: z.string().trim().max(1000).optional(),
+      }).parse(req.body);
+      const [poll] = await db.update(externalPolls).set({
+        ...input, reviewedAt: input.status === "pending" ? null : new Date(),
+        reviewedBy: input.status === "pending" ? null : req.user!.id, updatedAt: new Date(),
+      }).where(eq(externalPolls.id, req.params.id)).returning();
+      if (!poll) return res.status(404).json({ message: "External poll not found" });
+      res.json(poll);
+    } catch (error: any) {
+      res.status(error?.name === "ZodError" ? 400 : 500).json({ message: error.message, errors: error.errors });
     }
   });
 

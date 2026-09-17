@@ -2782,6 +2782,120 @@ export const insertCandidateApprovalVoteSchema = createInsertSchema(candidateApp
 export type CandidateApprovalVote = typeof candidateApprovalVotes.$inferSelect;
 export type InsertCandidateApprovalVote = z.infer<typeof insertCandidateApprovalVoteSchema>;
 
+// External polling data — intentionally separate from community-created polls
+// and candidate approval votes.
+export const pollingSources = pgTable("polling_sources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  endpointUrl: text("endpoint_url").notNull(),
+  format: text("format").notNull().default("json"), // json | csv
+  geography: text("geography"),
+  raceScope: text("race_scope"),
+  accessNotes: text("access_notes"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  lastImportedAt: timestamp("last_imported_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  endpointUnique: sql`UNIQUE(${table.endpointUrl})`,
+  activeIndex: index("polling_sources_active_idx").on(table.isActive),
+}));
+
+export const pollingImportRuns = pgTable("polling_import_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar("source_id").notNull().references(() => pollingSources.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("queued"), // queued | running | completed | failed
+  totalRows: integer("total_rows").notNull().default(0),
+  importedRows: integer("imported_rows").notNull().default(0),
+  duplicateRows: integer("duplicate_rows").notNull().default(0),
+  errorRows: integer("error_rows").notNull().default(0),
+  currentRow: integer("current_row").notNull().default(0),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  sourceIndex: index("polling_import_runs_source_idx").on(table.sourceId),
+  statusIndex: index("polling_import_runs_status_idx").on(table.status),
+  createdIndex: index("polling_import_runs_created_idx").on(table.createdAt.desc()),
+  statusCheck: sql`CHECK (${table.status} IN ('queued', 'running', 'completed', 'failed'))`,
+}));
+
+export const externalPolls = pgTable("external_polls", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar("source_id").notNull().references(() => pollingSources.id, { onDelete: "cascade" }),
+  importRunId: varchar("import_run_id").references(() => pollingImportRuns.id, { onDelete: "set null" }),
+  sourceRecordKey: text("source_record_key"),
+  fingerprint: text("fingerprint").notNull(),
+  version: integer("version").notNull().default(1),
+  status: text("status").notNull().default("pending"), // pending | accepted | rejected
+  pollster: text("pollster").notNull(),
+  fieldStartDate: timestamp("field_start_date"),
+  fieldEndDate: timestamp("field_end_date"),
+  publishedDate: timestamp("published_date"),
+  race: text("race").notNull(),
+  question: text("question"),
+  geography: text("geography").notNull(),
+  sampleSize: integer("sample_size"),
+  methodology: text("methodology"),
+  results: jsonb("results").notNull().$type<Record<string, number>>(),
+  sourceUrl: text("source_url").notNull(),
+  rawPayload: jsonb("raw_payload").notNull(),
+  retrievedAt: timestamp("retrieved_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewNote: text("review_note"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  fingerprintUnique: sql`UNIQUE(${table.sourceId}, ${table.fingerprint})`,
+  sourceIndex: index("external_polls_source_idx").on(table.sourceId),
+  statusIndex: index("external_polls_status_idx").on(table.status),
+  raceIndex: index("external_polls_race_idx").on(table.race),
+  publishedIndex: index("external_polls_published_idx").on(table.publishedDate.desc()),
+  statusCheck: sql`CHECK (${table.status} IN ('pending', 'accepted', 'rejected'))`,
+}));
+
+export const pollingImportErrors = pgTable("polling_import_errors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  importRunId: varchar("import_run_id").notNull().references(() => pollingImportRuns.id, { onDelete: "cascade" }),
+  rowNumber: integer("row_number"),
+  message: text("message").notNull(),
+  rawRow: jsonb("raw_row"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  runIndex: index("polling_import_errors_run_idx").on(table.importRunId),
+}));
+
+export const insertPollingSourceSchema = createInsertSchema(pollingSources).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastImportedAt: true,
+});
+export const insertPollingImportRunSchema = createInsertSchema(pollingImportRuns).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertExternalPollSchema = createInsertSchema(externalPolls).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  retrievedAt: true,
+  reviewedAt: true,
+  reviewedBy: true,
+  reviewNote: true,
+});
+
+export type PollingSource = typeof pollingSources.$inferSelect;
+export type InsertPollingSource = z.infer<typeof insertPollingSourceSchema>;
+export type PollingImportRun = typeof pollingImportRuns.$inferSelect;
+export type ExternalPoll = typeof externalPolls.$inferSelect;
+export type InsertExternalPoll = z.infer<typeof insertExternalPollSchema>;
+export type PollingImportError = typeof pollingImportErrors.$inferSelect;
+
 // ─── Economic Policy Simulator ───────────────────────────────────────────────
 
 // Fiscal year baselines (e.g. FY 2024 CBO)

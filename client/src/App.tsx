@@ -61,6 +61,7 @@ const AdminUserBansPage = lazy(() => import("@/pages/admin-user-bans-page"));
 const AdminIpBlocksPage = lazy(() => import("@/pages/admin-ip-blocks-page"));
 const AdminPoliticiansPage = lazy(() => import("@/pages/admin-politicians-page"));
 const AdminPollsPage = lazy(() => import("@/pages/admin-polls-page"));
+const AdminPollingImportPage = lazy(() => import("@/pages/admin-polling-import-page"));
 const AdminSecurityPage = lazy(() => import("@/pages/admin-security-page"));
 const AdminDatabasePage = lazy(() => import("@/pages/admin-database-page"));
 const AdminAlgorithmPage = lazy(() => import("@/pages/admin-algorithm-page"));
@@ -235,6 +236,7 @@ function Router() {
         <ProtectedRoute path="/admin/scanner" component={AdminScannerPage} />
         <ProtectedRoute path="/admin/agentic-ai" component={AdminAgenticAiPage} />
         <ProtectedRoute path="/admin/polls" component={AdminPollsPage} />
+        <ProtectedRoute path="/admin/polling-import" component={AdminPollingImportPage} />
         <ProtectedRoute path="/admin/security" component={AdminSecurityPage} />
         <ProtectedRoute path="/admin/database" component={AdminDatabasePage} />
         <ProtectedRoute path="/admin/algorithm" component={AdminAlgorithmPage} />

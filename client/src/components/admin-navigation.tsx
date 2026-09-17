@@ -32,6 +32,7 @@ import {
   MapPin,
   Map,
   Mail,
+  DatabaseZap,
 } from "lucide-react";
 
 interface SubItem {
@@ -76,6 +77,7 @@ const navCategories: NavCategory[] = [
       { name: "State Data", href: "/admin/state-data", icon: MapPin },
       { name: "Budget Baselines", href: "/admin/budget-baselines", icon: Database },
       { name: "Districts", href: "/admin/districts", icon: Map },
+      { name: "Polling Import", href: "/admin/polling-import", icon: DatabaseZap },
     ],
   },
   {
