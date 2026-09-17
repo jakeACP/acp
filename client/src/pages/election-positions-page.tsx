@@ -202,6 +202,7 @@ export default function ElectionPositionsPage() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const address = params.get("address") ?? "";
+  const displayAddress = params.get("displayAddress") ?? address;
 
   const [lookupData, setLookupData] = useState<LookupResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -253,10 +254,10 @@ export default function ElectionPositionsPage() {
 
         <div className="mb-4">
           <h1 className="text-3xl font-bold">Your Elected Seats</h1>
-          {address && (
+          {displayAddress && (
             <div className="flex items-center gap-1.5 text-muted-foreground mt-1">
               <MapPin className="h-4 w-4 shrink-0" />
-              <span className="text-sm">{address}</span>
+              <span className="text-sm">{displayAddress}</span>
             </div>
           )}
           {lookupData && (

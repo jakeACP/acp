@@ -6888,6 +6888,55 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     res.json({ key });
   });
 
+  const electionAddressLimiter = new RateLimiterMemory({ points: 20, duration: 60 });
+
+  // Elections — validate a nationwide street address with the U.S. Census geocoder.
+  app.get("/api/elections/validate-address", async (req, res) => {
+    const address = String(req.query.address || "").trim();
+    if (address.length < 8 || address.length > 300) {
+      return res.status(400).json({ message: "Enter a complete street address, including city and state." });
+    }
+
+    try {
+      await electionAddressLimiter.consume(req.ip || "unknown");
+      const params = new URLSearchParams({
+        address,
+        benchmark: "Public_AR_Current",
+        format: "json",
+      });
+      const response = await fetch(
+        `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?${params}`,
+        { signal: AbortSignal.timeout(10_000) },
+      );
+      if (!response.ok) throw new Error(`Address service returned HTTP ${response.status}`);
+      const data = await response.json() as any;
+      const matches = (data?.result?.addressMatches || []).slice(0, 5).map((match: any) => {
+        const components = match.addressComponents || {};
+        return {
+          matchedAddress: match.matchedAddress,
+          latitude: Number(match.coordinates?.y),
+          longitude: Number(match.coordinates?.x),
+          zipCode: String(components.zip || components.zipCode || "").slice(0, 5),
+          stateCode: String(components.state || "").toUpperCase(),
+          city: components.city || null,
+        };
+      }).filter((match: any) =>
+        match.matchedAddress
+        && Number.isFinite(match.latitude)
+        && Number.isFinite(match.longitude)
+        && /^\d{5}$/.test(match.zipCode)
+        && /^[A-Z]{2}$/.test(match.stateCode)
+      );
+      res.json({ matches });
+    } catch (error: any) {
+      if (error?.msBeforeNext) {
+        return res.status(429).json({ message: "Too many address checks. Please wait a minute and try again." });
+      }
+      console.error("Election address validation error:", error);
+      res.status(502).json({ message: "Address verification is temporarily unavailable. Please try again." });
+    }
+  });
+
   // Elections — Address lookup: queries politician_profiles DB grouped by position
   app.get("/api/elections/lookup", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

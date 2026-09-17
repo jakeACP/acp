@@ -4,7 +4,7 @@ import { usePageMeta } from "@/hooks/use-page-meta";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Vote, MapPin, User, CheckCircle, Clock } from "lucide-react";
+import { Vote, MapPin, User, CheckCircle, Clock, Loader2, Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 
@@ -20,6 +20,15 @@ interface CandidateRunning {
   targetPositionJurisdiction: string | null;
 }
 
+interface AddressMatch {
+  matchedAddress: string;
+  latitude: number;
+  longitude: number;
+  zipCode: string;
+  stateCode: string;
+  city: string | null;
+}
+
 export default function ElectionsPage() {
   usePageMeta({
     title: "Elections",
@@ -28,34 +37,69 @@ export default function ElectionsPage() {
 
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [zipCode, setZipCode] = useState("");
+  const [address, setAddress] = useState("");
+  const [addressMatches, setAddressMatches] = useState<AddressMatch[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<AddressMatch | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   const { data: candidates = [], isLoading: candidatesLoading, isError: candidatesError } = useQuery<CandidateRunning[]>({
     queryKey: ["/api/public/candidates-running"],
   });
 
+  const validateAddress = async () => {
+    const enteredAddress = address.trim();
+    if (enteredAddress.length < 8) {
+      toast({ title: "Enter a complete street address", description: "Include the street, city, and state.", variant: "destructive" });
+      return;
+    }
+    setIsValidating(true);
+    setSelectedAddress(null);
+    setAddressMatches([]);
+    try {
+      const response = await fetch(`/api/elections/validate-address?address=${encodeURIComponent(enteredAddress)}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Could not verify address");
+      if (!data.matches?.length) {
+        toast({
+          title: "We couldn't verify that address",
+          description: "Check the street number, street name, city, state, and ZIP code, then try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setAddressMatches(data.matches);
+    } catch (error: any) {
+      toast({ title: "Address verification failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const zip = zipCode.trim();
-    
-    if (!zip) {
-      toast({ title: "Please enter a ZIP code", variant: "destructive" });
+    if (!selectedAddress) {
+      toast({ title: "Verify and select your address first", variant: "destructive" });
       return;
     }
-    
-    if (!/^\d{5}$/.test(zip)) {
-      toast({ title: "Please enter a valid 5-digit ZIP code", variant: "destructive" });
-      return;
+
+    const query = new URLSearchParams({
+      address: selectedAddress.stateCode === "MN" ? selectedAddress.matchedAddress : selectedAddress.zipCode,
+      displayAddress: selectedAddress.matchedAddress,
+      state: selectedAddress.stateCode,
+      zip: selectedAddress.zipCode,
+    });
+    if (selectedAddress.stateCode === "MN") {
+      query.set("lat", String(selectedAddress.latitude));
+      query.set("lng", String(selectedAddress.longitude));
     }
-    
-    navigate(`/elections/positions?address=${encodeURIComponent(zip)}`);
+    navigate(`/elections/positions?${query.toString()}`);
   };
 
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     "name": "Find Your Elections — Anti-Corruption Party",
-    "description": "Enter your ZIP code to see elected offices and candidates running near you.",
+    "description": "Verify your address to see elected offices and candidates running near you.",
     "url": typeof window !== "undefined" ? `${window.location.origin}/elections` : "/elections",
     "publisher": { "@type": "Organization", "name": "Anti-Corruption Party" },
   };
@@ -77,7 +121,7 @@ export default function ElectionsPage() {
 
           <h1 className="text-4xl font-bold tracking-tight mb-2">Find Your Elections</h1>
           <p className="text-muted-foreground text-lg mb-8">
-            Enter your ZIP code to see the elected offices representing you and the candidates running for each seat.
+            Verify your home address to see the elected offices representing you and the candidates running for each seat.
           </p>
 
           <form onSubmit={handleSearch} className="space-y-3">
@@ -85,21 +129,69 @@ export default function ElectionsPage() {
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
               <input
                 type="text"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-                placeholder="Enter your ZIP code"
-                maxLength={5}
+                value={address}
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  setSelectedAddress(null);
+                  setAddressMatches([]);
+                }}
+                placeholder="Enter Address"
+                autoComplete="street-address"
+                aria-label="Enter your full address"
                 className="w-full pl-9 pr-4 h-12 text-base rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0 transition-colors"
               />
             </div>
 
-            <Button type="submit" size="lg" className="w-full h-12">
+            {!selectedAddress && (
+              <Button type="button" variant="outline" size="lg" className="w-full h-12" onClick={validateAddress} disabled={isValidating || address.trim().length < 8}>
+                {isValidating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                {isValidating ? "Checking Address…" : "Verify Address"}
+              </Button>
+            )}
+
+            {addressMatches.length > 0 && !selectedAddress && (
+              <div className="rounded-md border bg-card p-2 text-left" role="listbox" aria-label="Verified address matches">
+                <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Select the correct verified address</p>
+                {addressMatches.map((match) => (
+                  <button
+                    type="button"
+                    key={`${match.matchedAddress}-${match.latitude}`}
+                    onClick={() => {
+                      setSelectedAddress(match);
+                      setAddress(match.matchedAddress);
+                      setAddressMatches([]);
+                    }}
+                    className="flex w-full items-start gap-2 rounded px-2 py-2 text-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <span>{match.matchedAddress}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {selectedAddress && (
+              <div className="flex items-start justify-between gap-3 rounded-md border border-green-300 bg-green-50 p-3 text-left dark:border-green-800 dark:bg-green-950/30">
+                <div className="flex min-w-0 gap-2">
+                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                  <div>
+                    <p className="text-sm font-medium text-green-900 dark:text-green-200">Verified address</p>
+                    <p className="text-sm text-green-800 dark:text-green-300">{selectedAddress.matchedAddress}</p>
+                  </div>
+                </div>
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setSelectedAddress(null)} aria-label="Change address">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            <Button type="submit" size="lg" className="w-full h-12" disabled={!selectedAddress}>
               Find My Elections
             </Button>
           </form>
 
           <p className="text-xs text-muted-foreground mt-6">
-            Your ZIP code is used only to look up your elected representatives and is not stored.
+            Your verified address is used only for this election lookup and is not stored.
           </p>
         </div>
 
