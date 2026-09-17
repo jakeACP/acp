@@ -1,0 +1,38 @@
+# ACP Civic Map — Minnesota Pilot Using Official Precinct GeoJSON
+
+## Summary
+
+Build the Elections-page map around the Minnesota Secretary of State’s official precinct dataset: [mn-precincts.json](https://sos.mn.gov/media/2791/mn-precincts.json). It supplies the statewide geometry needed to match an address to a precinct and show congressional, Minnesota Senate, Minnesota House, and county-commissioner districts.
+
+The pilot combines address lookup and map exploration, then expands to a full verified ballot through separately sourced official candidate, officeholder, and ballot data.
+
+## Key changes
+
+- Treat the Secretary of State GeoJSON as the canonical Minnesota precinct-boundary source; import and version a dated snapshot rather than relying on a live browser request.
+- Parse and retain `CongDist`, `MNSenDist`, `MNLegDist`, `CtyComDist`, `Precinct`, `PrecinctID`, `County`, and `CountyID`, plus polygon geometry.
+- Geocode a user’s saved or newly entered address, use point-in-polygon matching to resolve its precinct, center MapLibre on that point, and highlight the matched precinct.
+- Show the matched congressional, Minnesota Senate, Minnesota House, and county-commissioner districts in the Elections sidebar. Hovering or clicking any map area shows the same district summary for that precinct.
+- Add separate source-backed modules for current officeholders, candidate filings, contests, sample ballots, polling locations, and election results. Do not infer any of these from the precinct file.
+- Label the sidebar with the dataset publisher, source link, snapshot date, and a clear coverage state. Direct visitors to the Minnesota Voting Information Portal whenever precinct assignment is ambiguous or an official ballot detail is unavailable.
+- Preserve the earlier account behavior: show an inline address prompt in place of “Enter Zip Code” when an address is absent; require explicit consent before saving it; provide edit and permanent deletion controls.
+
+## Public interfaces
+
+- `GET /civic/lookup?address=` returns the matched precinct, four core districts, map location, source date, and coverage status.
+- `GET /civic/districts/{id}` returns district metadata, geometry, related election records, and source attribution.
+- `GET /civic/coverage/MN` identifies which information is verified for each office level: precinct/district, officeholder, candidates, ballot, polling place, and results.
+- Precinct imports record source URL, retrieval time, source date, schema version, and prior snapshot reference to support redistricting and auditability.
+
+## Test plan
+
+- Test addresses in multiple Minnesota counties and districts against the official Minnesota lookup.
+- Test addresses on or near precinct boundaries, invalid/unmatched addresses, changed precinct data, and missing properties.
+- Verify map hover, click, address-based centering, precinct highlighting, sidebar district grouping, and mobile behavior.
+- Verify that candidate/ballot placeholders are shown until their independent official sources are loaded.
+- Verify saved-address consent, secure access, editing, deletion, and anonymous lookup behavior.
+
+## Assumptions
+
+- The supplied May 2026 precinct GeoJSON is the initial official Minnesota boundary dataset.
+- This file supports core district identification only; full-ballot data requires additional official feeds.
+- Minnesota is the first source-certified state; nationwide federal/state coverage and later full-ballot state adapters remain the expansion path.
