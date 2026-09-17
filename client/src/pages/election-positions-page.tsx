@@ -82,7 +82,10 @@ function MinnesotaElectionMap({
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));
 
   return (
-    <Card className="relative left-1/2 mb-6 w-[95vw] -translate-x-1/2 overflow-hidden">
+    <Card
+      className="relative mb-6 w-[95vw] max-w-none overflow-hidden"
+      style={{ marginLeft: "calc(50% - 47.5vw)" }}
+    >
       <div className="grid lg:grid-cols-[minmax(0,1fr)_340px]">
         <div ref={containerRef} className="h-[68vh] min-h-[460px] max-h-[720px] w-full bg-muted" aria-label="Map centered on your verified address" />
         <aside className="max-h-[68vh] overflow-y-auto border-t p-5 lg:border-l lg:border-t-0">
