@@ -1,0 +1,71 @@
+.mn-map-panel {
+  width: 95vw;
+  margin-left: calc(50% - 47.5vw);
+  margin-bottom: 1.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+}
+.mn-map-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.mn-map-viewport {
+  position: relative;
+  min-width: 0;
+  height: clamp(300px, 48svh, 520px);
+  isolation: isolate;
+}
+.mn-map-canvas { position: absolute; inset: 0; z-index: 0; }
+.mn-map-sidebar { min-width: 0; padding: 1rem; border-top: 1px solid hsl(var(--border)); }
+/* The legend sits on map tiles, so it keeps a light surface and dark text in every theme. */
+.mn-map-legend { background: rgba(255, 255, 255, 0.95) !important; }
+.mn-map-legend, .mn-map-legend * { color: #1f2937 !important; }
+.mn-map-tooltip, .patriot .mn-map-tooltip { color: #111827 !important; background: #fff !important; border-color: #cbd5e1 !important; }
+.mn-address-marker {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #0f172a;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45);
+}
+.mn-office-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  padding: 0.6rem 0.65rem;
+  text-align: left;
+  font-size: 0.875rem;
+}
+.mn-office-option:hover { background: hsl(var(--muted)); }
+.mn-office-option[aria-pressed="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 0.12); font-weight: 600; }
+.mn-office-option:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.mn-map-control { width: 100%; border-radius: 0.4rem; border: 1px solid hsl(var(--border)); padding: 0.5rem; background: hsl(var(--background)); color: hsl(var(--foreground)); }
+.patriot .mn-map-panel { background: #111c35; color: #f8fafc; border-color: #475569; }
+.patriot .mn-map-control { background: #1e293b; color: #f8fafc; border-color: #64748b; }
+.patriot .mn-office-option:hover { background: #243451; }
+.patriot .mn-office-option[aria-pressed="true"] { background: #203b62; border-color: #60a5fa; }
+.patriot .mn-map-sidebar .text-muted-foreground { color: #cbd5e1; }
+/* Patriot Mode paints diagonal stripes on the page, so the ballot list needs its own surface. */
+.patriot .mn-ballot-campaigns {
+  background: #111c35;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+.patriot .mn-ballot-campaigns .text-muted-foreground { color: #cbd5e1; }
+@media (min-width: 1024px) {
+  .mn-map-grid {
+    grid-template-columns: minmax(0, 1fr) 330px;
+    height: clamp(340px, calc(100svh - 335px), 650px);
+  }
+  .mn-map-viewport { height: 100%; min-height: 0; }
+  .mn-map-sidebar { height: 100%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-top: 0; border-left: 1px solid hsl(var(--border)); scrollbar-gutter: stable; }
+}

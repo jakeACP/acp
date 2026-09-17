@@ -1,4 +1,4 @@
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { MnCampaign, MnDistrict, MnDistrictType } from "@shared/civic-map";
 import {
@@ -87,7 +87,6 @@ export const defaultMnCampaignDataSource: MnCampaignDataSource = {
         and(
           eq(raceCandidates.state, "MN"),
           eq(raceCandidates.electionYear, year),
-          notInArray(raceCandidates.filingStatus, ["withdrawn", "disqualified"]),
         ),
       );
   },
@@ -151,6 +150,11 @@ export function normalizeDistrictCode(
     county_commissioner: /^(?:COUNTY)?(?:BOARD|COMMISSION|COMMISSIONER)?(?:DISTRICT)?/,
   };
   normalized = normalized.replace(prefixes[type], "");
+  // Common compact seat codes can otherwise be ambiguous with the fully
+  // spelled office-prefix expression (for example MN-6).
+  if (type === "state_house") normalized = normalized.replace(/^HD/, "");
+  if (type === "state_senate") normalized = normalized.replace(/^SD/, "");
+  if (type === "congressional") normalized = normalized.replace(/^(?:MN|CD)/, "");
 
   if (type === "state_house") {
     const match = normalized.match(/^0*(\d{1,2})([AB])$/);
@@ -185,7 +189,7 @@ function officeType(
     return "state_senate";
   }
   if (
-    /state.{0,20}(?:house|representative)|(?:house|representative).{0,20}state|mn house|\bhouse\s+district/i.test(
+    /state.{0,20}(?:house|representative)|(?:house|representative).{0,20}state|mn house|minnesota house|house of representatives|\bhouse\s+district/i.test(
       text,
     )
   ) {
@@ -203,7 +207,7 @@ function normalizeCounty(value: string | null | undefined): string | null {
   return result || null;
 }
 
-function matchesDistrict(
+export function matchesMnDistrict(
   district: MnDistrict,
   title: string | null | undefined,
   rawCode: string | null | undefined,
@@ -224,7 +228,16 @@ function matchesDistrict(
 
   if (district.type === "state_house" || district.type === "state_senate") {
     if (level && level.toLowerCase() !== "state") return false;
-    if (jurisdiction && !/\bminnesota\b|\bmn\b/i.test(jurisdiction)) return false;
+  }
+  if (district.type === "congressional" && level && level.toLowerCase() !== "federal") {
+    return false;
+  }
+
+  // Seat numbers repeat in every state, so a row that carries jurisdiction
+  // context must prove it is Minnesota's seat. Rows without that context come
+  // from Minnesota-scoped queries and are already limited to this state.
+  if (district.type !== "county_commissioner" && jurisdiction !== undefined) {
+    if (!/\bminnesota\b|\bmn\b/i.test(jurisdiction || "")) return false;
   }
   return true;
 }
@@ -276,6 +289,11 @@ export async function getMnCampaigns(
   const linkedProfiles = new Set<string>();
 
   for (const row of raceRows) {
+    if (row.politicianProfileId && row.electionYear === year) {
+      // Remember inactive filings too, so their linked generic profile cannot
+      // silently put a withdrawn/disqualified person back on this cycle.
+      linkedProfiles.add(row.politicianProfileId);
+    }
     if (
       row.electionYear !== year ||
       (row.raceYear !== null && row.raceYear !== year) ||
@@ -286,7 +304,7 @@ export async function getMnCampaigns(
     const title = row.raceOfficeTitle || row.officeTitle;
     const code = row.raceDistrict || row.district;
     const county = row.raceCounty || row.county;
-    if (!matchesDistrict(district, title, code, county)) continue;
+    if (!matchesMnDistrict(district, title, code, county)) continue;
 
     const campaign: MnCampaign = {
       id: row.id,
@@ -303,7 +321,6 @@ export async function getMnCampaigns(
     const key = row.politicianProfileId
       ? `profile:${row.politicianProfileId}`
       : `name:${normalizedName(row.fullName)}`;
-    if (row.politicianProfileId) linkedProfiles.add(row.politicianProfileId);
     addRicher(campaigns, key, campaign);
   }
 
@@ -318,7 +335,7 @@ export async function getMnCampaigns(
     const level = useTarget ? row.targetLevel : row.heldLevel;
     const jurisdiction = useTarget ? row.targetJurisdiction : row.heldJurisdiction;
     const code = useTarget ? row.targetDistrict : row.heldDistrict;
-    if (!matchesDistrict(district, title, code, null, level, jurisdiction)) continue;
+    if (!matchesMnDistrict(district, title, code, null, level, jurisdiction)) continue;
 
     const sourceUrl = sanitizeSourceUrl(row.ballotpediaUrl);
     const campaign: MnCampaign = {

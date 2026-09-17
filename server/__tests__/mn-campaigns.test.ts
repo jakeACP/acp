@@ -129,6 +129,18 @@ describe("getMnCampaigns exact matching", () => {
       .toEqual(["active"]);
   });
 
+  it("does not reintroduce a withdrawn filing through its linked profile", async () => {
+    const result = await getMnCampaigns(
+      house30A,
+      2026,
+      source(
+        [race({ filingStatus: "withdrawn", politicianProfileId: "profile-1" })],
+        [profile()],
+      ),
+    );
+    expect(result).toEqual([]);
+  });
+
   it("uses target position preferentially and held position only for candidates", async () => {
     const rows = [
       profile({

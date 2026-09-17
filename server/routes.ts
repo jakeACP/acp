@@ -9,6 +9,7 @@ import os from "os";
 import { setupAuth } from "./auth";
 import mnBoundaryRoutes from "./mn-boundary-routes";
 import mnCampaignRoutes from "./mn-campaign-routes";
+import mnBallotRoutes from "./mn-ballot-routes";
 
 const execAsync = promisify(exec);
 
@@ -235,7 +236,7 @@ const objectStorageService = new ObjectStorageService();
 
 export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   setupAuth(app);
-  app.use("/api/elections/mn", mnBoundaryRoutes, mnCampaignRoutes);
+  app.use("/api/elections/mn", mnBoundaryRoutes, mnCampaignRoutes, mnBallotRoutes);
 
   // ── Apple App Site Association (Universal Links for iOS) ─────────────────────
   // Served before any auth middleware so iOS can verify without credentials.

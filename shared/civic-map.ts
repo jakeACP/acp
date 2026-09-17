@@ -53,3 +53,38 @@ export interface MnCampaignResponse {
   campaigns: MnCampaign[];
   electionYear: number;
 }
+
+export type MnPartyCategory = "republican" | "democrat" | "other" | "unknown";
+
+export interface MnIncumbent {
+  id: string;
+  fullName: string;
+  party: string | null;
+  photoUrl: string | null;
+}
+
+export interface MnHolding {
+  category: MnPartyCategory;
+  incumbents: MnIncumbent[];
+}
+
+export interface MnBallotOffice {
+  id: string;
+  label: string;
+  district: MnDistrict | null;
+  electionStatus: "scheduled" | "unconfirmed";
+  campaigns: MnCampaign[];
+  incumbents: MnIncumbent[];
+}
+
+export interface MnBallotResponse {
+  year: number;
+  cycleLabel: string;
+  offices: MnBallotOffice[];
+  coverageNote: string;
+}
+
+export interface MnElectionCycle {
+  year: number;
+  label: string;
+}
