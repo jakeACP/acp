@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, ChevronRight, MapPin, AlertCircle, User, DollarSign, Info, Navigation2 } from "lucide-react";
+import { ArrowLeft, ChevronRight, MapPin, AlertCircle, User, DollarSign } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation as useWouterLocation } from "wouter";
 import { useRef } from "react";
@@ -50,10 +50,12 @@ function MinnesotaElectionMap({
   latitude,
   longitude,
   lookup,
+  address,
 }: {
   latitude: number;
   longitude: number;
   lookup: LookupResponse;
+  address: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -80,13 +82,17 @@ function MinnesotaElectionMap({
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));
 
   return (
-    <Card className="mb-6 overflow-hidden">
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div ref={containerRef} className="h-[420px] min-h-[320px] w-full bg-muted" aria-label="Map centered on your verified address" />
-        <aside className="border-t p-5 lg:border-l lg:border-t-0">
+    <Card className="relative left-1/2 mb-6 w-[95vw] -translate-x-1/2 overflow-hidden">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div ref={containerRef} className="h-[68vh] min-h-[460px] max-h-[720px] w-full bg-muted" aria-label="Map centered on your verified address" />
+        <aside className="max-h-[68vh] overflow-y-auto border-t p-5 lg:border-l lg:border-t-0">
           <div className="mb-4 flex items-center gap-2">
             <MapPin className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-semibold">Your Minnesota districts</h2>
+          </div>
+          <div className="mb-4 rounded-md bg-muted/60 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Verified address</p>
+            <p className="mt-1 text-sm font-medium leading-snug">{address}</p>
           </div>
           <div className="space-y-3">
             {districts.length ? districts.map(([label, value]) => (
@@ -321,12 +327,6 @@ export default function ElectionPositionsPage() {
 
         <div className="mb-4">
           <h1 className="text-3xl font-bold">Your Elected Seats</h1>
-          {displayAddress && (
-            <div className="flex items-center gap-1.5 text-muted-foreground mt-1">
-              <MapPin className="h-4 w-4 shrink-0" />
-              <span className="text-sm">{displayAddress}</span>
-            </div>
-          )}
           {lookupData && (
             <p className="text-sm text-muted-foreground mt-0.5">
               Showing seats for <strong>{lookupData.stateName}</strong>
@@ -336,28 +336,6 @@ export default function ElectionPositionsPage() {
             </p>
           )}
         </div>
-
-        {/* District-awareness banner */}
-        {lookupData && !lookupData.districtKnown && !isLoading && (
-          <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-5">
-            <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <p className="font-medium text-blue-800 dark:text-blue-300">Showing all {lookupData.stateName} districts</p>
-              <p className="text-blue-700 dark:text-blue-400 mt-0.5">
-                Enter a full street address (e.g. <em>123 Main St, Minneapolis, MN 55401</em>) to see only the races for your specific district.
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-2 h-7 text-xs border-blue-300 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900"
-                onClick={() => navigate("/elections")}
-              >
-                <Navigation2 className="h-3 w-3 mr-1" />
-                Refine my address
-              </Button>
-            </div>
-          </div>
-        )}
 
         {isLoading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -377,7 +355,7 @@ export default function ElectionPositionsPage() {
         )}
 
         {lookupData?.stateCode === "MN" && Number.isFinite(latitude) && Number.isFinite(longitude) && (
-          <MinnesotaElectionMap latitude={latitude} longitude={longitude} lookup={lookupData} />
+          <MinnesotaElectionMap latitude={latitude} longitude={longitude} lookup={lookupData} address={displayAddress} />
         )}
 
         {error && (
