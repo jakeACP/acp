@@ -7,6 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ChevronRight, MapPin, AlertCircle, User, DollarSign, Info, Navigation2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation as useWouterLocation } from "wouter";
+import { useRef } from "react";
+import "leaflet/dist/leaflet.css";
 
 interface Politician {
   id: string;
@@ -42,6 +44,66 @@ interface LookupResponse {
   sldsDistrict: string | null;
   districtKnown: boolean;
   seats: Seat[];
+}
+
+function MinnesotaElectionMap({
+  latitude,
+  longitude,
+  lookup,
+}: {
+  latitude: number;
+  longitude: number;
+  lookup: LookupResponse;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    let map: any;
+    import("leaflet").then(({ default: L }) => {
+      if (!containerRef.current) return;
+      map = L.map(containerRef.current, { zoomControl: true }).setView([latitude, longitude], 14);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map);
+      L.circleMarker([latitude, longitude], {
+        radius: 9, color: "#1d4ed8", weight: 3, fillColor: "#3b82f6", fillOpacity: 0.9,
+      }).addTo(map).bindPopup("Verified address").openPopup();
+    });
+    return () => { if (map) map.remove(); };
+  }, [latitude, longitude]);
+
+  const districts = [
+    ["U.S. Congressional District", lookup.cdDistrict],
+    ["Minnesota Senate District", lookup.slduDistrict],
+    ["Minnesota House District", lookup.sldsDistrict],
+  ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+
+  return (
+    <Card className="mb-6 overflow-hidden">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div ref={containerRef} className="h-[420px] min-h-[320px] w-full bg-muted" aria-label="Map centered on your verified address" />
+        <aside className="border-t p-5 lg:border-l lg:border-t-0">
+          <div className="mb-4 flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Your Minnesota districts</h2>
+          </div>
+          <div className="space-y-3">
+            {districts.length ? districts.map(([label, value]) => (
+              <div key={label} className="rounded-md border p-3">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="font-semibold">District {value}</p>
+              </div>
+            )) : <p className="text-sm text-muted-foreground">District details could not be confirmed for this address.</p>}
+          </div>
+          <div className="mt-5 border-t pt-4 text-xs text-muted-foreground">
+            <p>This pinpoint uses your verified address. Official Minnesota precinct boundary overlays are being added separately.</p>
+            <a className="mt-2 inline-block text-primary hover:underline" href="https://pollfinder.sos.mn.gov/" target="_blank" rel="noreferrer">Verify with Minnesota Polling Place Finder</a>
+          </div>
+        </aside>
+      </div>
+    </Card>
+  );
 }
 
 type SectionKey = "presidential" | "usCongress" | "governor" | "stateCongress" | "local";
@@ -203,6 +265,10 @@ export default function ElectionPositionsPage() {
   const params = new URLSearchParams(search);
   const address = params.get("address") ?? "";
   const displayAddress = params.get("displayAddress") ?? address;
+  const state = params.get("state") ?? "";
+  const zip = params.get("zip") ?? "";
+  const latitude = Number(params.get("lat"));
+  const longitude = Number(params.get("lng"));
 
   const [lookupData, setLookupData] = useState<LookupResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -212,7 +278,8 @@ export default function ElectionPositionsPage() {
     if (!address) return;
     setIsLoading(true);
     setError(null);
-    fetch(`/api/elections/lookup?address=${encodeURIComponent(address)}`, { credentials: "include" })
+    const lookupParams = new URLSearchParams({ address, state, zip });
+    fetch(`/api/elections/lookup?${lookupParams.toString()}`, { credentials: "include" })
       .then(async res => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.message ?? "Failed to load seats");
@@ -221,7 +288,7 @@ export default function ElectionPositionsPage() {
       .then(data => setLookupData(data))
       .catch((err: any) => setError(err.message ?? "Failed to load seats"))
       .finally(() => setIsLoading(false));
-  }, [address]);
+  }, [address, state, zip]);
 
   const handleViewRace = (seat: Seat, stateName: string) => {
     const query = new URLSearchParams({
@@ -307,6 +374,10 @@ export default function ElectionPositionsPage() {
               </Card>
             ))}
           </div>
+        )}
+
+        {lookupData?.stateCode === "MN" && Number.isFinite(latitude) && Number.isFinite(longitude) && (
+          <MinnesotaElectionMap latitude={latitude} longitude={longitude} lookup={lookupData} />
         )}
 
         {error && (

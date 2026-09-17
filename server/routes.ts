@@ -6890,6 +6890,53 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   const electionAddressLimiter = new RateLimiterMemory({ points: 20, duration: 60 });
 
+  app.get("/api/elections/address-suggestions", async (req, res) => {
+    const input = String(req.query.input || "").trim();
+    if (input.length < 4 || input.length > 200) return res.json({ suggestions: [] });
+    try {
+      await electionAddressLimiter.consume(req.ip || "unknown");
+      const params = new URLSearchParams({
+        q: input,
+        limit: "8",
+        lang: "en",
+      });
+      const response = await fetch(`https://photon.komoot.io/api/?${params}`, {
+        signal: AbortSignal.timeout(8_000),
+        headers: { "User-Agent": "ACP-Democracy-Elections/1.0" },
+      });
+      const data = await response.json() as any;
+      if (!response.ok) throw new Error(`Address service returned HTTP ${response.status}`);
+      const suggestions = (data.features || [])
+        .filter((feature: any) => feature.properties?.countrycode === "US")
+        .map((feature: any) => {
+          const p = feature.properties || {};
+          const streetAddress = [p.housenumber, p.street || p.name].filter(Boolean).join(" ");
+          const description = [
+            streetAddress,
+            p.city || p.locality || p.county,
+            p.state,
+            p.postcode,
+          ].filter(Boolean).join(", ");
+          return {
+            id: `${p.osm_type || "place"}-${p.osm_id || description}`,
+            description,
+          };
+        })
+        .filter((suggestion: any, index: number, all: any[]) =>
+          suggestion.description
+          && all.findIndex((item) => item.description === suggestion.description) === index
+        )
+        .slice(0, 5);
+      res.json({
+        suggestions,
+      });
+    } catch (error: any) {
+      if (error?.msBeforeNext) return res.status(429).json({ message: "Too many address checks. Please wait a minute." });
+      console.error("Election address suggestions error:", error);
+      res.status(502).json({ message: "Address suggestions are temporarily unavailable" });
+    }
+  });
+
   // Elections — validate a nationwide street address with the U.S. Census geocoder.
   app.get("/api/elections/validate-address", async (req, res) => {
     const address = String(req.query.address || "").trim();
@@ -6941,12 +6988,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.get("/api/elections/lookup", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const address = (req.query.address as string || "").trim();
+    const verifiedState = String(req.query.state || "").trim().toLowerCase();
+    const verifiedZip = String(req.query.zip || "").trim();
     if (!address) return res.status(400).json({ message: "address is required" });
 
     try {
       // Step 1: Get state code + district info via Google Civic Divisions API
       const civicApiKey = process.env.GOOGLE_CIVIC_API_KEY;
-      let stateCode: string | null = null;
+      let stateCode: string | null = /^[a-z]{2}$/.test(verifiedState) && STATE_CODE_TO_NAME[verifiedState] ? verifiedState : null;
       let cdDistrict: string | null = null;   // congressional district number e.g. "6"
       let slduDistrict: string | null = null; // state senate district
       let sldsDistrict: string | null = null; // state house district
@@ -6991,7 +7040,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
       // Fallback 2: if input looks like a ZIP code, map via known ZIP ranges
       if (!stateCode) {
-        const zipMatch = address.match(/\b(\d{5})\b/);
+        const zipMatch = verifiedZip.match(/^(\d{5})$/) || address.match(/\b(\d{5})\b/);
         if (zipMatch) {
           const ZIP_RANGES: [number, number, string][] = [
             [1001, 2791, 'ma'], [2801, 2940, 'ri'], [3031, 3897, 'nh'],

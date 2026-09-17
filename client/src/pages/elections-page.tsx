@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { usePageMeta } from "@/hooks/use-page-meta";
 import { Navigation } from "@/components/navigation";
@@ -29,6 +29,11 @@ interface AddressMatch {
   city: string | null;
 }
 
+interface AddressSuggestion {
+  id: string;
+  description: string;
+}
+
 export default function ElectionsPage() {
   usePageMeta({
     title: "Elections",
@@ -39,6 +44,8 @@ export default function ElectionsPage() {
   const { toast } = useToast();
   const [address, setAddress] = useState("");
   const [addressMatches, setAddressMatches] = useState<AddressMatch[]>([]);
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<AddressMatch | null>(null);
   const [isValidating, setIsValidating] = useState(false);
 
@@ -46,8 +53,35 @@ export default function ElectionsPage() {
     queryKey: ["/api/public/candidates-running"],
   });
 
-  const validateAddress = async () => {
-    const enteredAddress = address.trim();
+  useEffect(() => {
+    if (selectedAddress || address.trim().length < 4) {
+      setSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSuggestionsLoading(true);
+      try {
+        const response = await fetch(`/api/elections/address-suggestions?input=${encodeURIComponent(address.trim())}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        setSuggestions(data.suggestions || []);
+      } catch (error: any) {
+        if (error.name !== "AbortError") setSuggestions([]);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [address, selectedAddress]);
+
+  const validateAddress = async (addressOverride?: string) => {
+    const enteredAddress = (addressOverride ?? address).trim();
     if (enteredAddress.length < 8) {
       toast({ title: "Enter a complete street address", description: "Include the street, city, and state.", variant: "destructive" });
       return;
@@ -134,16 +168,38 @@ export default function ElectionsPage() {
                   setAddress(e.target.value);
                   setSelectedAddress(null);
                   setAddressMatches([]);
+                  setSuggestions([]);
                 }}
                 placeholder="Enter Address"
                 autoComplete="street-address"
                 aria-label="Enter your full address"
                 className="w-full pl-9 pr-4 h-12 text-base rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0 transition-colors"
               />
+              {suggestionsLoading && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
             </div>
 
+            {suggestions.length > 0 && !selectedAddress && (
+              <div className="rounded-md border bg-card p-1 text-left shadow-md" role="listbox" aria-label="Address suggestions">
+                {suggestions.map((suggestion) => (
+                  <button
+                    type="button"
+                    key={suggestion.id}
+                    onClick={() => {
+                      setAddress(suggestion.description);
+                      setSuggestions([]);
+                      validateAddress(suggestion.description);
+                    }}
+                    className="flex w-full items-start gap-2 rounded px-3 py-2.5 text-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span>{suggestion.description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {!selectedAddress && (
-              <Button type="button" variant="outline" size="lg" className="w-full h-12" onClick={validateAddress} disabled={isValidating || address.trim().length < 8}>
+              <Button type="button" variant="outline" size="lg" className="w-full h-12" onClick={() => validateAddress()} disabled={isValidating || address.trim().length < 8}>
                 {isValidating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                 {isValidating ? "Checking Address…" : "Verify Address"}
               </Button>
