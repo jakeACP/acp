@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Navigation } from "@/components/navigation";
@@ -48,8 +48,6 @@ type ZipResult = {
   politicians: RepEntry[];
 };
 
-const GRADE_ORDER: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, F: 5 };
-
 function gradeColors(grade?: string) {
   switch (grade) {
     case "A": return { bg: "bg-green-600", text: "text-white", border: "border-green-700", light: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" };
@@ -60,6 +58,10 @@ function gradeColors(grade?: string) {
     case "?": return { bg: "bg-slate-500", text: "text-white", border: "border-slate-600", light: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
     default: return { bg: "bg-slate-400", text: "text-white", border: "border-slate-500", light: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
   }
+}
+
+function displayGrade(grade?: string | null) {
+  return grade && ["A", "B", "C", "D", "F"].includes(grade) ? grade : "NG";
 }
 
 function partyShort(party?: string): string {
@@ -76,19 +78,6 @@ function partyBadgeClass(party?: string): string {
   if (p.includes("republican")) return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300";
   if (p.includes("democrat")) return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
   return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
-}
-
-function matchesSearch(rep: RepEntry, q: string): boolean {
-  if (!q) return true;
-  const lower = q.toLowerCase();
-  if (rep.fullName.toLowerCase().includes(lower)) return true;
-  if (rep.party?.toLowerCase().includes(lower)) return true;
-  if (rep.position?.title?.toLowerCase().includes(lower)) return true;
-  if (rep.position?.jurisdiction?.toLowerCase().includes(lower)) return true;
-  if (rep.position?.district?.toLowerCase().includes(lower)) return true;
-  if (rep.sigAcronyms.some(s => s.toLowerCase().includes(lower))) return true;
-  if (rep.profileType?.toLowerCase().includes(lower)) return true;
-  return false;
 }
 
 function grandTotal(rep: RepEntry): number | null {
@@ -115,11 +104,9 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
                 <span className="text-lg font-bold text-slate-500">{initials}</span>
               </div>
             )}
-            {pol.corruptionGrade && (
-              <span className={`absolute -bottom-1 -right-1 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-800 ${g.bg} ${g.text}`}>
-                {pol.corruptionGrade}
-              </span>
-            )}
+            <span title={pol.corruptionGrade ? `ACP grade ${displayGrade(pol.corruptionGrade)}` : "Not Graded"} className={`absolute -bottom-1 -right-1 text-[9px] font-bold min-w-6 h-6 px-0.5 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-800 ${g.bg} ${g.text}`}>
+              {displayGrade(pol.corruptionGrade)}
+            </span>
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{pol.fullName}</h3>
@@ -180,7 +167,7 @@ function ZipRepCard({ pol }: { pol: RepEntry }) {
 
 type SortCol = "name" | "party" | "position" | "state" | "sigs" | "total" | "grade";
 
-const GRADE_FILTERS = ["All", "A", "B", "C", "D", "F"] as const;
+const GRADE_FILTERS = ["All", "A", "B", "C", "D", "F", "NG"] as const;
 type GradeFilter = typeof GRADE_FILTERS[number];
 
 export default function RepresentativesPage() {
@@ -191,7 +178,8 @@ export default function RepresentativesPage() {
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("All");
   const [sortCol, setSortCol] = useState<SortCol>("grade");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [displayLimit, setDisplayLimit] = useState(150);
+  const [page, setPage] = useState(0);
+  const pageSize = 150;
 
   const { data: zipData, isFetching: zipFetching, error: zipError } = useQuery<ZipResult>({
     queryKey: ["/api/representatives/by-zip", activeZip],
@@ -207,10 +195,26 @@ export default function RepresentativesPage() {
     retry: false,
   });
 
-  const { data: allReps = [], isLoading: repsLoading } = useQuery<RepEntry[]>({
-    queryKey: ["/api/reps/list"],
+  const params = new URLSearchParams({
+    search: searchQuery,
+    grade: gradeFilter === "All" ? "" : gradeFilter,
+    sort: sortCol,
+    direction: sortDir,
+    limit: String(pageSize),
+    offset: String(page * pageSize),
+  });
+  const { data: repsData, isLoading: repsLoading } = useQuery<{ politicians: RepEntry[]; total: number; gradeCounts: Record<string, number> }>({
+    queryKey: ["/api/reps/list", searchQuery, gradeFilter, sortCol, sortDir, page],
+    queryFn: async () => {
+      const res = await fetch(`/api/reps/list?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load representatives");
+      return res.json();
+    },
     staleTime: 5 * 60 * 1000,
   });
+  const allReps = repsData?.politicians ?? [];
+  const totalReps = repsData?.total ?? 0;
+  const gradeCount = repsData?.gradeCounts ?? { A: 0, B: 0, C: 0, D: 0, F: 0, NG: 0 };
 
   const handleZipSearch = () => {
     const zip = zipInput.trim().slice(0, 5);
@@ -226,47 +230,8 @@ export default function RepresentativesPage() {
   function toggleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortCol(col); setSortDir("asc"); }
-    setDisplayLimit(150);
+    setPage(0);
   }
-
-  const filteredReps = useMemo(() => {
-    const filtered = allReps.filter(rep => {
-      if (gradeFilter !== "All" && rep.corruptionGrade !== gradeFilter) return false;
-      if (searchQuery && !matchesSearch(rep, searchQuery)) return false;
-      return true;
-    });
-
-    return filtered.sort((a, b) => {
-      const dir = sortDir === "asc" ? 1 : -1;
-      switch (sortCol) {
-        case "name":     return dir * a.fullName.localeCompare(b.fullName);
-        case "party":    return dir * (partyShort(a.party).localeCompare(partyShort(b.party)));
-        case "position": return dir * ((a.position?.title ?? "").localeCompare(b.position?.title ?? ""));
-        case "state":    return dir * ((a.position?.jurisdiction ?? "").localeCompare(b.position?.jurisdiction ?? ""));
-        case "sigs":     return dir * (a.sigAcronyms.length - b.sigAcronyms.length);
-        case "total": {
-          const ta = grandTotal(a) ?? 0;
-          const tb = grandTotal(b) ?? 0;
-          return dir * (ta - tb);
-        }
-        case "grade": {
-          const ga = GRADE_ORDER[a.corruptionGrade ?? ""] ?? 6;
-          const gb = GRADE_ORDER[b.corruptionGrade ?? ""] ?? 6;
-          if (ga !== gb) return dir * (ga - gb);
-          return (grandTotal(a) ?? 0) - (grandTotal(b) ?? 0);
-        }
-        default: return 0;
-      }
-    });
-  }, [allReps, searchQuery, gradeFilter, sortCol, sortDir]);
-
-  const gradeCount = useMemo(() => {
-    const counts: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, F: 0 };
-    for (const r of allReps) {
-      if (r.corruptionGrade && counts[r.corruptionGrade] !== undefined) counts[r.corruptionGrade]++;
-    }
-    return counts;
-  }, [allReps]);
 
   function SortIcon({ col }: { col: SortCol }) {
     if (sortCol !== col) return <ChevronUp className="w-3 h-3 text-slate-300 dark:text-slate-600" />;
@@ -371,7 +336,7 @@ export default function RepresentativesPage() {
             <Input
               placeholder="Search name, state, SIG, position…"
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => { setSearchQuery(e.target.value); setPage(0); }}
               className="pl-8 text-sm h-8"
             />
             {searchQuery && (
@@ -385,11 +350,11 @@ export default function RepresentativesPage() {
             {GRADE_FILTERS.map(g => {
               const colors = gradeColors(g === "All" ? undefined : g);
               const isActive = gradeFilter === g;
-              const count = g === "All" ? allReps.length : gradeCount[g];
+              const count = g === "All" ? Object.values(gradeCount).reduce((sum, value) => sum + value, 0) : gradeCount[g];
               return (
                 <button
                   key={g}
-                  onClick={() => { setGradeFilter(g); setDisplayLimit(150); }}
+                  onClick={() => { setGradeFilter(g); setPage(0); }}
                   className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all ${
                     isActive
                       ? g === "All" ? "bg-slate-700 text-white border-slate-700" : `${colors.bg} ${colors.text} ${colors.border}`
@@ -404,7 +369,7 @@ export default function RepresentativesPage() {
 
           {!repsLoading && (
             <span className="text-xs text-slate-400 ml-auto shrink-0">
-              {filteredReps.length} representatives
+              {totalReps} representatives and candidates
             </span>
           )}
         </div>
@@ -415,7 +380,7 @@ export default function RepresentativesPage() {
             <div className="flex items-center justify-center py-16 text-slate-400">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />Loading representatives…
             </div>
-          ) : filteredReps.length === 0 ? (
+          ) : allReps.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
               <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="text-sm">No representatives match your search.</p>
@@ -438,7 +403,7 @@ export default function RepresentativesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredReps.slice(0, displayLimit).map((rep, idx) => {
+                  {allReps.map((rep, idx) => {
                     const g = gradeColors(rep.corruptionGrade);
                     const initials = rep.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
                     const total = grandTotal(rep);
@@ -449,7 +414,7 @@ export default function RepresentativesPage() {
                       <tr key={rep.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
 
                         {/* Row number */}
-                        <td className="px-3 py-2 text-xs text-slate-400 tabular-nums">{idx + 1}</td>
+                          <td className="px-3 py-2 text-xs text-slate-400 tabular-nums">{page * pageSize + idx + 1}</td>
 
                         {/* Photo */}
                         <td className="px-3 py-2">
@@ -509,7 +474,7 @@ export default function RepresentativesPage() {
                         {/* State / Jurisdiction */}
                         <td className="px-3 py-2">
                           <span className="text-xs text-slate-600 dark:text-slate-400">
-                            {rep.position?.jurisdiction || "—"}
+                            {rep.position?.jurisdiction || rep.targetPosition?.jurisdiction || "—"}
                           </span>
                           {rep.position?.district && (
                             <div className="text-[10px] text-slate-400 mt-0.5">{rep.position.district}</div>
@@ -567,13 +532,9 @@ export default function RepresentativesPage() {
 
                         {/* Grade */}
                         <td className="px-3 py-2">
-                          {rep.corruptionGrade ? (
-                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold border ${g.bg} ${g.text} ${g.border}`}>
-                              {rep.corruptionGrade}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
-                          )}
+                          <span title={rep.corruptionGrade ? `ACP grade ${rep.corruptionGrade}` : "Not Graded"} className={`inline-flex items-center justify-center min-w-8 h-8 px-1 rounded-full text-xs font-bold border ${g.bg} ${g.text} ${g.border}`}>
+                            {displayGrade(rep.corruptionGrade)}
+                          </span>
                         </td>
 
                         {/* Profile link */}
@@ -593,12 +554,13 @@ export default function RepresentativesPage() {
           )}
 
           {/* Load more footer */}
-          {filteredReps.length > displayLimit && (
+          {totalReps > pageSize && (
             <div className="flex flex-col items-center gap-1 py-4 border-t border-slate-100 dark:border-slate-800">
-              <Button variant="outline" size="sm" onClick={() => setDisplayLimit(l => l + 150)}>
-                Load More ({filteredReps.length - displayLimit} remaining)
-              </Button>
-              <span className="text-xs text-slate-400">Showing {Math.min(displayLimit, filteredReps.length)} of {filteredReps.length}</span>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={(page + 1) * pageSize >= totalReps} onClick={() => setPage(p => p + 1)}>Next</Button>
+              </div>
+              <span className="text-xs text-slate-400">Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, totalReps)} of {totalReps}</span>
             </div>
           )}
         </Card>

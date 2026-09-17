@@ -9,3 +9,4 @@
 - [Vite manualChunks white page](vite-manualchunks-white-page.md) — never split vendor code into multiple chunks; SSR routes must gate on isBot(req) or browsers get static HTML
 - [Minnesota election boundaries](minnesota-election-boundaries.md) — district selection is office-specific; boundary coverage does not certify campaign coverage; district numbers repeat across states
 - [Leaflet preferCanvas event pitfalls](leaflet-canvas-events.md) — a vector layer in another pane spawns a 2nd canvas that eats all events; map.on("click") never fires over a canvas renderer
+- [Candidate directory eligibility](candidate-directory-eligibility.md) — isCurrent means incumbency, not search eligibility; valid candidate profiles need a state-aware seat link

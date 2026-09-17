@@ -224,6 +224,18 @@ async function setupRoutes() {
       log(`Account email migration skipped: ${e.message}`);
     }
 
+    try {
+      const { runCandidateProfileMigration } = await import("./candidate-profile-migration");
+      const report = await runCandidateProfileMigration();
+      if (report) {
+        log(`Candidate profile migration: ${report.searchableGain} profiles newly covered by directory eligibility, ${report.districtLinksRepaired} district links repaired, ${report.skippedIncomplete} incomplete and ${report.skippedAmbiguous} ambiguous rows skipped`);
+      } else {
+        log("Candidate profile migration already applied");
+      }
+    } catch (e: any) {
+      log(`Candidate profile migration failed: ${e.message}`);
+    }
+
     // Mark server ready — the 503 startup guard will now pass all requests through
     serverReady = true;
     log("Server fully ready");

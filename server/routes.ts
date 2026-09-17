@@ -3365,11 +3365,22 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Public endpoint: list all current politicians with SIG data, sorted by grade (A first)
+  // Public endpoint: searchable directory of current representatives and active candidate profiles.
   app.get("/api/reps/list", async (req, res) => {
     try {
-      const politicians = await storage.listPoliticiansWithSigs();
-      res.json(politicians);
+      const limit = Math.min(Math.max(Number(req.query.limit) || 150, 1), 250);
+      const offset = Math.max(Number(req.query.offset) || 0, 0);
+      const sort = String(req.query.sort || "grade") as any;
+      const direction = req.query.direction === "desc" ? "desc" : "asc";
+      const result = await storage.listPoliticiansWithSigs({
+        search: String(req.query.search || ""),
+        grade: String(req.query.grade || ""),
+        sort,
+        direction,
+        limit,
+        offset,
+      });
+      res.json(result);
     } catch (error: any) {
       console.error("Reps list error:", error);
       res.status(500).json({ message: error.message || "Failed to load representatives" });

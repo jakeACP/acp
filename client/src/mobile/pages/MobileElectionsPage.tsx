@@ -48,11 +48,9 @@ function PoliticianRow({ p }: { p: Politician }) {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {p.corruptionGrade && (
-            <span className={`text-sm font-bold ${gradeColor(p.corruptionGrade)}`}>
-              {p.corruptionGrade}
-            </span>
-          )}
+          <span title={p.corruptionGrade ? `ACP grade ${p.corruptionGrade}` : "Not Graded"} className={`text-sm font-bold ${gradeColor(p.corruptionGrade)}`}>
+            {p.corruptionGrade || "NG"}
+          </span>
           <ChevronRight className="w-4 h-4 text-white/30" />
         </div>
       </div>

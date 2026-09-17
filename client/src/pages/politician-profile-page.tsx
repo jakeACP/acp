@@ -516,23 +516,18 @@ export default function PoliticianProfilePage() {
                 {/* Admin Grade */}
                 <div className="text-center">
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Admin</p>
-                  {profile.corruptionGrade ? (
-                    <>
+                  <>
                     <div 
-                      className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl font-bold ${getCorruptionGradeColor(profile.corruptionGrade)}`}
+                      className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center font-bold ${profile.corruptionGrade ? `text-2xl ${getCorruptionGradeColor(profile.corruptionGrade)}` : "text-sm bg-gray-200 dark:bg-gray-700 text-gray-500"}`}
                       data-testid="badge-admin-grade"
+                      title={profile.corruptionGrade ? `ACP grade ${profile.corruptionGrade}` : "Not Graded"}
                     >
-                      {profile.corruptionGrade}
+                      {profile.corruptionGrade || "NG"}
                     </div>
                     {(profile as any).numericScore != null && (
                       <p className="text-xs text-gray-500 mt-1">{Math.round((profile as any).numericScore)}/100</p>
                     )}
-                    </>
-                  ) : (
-                    <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-400">
-                      N/A
-                    </div>
-                  )}
+                  </>
                 </div>
 
                 {/* Community Grade */}

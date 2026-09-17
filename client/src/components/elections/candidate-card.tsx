@@ -95,17 +95,15 @@ export function CandidateCard({ politician }: CandidateCardProps) {
               )}
             </div>
           </div>
-          {politician.corruptionGrade && (
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${gradeColor}`}>
-              {politician.corruptionGrade}
-            </div>
-          )}
+          <div title={politician.corruptionGrade ? `ACP grade ${politician.corruptionGrade}` : "Not Graded"} className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${gradeColor}`}>
+            {politician.corruptionGrade && ["A", "B", "C", "D", "F"].includes(politician.corruptionGrade) ? politician.corruptionGrade : "NG"}
+          </div>
         </div>
 
         <div className="flex items-center justify-between text-xs text-muted-foreground mb-2 gap-2">
           <div className="flex items-center gap-1">
             <span className="font-medium">ACP Grade:</span>
-            <span>{politician.corruptionGrade ?? "—"}</span>
+            <span>{politician.corruptionGrade && ["A", "B", "C", "D", "F"].includes(politician.corruptionGrade) ? politician.corruptionGrade : "NG"}</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="font-medium">Contributions:</span>

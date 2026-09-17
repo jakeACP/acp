@@ -64,7 +64,7 @@ export function MobilePoliticianDetailPage() {
     );
   }
 
-  const grade = politician.corruptionGrade;
+  const grade = politician.corruptionGrade || "NG";
   const gColor = gradeColor(grade);
   const demerits: any[] = politician.demerits || [];
   const sigs: any[] = politician.sigs || politician.specialInterestGroups || [];
@@ -103,18 +103,15 @@ export function MobilePoliticianDetailPage() {
                   <p className="text-white/40 text-xs">{politician.state}</p>
                 )}
               </div>
-              {grade && (
-                <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center" title={politician.corruptionGrade ? `ACP grade ${grade}` : "Not Graded"}>
                   <div className="w-14 h-14 rounded-full flex items-center justify-center border-2"
                     style={{ borderColor: gColor, background: `${gColor}20` }}>
                     <span className="text-xl font-black" style={{ color: gColor }}>{grade}</span>
                   </div>
                   <span className="text-white/40 text-[10px] mt-1">ACP Grade</span>
                 </div>
-              )}
+              </div>
             </div>
-          </div>
-
           {/* Funding breakdown */}
           {sigs.length > 0 && (
             <div className="glass-card p-4">

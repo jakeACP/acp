@@ -9,6 +9,7 @@ import { alias } from "drizzle-orm/pg-core";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
+import { candidateSeatKey, expectedFederalSeatKey, uniqueCandidateSeatMatch } from "./lib/candidate-seat-identity";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -205,7 +206,14 @@ export interface IStorage {
   
   // Politician Profiles Management
   listPoliticianProfiles(filters?: { positionId?: string; isCurrent?: boolean }): Promise<any[]>;
-  listPoliticiansWithSigs(): Promise<any[]>;
+  listPoliticiansWithSigs(options?: {
+    search?: string;
+    grade?: string;
+    sort?: "name" | "party" | "position" | "state" | "sigs" | "total" | "grade";
+    direction?: "asc" | "desc";
+    limit?: number;
+    offset?: number;
+  }): Promise<{ politicians: any[]; total: number; gradeCounts: Record<string, number> }>;
   getPoliticiansByPositionTitles(titles: string[]): Promise<any[]>;
   getPoliticiansByStateAndDistrict(stateName: string, congressionalDistricts: number[]): Promise<any[]>;
   getPoliticianProfile(id: string): Promise<any>;
@@ -244,7 +252,8 @@ export interface IStorage {
   
   importCongress(): Promise<{ profiles_created: number; profiles_updated: number; positions_created: number; sigs_created: number; sponsorships_created: number; endorsements_created: number }>;
   linkPartyEndorsements(): Promise<{ linked: number; skipped: number }>;
-  importCandidates(candidates: Array<{ fullName: string; office: string; officeLevel: string; district: string; state: string; party: string; isIncumbent: string; status: string; primaryDate: string; generalDate: string; ballotpediaUrl: string; fecCandidateId: string; website: string; email: string; phone: string; biography: string; photoUrl: string; notes: string; profileType?: string }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number }>;
+  importCandidates(candidates: Array<{ fullName: string; office: string; officeLevel: string; district: string; state: string; party: string; isIncumbent: string; status: string; primaryDate: string; generalDate: string; ballotpediaUrl: string; fecCandidateId: string; website: string; email: string; phone: string; biography: string; photoUrl: string; notes: string; profileType?: string }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number; searchable_gain: number; incomplete_rows: number; ambiguous_rows: number }>;
+  reconcileImportedCandidateProfiles(): Promise<{ searchableGain: number; districtLinksRepaired: number; skippedIncomplete: number; skippedAmbiguous: number }>;
   importProfilesCsv(profiles: Array<{ fullName: string; party: string; email: string; phone: string; website: string; biography: string; termStart: string; termEnd: string; isCurrent: string; officeAddress: string }>): Promise<{ created: number; updated: number }>;
   importPositionsCsv(positions: Array<{ title: string; officeType: string; level: string; jurisdiction: string; district: string; termLength: string; isElected: string; isActive: string }>): Promise<{ created: number; updated: number }>;
 
@@ -3964,7 +3973,99 @@ export class DatabaseStorage implements IStorage {
     return results.map(r => ({ ...r.politician, position: r.position, targetPosition: r.targetPosition }));
   }
 
-  async listPoliticiansWithSigs(): Promise<any[]> {
+  async listPoliticiansWithSigs(options: {
+    search?: string;
+    grade?: string;
+    sort?: "name" | "party" | "position" | "state" | "sigs" | "total" | "grade";
+    direction?: "asc" | "desc";
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{ politicians: any[]; total: number; gradeCounts: Record<string, number> }> {
+    const limit = Math.min(Math.max(options.limit ?? 150, 1), 250);
+    const offset = Math.max(options.offset ?? 0, 0);
+    const direction = options.direction === "desc" ? "DESC" : "ASC";
+    const search = options.search?.trim() || null;
+    const grade = options.grade && ["A", "B", "C", "D", "F", "NG"].includes(options.grade)
+      ? options.grade
+      : null;
+    const orderColumns: Record<string, string> = {
+      name: "pol.full_name",
+      party: "COALESCE(pol.party, '')",
+      position: "COALESCE(pos.title, target.title, '')",
+      state: "COALESCE(pos.jurisdiction, target.jurisdiction, '')",
+      sigs: "sig_stats.sig_count",
+      total: "GREATEST(COALESCE(pol.total_contributions, 0), COALESCE(sig_stats.sig_total / 100, 0))",
+      grade: "CASE pol.corruption_grade WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END",
+    };
+    const orderColumn = orderColumns[options.sort || "grade"] || orderColumns.grade;
+
+    const baseFilter = sql`
+      (pol.is_current = true OR pol.profile_type IN ('candidate', 'representative'))
+      AND (pol.position_id IS NOT NULL OR pol.target_position_id IS NOT NULL)
+      AND (${search}::text IS NULL OR
+        pol.full_name ILIKE '%' || ${search} || '%' OR
+        pol.party ILIKE '%' || ${search} || '%' OR
+        pol.profile_type ILIKE '%' || ${search} || '%' OR
+        pos.title ILIKE '%' || ${search} || '%' OR
+        pos.jurisdiction ILIKE '%' || ${search} || '%' OR
+        pos.district ILIKE '%' || ${search} || '%' OR
+        target.title ILIKE '%' || ${search} || '%' OR
+        target.jurisdiction ILIKE '%' || ${search} || '%' OR
+        EXISTS (
+          SELECT 1 FROM politician_sig_sponsorships pss
+          JOIN special_interest_groups sig ON sig.id = pss.sig_id
+          WHERE pss.politician_id = pol.id AND sig.acronym ILIKE '%' || ${search} || '%'
+        )
+      )
+    `;
+
+    const [pageResult, countResult, gradeResult] = await Promise.all([
+      db.execute(sql`
+        SELECT pol.id
+        FROM politician_profiles pol
+        LEFT JOIN political_positions pos ON pos.id = pol.position_id
+        LEFT JOIN political_positions target ON target.id = pol.target_position_id
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*)::int AS sig_count, COALESCE(SUM(pss.reported_amount), 0) AS sig_total
+          FROM politician_sig_sponsorships pss
+          WHERE pss.politician_id = pol.id
+        ) sig_stats ON true
+        WHERE ${baseFilter}
+          AND (${grade}::text IS NULL OR
+            (${grade} = 'NG' AND (pol.corruption_grade IS NULL OR pol.corruption_grade NOT IN ('A','B','C','D','F')))
+            OR pol.corruption_grade = ${grade})
+        ORDER BY ${sql.raw(orderColumn)} ${sql.raw(direction)}, pol.full_name ASC
+        LIMIT ${limit} OFFSET ${offset}
+      `),
+      db.execute(sql`
+        SELECT COUNT(*)::int AS total
+        FROM politician_profiles pol
+        LEFT JOIN political_positions pos ON pos.id = pol.position_id
+        LEFT JOIN political_positions target ON target.id = pol.target_position_id
+        WHERE ${baseFilter}
+          AND (${grade}::text IS NULL OR
+            (${grade} = 'NG' AND (pol.corruption_grade IS NULL OR pol.corruption_grade NOT IN ('A','B','C','D','F')))
+            OR pol.corruption_grade = ${grade})
+      `),
+      db.execute(sql`
+        SELECT CASE WHEN pol.corruption_grade IN ('A','B','C','D','F') THEN pol.corruption_grade ELSE 'NG' END AS grade,
+               COUNT(*)::int AS count
+        FROM politician_profiles pol
+        LEFT JOIN political_positions pos ON pos.id = pol.position_id
+        LEFT JOIN political_positions target ON target.id = pol.target_position_id
+        WHERE ${baseFilter}
+        GROUP BY CASE WHEN pol.corruption_grade IN ('A','B','C','D','F') THEN pol.corruption_grade ELSE 'NG' END
+      `),
+    ]);
+
+    const ids = (pageResult.rows as any[]).map(row => row.id as string);
+    const total = Number((countResult.rows[0] as any)?.total || 0);
+    const gradeCounts: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, F: 0, NG: 0 };
+    for (const row of gradeResult.rows as any[]) {
+      if (row.grade in gradeCounts) gradeCounts[row.grade] = Number(row.count);
+    }
+    if (ids.length === 0) return { politicians: [], total, gradeCounts };
+
     const targetPositions = alias(politicalPositions, "target_positions");
     const results = await db
       .select({
@@ -3975,17 +4076,15 @@ export class DatabaseStorage implements IStorage {
       .from(politicianProfiles)
       .leftJoin(politicalPositions, eq(politicianProfiles.positionId, politicalPositions.id))
       .leftJoin(targetPositions, eq(politicianProfiles.targetPositionId, targetPositions.id))
-      .where(eq(politicianProfiles.isCurrent, true))
-      .orderBy(
-        sql`CASE ${politicianProfiles.corruptionGrade} WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END`,
-        politicianProfiles.fullName
-      )
-      .limit(2000);
+      .where(inArray(politicianProfiles.id, ids));
 
-    const politicians = results.map(r => ({ ...r.politician, position: r.position, targetPosition: r.targetPosition }));
-    if (politicians.length === 0) return [];
+    const resultById = new Map(results.map(r => [
+      r.politician.id,
+      { ...r.politician, position: r.position, targetPosition: r.targetPosition },
+    ]));
+    const politicians = ids.map(id => resultById.get(id)).filter(Boolean) as any[];
 
-    const ids = politicians.map(p => p.id);
+    const politicianIds = politicians.map(p => p.id);
     const sponsorships = await db
       .select({
         politicianId: politicianSigSponsorships.politicianId,
@@ -3995,7 +4094,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(politicianSigSponsorships)
       .innerJoin(specialInterestGroups, eq(politicianSigSponsorships.sigId, specialInterestGroups.id))
-      .where(inArray(politicianSigSponsorships.politicianId, ids));
+      .where(inArray(politicianSigSponsorships.politicianId, politicianIds));
 
     const sigMap = new Map<string, typeof sponsorships>();
     for (const s of sponsorships) {
@@ -4006,7 +4105,7 @@ export class DatabaseStorage implements IStorage {
     const allDemerits = await db
       .select({ politicianId: politicianDemerits.politicianId, label: politicianDemerits.label, type: politicianDemerits.type })
       .from(politicianDemerits)
-      .where(inArray(politicianDemerits.politicianId, ids));
+      .where(inArray(politicianDemerits.politicianId, politicianIds));
 
     const demeritMap = new Map<string, Array<{ label: string; type: string }>>();
     for (const d of allDemerits) {
@@ -4014,7 +4113,7 @@ export class DatabaseStorage implements IStorage {
       demeritMap.get(d.politicianId)!.push({ label: d.label, type: d.type });
     }
 
-    return politicians.map(p => {
+    const enriched = politicians.map(p => {
       const sigs = sigMap.get(p.id) || [];
       const totalLobbyAmount = sigs.reduce((sum, s) => sum + (s.reportedAmount ?? 0), 0);
       const sigAcronyms = sigs
@@ -4024,6 +4123,7 @@ export class DatabaseStorage implements IStorage {
       const demerits = demeritMap.get(p.id) || [];
       return { ...p, totalLobbyAmount, sigAcronyms, rejectsAIPAC, demerits };
     });
+    return { politicians: enriched, total, gradeCounts };
   }
 
   async getPoliticiansByPositionTitles(titles: string[]): Promise<any[]> {
@@ -5581,12 +5681,15 @@ export class DatabaseStorage implements IStorage {
     generalDate: string; ballotpediaUrl: string; fecCandidateId: string;
     website: string; email: string; phone: string; biography: string; photoUrl: string;
     notes: string; profileType?: string;
-  }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number }> {
+  }>): Promise<{ created: number; updated: number; positions_created: number; photos_fetched: number; handles_generated: number; searchable_gain: number; incomplete_rows: number; ambiguous_rows: number }> {
     let created = 0;
     let updated = 0;
     let positions_created = 0;
     let photos_fetched = 0;
     let handles_generated = 0;
+    let searchable_gain = 0;
+    let incomplete_rows = 0;
+    let ambiguous_rows = 0;
 
     const STATE_NAME_TO_ABBR: Record<string, string> = {
       "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
@@ -5603,6 +5706,19 @@ export class DatabaseStorage implements IStorage {
     };
 
     const US_STATE_ABBRS = new Set(Object.values(STATE_NAME_TO_ABBR));
+    const normalizeStateIdentity = (value: string): string => {
+      const trimmed = (value || "").trim();
+      const upper = trimmed.toUpperCase();
+      if (US_STATE_ABBRS.has(upper)) return upper;
+      const exact = Object.entries(STATE_NAME_TO_ABBR).find(([name]) => name.toLowerCase() === trimmed.toLowerCase());
+      return exact?.[1] || upper;
+    };
+    const normalizeDistrictIdentity = (value: string): string => {
+      const upper = (value || "").trim().toUpperCase();
+      if (!upper || ["STATEWIDE", "AT LARGE", "AT-LARGE"].includes(upper)) return "STATEWIDE";
+      const match = upper.match(/(?:DISTRICT|CD|HD|SD)?\s*0*(\d+[A-Z]?)/);
+      return match?.[1] || upper.replace(/\s+/g, " ");
+    };
 
     function buildHandle(fullName: string, stateAbbr: string): string {
       let name = fullName
@@ -5676,12 +5792,24 @@ export class DatabaseStorage implements IStorage {
       const district = (row.district || "").trim();
       const state = (row.state || "").trim();
       const level = (row.officeLevel || "State").trim();
+      const stateIdentity = normalizeStateIdentity(state || district);
+      const districtIdentity = normalizeDistrictIdentity(district);
+      const importedSeatKey = candidateSeatKey({
+        office,
+        level,
+        state: state || district,
+        district,
+      });
+      if (!office || !stateIdentity || !importedSeatKey) {
+        incomplete_rows++;
+        continue;
+      }
 
       // Determine the jurisdiction: prefer the explicit STATE column, fall back to district text parsing
       const jurisdiction = state || district || "Statewide";
 
       let positionTitle: string;
-      if (district && district !== "Statewide") {
+      if (districtIdentity !== "STATEWIDE") {
         positionTitle = `${office} – ${district}`;
       } else {
         positionTitle = office;
@@ -5689,16 +5817,25 @@ export class DatabaseStorage implements IStorage {
 
       let positionId: string | null = null;
       // Cache key includes jurisdiction to prevent cross-state collisions (e.g. same district number in two states)
-      const cacheKey = `${positionTitle.toLowerCase()}|${jurisdiction.toLowerCase()}`;
+      const cacheKey = importedSeatKey;
 
       if (positionCache.has(cacheKey)) {
         positionId = positionCache.get(cacheKey)!;
       } else {
         // Match by title + jurisdiction + district (all three) to prevent duplicates across states/cycles
-        const existing = allExistingPositions.find(p =>
-          p.title.toLowerCase() === positionTitle.toLowerCase() &&
-          (p.jurisdiction || "").toLowerCase() === jurisdiction.toLowerCase()
-        );
+        const positionMatch = uniqueCandidateSeatMatch(allExistingPositions, importedSeatKey, p => candidateSeatKey({
+          office: p.title,
+          officeType: p.officeType,
+          level: p.level,
+          state: p.jurisdiction,
+          district: p.district,
+          storedTitle: p.title,
+        }));
+        if (positionMatch.ambiguous) {
+          ambiguous_rows++;
+          continue;
+        }
+        const existing = positionMatch.match || undefined;
         if (existing) {
           positionId = existing.id;
           positionCache.set(cacheKey, positionId);
@@ -5711,7 +5848,7 @@ export class DatabaseStorage implements IStorage {
             officeType,
             level: level.toLowerCase() === "federal" ? "federal" : "state",
             jurisdiction,
-            district: district !== "Statewide" ? district : undefined,
+            district: districtIdentity !== "STATEWIDE" ? district : undefined,
             isElected: true,
             isActive: true,
           }).returning();
@@ -5724,7 +5861,10 @@ export class DatabaseStorage implements IStorage {
       }
 
       const fullName = (row.fullName || "").trim();
-      if (!fullName) continue;
+      if (!fullName || !positionId) {
+        incomplete_rows++;
+        continue;
+      }
 
       const notesText = [row.status, row.notes].filter(Boolean).join(" | ") || null;
 
@@ -5736,15 +5876,37 @@ export class DatabaseStorage implements IStorage {
       })();
 
       const existingProfiles = await db.select().from(politicianProfiles)
-        .where(sql`lower(full_name) = lower(${fullName})`);
+        .where(row.fecCandidateId
+          ? or(
+              sql`lower(full_name) = lower(${fullName})`,
+              eq(politicianProfiles.fecCandidateId, row.fecCandidateId)
+            )
+          : sql`lower(full_name) = lower(${fullName})`);
 
       let profileId: string;
       let existingPhotoUrl: string | null = null;
+      let existingHandle: string | null = null;
 
-      if (existingProfiles.length > 0) {
-        const existing = existingProfiles[0];
+      const fecMatches = row.fecCandidateId
+        ? existingProfiles.filter(profile => profile.fecCandidateId === row.fecCandidateId)
+        : [];
+      const identityMatches = existingProfiles.filter(profile =>
+        profile.positionId === positionId || profile.targetPositionId === positionId
+      );
+      const existing = fecMatches.length === 1
+        ? fecMatches[0]
+        : identityMatches.length === 1
+          ? identityMatches[0]
+          : undefined;
+      if (fecMatches.length > 1 || identityMatches.length > 1) {
+        ambiguous_rows++;
+        continue;
+      }
+
+      if (existing) {
         profileId = existing.id;
         existingPhotoUrl = existing.photoUrl || null;
+        existingHandle = existing.handle || null;
 
         // Smart position assignment for incumbents running for a different seat:
         // If they already hold a position and the CSV office is different, treat CSV as targetPositionId
@@ -5801,6 +5963,7 @@ export class DatabaseStorage implements IStorage {
         profileId = inserted.id;
         created++;
       }
+      if (normalizedProfileType === "candidate" && row.isIncumbent !== "Yes") searchable_gain++;
 
       // Photo: use PHOTO_URL from sheet first, then auto-fetch from Ballotpedia/Wikipedia
       if (!existingPhotoUrl) {
@@ -5821,7 +5984,7 @@ export class DatabaseStorage implements IStorage {
 
       // Generate @handle from name + state abbreviation
       const stateAbbr = getStateAbbrFromText(state) || getStateAbbrFromText(district);
-      if (stateAbbr) {
+      if (stateAbbr && !existingHandle) {
         let handle = buildHandle(fullName, stateAbbr);
         if (handle) {
           let finalHandle = handle;
@@ -5838,7 +6001,140 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    return { created, updated, positions_created, photos_fetched, handles_generated };
+    return { created, updated, positions_created, photos_fetched, handles_generated, searchable_gain, incomplete_rows, ambiguous_rows };
+  }
+
+  async reconcileImportedCandidateProfiles(): Promise<{
+    searchableGain: number;
+    districtLinksRepaired: number;
+    skippedIncomplete: number;
+    skippedAmbiguous: number;
+  }> {
+    const [profiles, positions] = await Promise.all([
+      db.select({
+        id: politicianProfiles.id,
+        isCurrent: politicianProfiles.isCurrent,
+        positionId: politicianProfiles.positionId,
+        targetPositionId: politicianProfiles.targetPositionId,
+        fecCandidateId: politicianProfiles.fecCandidateId,
+      }).from(politicianProfiles)
+        .where(inArray(politicianProfiles.profileType, ["candidate", "representative"])),
+      db.select().from(politicalPositions),
+    ]);
+
+    const stateNames: Record<string, string> = {
+      ALABAMA: "AL", ALASKA: "AK", ARIZONA: "AZ", ARKANSAS: "AR", CALIFORNIA: "CA",
+      COLORADO: "CO", CONNECTICUT: "CT", DELAWARE: "DE", FLORIDA: "FL", GEORGIA: "GA",
+      HAWAII: "HI", IDAHO: "ID", ILLINOIS: "IL", INDIANA: "IN", IOWA: "IA", KANSAS: "KS",
+      KENTUCKY: "KY", LOUISIANA: "LA", MAINE: "ME", MARYLAND: "MD", MASSACHUSETTS: "MA",
+      MICHIGAN: "MI", MINNESOTA: "MN", MISSISSIPPI: "MS", MISSOURI: "MO", MONTANA: "MT",
+      NEBRASKA: "NE", NEVADA: "NV", "NEW HAMPSHIRE": "NH", "NEW JERSEY": "NJ",
+      "NEW MEXICO": "NM", "NEW YORK": "NY", "NORTH CAROLINA": "NC", "NORTH DAKOTA": "ND",
+      OHIO: "OH", OKLAHOMA: "OK", OREGON: "OR", PENNSYLVANIA: "PA", "RHODE ISLAND": "RI",
+      "SOUTH CAROLINA": "SC", "SOUTH DAKOTA": "SD", TENNESSEE: "TN", TEXAS: "TX", UTAH: "UT",
+      VERMONT: "VT", VIRGINIA: "VA", WASHINGTON: "WA", "WEST VIRGINIA": "WV",
+      WISCONSIN: "WI", WYOMING: "WY", "DISTRICT OF COLUMBIA": "DC", "WASHINGTON D.C.": "DC",
+      "PUERTO RICO": "PR",
+    };
+    const stateAbbrs = new Set(Object.values(stateNames));
+    const normalizeState = (value: string | null): string | null => {
+      const upper = (value || "").trim().toUpperCase();
+      if (stateAbbrs.has(upper)) return upper;
+      if (stateNames[upper]) return stateNames[upper];
+      for (const [name, abbr] of Object.entries(stateNames)) {
+        if (upper.includes(name)) return abbr;
+      }
+      const match = upper.match(/\b([A-Z]{2})\b/);
+      return match && stateAbbrs.has(match[1]) ? match[1] : null;
+    };
+    const normalizeDistrict = (value: string | null): string | null => {
+      const cleaned = (value || "").trim().toUpperCase();
+      if (!cleaned || cleaned === "STATEWIDE" || cleaned === "AT LARGE" || cleaned === "AT-LARGE") return "STATEWIDE";
+      const match = cleaned.match(/(?:DISTRICT|CD|HD|SD)?\s*0*(\d+[A-Z]?)/);
+      return match ? match[1] : null;
+    };
+    const normalizeOffice = (title: string | null, district: string | null): string | null => {
+      let value = (title || "").toUpperCase().replace(/[–—-]/g, " ").replace(/\s+/g, " ").trim();
+      if (!value) return null;
+      if (district && district !== "STATEWIDE") {
+        value = value.replace(new RegExp(`\\b(?:DISTRICT|CD|HD|SD)?\\s*0*${district}\\b`, "g"), "").trim();
+      }
+      return value || null;
+    };
+
+    const positionById = new Map(positions.map(position => [position.id, position]));
+    const identityKey = (position: typeof positions[number]): string | null => candidateSeatKey({
+      office: position.title,
+      officeType: position.officeType,
+      level: position.level,
+      state: position.jurisdiction,
+      district: position.district,
+      storedTitle: position.title,
+    });
+    const isCompletePosition = (position: typeof positions[number], key: string | null) => {
+      if (!key || !position.jurisdiction) return false;
+      const district = key.split("|").at(-1);
+      return district === "STATEWIDE" || Boolean(position.district);
+    };
+
+    const canonicalByKey = new Map<string, string[]>();
+    for (const position of positions) {
+      const key = identityKey(position);
+      if (!isCompletePosition(position, key) || !key) continue;
+      const ids = canonicalByKey.get(key) || [];
+      ids.push(position.id);
+      canonicalByKey.set(key, ids);
+    }
+
+    let districtLinksRepaired = 0;
+    let skippedIncomplete = 0;
+    let skippedAmbiguous = 0;
+    await db.transaction(async tx => {
+      for (const profile of profiles) {
+        const linkedId = profile.targetPositionId || profile.positionId;
+        if (!linkedId) {
+          skippedIncomplete++;
+          continue;
+        }
+        const linkedPosition = positionById.get(linkedId);
+        if (!linkedPosition) {
+          skippedIncomplete++;
+          continue;
+        }
+        const key = identityKey(linkedPosition);
+        if (!key) {
+          skippedIncomplete++;
+          continue;
+        }
+        const expectedKey = expectedFederalSeatKey(profile.fecCandidateId);
+        const wrongFederalSeat = expectedKey !== null && expectedKey !== key;
+        if (isCompletePosition(linkedPosition, key) && !wrongFederalSeat) continue;
+        const repairKey = wrongFederalSeat ? expectedKey : key;
+        const canonicalIds = (canonicalByKey.get(repairKey) || []).filter(id => id !== linkedId);
+        if (canonicalIds.length === 0) {
+          skippedIncomplete++;
+        continue;
+        }
+        if (canonicalIds.length > 1) {
+          skippedAmbiguous++;
+          continue;
+        }
+        const canonicalId = canonicalIds[0];
+        if (profile.targetPositionId) {
+          await tx.update(politicianProfiles).set({ targetPositionId: canonicalId, updatedAt: new Date() })
+            .where(eq(politicianProfiles.id, profile.id));
+        } else {
+          await tx.update(politicianProfiles).set({ positionId: canonicalId, updatedAt: new Date() })
+            .where(eq(politicianProfiles.id, profile.id));
+        }
+        districtLinksRepaired++;
+      }
+    });
+
+    const searchableGain = profiles.filter(profile =>
+      profile.isCurrent === false && (profile.positionId || profile.targetPositionId)
+    ).length;
+    return { searchableGain, districtLinksRepaired, skippedIncomplete, skippedAmbiguous };
   }
 
   async importProfilesCsv(profiles: Array<{

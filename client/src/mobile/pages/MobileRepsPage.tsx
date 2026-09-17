@@ -365,11 +365,9 @@ function RepCard({
               </Link>
             </div>
             <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              {rep.corruptionGrade && (
-                <span className={`text-xl font-black ${gradeColor(rep.corruptionGrade)}`}>
-                  {rep.corruptionGrade}
-                </span>
-              )}
+              <span title={rep.corruptionGrade ? `ACP grade ${rep.corruptionGrade}` : "Not Graded"} className={`text-xl font-black ${gradeColor(rep.corruptionGrade)}`}>
+                {rep.corruptionGrade || "NG"}
+              </span>
             </div>
           </div>
 
@@ -781,11 +779,9 @@ function ElectionPoliticianRow({ pol, showBadge }: { pol: ElectionPolitician; sh
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {pol.corruptionGrade && (
-            <span className={`text-base font-black ${gradeColor(pol.corruptionGrade)}`}>
-              {pol.corruptionGrade}
-            </span>
-          )}
+          <span title={pol.corruptionGrade ? `ACP grade ${pol.corruptionGrade}` : "Not Graded"} className={`text-base font-black ${gradeColor(pol.corruptionGrade)}`}>
+            {pol.corruptionGrade || "NG"}
+          </span>
           <ChevronRight className="w-4 h-4 text-white/30" />
         </div>
       </div>

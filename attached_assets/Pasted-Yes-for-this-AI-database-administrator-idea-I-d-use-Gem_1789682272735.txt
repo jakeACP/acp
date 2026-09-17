@@ -1,0 +1,96 @@
+Yes: for this “AI database administrator” idea, I’d use Gemini 2.5 Flash-Lite as the default low-cost model.
+As of today, Google lists Gemini 2.5 Flash-Lite at:
+- Standard: $0.10 / 1M input tokens, $0.40 / 1M output tokens
+- Batch/Flex: $0.05 / 1M input tokens, $0.20 / 1M output tokens
+That is extremely cheap for background database maintenance. Source: Google Gemini API pricing.
+For comparison, OpenAI GPT-5 mini is listed at about $0.25 / 1M input and $2.00 / 1M output, so it is still cheap, but more expensive than Gemini Flash-Lite for high-volume background work. Source: OpenAI developers pricing page.
+My recommendation:
+Use Gemini 2.5 Flash-Lite for the bulk jobs:
+- scraping candidate pages
+- extracting campaign info
+- finding social profile links
+- generating handles
+- classifying candidates as active / dropped out / lost
+- deduping rows
+- summarizing Super PAC pages
+- checking for stale records
+Then use a stronger model only when confidence is low or the task is sensitive, like:
+- conflicting candidate info
+- ambiguous social handles
+- campaign finance interpretation
+- legal/compliance-adjacent wording
+The key thing: don’t let the model “run loose.” Build a daily budget guard:
+Daily AI budget: $5
+Stop new jobs at: $4.50
+Reserve: $0.50 for retries / alerts
+With Gemini Flash-Lite batch pricing, $5/day can buy roughly:
+- 100M input tokens, or
+- 25M output tokens, or
+- a mix of both
+That is a lot of candidate-maintenance work if you keep prompts short and store intermediate results.
+For ACP, I’d architect it like this:
+1. Crawler layer: fetch pages, PDFs, APIs, social pages, FEC/OpenSecrets/state data.
+2. AI extraction layer: turn messy pages into structured JSON.
+3. Validator layer: require citations/URLs, confidence scores, and schema checks.
+4. Database admin layer: propose updates, merge duplicates, mark stale records.
+5. Budget governor: stop at $5/day, log every model call, retry tomorrow.
+One important note: AI should not be the scraper itself when a normal scraper/API will do. Use regular code to fetch the data, then use cheap AI to interpret messy pages. That will make the whole system cheaper and much more reliable.
+If I were building this, I’d start with Gemini 2.5 Flash-Lite + strict JSON outputs + daily spend limiter, then add OpenAI or a stronger Gemini model only as an escalation path.
+
+
+4:54 PM
+
+
+
+
+
+
+
+
+What about Deep Seek or Kimi K3? 
+
+
+
+
+
+
+
+4:55 PM
+
+
+
+
+
+
+Worked for 10s
+
+
+
+DeepSeek is absolutely worth considering. Kimi K3 probably is not your cheap daily-worker model.
+DeepSeek
+DeepSeek’s official pricing page shows very low rates, including tiny cache-hit prices and cheap V4-style models. The search result I found from the official DeepSeek docs lists prices as low as roughly $0.003-$0.006 / 1M input cache-hit tokens and $0.022-$0.044 / 1M output for one tier, with larger models higher. Source: DeepSeek API docs.
+For your ACP database-admin work, DeepSeek could be excellent for:
+- cheap classification
+- extracting structured fields
+- deduping
+- generating usernames/handles
+- cleaning imported rows
+- turning scraped page text into JSON
+- making simple “keep/remove/update” decisions
+The concern is less price and more operational trust: uptime, rate limits, privacy posture, API reliability, and how comfortable you are sending political/campaign data to that provider. For public campaign data, that may be fine. For internal ACP strategy, voter data, donor notes, or anything sensitive, I’d be more careful.
+Kimi K3
+Kimi K3 is powerful, but pricing looks much higher than Gemini Flash-Lite or cheap DeepSeek tiers. Moonshot’s pricing page/search result shows Kimi K3 around $3.00 / 1M input and $15.00 / 1M output, with cheaper cached input. Source: Kimi API pricing.
+That means Kimi K3 is more like an escalation model for hard jobs:
+- long-context research
+- messy candidate background synthesis
+- complex cross-source reasoning
+- code generation for the ACP tools
+- “investigate this candidate/entity deeply” tasks
+I would not use Kimi K3 as the always-on $5/day worker unless the tasks are rare and high value.
+My practical stack would be:
+1. Default cheap worker: Gemini 2.5 Flash-Lite or DeepSeek V4/Flash-style model.
+2. Verifier/escalation: GPT-5 mini, Gemini Flash, or Kimi K3.
+3. Never spend AI on fetching: use normal scrapers/APIs first, then feed compact text to AI.
+4. Require source URLs + confidence: no database update without provenance.
+5. Daily budget cap: hard stop at $5, with separate per-task limits.
+For your specific idea, I’d probably test DeepSeek vs Gemini Flash-Lite on 100 real ACP rows and compare: cost, JSON validity, false positives, and how often a human would need to fix it. Then pick the cheaper one that behaves reliably.
