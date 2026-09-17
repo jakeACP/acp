@@ -7,3 +7,4 @@
 - [Capacitor native layer](capacitor-native-layer.md) — all native plugins use dynamic lazy imports in service files; Capacitor.isNativePlatform() guard must precede every plugin call; push tokens stored in extendedProfileData.deviceTokens (no schema change)
 - [DBA Agent API layer](dba-agent-api.md) — election_races + race_candidates tables, dba role, elections:read/candidates:read/candidates:write permissions; db:push needs TTY so use node -e pg.Pool SQL migration instead
 - [Vite manualChunks white page](vite-manualchunks-white-page.md) — never split vendor code into multiple chunks; SSR routes must gate on isBot(req) or browsers get static HTML
+- [Minnesota election boundaries](minnesota-election-boundaries.md) — district selection is office-specific; boundary coverage does not certify campaign coverage.

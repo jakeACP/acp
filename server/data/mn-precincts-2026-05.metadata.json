@@ -1,0 +1,11 @@
+{
+  "snapshotId": "mn-sos-precincts-2026-05",
+  "publisher": "Office of the Minnesota Secretary of State Elections Division",
+  "sourceUrl": "https://sos.mn.gov/media/2791/mn-precincts.json",
+  "sourceDate": "May 1,2026",
+  "retrievedAt": "2026-09-17",
+  "sha256": "b5a60166dba4a45032f6c835403b0776469d2ca2582b0a98b090864bbdaa189c",
+  "bytes": 6382131,
+  "precinctCount": 4106,
+  "coordinateResolutionDegrees": 0.0001
+}

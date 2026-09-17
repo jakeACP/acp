@@ -6,9 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ChevronRight, MapPin, AlertCircle, User, DollarSign } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useLocation as useWouterLocation } from "wouter";
-import { useRef } from "react";
-import "leaflet/dist/leaflet.css";
+import { MinnesotaCivicMap } from "@/components/elections/minnesota-civic-map";
 
 interface Politician {
   id: string;
@@ -44,75 +42,6 @@ interface LookupResponse {
   sldsDistrict: string | null;
   districtKnown: boolean;
   seats: Seat[];
-}
-
-function MinnesotaElectionMap({
-  latitude,
-  longitude,
-  lookup,
-  address,
-}: {
-  latitude: number;
-  longitude: number;
-  lookup: LookupResponse;
-  address: string;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!containerRef.current) return;
-    let map: any;
-    import("leaflet").then(({ default: L }) => {
-      if (!containerRef.current) return;
-      map = L.map(containerRef.current, { zoomControl: true }).setView([latitude, longitude], 14);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
-      }).addTo(map);
-      L.circleMarker([latitude, longitude], {
-        radius: 9, color: "#1d4ed8", weight: 3, fillColor: "#3b82f6", fillOpacity: 0.9,
-      }).addTo(map).bindPopup("Verified address").openPopup();
-    });
-    return () => { if (map) map.remove(); };
-  }, [latitude, longitude]);
-
-  const districts = [
-    ["U.S. Congressional District", lookup.cdDistrict],
-    ["Minnesota Senate District", lookup.slduDistrict],
-    ["Minnesota House District", lookup.sldsDistrict],
-  ].filter((entry): entry is [string, string] => Boolean(entry[1]));
-
-  return (
-    <Card
-      className="relative mb-6 w-[95vw] max-w-none overflow-hidden"
-      style={{ marginLeft: "calc(50% - 47.5vw)" }}
-    >
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div ref={containerRef} className="h-[68vh] min-h-[460px] max-h-[720px] w-full bg-muted" aria-label="Map centered on your verified address" />
-        <aside className="max-h-[68vh] overflow-y-auto border-t p-5 lg:border-l lg:border-t-0">
-          <div className="mb-4 flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Your Minnesota districts</h2>
-          </div>
-          <div className="mb-4 rounded-md bg-muted/60 p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Verified address</p>
-            <p className="mt-1 text-sm font-medium leading-snug">{address}</p>
-          </div>
-          <div className="space-y-3">
-            {districts.length ? districts.map(([label, value]) => (
-              <div key={label} className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="font-semibold">District {value}</p>
-              </div>
-            )) : <p className="text-sm text-muted-foreground">District details could not be confirmed for this address.</p>}
-          </div>
-          <div className="mt-5 border-t pt-4 text-xs text-muted-foreground">
-            <p>This pinpoint uses your verified address. Official Minnesota precinct boundary overlays are being added separately.</p>
-            <a className="mt-2 inline-block text-primary hover:underline" href="https://pollfinder.sos.mn.gov/" target="_blank" rel="noreferrer">Verify with Minnesota Polling Place Finder</a>
-          </div>
-        </aside>
-      </div>
-    </Card>
-  );
 }
 
 type SectionKey = "presidential" | "usCongress" | "governor" | "stateCongress" | "local";
@@ -276,27 +205,40 @@ export default function ElectionPositionsPage() {
   const displayAddress = params.get("displayAddress") ?? address;
   const state = params.get("state") ?? "";
   const zip = params.get("zip") ?? "";
-  const latitude = Number(params.get("lat"));
-  const longitude = Number(params.get("lng"));
+  const lat = params.get("lat");
+  const lng = params.get("lng");
+  const latitude = lat?.trim() && Number.isFinite(Number(lat)) && Math.abs(Number(lat)) <= 90 ? Number(lat) : null;
+  const longitude = lng?.trim() && Number.isFinite(Number(lng)) && Math.abs(Number(lng)) <= 180 ? Number(lng) : null;
 
   const [lookupData, setLookupData] = useState<LookupResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isMinnesota = state.toUpperCase() === "MN" || lookupData?.stateCode === "MN";
 
   useEffect(() => {
     if (!address) return;
+    // The official MN boundary flow resolves its own districts and exact campaigns.
+    if (state.toUpperCase() === "MN") {
+      setIsLoading(false);
+      setError(null);
+      setLookupData(null);
+      return;
+    }
+    const controller = new AbortController();
     setIsLoading(true);
     setError(null);
+    setLookupData(null);
     const lookupParams = new URLSearchParams({ address, state, zip });
-    fetch(`/api/elections/lookup?${lookupParams.toString()}`, { credentials: "include" })
+    fetch(`/api/elections/lookup?${lookupParams.toString()}`, { credentials: "include", signal: controller.signal })
       .then(async res => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.message ?? "Failed to load seats");
         return data as LookupResponse;
       })
       .then(data => setLookupData(data))
-      .catch((err: any) => setError(err.message ?? "Failed to load seats"))
-      .finally(() => setIsLoading(false));
+      .catch((err: any) => { if (!controller.signal.aborted) setError(err.message ?? "Failed to load seats"); })
+      .finally(() => { if (!controller.signal.aborted) setIsLoading(false); });
+    return () => controller.abort();
   }, [address, state, zip]);
 
   const handleViewRace = (seat: Seat, stateName: string) => {
@@ -329,8 +271,9 @@ export default function ElectionPositionsPage() {
         </div>
 
         <div className="mb-4">
-          <h1 className="text-3xl font-bold">Your Elected Seats</h1>
-          {lookupData && (
+          <h1 className="text-3xl font-bold">{isMinnesota ? "Explore Minnesota elections" : "Your Elected Seats"}</h1>
+          {isMinnesota && <p className="mt-1 text-sm text-muted-foreground">Select a district to see its campaigns below the map.</p>}
+          {lookupData && !isMinnesota && (
             <p className="text-sm text-muted-foreground mt-0.5">
               Showing seats for <strong>{lookupData.stateName}</strong>
               {lookupData.cdDistrict && (
@@ -357,8 +300,8 @@ export default function ElectionPositionsPage() {
           </div>
         )}
 
-        {lookupData?.stateCode === "MN" && Number.isFinite(latitude) && Number.isFinite(longitude) && (
-          <MinnesotaElectionMap latitude={latitude} longitude={longitude} lookup={lookupData} address={displayAddress} />
+        {isMinnesota && (
+          <MinnesotaCivicMap latitude={latitude} longitude={longitude} address={displayAddress} />
         )}
 
         {error && (
@@ -371,7 +314,7 @@ export default function ElectionPositionsPage() {
           </div>
         )}
 
-        {lookupData && !isLoading && (
+        {lookupData && !isLoading && !isMinnesota && (
           <>
             <p className="text-sm text-muted-foreground mb-6">
               Found {lookupData.seats.length} position{lookupData.seats.length !== 1 ? "s" : ""} in the ACP database for your area.
@@ -415,7 +358,7 @@ export default function ElectionPositionsPage() {
           </>
         )}
 
-        {!isLoading && !error && !lookupData && address && (
+        {!isLoading && !error && !lookupData && address && !isMinnesota && (
           <div className="text-center py-16 text-muted-foreground">
             <p>No data returned. Please try a different address.</p>
           </div>
